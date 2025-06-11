@@ -30,7 +30,6 @@ export const BRACKET_API_URL = 'https://script.google.com/macros/s/AKfycbyARvrGY
 // This is used to find the correct manager in the Sleeper data to get their team name.
 export const NICKNAME_TO_SLEEPER_USER = {
   "irwin": "irwin35",
-  "irwin35": "irwin35",
   "randall": "DoctorBustdown",
   "o'donoghue": "MattOD54",
   "odonoghue": "MattOD54", // Support common variations
