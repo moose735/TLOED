@@ -125,7 +125,7 @@ const App = () => {
 
     const nameParts = displayName.trim().split(/\s+/);
     if (nameParts.length > 1) {
-      nameParts[nameP`parts.length - 1] = teamName;
+      nameParts[nameParts.length - 1] = teamName;
       return nameParts.join(' ');
     }
     return displayName;
