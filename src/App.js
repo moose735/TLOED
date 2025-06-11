@@ -9,13 +9,22 @@ import {
   NICKNAME_TO_SLEEPER_USER
 } from './config'; // Standard import path for sibling files
 
+// Define the available tabs
+const TABS = {
+  TRADES: 'Trades',
+  ODDS: 'Weekly Odds',
+  BRACKET: 'Playoff Bracket',
+  HISTORY: 'League History',
+  CHAMPIONS: 'Champions'
+};
+
 // Main App component
 const App = () => {
-  // State to store data fetched from Sleeper API (League details)
+  // State to store data fetched from Sleeper API (League details) - KEPT FOR MAP
   const [sleeperLeagueData, setSleeperLeagueData] = useState(null);
   // State to store data fetched from Google Sheet API (General historical data like power rankings)
   const [googleSheetHistory, setGoogleSheetHistory] = useState(null);
-  // State to store league managers/teams data from Sleeper API
+  // State to store league managers/teams data from Sleeper API - KEPT FOR MAP
   const [leagueManagers, setLeagueManagers] = useState(null);
   // State to store recent transactions data from the new Apps Script JSON API
   const [recentTrades, setRecentTrades] = useState(null);
@@ -37,18 +46,18 @@ const App = () => {
   // State to store a map of nickname/last name (from Google Sheets) to actual Sleeper team names
   const [playerNameToTeamNameMap, setPlayerNameToTeamNameMap] = useState({});
 
+  // State for active tab
+  const [activeTab, setActiveTab] = useState(TABS.TRADES); // Default to Trades tab
 
   // States for loading indicators
-  const [loadingSleeper, setLoadingSleeper] = useState(true);
+  // Removed loadingSleeper and loadingManagers as those sections are gone, but kept for fetch logic if map is needed
   const [loadingGoogleSheet, setLoadingGoogleSheet] = useState(true);
-  const [loadingManagers, setLoadingManagers] = useState(true);
   const [loadingTrades, setLoadingTrades] = useState(true);
   const [loadingChampions, setLoadingChampions] = useState(true);
 
   // States for error messages
-  const [errorSleeper, setErrorSleeper] = useState(null);
+  // Removed errorSleeper and errorManagers
   const [errorGoogleSheet, setErrorGoogleSheet] = useState(null);
-  const [errorManagers, setErrorManagers] = useState(null);
   const [errorTrades, setErrorTrades] = useState(null);
   const [errorChampions, setErrorChampions] = useState(null);
 
@@ -62,13 +71,12 @@ const App = () => {
   };
 
 
-  // Effect hook to fetch general league data from Sleeper API
+  // Effect hook to fetch general league data from Sleeper API (KEPT TO GET LEAGUE ID FOR MAP)
   useEffect(() => {
     const fetchSleeperData = async () => {
       if (SLEEPER_LEAGUE_ID === 'YOUR_SLEEPER_LEAGUE_ID') {
-        setLoadingSleeper(false);
-        setErrorSleeper("Please update SLEEPER_LEAGUE_ID in config.js with your actual league ID.");
-        return;
+        // console.warn("SLEEPER_LEAGUE_ID not set. Skipping Sleeper league data fetch.");
+        return; // Don't set error or loading state for a section we removed
       }
 
       try {
@@ -82,10 +90,7 @@ const App = () => {
         const data = await response.json();
         setSleeperLeagueData(data);
       } catch (error) {
-        console.error("Error fetching Sleeper data:", error);
-        setErrorSleeper(error.message);
-      } finally {
-        setLoadingSleeper(false);
+        console.error("Error fetching Sleeper data for map:", error);
       }
     };
 
@@ -93,7 +98,7 @@ const App = () => {
   }, [SLEEPER_LEAGUE_ID]);
 
 
-  // Helper function to format manager display name by replacing last name with team name
+  // Helper function to format manager display name by replacing last name with team name (KEPT FOR MAP)
   const getFormattedManagerName = (displayName, teamName) => {
     if (!displayName || !teamName) return displayName || teamName;
 
@@ -107,11 +112,12 @@ const App = () => {
 
 
   // Effect hook to fetch league managers/users data from Sleeper API and build the team name map
+  // This is crucial for `getMappedTeamName` so it's kept.
   useEffect(() => {
     const fetchManagersData = async () => {
       if (SLEEPER_LEAGUE_ID === 'YOUR_SLEEPER_LEAGUE_ID') {
-        setLoadingManagers(false);
-        return;
+        // console.warn("SLEEPER_LEAGUE_ID not set. Skipping managers data fetch for map.");
+        return; // Don't set error or loading state for a section we removed
       }
 
       try {
@@ -144,7 +150,7 @@ const App = () => {
             avatar: user.avatar ? `https://sleepercdn.com/avatars/thumbs/${user.avatar}` : 'https://placehold.co/40x40/cccccc/333333?text=M'
           };
         });
-        setLeagueManagers(combinedManagers);
+        setLeagueManagers(combinedManagers); // Still set for potential future use or debugging
 
         // Build the playerNameToTeamNameMap
         const newPlayerNameToTeamNameMap = {};
@@ -154,19 +160,15 @@ const App = () => {
           );
           if (matchingManager) {
             newPlayerNameToTeamNameMap[nicknameKey.toLowerCase()] = matchingManager.teamName; // Store in lowercase for consistent lookup
-            console.log(`Mapped "${nicknameKey}" to "${matchingManager.teamName}"`); // For debugging
+            // console.log(`Mapped "${nicknameKey}" to "${matchingManager.teamName}"`); // For debugging
           } else {
-            console.log(`No Sleeper manager found for "${sleeperUserIdentifier}" (from nickname "${nicknameKey}")`); // For debugging
+            // console.log(`No Sleeper manager found for "${sleeperUserIdentifier}" (from nickname "${nicknameKey}")`); // For debugging
           }
         });
         setPlayerNameToTeamNameMap(newPlayerNameToTeamNameMap);
 
-
       } catch (error) {
-        console.error("Error fetching managers data:", error);
-        setErrorManagers(error.message);
-      } finally {
-        setLoadingManagers(false);
+        console.error("Error fetching managers data for map:", error);
       }
     };
 
@@ -760,6 +762,45 @@ const App = () => {
             color: #2D3748; /* Darker text */
         }
 
+        /* Tab specific styles */
+        .tab-button {
+            padding: 12px 20px;
+            border: none;
+            background: #bfbfbf; /* Light Grey */
+            color: #333;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s ease, color 0.3s ease;
+            border-radius: 8px 8px 0 0;
+            margin: 0 2px;
+            box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
+        }
+
+        .tab-button.active {
+            background: linear-gradient(135deg, #0070c0 0%, #005f9f 100%); /* Primary blue gradient */
+            color: white;
+            box-shadow: 0 -4px 8px rgba(0,0,0,0.2);
+            border-bottom: 2px solid transparent; /* Remove border-bottom for active tab */
+        }
+
+        .tab-button:hover:not(.active) {
+            background: #e0e0e0; /* Lighter grey on hover */
+            color: #0070c0;
+        }
+
+        .tab-content {
+            background: white;
+            padding: 25px;
+            border-radius: 0 0 8px 8px; /* Rounded bottom corners only */
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 4xl;
+            min-height: 400px; /* Ensure a minimum height for content */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
 
         @media (max-width: 600px) {
           .bracket-container {
@@ -785,375 +826,346 @@ const App = () => {
             flex-basis: calc(50% - 8px);
             max-width: calc(50% - 8px);
           }
+           .tab-button {
+              padding: 10px 15px;
+              font-size: 0.9em;
+              margin: 0 1px;
+              border-radius: 6px 6px 0 0;
+           }
         }
         @media (max-width: 400px) {
           .lower-seed-box {
             flex-basis: calc(100% - 8px);
             max-width: calc(100% - 8px);
           }
+           .tab-button {
+              font-size: 0.8em;
+              padding: 8px 10px;
+           }
         }
       `}</style>
 
       {/* Header Section */}
       <header className="w-full max-w-4xl bg-gradient-to-r from-[#0070c0] to-[#005f9f] text-white p-6 rounded-xl shadow-lg mb-8 text-center">
         <h1 className="text-4xl font-extrabold mb-2">Fantasy League Dashboard</h1>
-        <p className="text-xl">Your one-stop shop for league insights!</p>
+        {sleeperLeagueData && (
+          <p className="text-xl">
+            {sleeperLeagueData.name} ({sleeperLeagueData.season} Season)
+          </p>
+        )}
+        {!sleeperLeagueData && (
+            <p className="text-xl">Your one-stop shop for league insights!</p>
+        )}
       </header>
 
-      {/* Current League Status (Sleeper API) */}
-      <section className="w-full max-w-4xl bg-white p-6 rounded-xl shadow-md mb-8">
-        <h2 className="text-2xl font-bold text-[#0070c0] mb-4 border-b-2 border-[#bfbfbf] pb-2">
-          Current League Status
-        </h2>
-        {loadingSleeper ? (
-          <p className="text-gray-600">Loading current league data from Sleeper...</p>
-        ) : errorSleeper ? (
-          <p className="text-red-500">Error: {errorSleeper}</p>
-        ) : sleeperLeagueData ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div className="bg-white p-4 rounded-lg shadow-sm border border-[#bfbfbf]">
-              <p className="font-semibold text-lg">League Name:</p>
-              <p className="text-xl font-bold text-[#0070c0]">{sleeperLeagueData.name}</p>
-            </div>
-            <div className="bg-white p-4 rounded-lg shadow-sm border border-[#bfbfbf]">
-              <p className="font-semibold text-lg">Season:</p>
-              <p className="text-xl font-bold text-[#0070c0]">{sleeperLeagueData.season}</p>
-            </div>
-            <div className="bg-white p-4 rounded-lg shadow-sm border border-[#bfbfbf]">
-              <p className="font-semibold text-lg">Total Rosters:</p>
-              <p className="text-xl font-bold text-[#0070c0]">{sleeperLeagueData.total_rosters}</p>
-            </div>
-            <div className="bg-white p-4 rounded-lg shadow-sm border border-[#bfbfbf]">
-              <p className="font-semibold text-lg">Status:</p>
-              <p className="text-xl font-bold text-[#0070c0]">{sleeperLeagueData.status}</p>
-            </div>
-            <div className="bg-white p-4 rounded-lg shadow-sm border border-[#bfbfbf]">
-              <p className="font-semibold text-lg">Draft ID:</p>
-              <p className="text-xl font-bold text-[#0070c0]">{sleeperLeagueData.draft_id}</p>
-            </div>
-             <div className="bg-white p-4 rounded-lg shadow-sm border border-[#bfbfbf]">
-              <p className="font-semibold text-lg">Last Updated:</p>
-              <p className="text-xl font-bold text-[#0070c0]">
-                {new Date(sleeperLeagueData.last_updated_at).toLocaleDateString()}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <p className="text-gray-600">No current Sleeper league data available.</p>
-        )}
-      </section>
+      {/* Tabs Navigation */}
+      <div className="w-full max-w-4xl flex justify-center mb-0 mt-4">
+        {Object.values(TABS).map((tab) => (
+          <button
+            key={tab}
+            className={`tab-button ${activeTab === tab ? 'active' : ''}`}
+            onClick={() => setActiveTab(tab)}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
 
-      {/* League Managers / Teams Section (Sleeper API) */}
-      <section className="w-full max-w-4xl bg-white p-6 rounded-xl shadow-md mb-8">
-        <h2 className="text-2xl font-bold text-[#0070c0] mb-4 border-b-2 border-[#bfbfbf] pb-2">
-          League Managers & Teams
-        </h2>
-        {loadingManagers ? (
-          <p className="text-gray-600">Loading league managers and team data...</p>
-        ) : errorManagers ? (
-          <p className="text-red-500">Error: {errorManagers}</p>
-        ) : leagueManagers && leagueManagers.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {leagueManagers.map(manager => (
-              <div key={manager.userId} className="bg-white p-4 rounded-lg shadow-sm flex items-center gap-4 border border-[#bfbfbf]">
-                <img src={manager.avatar} alt={`${manager.displayName}'s avatar`} className="w-12 h-12 rounded-full object-cover border-2 border-[#0070c0]" onError={(e) => e.target.src = 'https://placehold.co/40x40/cccccc/333333?text=M' } />
-                <div>
-                  <p className="font-semibold text-lg text-[#0070c0]">{manager.teamName}</p>
-                  <p className="text-md text-gray-700">Manager: {manager.formattedDisplayNameForManagerLine}</p>
+      {/* Tab Content Area */}
+      <div className="tab-content">
+        {activeTab === TABS.TRADES && (
+          <section className="w-full">
+            <h2 className="text-2xl font-bold text-[#0070c0] mb-4 border-b-2 border-[#bfbfbf] pb-2 text-center">
+              Recent Trades Ticker
+            </h2>
+            {loadingTrades ? (
+              <p className="text-gray-600">Loading recent trades data...</p>
+            ) : errorTrades ? (
+              <p className="text-red-500 px-4 md:px-0">Error: {errorTrades}</p>
+            ) : recentTrades && recentTrades.length > 0 ? (
+              <div id="trade-ticker-container" className="overflow-x-auto whitespace-nowrap py-2">
+                <div className="inline-flex gap-2 animate-ticker-scroll pb-2 items-center">
+                  {/* Duplicate content for continuous scrolling effect */}
+                  {[...recentTrades, ...recentTrades].map((trade, index) => (
+                    <div key={`${trade.transaction_id}-${index}`} className="
+                      bg-white/90 border border-[#bfbfbf] rounded-md shadow-sm p-2.5 flex flex-col gap-2
+                      flex-shrink-0
+                      min-w-[280px]
+                      h-auto
+                      overflow-y-hidden
+                    ">
+                      <h3 className="
+                        flex justify-center font-semibold text-[11px] text-gray-700 tracking-wide
+                        pb-1 mb-1 border-b-2 border-[#0070c0] text-center
+                      ">
+                        Trade Completed - Week {trade.week}
+                      </h3>
+                      <div className="flex flex-nowrap justify-center items-start w-full h-full gap-0">
+                        {trade.participants.map((participant, pIndex) => (
+                          <React.Fragment key={participant.rosterId}>
+                            <div className="flex flex-col flex-shrink-0 items-center p-0.5 min-w-[120px]">
+                              <div className="flex flex-col items-center gap-1 mb-1 pb-1.5 border-b border-[#ff0000] w-full"> {/* Red border for trades */}
+                                <img src={participant.managerAvatar} alt={`${participant.teamName} avatar`} className="w-5 h-5 rounded-full object-cover border border-[#ff0000]" onError={(e) => e.target.src = 'https://placehold.co/32x32/cccccc/333333?text=M' } />
+                                <span className="font-semibold text-[10px] text-[#0070c0] text-center break-words max-w-full">{getMappedTeamName(participant.teamName)}</span>
+                              </div>
+                              <div className="flex flex-col gap-1 flex-grow w-full">
+                                {/* Received Assets */}
+                                {participant.receivedAssets.length > 0 && participant.receivedAssets.map((asset, assetIndex) => <div key={assetIndex}>{renderTradeAsset(asset, 'received')}</div>)}
+                                {/* Sent Assets (add separator if both exist) */}
+                                {participant.receivedAssets.length > 0 && participant.sentAssets.length > 0 && (
+                                  <div className="pt-2"></div>
+                                )}
+                                {participant.sentAssets.length > 0 && participant.sentAssets.map((asset, assetIndex) => <div key={assetIndex}>{renderTradeAsset(asset, 'sent')}</div>)}
+                              </div>
+                            </div>
+                          </React.Fragment>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-gray-600">No league manager data available. Ensure your league ID is correct and rosters/users exist.</p>
+            ) : (
+              <p className="text-gray-600 px-4 md:px-0">No recent trades data available. Please ensure your Trade Ticker Apps Script URL is correct and data is being returned.</p>
+            )}
+          </section>
         )}
-      </section>
 
-      {/* Recent Trades Ticker (from Apps Script JSON API) */}
-      <section className="w-full mb-8">
-        {/* Render content only when not loading */}
-        {!loadingTrades && (
-          errorTrades ? (
-            <p className="text-red-500 px-4 md:px-0">Error: {errorTrades}</p>
-          ) : recentTrades && recentTrades.length > 0 ? (
-            <div id="trade-ticker-container" className="overflow-x-auto whitespace-nowrap py-2">
-              <div className="inline-flex gap-2 animate-ticker-scroll pb-2 items-center">
-                {/* Duplicate content for continuous scrolling effect */}
-                {[...recentTrades, ...recentTrades].map((trade, index) => (
-                  <div key={`${trade.transaction_id}-${index}`} className="
-                    bg-white/90 border border-[#bfbfbf] rounded-md shadow-sm p-2.5 flex flex-col gap-2
-                    flex-shrink-0
-                    min-w-[280px]
-                    h-auto
-                    overflow-y-hidden
-                  ">
-                    <h3 className="
-                      flex justify-center font-semibold text-[11px] text-gray-700 tracking-wide
-                      pb-1 mb-1 border-b-2 border-[#0070c0] text-center
-                    ">
-                      Trade Completed - Week {trade.week}
-                    </h3>
-                    <div className="flex flex-nowrap justify-center items-start w-full h-full gap-0">
-                      {trade.participants.map((participant, pIndex) => (
-                        <React.Fragment key={participant.rosterId}>
-                          <div className="flex flex-col flex-shrink-0 items-center p-0.5 min-w-[120px]">
-                            <div className="flex flex-col items-center gap-1 mb-1 pb-1.5 border-b border-[#ff0000] w-full"> {/* Red border for trades */}
-                              <img src={participant.managerAvatar} alt={`${participant.teamName} avatar`} className="w-5 h-5 rounded-full object-cover border border-[#ff0000]" onError={(e) => e.target.src = 'https://placehold.co/32x32/cccccc/333333?text=M' } />
-                              <span className="font-semibold text-[10px] text-[#0070c0] text-center break-words max-w-full">{participant.teamName}</span>
-                            </div>
-                            <div className="flex flex-col gap-1 flex-grow w-full">
-                              {/* Received Assets */}
-                              {participant.receivedAssets.length > 0 && participant.receivedAssets.map((asset, assetIndex) => <div key={assetIndex}>{renderTradeAsset(asset, 'received')}</div>)}
-                              {/* Sent Assets (add separator if both exist) */}
-                              {participant.receivedAssets.length > 0 && participant.sentAssets.length > 0 && (
-                                <div className="pt-2"></div>
-                              )}
-                              {participant.sentAssets.length > 0 && participant.sentAssets.map((asset, assetIndex) => <div key={assetIndex}>{renderTradeAsset(asset, 'sent')}</div>)}
-                            </div>
+        {activeTab === TABS.ODDS && (
+          <section className="w-full flex flex-col items-center">
+            <h2 className="text-2xl font-bold text-[#0070c0] mb-4 border-b-2 border-[#bfbfbf] pb-2 w-full text-center">
+              Weekly Odds & Results (Week {currentOddsWeek !== null ? currentOddsWeek + 1 : '...'})
+            </h2>
+            {loadingOdds ? (
+              <p className="text-gray-600">Loading weekly odds data...</p>
+            ) : errorOdds ? (
+              <p className="text-red-500">Error: {errorOdds}</p>
+            ) : weeklyOddsData[currentOddsWeek] && weeklyOddsData[currentOddsWeek].length > 0 ? (
+              <>
+                <div className="week-buttons-container">
+                  {Array.from({ length: totalOddsWeeks }, (_, i) => (
+                    <button
+                      key={i}
+                      className={`week-nav-button ${currentOddsWeek === i ? 'active' : ''}`}
+                      onClick={() => setCurrentOddsWeek(i)}
+                    >
+                      {i + 1}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex flex-col items-center w-full">
+                  {weeklyOddsData[currentOddsWeek].map((match, idx) => {
+                    // Apply team name replacement using the universal helper
+                    const displayP1Name = getMappedTeamName(match.p1Name);
+                    const displayP2Name = getMappedTeamName(match.p2Name);
+
+                    const p1Class = match.winner === 1 ? 'odds-win' : match.winner === 2 ? 'odds-lose' : '';
+                    const p2Class = match.winner === 2 ? 'odds-win' : match.winner === 1 ? 'odds-lose' : '';
+                    const ouOClass = match.ouResult === 1 ? 'odds-win' : match.ouResult === 2 ? 'odds-lose' : '';
+                    const ouUClass = match.ouResult === 2 ? 'odds-win' : match.ouResult === 1 ? 'odds-lose' : '';
+
+                    const hasScores = match.p1Score !== '' && match.p2Score !== '';
+                    const p1ScoreDisplay = hasScores ? `<span class="odds-score">${match.p1Score}</span>` : '';
+                    const p2ScoreDisplay = hasScores ? `<span class="odds-score">${match.p2Score}</span>` : '';
+
+                    return (
+                      <div key={idx} className="odds-matchup">
+                        <div className="odds-player">
+                          <div dangerouslySetInnerHTML={{ __html: `${displayP1Name} ${p1ScoreDisplay}` }}></div>
+                          <div className="odds-bubbles">
+                            <div className={`odds-value ${p1Class}`}>{match.p1Odds}</div>
+                            <div className={`odds-ou-box ${ouOClass}`}>O {match.ou}<br/><small>-110</small></div>
                           </div>
-                        </React.Fragment>
-                      ))}
-                    </div>
+                        </div>
+                        <div className="odds-player">
+                          <div dangerouslySetInnerHTML={{ __html: `${displayP2Name} ${p2ScoreDisplay}` }}></div>
+                          <div className="odds-bubbles">
+                            <div className={`odds-value ${p2Class}`}>{match.p2Odds}</div>
+                            <div className={`odds-ou-box ${ouUClass}`}>U {match.ou}<br/><small>-110</small></div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <p className="text-gray-600">No weekly odds data available for this week. Check your Apps Script and Google Sheet.</p>
+            )}
+          </section>
+        )}
+
+        {activeTab === TABS.BRACKET && (
+          <section className="w-full flex flex-col items-center">
+            <h2 className="text-2xl font-bold text-[#0070c0] mb-4 border-b-2 border-[#bfbfbf] pb-2 w-full text-center">
+              Projected Playoff Bracket
+            </h2>
+            {loadingBracket ? (
+              <p className="text-gray-600">Loading playoff bracket data...</p>
+            ) : errorBracket ? (
+              <p className="text-red-500">Error: {errorBracket}</p>
+            ) : bracketData ? (
+              <>
+                <div className="bracket-container">
+                  {/* Round 1 */}
+                  <div className="bracket-round">
+                    <div className="bracket-round-label">Round 1</div>
+                    {bracketData.round1.map((match, index) => {
+                      // Apply team name replacement using the universal helper
+                      const displayTeam1 = getMappedTeamName(match.team1);
+                      const displayTeam2 = getMappedTeamName(match.team2);
+
+                      return (
+                        <div key={`r1-match-${index}`} className="bracket-match">
+                          <div className="bracket-match-player">
+                              <strong>{match.seed1}</strong> <span>{displayTeam1 || <span className="bracket-bye">Bye</span>}</span>
+                          </div>
+                          <div className="bracket-vs">vs</div>
+                          <div className="bracket-match-player">
+                              <strong>{match.seed2}</strong> <span>{displayTeam2 || <span className="bracket-bye">Bye</span>}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Round 2 */}
+                  <div className="bracket-round">
+                    <div className="bracket-round-label">Round 2</div>
+                    {bracketData.round2.map((match, index) => {
+                      // Apply team name replacement using the universal helper
+                      const displayTeam = getMappedTeamName(match.team);
+
+                      return (
+                        <div key={`r2-match-${index}`} className="bracket-match">
+                          <div className="bracket-match-player">
+                              <strong>{match.seed}</strong> <span>{displayTeam || <span className="bracket-bye">Bye</span>}</span>
+                          </div>
+                          <div className="bracket-vs">vs</div>
+                          {/* Placeholder text for remaining seeds as per original */}
+                          <div className="bracket-bye">
+                              {index === 0 ? "Lowest Seed Remaining" : "Highest Seed Remaining"}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="dotted-line"></div>
+
+                {/* Lower seeds grid */}
+                <h3 className="text-xl font-bold text-gray-700 mb-4 mt-6 w-full text-center">
+                    Remaining Seeds
+                </h3>
+                <div className="lower-seeds-grid">
+                  {bracketData.lowerSeeds.map((entry, index) => {
+                    // Apply team name replacement using the universal helper
+                    const displayTeam = getMappedTeamName(entry.team);
+
+                    return (
+                      <div key={`lower-seed-${index}`} className="lower-seed-box">
+                        <strong>{entry.seed}</strong> <span>{displayTeam || <span className="bracket-bye">Bye</span>}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <p className="text-gray-600">No playoff bracket data available. Check your Apps Script and Google Sheet.</p>
+            )}
+          </section>
+        )}
+
+        {activeTab === TABS.HISTORY && (
+          <section className="w-full">
+            <h2 className="text-2xl font-bold text-[#0070c0] mb-4 border-b-2 border-[#bfbfbf] pb-2 text-center">
+              League History (Power Rankings / General Data)
+            </h2>
+            {loadingGoogleSheet ? (
+              <p className="text-gray-600">Loading league history from Google Sheet...</p>
+            ) : errorGoogleSheet ? (
+              <p className="text-red-500">Error: {errorGoogleSheet}</p>
+            ) : googleSheetHistory ? (
+              <div>
+                {googleSheetHistory.data && googleSheetHistory.data.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full bg-white rounded-lg overflow-hidden shadow">
+                      <thead className="bg-[#bfbfbf]"> {/* Light Grey header background */}
+                        <tr>
+                          {Object.keys(googleSheetHistory.data[0]).map((header) => (
+                            <th key={header} className="py-3 px-4 text-left text-sm font-semibold text-[#0070c0] uppercase tracking-wider">
+                              {header.replace(/_/g, ' ')} {/* Replace underscores with spaces for display */}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {googleSheetHistory.data.map((row, index) => {
+                          // Apply team name replacement for each cell in the row
+                          const processedRow = Object.values(row).map(value =>
+                            getMappedTeamName(value)
+                          );
+                          return (
+                            <tr key={index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                              {processedRow.map((value, idx) => (
+                                <td key={idx} className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
+                                  {value}
+                                </td>
+                              ))}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-gray-600">No general historical data found in Google Sheet.</p>
+                )}
+              </div>
+            ) : (
+              <p className="text-gray-600">No Google Sheet history data available.</p>
+            )}
+            <p className="mt-4 text-sm text-gray-500">
+              <a href="https://developers.google.com/apps-script/guides/web" target="_blank" rel="noopener noreferrer" className="text-[#0070c0] hover:underline">
+                Learn how to expose your Google Sheet as an API using Google Apps Script.
+              </a>
+            </p>
+          </section>
+        )}
+
+        {activeTab === TABS.CHAMPIONS && (
+          <section className="w-full">
+            <h2 className="text-2xl font-bold text-[#0070c0] mb-4 border-b-2 border-[#bfbfbf] pb-2 text-center">
+              Historical Champions & Awards
+            </h2>
+            {loadingChampions ? (
+              <p className="text-gray-600">Loading historical champions data...</p>
+            ) : errorChampions ? (
+              <p className="text-red-500">Error: {errorChampions}</p>
+            ) : historicalChampions && historicalChampions.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {historicalChampions.map((champion, index) => (
+                  <div key={index} className="bg-white p-4 rounded-lg shadow-sm border border-[#bfbfbf]">
+                    {/* Apply team name replacement for champion, runnerUp, mvp */}
+                    {champion.champion && <p className="font-semibold text-lg text-[#0070c0]">🏆 {champion.year} Champion: {getMappedTeamName(champion.champion)}</p>}
+                    {champion.runnerUp && <p className="text-md text-gray-700">🥈 Runner-Up: {getMappedTeamName(champion.runnerUp)}</p>}
+                    {champion.mvp && <p className="text-md text-gray-700">⭐ MVP: {getMappedTeamName(champion.mvp)}</p>}
+                    {/* Add more fields for other awards as needed */}
                   </div>
                 ))}
               </div>
-            </div>
-          ) : (
-            <p className="text-gray-600 px-4 md:px-0">No recent trades data available. Please ensure your Trade Ticker Apps Script URL is correct and data is being returned.</p>
-          )
-        )}
-      </section>
-
-
-      {/* Weekly Odds Section */}
-      <section className="w-full max-w-4xl bg-white p-6 rounded-xl shadow-md mb-8 flex flex-col items-center">
-        <h2 className="text-2xl font-bold text-[#0070c0] mb-4 border-b-2 border-[#bfbfbf] pb-2 w-full text-center">
-          Weekly Odds & Results (Week {currentOddsWeek !== null ? currentOddsWeek + 1 : '...'})
-        </h2>
-        {loadingOdds ? (
-          <p className="text-gray-600">Loading weekly odds data...</p>
-        ) : errorOdds ? (
-          <p className="text-red-500">Error: {errorOdds}</p>
-        ) : weeklyOddsData[currentOddsWeek] && weeklyOddsData[currentOddsWeek].length > 0 ? (
-          <>
-            <div className="week-buttons-container">
-              {Array.from({ length: totalOddsWeeks }, (_, i) => (
-                <button
-                  key={i}
-                  className={`week-nav-button ${currentOddsWeek === i ? 'active' : ''}`}
-                  onClick={() => setCurrentOddsWeek(i)}
-                >
-                  {i + 1}
-                </button>
-              ))}
-            </div>
-            <div className="flex flex-col items-center w-full">
-              {weeklyOddsData[currentOddsWeek].map((match, idx) => {
-                // Apply team name replacement using the universal helper
-                const displayP1Name = getMappedTeamName(match.p1Name);
-                const displayP2Name = getMappedTeamName(match.p2Name);
-
-                const p1Class = match.winner === 1 ? 'odds-win' : match.winner === 2 ? 'odds-lose' : '';
-                const p2Class = match.winner === 2 ? 'odds-win' : match.winner === 1 ? 'odds-lose' : '';
-                const ouOClass = match.ouResult === 1 ? 'odds-win' : match.ouResult === 2 ? 'odds-lose' : '';
-                const ouUClass = match.ouResult === 2 ? 'odds-win' : match.ouResult === 1 ? 'odds-lose' : '';
-
-                const hasScores = match.p1Score !== '' && match.p2Score !== '';
-                const p1ScoreDisplay = hasScores ? `<span class="odds-score">${match.p1Score}</span>` : '';
-                const p2ScoreDisplay = hasScores ? `<span class="odds-score">${match.p2Score}</span>` : '';
-
-                return (
-                  <div key={idx} className="odds-matchup">
-                    <div className="odds-player">
-                      <div dangerouslySetInnerHTML={{ __html: `${displayP1Name} ${p1ScoreDisplay}` }}></div>
-                      <div className="odds-bubbles">
-                        <div className={`odds-value ${p1Class}`}>{match.p1Odds}</div>
-                        <div className={`odds-ou-box ${ouOClass}`}>O {match.ou}<br/><small>-110</small></div>
-                      </div>
-                    </div>
-                    <div className="odds-player">
-                      <div dangerouslySetInnerHTML={{ __html: `${displayP2Name} ${p2ScoreDisplay}` }}></div>
-                      <div className="odds-bubbles">
-                        <div className={`odds-value ${p2Class}`}>{match.p2Odds}</div>
-                        <div className={`odds-ou-box ${ouUClass}`}>U {match.ou}<br/><small>-110</small></div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </>
-        ) : (
-          <p className="text-gray-600">No weekly odds data available for this week. Check your Apps Script and Google Sheet.</p>
-        )}
-      </section>
-
-      {/* NEW: Playoff Bracket Section */}
-      <section className="w-full max-w-4xl bg-white p-6 rounded-xl shadow-md mb-8 flex flex-col items-center">
-        <h2 className="text-2xl font-bold text-[#0070c0] mb-4 border-b-2 border-[#bfbfbf] pb-2 w-full text-center">
-          Projected Playoff Bracket
-        </h2>
-        {loadingBracket ? (
-          <p className="text-gray-600">Loading playoff bracket data...</p>
-        ) : errorBracket ? (
-          <p className="text-red-500">Error: {errorBracket}</p>
-        ) : bracketData ? (
-          <>
-            <div className="bracket-container">
-              {/* Round 1 */}
-              <div className="bracket-round">
-                <div className="bracket-round-label">Round 1</div>
-                {bracketData.round1.map((match, index) => {
-                  // Apply team name replacement using the universal helper
-                  const displayTeam1 = getMappedTeamName(match.team1);
-                  const displayTeam2 = getMappedTeamName(match.team2);
-
-                  return (
-                    <div key={`r1-match-${index}`} className="bracket-match">
-                      <div className="bracket-match-player">
-                          <strong>{match.seed1}</strong> <span>{displayTeam1 || <span className="bracket-bye">Bye</span>}</span>
-                      </div>
-                      <div className="bracket-vs">vs</div>
-                      <div className="bracket-match-player">
-                          <strong>{match.seed2}</strong> <span>{displayTeam2 || <span className="bracket-bye">Bye</span>}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Round 2 */}
-              <div className="bracket-round">
-                <div className="bracket-round-label">Round 2</div>
-                {bracketData.round2.map((match, index) => {
-                  // Apply team name replacement using the universal helper
-                  const displayTeam = getMappedTeamName(match.team);
-
-                  return (
-                    <div key={`r2-match-${index}`} className="bracket-match">
-                      <div className="bracket-match-player">
-                          <strong>{match.seed}</strong> <span>{displayTeam || <span className="bracket-bye">Bye</span>}</span>
-                      </div>
-                      <div className="bracket-vs">vs</div>
-                      {/* Placeholder text for remaining seeds as per original */}
-                      <div className="bracket-bye">
-                          {index === 0 ? "Lowest Seed Remaining" : "Highest Seed Remaining"}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="dotted-line"></div>
-
-            {/* Lower seeds grid */}
-            <h3 className="text-xl font-bold text-gray-700 mb-4 mt-6 w-full text-center">
-                Remaining Seeds
-            </h3>
-            <div className="lower-seeds-grid">
-              {bracketData.lowerSeeds.map((entry, index) => {
-                // Apply team name replacement using the universal helper
-                const displayTeam = getMappedTeamName(entry.team);
-
-                return (
-                  <div key={`lower-seed-${index}`} className="lower-seed-box">
-                    <strong>{entry.seed}</strong> <span>{displayTeam || <span className="bracket-bye">Bye</span>}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </>
-        ) : (
-          <p className="text-gray-600">No playoff bracket data available. Check your Apps Script and Google Sheet.</p>
-        )}
-      </section>
-
-      {/* League History Data Section (Google Sheet - general history/power rankings) */}
-      <section className="w-full max-w-4xl bg-white p-6 rounded-xl shadow-md mb-8">
-        <h2 className="text-2xl font-bold text-[#0070c0] mb-4 border-b-2 border-[#bfbfbf] pb-2">
-          League History (Power Rankings / General Data)
-        </h2>
-        {loadingGoogleSheet ? (
-          <p className="text-gray-600">Loading league history from Google Sheet...</p>
-        ) : errorGoogleSheet ? (
-          <p className="text-red-500">Error: {errorGoogleSheet}</p>
-        ) : googleSheetHistory ? (
-          <div>
-            {googleSheetHistory.data && googleSheetHistory.data.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="min-w-full bg-white rounded-lg overflow-hidden shadow">
-                  <thead className="bg-[#bfbfbf]"> {/* Light Grey header background */}
-                    <tr>
-                      {Object.keys(googleSheetHistory.data[0]).map((header) => (
-                        <th key={header} className="py-3 px-4 text-left text-sm font-semibold text-[#0070c0] uppercase tracking-wider">
-                          {header.replace(/_/g, ' ')} {/* Replace underscores with spaces for display */}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {googleSheetHistory.data.map((row, index) => {
-                      // Apply team name replacement for each cell in the row
-                      const processedRow = Object.values(row).map(value =>
-                        getMappedTeamName(value)
-                      );
-                      return (
-                        <tr key={index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                          {processedRow.map((value, idx) => (
-                            <td key={idx} className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
-                              {value}
-                            </td>
-                          ))}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
             ) : (
-              <p className="text-gray-600">No general historical data found in Google Sheet.</p>
+              <p className="text-gray-600">No historical champions/awards data available. Consider populating a Google Sheet for this section.</p>
             )}
-          </div>
-        ) : (
-          <p className="text-gray-600">No Google Sheet history data available.</p>
+            <p className="mt-4 text-sm text-gray-500">
+              If you want to fetch this data from a Google Sheet, you'll need to set up a dedicated Apps Script deployment for it,
+              similar to how you did for the power rankings, and update `GOOGLE_SHEET_CHAMPIONS_API_URL`.
+            </p>
+          </section>
         )}
-        <p className="mt-4 text-sm text-gray-500">
-          <a href="https://developers.google.com/apps-script/guides/web" target="_blank" rel="noopener noreferrer" className="text-[#0070c0] hover:underline">
-            Learn how to expose your Google Sheet as an API using Google Apps Script.
-          </a>
-        </p>
-      </section>
+      </div>
 
-      {/* Historical Champions / Awards Section (Google Sheet or Hardcoded) */}
-      <section className="w-full max-w-4xl bg-white p-6 rounded-xl shadow-md mb-8">
-        <h2 className="text-2xl font-bold text-[#0070c0] mb-4 border-b-2 border-[#bfbfbf] pb-2">
-          Historical Champions & Awards
-        </h2>
-        {loadingChampions ? (
-          <p className="text-gray-600">Loading historical champions data...</p>
-        ) : errorChampions ? (
-          <p className="text-red-500">Error: {errorChampions}</p>
-        ) : historicalChampions && historicalChampions.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {historicalChampions.map((champion, index) => (
-              <div key={index} className="bg-white p-4 rounded-lg shadow-sm border border-[#bfbfbf]">
-                {/* Apply team name replacement for champion, runnerUp, mvp */}
-                {champion.champion && <p className="font-semibold text-lg text-[#0070c0]">🏆 {champion.year} Champion: {getMappedTeamName(champion.champion)}</p>}
-                {champion.runnerUp && <p className="text-md text-gray-700">🥈 Runner-Up: {getMappedTeamName(champion.runnerUp)}</p>}
-                {champion.mvp && <p className="text-md text-gray-700">⭐ MVP: {getMappedTeamName(champion.mvp)}</p>}
-                {/* Add more fields for other awards as needed */}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-gray-600">No historical champions/awards data available. Consider populating a Google Sheet for this section.</p>
-        )}
-        <p className="mt-4 text-sm text-gray-500">
-          If you want to fetch this data from a Google Sheet, you'll need to set up a dedicated Apps Script deployment for it,
-          similar to how you did for the power rankings, and update `GOOGLE_SHEET_CHAMPIONS_API_URL`.
-        </p>
-      </section>
 
       {/* Footer / Instructions */}
       <footer className="mt-8 text-center text-gray-600 text-sm pb-8">
