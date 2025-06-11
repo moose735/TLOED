@@ -43,42 +43,7 @@ const App = () => {
   const [errorTrades, setErrorTrades] = useState(null);
   const [errorChampions, setErrorChampions] = useState(null);
 
-  // --- Configuration ---
-  // Replace with your actual Sleeper League ID
-  const SLEEPER_LEAGUE_ID = '1048371694643060736';
-  // Replace with the deployed URL of your Google Apps Script Web App for general history/power rankings
-  const GOOGLE_SHEET_API_URL = 'https://script.google.com/macros/s/AKfycbxU2TLDiOxoym2VETq3qrfwUCjE9O0c_gbwHhfAgnrk2faxcBt30EW0jJIq6WXwtYhPdw/exec';
-  // New: Replace with the deployed URL of your Google Apps Script JSON API for the Trade Ticker
-  const TRADE_TICKER_API_URL = 'https://script.google.com/macros/s/AKfycbxFZStkx9SvST6inAbnzfljrRr39H8CsprmEuRh9VUkjRLiAx_-5deo91r7lPegyDkC8A/exec';
-  // If you create a separate Apps Script for champions, use a new URL here
-  const GOOGLE_SHEET_CHAMPIONS_API_URL = 'YOUR_GOOGLE_SHEET_CHAMPIONS_API_URL'; // Placeholder for specific champions data
-  // NEW: Replace with the deployed URL of your Google Apps Script JSON API for Weekly Odds
-  const WEEKLY_ODDS_API_URL = 'https://script.google.com/macros/s/AKfycbxIrqBFK5peO8mSQ1V5mqUxVtfY2kf3-gDP2_Gw9Qxi5LllYbwgM_GcnEvAeGsGpwk4_w/exec';
-  // NEW: Replace with the deployed URL of your Google Apps Script JSON API for Playoff Bracket
-  const BRACKET_API_URL = 'https://script.google.com/macros/s/AKfycbyARvrGYRVnIsHg28e689hOpKHLt2uQ85uDnFDpB8GfnUvknxQRSitrszGPlf4xKWFBrA/exec';
-
-  // Mapping of nicknames/last names (as they might appear in Google Sheets)
-  // to their corresponding Sleeper display_name/username.
-  // This is used to find the correct manager in the Sleeper data.
-  const NICKNAME_TO_SLEEPER_USER = {
-    "irwin": "irwin35",
-    "irwin35": "irwin35",
-    "randall": "DoctorBustdown",
-    "o'donoghue": "MattOD54",
-    "odonoghue": "MattOD54", // Support common variations
-    "bjarnar": "jamiebjarnar",
-    "schmitt": "joes35",
-    "neufeglise": "TJNeuf31",
-    "dembski": "jdembski2000",
-    "meer": "saadmeer32",
-    "boilard": "jblizzySwag",
-    "blumbergs": "blumdick",
-    "ainsworth": "wainsworth",
-    "tomczak": "mavtzak",
-  };
-
-
-  // Helper function to replace a given name (from Google Sheet) with its mapped Sleeper team name.
+   // Helper function to replace a given name (from Google Sheet) with its mapped Sleeper team name.
   // Uses the `playerNameToTeamNameMap` populated from Sleeper data.
   const getMappedTeamName = (originalName) => {
     if (!originalName || typeof originalName !== 'string') return originalName;
