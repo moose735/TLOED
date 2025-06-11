@@ -963,14 +963,11 @@ const App = () => {
 
       {/* Header Section */}
       <header className="w-full max-w-4xl bg-gradient-to-r from-[#0070c0] to-[#005f9f] text-white p-6 rounded-xl shadow-lg mb-8 text-center">
-        <h1 className="text-4xl font-extrabold mb-2">Fantasy League Dashboard</h1>
+        <h1 className="text-4xl font-extrabold mb-2">The League of Extraordinary Douchebags</h1>
         {sleeperLeagueData && (
           <p className="text-xl">
-            {sleeperLeagueData.name} ({sleeperLeagueData.season} Season)
+            {sleeperLeagueData.season} Season
           </p>
-        )}
-        {!sleeperLeagueData && (
-            <p className="text-xl">Your one-stop shop for league insights!</p>
         )}
       </header>
 
@@ -1328,13 +1325,7 @@ const App = () => {
 
       {/* Footer / Instructions */}
       <footer className="mt-8 text-center text-gray-600 text-sm pb-8">
-        <p>Remember to replace placeholder `YOUR_SLEEPER_LEAGUE_ID`, `YOUR_GOOGLE_SHEET_API_URL`, etc., with your actual values.</p>
-        <p className="mt-2">
-          For Sleeper API documentation, visit:{" "}
-          <a href="https://docs.sleeper.com/" target="_blank" rel="noopener noreferrer" className="text-[#0070c0] hover:underline">
-            https://docs.sleeper.com/
-          </a>
-        </p>
+        {/* Removed all original footer text */}
       </footer>
     </div>
   );
