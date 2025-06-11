@@ -343,7 +343,7 @@ const App = () => {
         setErrorOdds(
           `Error: ${error.message}. ` +
           `Please ensure your Weekly Odds Apps Script URL (${WEEKLY_ODDS_API_URL}) is correct and publicly accessible. ` +
-          `Try opening this URL directly in your browser with '?week=0' appended. If it doesn't show JSON data, there's an issue with your Apps Script deployment or code.`
+          `Try opening this URL directly in your browser with '?week=0' appended. If it doesn't show JSON data, there's an issue with your Apps Script deployment or code (check Apps Script 'Executions' logs!).`
         );
       } finally {
         setLoadingOdds(false);
@@ -909,29 +909,15 @@ const App = () => {
           white-space: nowrap;
         }
 
-        /* Trade Ticker Item Specific Styles */
-        .trade-ticker-card {
-            min-width: 280px; /* Keep consistent width */
-            min-height: 220px; /* Set a fixed height for uniformity */
-            overflow-y: hidden;
-            display: flex;
-            flex-direction: column;
-            gap: 2px; /* Reduce gap slightly */
-            padding: 10px 8px; /* Add some internal padding */
-            border-right: 1px solid #cccccc; /* Subtle separator between trade cards */
-            background-color: transparent; /* No background on the card itself */
-        }
-        .trade-ticker-card:last-child {
-            border-right: none; /* No border on the very last duplicated item */
-        }
-        /* Ensure the trade ticker container has a background for contrast */
+        /* Trade Ticker Container (now transparent) */
         #trade-ticker-container {
-            background-color: #f1f5f9; /* Light background for the ticker track */
-            border-radius: 8px;
-            box-shadow: inset 0 1px 3px rgba(0,0,0,0.08);
-            padding-top: 5px;
-            padding-bottom: 5px;
+            background-color: transparent;
+            box-shadow: none;
+            padding: 0; /* Remove vertical padding specific to this container */
+            border-radius: 0;
         }
+
+        /* No specific .trade-ticker-card CSS needed beyond Tailwind classes */
 
 
         @media (max-width: 600px) {
@@ -1052,11 +1038,16 @@ const App = () => {
             ) : errorTrades ? (
               <p className="text-red-500 px-4 md:px-0 text-center">Error: {errorTrades}</p>
             ) : recentTrades && recentTrades.length > 0 ? (
-              <div id="trade-ticker-container" className="overflow-x-auto whitespace-nowrap py-2">
-                <div className="inline-flex gap-2 animate-ticker-scroll pb-2 items-center">
+              <div id="trade-ticker-container" className="overflow-x-auto whitespace-nowrap"> {/* Removed py-2 here */}
+                <div className="inline-flex gap-4 animate-ticker-scroll items-center"> {/* Increased gap to gap-4 */}
                   {/* Duplicate content for continuous scrolling effect */}
                   {[...recentTrades, ...recentTrades].map((trade, index) => (
-                    <div key={`${trade.transaction_id}-${index}`} className="trade-ticker-card">
+                    <div key={`${trade.transaction_id}-${index}`} className="
+                      bg-white border border-[#bfbfbf] rounded-md shadow-sm p-2.5
+                      flex flex-col flex-shrink-0
+                      min-w-[280px] min-h-[220px]
+                      overflow-y-hidden
+                    ">
                       <h3 className="
                         flex justify-center font-semibold text-[11px] text-gray-700 tracking-wide
                         pb-1 mb-1 border-b-2 border-[#0070c0] text-center
