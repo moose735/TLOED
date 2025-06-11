@@ -1,5 +1,13 @@
 import React, { useState, useEffect } from 'react';
-
+import {
+  SLEEPER_LEAGUE_ID,
+  GOOGLE_SHEET_API_URL,
+  TRADE_TICKER_API_URL,
+  GOOGLE_SHEET_CHAMPIONS_API_URL,
+  WEEKLY_ODDS_API_URL,
+  BRACKET_API_URL,
+  NICKNAME_TO_SLEEPER_USER
+} from './config';
 // Main App component
 const App = () => {
   // State to store data fetched from Sleeper API (League details)
