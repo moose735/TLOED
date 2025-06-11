@@ -55,7 +55,7 @@ const App = () => {
   // NEW: Replace with the deployed URL of your Google Apps Script JSON API for Weekly Odds
   const WEEKLY_ODDS_API_URL = 'https://script.google.com/macros/s/AKfycbxIrqBFK5peO8mSQ1V5mqUxVtfY2kf3-gDP2_Gw9Qxi5LllYbwgM_GcnEvAeGsGpwk4_w/exec';
   // NEW: Replace with the deployed URL of your Google Apps Script JSON API for Playoff Bracket
-  const BRACKET_API_URL = 'https://script.google.com/macros/s/AKfycbyARvrGYRVnIsHg28e689hOpKHLt2uQ85uDnFDpB8GfnUvknxQRSitrszGPlf4xWFBrA/exec';
+  const BRACKET_API_URL = 'https://script.google.com/macros/s/AKfycbyARvrGYRVnIsHg28e689hOpKHLt2uQ85uDnFDpB8GfnUvknxQRSitrszGPlf4xKWFBrA/exec';
 
   // Mapping of nicknames/last names (as they might appear in Google Sheets)
   // to their corresponding Sleeper display_name/username.
