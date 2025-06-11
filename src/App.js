@@ -909,6 +909,31 @@ const App = () => {
           white-space: nowrap;
         }
 
+        /* Trade Ticker Item Specific Styles */
+        .trade-ticker-card {
+            min-width: 280px; /* Keep consistent width */
+            min-height: 220px; /* Set a fixed height for uniformity */
+            overflow-y: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 2px; /* Reduce gap slightly */
+            padding: 10px 8px; /* Add some internal padding */
+            border-right: 1px solid #cccccc; /* Subtle separator between trade cards */
+            background-color: transparent; /* No background on the card itself */
+        }
+        .trade-ticker-card:last-child {
+            border-right: none; /* No border on the very last duplicated item */
+        }
+        /* Ensure the trade ticker container has a background for contrast */
+        #trade-ticker-container {
+            background-color: #f1f5f9; /* Light background for the ticker track */
+            border-radius: 8px;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.08);
+            padding-top: 5px;
+            padding-bottom: 5px;
+        }
+
+
         @media (max-width: 600px) {
           .navbar {
             padding: 0;
@@ -938,6 +963,10 @@ const App = () => {
           }
           .team-ticker-item {
             padding: 0 10px;
+          }
+          .trade-ticker-card {
+            min-width: 250px;
+            min-height: 180px; /* Adjust for smaller screens if needed */
           }
         }
       `}</style>
@@ -1027,13 +1056,7 @@ const App = () => {
                 <div className="inline-flex gap-2 animate-ticker-scroll pb-2 items-center">
                   {/* Duplicate content for continuous scrolling effect */}
                   {[...recentTrades, ...recentTrades].map((trade, index) => (
-                    <div key={`${trade.transaction_id}-${index}`} className="
-                      bg-white/90 border border-[#bfbfbf] rounded-md shadow-sm p-2.5 flex flex-col gap-2
-                      flex-shrink-0
-                      min-w-[280px]
-                      h-auto
-                      overflow-y-hidden
-                    ">
+                    <div key={`${trade.transaction_id}-${index}`} className="trade-ticker-card">
                       <h3 className="
                         flex justify-center font-semibold text-[11px] text-gray-700 tracking-wide
                         pb-1 mb-1 border-b-2 border-[#0070c0] text-center
