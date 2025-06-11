@@ -21,7 +21,7 @@ export const GOOGLE_SHEET_CHAMPIONS_API_URL = 'YOUR_GOOGLE_SHEET_CHAMPIONS_API_U
 export const WEEKLY_ODDS_API_URL = 'https://script.google.com/macros/s/AKfycbxIrqBFK5peO8mSQ1V5mqUxVtfY2kf3-gDP2_Gw9Qxi5LllYbwgM_GcnEvAeGsGpwk4_w/exec';
 
 // Replace with the deployed URL of your Google Apps Script JSON API for Playoff Bracket
-export const BRACKET_API_URL = 'https://script.google.com/macros/s/AKfycbyARvrGYRVnIsHg28e689hOpKHLt2uQ85uDnFDpB8GfnUvknxQRSitrszGPlf4xWFBrA/exec';
+export const BRACKET_API_URL = 'https://script.google.com/macros/s/AKfycbyARvrGYRVnIsHg28e689hOpKHLt2uQ85uDnFDpB8GfnUvknxQRSitrszGPlf4xKWFBrA/exec';
 
 
 // --- Manager Name Mappings ---
