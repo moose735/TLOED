@@ -125,7 +125,7 @@ const App = () => {
 
     const nameParts = displayName.trim().split(/\s+/);
     if (nameParts.length > 1) {
-      nameParts[nameParts.length - 1] = teamName;
+      nameParts[nameP`parts.length - 1] = teamName;
       return nameParts.join(' ');
     }
     return displayName;
@@ -551,13 +551,7 @@ const App = () => {
         .odds-ou-box small {
           font-size: 0.7em;
           font-weight: normal;
-          color: #666;
-        }
-        .odds-score {
-          margin-left: 10px;
-          font-size: 14px;
-          color: #444;
-          font-weight: 700;
+          color: #666; /* Default dark grey text */
         }
         .odds-win {
             background: linear-gradient(135deg, #0070c0 0%, #005f9f 100%) !important; /* Blue gradient */
@@ -565,11 +559,21 @@ const App = () => {
             border-color: #005f9f !important;
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
+        /* FIX: Ensure -110 text is visible on blue background */
+        .odds-ou-box.odds-win small {
+            color: white !important; /* Make the small text white when the box is winning */
+        }
         .odds-lose {
             background: #ffffff !important; /* White for loser */
             color: #888 !important;
             border-color: #bfbfbf !important; /* Light grey border */
             opacity: 0.85;
+        }
+        .odds-score {
+          margin-left: 10px;
+          font-size: 14px;
+          color: #444;
+          font-weight: 700;
         }
         .odds-button {
           margin: 12px;
