@@ -9,7 +9,26 @@ import {
   NICKNAME_TO_SLEEPER_USER
 } from './config'; // Standard import path for sibling files
 
-// Define the available tabs
+// Define the available tabs and their categories for the dropdown
+const NAV_CATEGORIES = {
+  HOME: { label: 'Home', tab: 'Trades' }, // Home directly maps to Trades ticker
+  LEAGUE_STATS: {
+    label: 'League Stats',
+    subTabs: [
+      { label: 'Weekly Odds', tab: 'Weekly Odds' },
+      { label: 'Playoff Bracket', tab: 'Playoff Bracket' },
+    ]
+  },
+  HISTORICAL_DATA: {
+    label: 'Historical Data',
+    subTabs: [
+      { label: 'League History', tab: 'League History' },
+      { label: 'Champions & Awards', tab: 'Champions' },
+    ]
+  }
+};
+
+// Flattened list of all possible tabs for conditional rendering
 const TABS = {
   TRADES: 'Trades',
   ODDS: 'Weekly Odds',
@@ -20,11 +39,11 @@ const TABS = {
 
 // Main App component
 const App = () => {
-  // State to store data fetched from Sleeper API (League details) - KEPT FOR MAP
+  // State to store data fetched from Sleeper API (League details) - KEPT FOR HEADER DISPLAY
   const [sleeperLeagueData, setSleeperLeagueData] = useState(null);
   // State to store data fetched from Google Sheet API (General historical data like power rankings)
   const [googleSheetHistory, setGoogleSheetHistory] = useState(null);
-  // State to store league managers/teams data from Sleeper API - KEPT FOR MAP
+  // State to store league managers/teams data from Sleeper API - KEPT FOR TEAM TICKER AND NAME MAP
   const [leagueManagers, setLeagueManagers] = useState(null);
   // State to store recent transactions data from the new Apps Script JSON API
   const [recentTrades, setRecentTrades] = useState(null);
@@ -46,17 +65,18 @@ const App = () => {
   // State to store a map of nickname/last name (from Google Sheets) to actual Sleeper team names
   const [playerNameToTeamNameMap, setPlayerNameToTeamNameMap] = useState({});
 
-  // State for active tab
-  const [activeTab, setActiveTab] = useState(TABS.TRADES); // Default to Trades tab
+  // State for active tab (now derived from dropdown selection)
+  const [activeTab, setActiveTab] = useState(TABS.TRADES); // Default to Trades (Home) tab
+
+  // State for dropdown visibility
+  const [activeDropdown, setActiveDropdown] = useState(null); // Stores the label of the currently open dropdown
 
   // States for loading indicators
-  // Removed loadingSleeper and loadingManagers as those sections are gone, but kept for fetch logic if map is needed
   const [loadingGoogleSheet, setLoadingGoogleSheet] = useState(true);
   const [loadingTrades, setLoadingTrades] = useState(true);
   const [loadingChampions, setLoadingChampions] = useState(true);
 
   // States for error messages
-  // Removed errorSleeper and errorManagers
   const [errorGoogleSheet, setErrorGoogleSheet] = useState(null);
   const [errorTrades, setErrorTrades] = useState(null);
   const [errorChampions, setErrorChampions] = useState(null);
@@ -71,12 +91,12 @@ const App = () => {
   };
 
 
-  // Effect hook to fetch general league data from Sleeper API (KEPT TO GET LEAGUE ID FOR MAP)
+  // Effect hook to fetch general league data from Sleeper API (KEPT FOR HEADER DISPLAY)
   useEffect(() => {
     const fetchSleeperData = async () => {
       if (SLEEPER_LEAGUE_ID === 'YOUR_SLEEPER_LEAGUE_ID') {
         // console.warn("SLEEPER_LEAGUE_ID not set. Skipping Sleeper league data fetch.");
-        return; // Don't set error or loading state for a section we removed
+        return;
       }
 
       try {
@@ -90,7 +110,7 @@ const App = () => {
         const data = await response.json();
         setSleeperLeagueData(data);
       } catch (error) {
-        console.error("Error fetching Sleeper data for map:", error);
+        console.error("Error fetching Sleeper data for header:", error);
       }
     };
 
@@ -99,6 +119,7 @@ const App = () => {
 
 
   // Helper function to format manager display name by replacing last name with team name (KEPT FOR MAP)
+  // This is no longer used for display, but kept for consistency if needed in the future.
   const getFormattedManagerName = (displayName, teamName) => {
     if (!displayName || !teamName) return displayName || teamName;
 
@@ -112,12 +133,12 @@ const App = () => {
 
 
   // Effect hook to fetch league managers/users data from Sleeper API and build the team name map
-  // This is crucial for `getMappedTeamName` so it's kept.
+  // This is crucial for `getMappedTeamName` and the new team ticker.
   useEffect(() => {
     const fetchManagersData = async () => {
       if (SLEEPER_LEAGUE_ID === 'YOUR_SLEEPER_LEAGUE_ID') {
-        // console.warn("SLEEPER_LEAGUE_ID not set. Skipping managers data fetch for map.");
-        return; // Don't set error or loading state for a section we removed
+        setLeagueManagers([]); // Set empty array if ID not configured
+        return;
       }
 
       try {
@@ -144,13 +165,13 @@ const App = () => {
             userId: user.user_id,
             displayName: displayName,
             teamName: teamName,
-            formattedDisplayNameForManagerLine: getFormattedManagerName(displayName, teamName),
+            formattedDisplayNameForManagerLine: getFormattedManagerName(displayName, teamName), // Retained but not used for display
             wins: userRoster ? userRoster.settings.wins : 0,
             losses: userRoster ? userRoster.settings.losses : 0,
             avatar: user.avatar ? `https://sleepercdn.com/avatars/thumbs/${user.avatar}` : 'https://placehold.co/40x40/cccccc/333333?text=M'
           };
         });
-        setLeagueManagers(combinedManagers); // Still set for potential future use or debugging
+        setLeagueManagers(combinedManagers);
 
         // Build the playerNameToTeamNameMap
         const newPlayerNameToTeamNameMap = {};
@@ -159,16 +180,13 @@ const App = () => {
             manager.displayName.toLowerCase() === sleeperUserIdentifier.toLowerCase()
           );
           if (matchingManager) {
-            newPlayerNameToTeamNameMap[nicknameKey.toLowerCase()] = matchingManager.teamName; // Store in lowercase for consistent lookup
-            // console.log(`Mapped "${nicknameKey}" to "${matchingManager.teamName}"`); // For debugging
-          } else {
-            // console.log(`No Sleeper manager found for "${sleeperUserIdentifier}" (from nickname "${nicknameKey}")`); // For debugging
+            newPlayerNameToTeamNameMap[nicknameKey.toLowerCase()] = matchingManager.teamName;
           }
         });
         setPlayerNameToTeamNameMap(newPlayerNameToTeamNameMap);
 
       } catch (error) {
-        console.error("Error fetching managers data for map:", error);
+        console.error("Error fetching managers data for map and ticker:", error);
       }
     };
 
@@ -447,10 +465,10 @@ const App = () => {
         }
 
         /* Hide scrollbar for the trade ticker container */
-        #trade-ticker-container {
+        #trade-ticker-container, #team-ticker-container {
           scrollbar-width: none; /* Firefox */
         }
-        #trade-ticker-container::-webkit-scrollbar {
+        #trade-ticker-container::-webkit-scrollbar, #team-ticker-container::-webkit-scrollbar {
           display: none; /* Chrome, Safari, Opera */
         }
 
@@ -762,86 +780,165 @@ const App = () => {
             color: #2D3748; /* Darker text */
         }
 
-        /* Tab specific styles */
-        .tab-button {
-            padding: 12px 20px;
-            border: none;
-            background: #bfbfbf; /* Light Grey */
-            color: #333;
-            font-weight: 600;
+        /* Dropdown Navigation Styles */
+        .navbar {
+            display: flex;
+            justify-content: center;
+            width: 100%;
+            max-width: 4xl;
+            background: #0070c0; /* Darker blue for navbar */
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            padding: 0 10px;
+            z-index: 1000; /* Ensure it stays on top */
+            position: relative;
+        }
+
+        .nav-item {
+            position: relative;
             cursor: pointer;
-            transition: background 0.3s ease, color 0.3s ease;
-            border-radius: 8px 8px 0 0;
-            margin: 0 2px;
-            box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
-        }
-
-        .tab-button.active {
-            background: linear-gradient(135deg, #0070c0 0%, #005f9f 100%); /* Primary blue gradient */
+            padding: 15px 20px;
             color: white;
-            box-shadow: 0 -4px 8px rgba(0,0,0,0.2);
-            border-bottom: 2px solid transparent; /* Remove border-bottom for active tab */
+            font-weight: 600;
+            transition: background-color 0.3s ease;
+            white-space: nowrap; /* Prevent wrapping */
         }
 
-        .tab-button:hover:not(.active) {
-            background: #e0e0e0; /* Lighter grey on hover */
+        .nav-item:hover {
+            background-color: #005f9f; /* Slightly darker on hover */
+        }
+
+        .nav-item.active-category {
+            background-color: #005f9f; /* Active category styling */
+        }
+
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: #f9f9f9; /* Light background for dropdown */
+            min-width: 160px;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 1001;
+            left: 0; /* Align dropdown with its parent nav-item */
+            top: 100%; /* Position below the nav-item */
+            border-radius: 0 0 8px 8px;
+            overflow: hidden;
+            border-top: 2px solid #0070c0; /* Blue line at top of dropdown */
+        }
+
+        .nav-item:hover .dropdown-content, .dropdown-content.active {
+            display: block;
+        }
+
+        .dropdown-item {
+            color: #333;
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+            text-align: left;
+            font-weight: normal;
+        }
+
+        .dropdown-item:hover {
+            background-color: #e0e0e0;
             color: #0070c0;
         }
+        .dropdown-item.active-tab {
+            background-color: #0070c0; /* Active tab in dropdown */
+            color: white;
+        }
 
-        .tab-content {
+
+        .content-container {
             background: white;
             padding: 25px;
-            border-radius: 0 0 8px 8px; /* Rounded bottom corners only */
+            border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
             width: 100%;
             max-width: 4xl;
-            min-height: 400px; /* Ensure a minimum height for content */
+            min-height: 400px;
             display: flex;
             flex-direction: column;
             align-items: center;
+            margin-top: 20px; /* Space between nav and content */
         }
 
+        /* Team Ticker specific styles */
+        #team-ticker-container {
+          overflow-x: auto;
+          white-space: nowrap;
+          padding: 8px 0;
+          width: 100%;
+          background: #e0e0e0; /* Light grey background */
+          margin-bottom: 20px; /* Space between team ticker and navbar */
+          box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .team-ticker-item {
+          display: inline-flex; /* Use inline-flex to allow flex properties while being in a row */
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 0 15px;
+          margin: 0 5px;
+          border-right: 1px solid #bfbfbf; /* Separator */
+          height: 70px; /* Fixed height for consistent alignment */
+          flex-shrink: 0;
+          font-size: 13px;
+          color: #444;
+        }
+        .team-ticker-item:last-child {
+            border-right: none;
+        }
+        .team-ticker-item img {
+          width: 30px;
+          height: 30px;
+          border-radius: 50%;
+          object-fit: cover;
+          margin-bottom: 4px;
+          border: 1px solid #0070c0;
+        }
+        .team-ticker-item .team-name {
+          font-weight: 600;
+          color: #0070c0;
+          white-space: nowrap;
+        }
+        .team-ticker-item .team-record {
+          font-size: 11px;
+          color: #666;
+          white-space: nowrap;
+        }
 
         @media (max-width: 600px) {
-          .bracket-container {
-            flex-direction: column;
-            align-items: center;
+          .navbar {
+            padding: 0;
+            flex-wrap: wrap; /* Allow nav items to wrap */
+            border-radius: 8px; /* Maintain rounded corners if wrapped */
           }
-          .bracket-round {
-            margin-bottom: 20px;
-            width: 90%;
-            min-width: unset;
+          .nav-item {
+            padding: 10px 12px;
+            font-size: 0.9em;
           }
-          .bracket-match {
-            font-size: 14px;
-            padding: 10px;
+          .dropdown-content {
+            width: 100%; /* Full width for dropdown on small screens */
+            left: 0;
+            border-radius: 0 0 8px 8px; /* Adjust if navbar wraps */
+            position: static; /* Stack vertically for simpler mobile dropdowns */
+            box-shadow: none; /* Remove shadow to blend */
+            border-top: none;
           }
-          .bracket-round-label {
-            font-size: 16px;
+          .nav-item:hover .dropdown-content, .dropdown-content.active {
+            display: block; /* Always show when active for category */
           }
-          .lower-seeds-grid {
-            gap: 8px;
+          .dropdown-item {
+            padding: 10px 12px;
           }
-          .lower-seed-box {
-            flex-basis: calc(50% - 8px);
-            max-width: calc(50% - 8px);
+          .content-container {
+            padding: 15px;
           }
-           .tab-button {
-              padding: 10px 15px;
-              font-size: 0.9em;
-              margin: 0 1px;
-              border-radius: 6px 6px 0 0;
-           }
-        }
-        @media (max-width: 400px) {
-          .lower-seed-box {
-            flex-basis: calc(100% - 8px);
-            max-width: calc(100% - 8px);
+          .team-ticker-item {
+            padding: 0 10px;
           }
-           .tab-button {
-              font-size: 0.8em;
-              padding: 8px 10px;
-           }
         }
       `}</style>
 
@@ -858,30 +955,73 @@ const App = () => {
         )}
       </header>
 
-      {/* Tabs Navigation */}
-      <div className="w-full max-w-4xl flex justify-center mb-0 mt-4">
-        {Object.values(TABS).map((tab) => (
-          <button
-            key={tab}
-            className={`tab-button ${activeTab === tab ? 'active' : ''}`}
-            onClick={() => setActiveTab(tab)}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
+      {/* New Team Ticker */}
+      <section id="team-ticker-container">
+        {leagueManagers && leagueManagers.length > 0 ? (
+          <div className="inline-flex animate-ticker-scroll items-center h-full">
+            {/* Duplicate content for continuous scrolling effect */}
+            {[...leagueManagers, ...leagueManagers].map((manager, index) => (
+              <div key={`${manager.userId}-${index}`} className="team-ticker-item">
+                <img src={manager.avatar} alt={`${manager.teamName} avatar`} onError={(e) => e.target.src = 'https://placehold.co/30x30/cccccc/333333?text=M' } />
+                <span className="team-name">{manager.teamName}</span>
+                <span className="team-record">{manager.wins}-{manager.losses}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-gray-600 text-center py-2">Loading team data for ticker...</p>
+        )}
+      </section>
 
-      {/* Tab Content Area */}
-      <div className="tab-content">
+
+      {/* Dropdown Navigation */}
+      <nav className="navbar mb-0">
+        {Object.entries(NAV_CATEGORIES).map(([categoryKey, category]) => (
+          <div
+            key={categoryKey}
+            className={`nav-item ${activeDropdown === categoryKey ? 'active-category' : ''}`}
+            onMouseEnter={() => category.subTabs && setActiveDropdown(categoryKey)}
+            onMouseLeave={() => setActiveDropdown(null)}
+            onClick={() => { // For categories without sub-tabs (like Home)
+              if (!category.subTabs) {
+                setActiveTab(category.tab);
+                setActiveDropdown(null); // Close any open dropdowns
+              }
+            }}
+          >
+            {category.label}
+            {category.subTabs && (
+              <div className={`dropdown-content ${activeDropdown === categoryKey ? 'active' : ''}`}>
+                {category.subTabs.map((subTab) => (
+                  <a
+                    key={subTab.tab}
+                    href="#" // Use href="#" or onClick for proper link behavior in A tag
+                    className={`dropdown-item ${activeTab === subTab.tab ? 'active-tab' : ''}`}
+                    onClick={(e) => {
+                      e.preventDefault(); // Prevent default link behavior
+                      setActiveTab(subTab.tab);
+                      setActiveDropdown(null); // Close dropdown after selection
+                    }}
+                  >
+                    {subTab.label}
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </nav>
+
+      {/* Main Content Area */}
+      <div className="content-container">
+        {/* Conditional rendering based on activeTab */}
         {activeTab === TABS.TRADES && (
           <section className="w-full">
-            <h2 className="text-2xl font-bold text-[#0070c0] mb-4 border-b-2 border-[#bfbfbf] pb-2 text-center">
-              Recent Trades Ticker
-            </h2>
+            {/* Removed heading for Trade Ticker */}
             {loadingTrades ? (
-              <p className="text-gray-600">Loading recent trades data...</p>
+              <p className="text-gray-600 text-center">Loading recent trades data...</p>
             ) : errorTrades ? (
-              <p className="text-red-500 px-4 md:px-0">Error: {errorTrades}</p>
+              <p className="text-red-500 px-4 md:px-0 text-center">Error: {errorTrades}</p>
             ) : recentTrades && recentTrades.length > 0 ? (
               <div id="trade-ticker-container" className="overflow-x-auto whitespace-nowrap py-2">
                 <div className="inline-flex gap-2 animate-ticker-scroll pb-2 items-center">
@@ -926,7 +1066,7 @@ const App = () => {
                 </div>
               </div>
             ) : (
-              <p className="text-gray-600 px-4 md:px-0">No recent trades data available. Please ensure your Trade Ticker Apps Script URL is correct and data is being returned.</p>
+              <p className="text-gray-600 px-4 md:px-0 text-center">No recent trades data available. Please ensure your Trade Ticker Apps Script URL is correct and data is being returned.</p>
             )}
           </section>
         )}
@@ -1169,7 +1309,7 @@ const App = () => {
 
       {/* Footer / Instructions */}
       <footer className="mt-8 text-center text-gray-600 text-sm pb-8">
-        <p>Remember to replace placeholder `YOUR_SLEEPER_LEAGUE_ID`, `YOUR_GOOGLE_SHEET_API_URL`, and `YOUR_GOOGLE_SHEET_CHAMPIONS_API_URL` with your actual values.</p>
+        <p>Remember to replace placeholder `YOUR_SLEEPER_LEAGUE_ID`, `YOUR_GOOGLE_SHEET_API_URL`, etc., with your actual values.</p>
         <p className="mt-2">
           For Sleeper API documentation, visit:{" "}
           <a href="https://docs.sleeper.com/" target="_blank" rel="noopener noreferrer" className="text-[#0070c0] hover:underline">
