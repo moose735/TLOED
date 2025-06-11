@@ -7,7 +7,8 @@ import {
   WEEKLY_ODDS_API_URL,
   BRACKET_API_URL,
   NICKNAME_TO_SLEEPER_USER
-} from './config';
+} from './config'; // Standard import path for sibling files
+
 // Main App component
 const App = () => {
   // State to store data fetched from Sleeper API (League details)
@@ -51,7 +52,8 @@ const App = () => {
   const [errorTrades, setErrorTrades] = useState(null);
   const [errorChampions, setErrorChampions] = useState(null);
 
-   // Helper function to replace a given name (from Google Sheet) with its mapped Sleeper team name.
+
+  // Helper function to replace a given name (from Google Sheet) with its mapped Sleeper team name.
   // Uses the `playerNameToTeamNameMap` populated from Sleeper data.
   const getMappedTeamName = (originalName) => {
     if (!originalName || typeof originalName !== 'string') return originalName;
@@ -65,7 +67,7 @@ const App = () => {
     const fetchSleeperData = async () => {
       if (SLEEPER_LEAGUE_ID === 'YOUR_SLEEPER_LEAGUE_ID') {
         setLoadingSleeper(false);
-        setErrorSleeper("Please update SLEEPER_LEAGUE_ID in App.js with your actual league ID.");
+        setErrorSleeper("Please update SLEEPER_LEAGUE_ID in config.js with your actual league ID.");
         return;
       }
 
@@ -177,7 +179,7 @@ const App = () => {
     const fetchTradesData = async () => {
       if (TRADE_TICKER_API_URL === 'YOUR_TRADE_TICKER_APPS_SCRIPT_URL') {
         setLoadingTrades(false);
-        setErrorTrades("Please update TRADE_TICKER_API_URL in App.js with your actual Apps Script URL for trades.");
+        setErrorTrades("Please update TRADE_TICKER_API_URL in config.js with your actual Apps Script URL for trades.");
         return;
       }
 
@@ -212,7 +214,7 @@ const App = () => {
     const fetchGoogleSheetData = async () => {
       if (GOOGLE_SHEET_API_URL === 'YOUR_GOOGLE_SHEET_APPS_SCRIPT_URL') {
         setLoadingGoogleSheet(false);
-        setErrorGoogleSheet("Please update GOOGLE_SHEET_API_URL in App.js with your actual Apps Script URL for general history.");
+        setErrorGoogleSheet("Please update GOOGLE_SHEET_API_URL in config.js with your actual Apps Script URL for general history.");
         return;
       }
 
@@ -283,7 +285,7 @@ const App = () => {
     const fetchWeeklyOdds = async (weekNum) => {
       if (WEEKLY_ODDS_API_URL === 'YOUR_WEEKLY_ODDS_APPS_SCRIPT_URL_HERE') {
         setLoadingOdds(false);
-        setErrorOdds("Please update WEEKLY_ODDS_API_URL in App.js with your actual Apps Script URL for weekly odds.");
+        setErrorOdds("Please update WEEKLY_ODDS_API_URL in config.js with your actual Apps Script URL for weekly odds.");
         return;
       }
 
@@ -368,7 +370,7 @@ const App = () => {
     const fetchBracketData = async () => {
       if (BRACKET_API_URL === 'YOUR_BRACKET_APPS_SCRIPT_URL_HERE') {
         setLoadingBracket(false);
-        setErrorBracket("Please update BRACKET_API_URL in App.js with your actual Apps Script URL for the playoff bracket.");
+        setErrorBracket("Please update BRACKET_API_URL in config.js with your actual Apps Script URL for the playoff bracket.");
         return;
       }
 
@@ -402,14 +404,14 @@ const App = () => {
 
   // Helper function to render an individual player or pick item within a trade card
   const renderTradeAsset = (item, type) => {
-    const signClass = type === 'received' ? 'text-green-500' : 'text-red-500';
+    const signClass = type === 'received' ? 'text-[#0070c0]' : 'text-[#ff0000]'; // Blue for received, Red for sent
     const signText = type === 'received' ? '+' : '−';
 
     if (item.type === 'pick') {
       return (
         <div key={item.name} className="flex items-center justify-center gap-1 text-[9px] font-semibold text-gray-700">
           <span className={`${signClass} font-extrabold w-3 h-3 rounded-full flex items-center justify-center text-center mr-0.5 select-none flex-shrink-0`}>{signText}</span>
-          <span className="text-orange-800">{item.name}</span>
+          <span className="text-orange-800">{item.name}</span> {/* Keep orange for picks */}
         </div>
       );
     } else { // Player
@@ -507,58 +509,55 @@ const App = () => {
           justify-content: flex-end;
         }
         .odds-value, .odds-ou-box {
-          background: #e0e0e0;
-          padding: 8px 12px; /* Increased padding for better touch targets */
-          border-radius: 25px; /* More rounded */
+          background: #bfbfbf; /* Light Grey */
+          padding: 8px 12px;
+          border-radius: 25px;
           font-weight: bold;
-          font-size: 15px; /* Slightly larger odds font */
-          min-width: 55px; /* Wider bubbles */
+          font-size: 15px;
+          min-width: 55px;
           text-align: center;
           white-space: nowrap;
-          border: 1px solid #ccc; /* Subtle border */
+          border: 1px solid #a0a0a0; /* Slightly darker grey border */
           transition: background 0.2s ease-in-out, border-color 0.2s ease-in-out;
-
-          /* Flexbox for perfect vertical and horizontal centering */
           display: flex;
           justify-content: center;
           align-items: center;
         }
-        /* Specific centering for .odds-ou-box as it has two lines */
         .odds-ou-box {
           flex-direction: column;
-          line-height: 1.2; /* Retain for multi-line OU box for spacing */
+          line-height: 1.2;
         }
 
         .odds-ou-box small {
-          font-size: 0.7em; /* Keep small text readable */
+          font-size: 0.7em;
           font-weight: normal;
           color: #666;
         }
         .odds-score {
-          margin-left: 10px; /* More space after name */
-          font-size: 14px; /* Slightly larger score font */
-          color: #444; /* Darker score color */
-          font-weight: 700; /* Bolder score */
+          margin-left: 10px;
+          font-size: 14px;
+          color: #444;
+          font-weight: 700;
         }
         .odds-win {
-            background: linear-gradient(135deg, #4CAF50 0%, #689F38 100%) !important;
+            background: linear-gradient(135deg, #0070c0 0%, #005f9f 100%) !important; /* Blue gradient */
             color: white !important;
-            border-color: #388E3C !important;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2); /* Subtle shadow for wins */
+            border-color: #005f9f !important;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
         .odds-lose {
-            background: #F5F5F5 !important;
+            background: #ffffff !important; /* White for loser */
             color: #888 !important;
-            border-color: #E0E0E0 !important;
-            opacity: 0.85; /* Slightly less opaque */
+            border-color: #bfbfbf !important; /* Light grey border */
+            opacity: 0.85;
         }
         .odds-button {
-          margin: 12px; /* More margin around buttons */
-          padding: 12px 20px; /* Larger buttons */
-          background: linear-gradient(135deg, #3f51b5 0%, #303F9F 100%); /* Gradient background */
+          margin: 12px;
+          padding: 12px 20px;
+          background: linear-gradient(135deg, #0070c0 0%, #005f9f 100%); /* Primary blue gradient */
           color: white;
           border: none;
-          border-radius: 8px; /* More rounded buttons */
+          border-radius: 8px;
           cursor: pointer;
           font-weight: bold;
           font-size: 16px;
@@ -566,9 +565,9 @@ const App = () => {
           box-shadow: 0 3px 6px rgba(0,0,0,0.2);
         }
         .odds-button:hover {
-          transform: translateY(-2px); /* Lift effect on hover */
+          transform: translateY(-2px);
           box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-          background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%); /* Green hover */
+          background: linear-gradient(135deg, #005f9f 0%, #004c80 100%); /* Darker blue on hover */
         }
         .odds-button:disabled {
           background: #cccccc;
@@ -579,28 +578,28 @@ const App = () => {
         }
 
         .week-nav-button {
-          background: #e0e0e0;
-          color: #3f51b5;
+          background: #bfbfbf; /* Light Grey */
+          color: #0070c0; /* Primary Blue */
           font-weight: 600;
           padding: 8px 12px;
           border-radius: 6px;
           cursor: pointer;
           transition: background 0.2s, color 0.2s, transform 0.1s;
-          border: 1px solid #ccc;
+          border: 1px solid #a0a0a0; /* Slightly darker grey border */
           margin: 4px;
-          min-width: 40px; /* Ensure buttons have a minimum width */
+          min-width: 40px;
         }
 
         .week-nav-button:hover {
-          background: #cddc39; /* Light green on hover */
-          color: #333;
+          background: #e0e0e0; /* Lighter grey on hover */
+          color: #005f9f; /* Darker blue on hover */
           transform: translateY(-1px);
         }
 
         .week-nav-button.active {
-          background: #3f51b5; /* Blue for active week */
+          background: #0070c0; /* Primary Blue for active week */
           color: white;
-          border-color: #303F9F;
+          border-color: #005f9f;
           box-shadow: 0 2px 5px rgba(0,0,0,0.2);
           transform: translateY(-1px);
         }
@@ -608,42 +607,42 @@ const App = () => {
         /* Adjustments for better wrapping on small screens for week buttons */
         .week-buttons-container {
             display: flex;
-            flex-wrap: wrap; /* Allow buttons to wrap to the next line */
+            flex-wrap: wrap;
             justify-content: center;
-            gap: 8px; /* Space between buttons */
+            gap: 8px;
             margin-bottom: 1rem;
-            max-width: 100%; /* Ensure it doesn't overflow horizontally */
-            overflow-x: auto; /* Allow horizontal scrolling if buttons don't fit */
-            padding-bottom: 8px; /* Add some padding if scrollbar appears */
-            scrollbar-width: none; /* Hide scrollbar for firefox */
+            max-width: 100%;
+            overflow-x: auto;
+            padding-bottom: 8px;
+            scrollbar-width: none;
         }
         .week-buttons-container::-webkit-scrollbar {
-            display: none; /* Hide scrollbar for webkit browsers */
+            display: none;
         }
 
         /* Playoff Bracket Specific Styles */
         .bracket-container {
           display: flex;
           justify-content: center;
-          gap: 20px; /* Space between rounds */
-          flex-wrap: nowrap; /* Prevent rounds from wrapping */
-          overflow-x: auto; /* Allow horizontal scrolling if necessary */
+          gap: 20px;
+          flex-wrap: nowrap;
+          overflow-x: auto;
           max-width: 100%;
-          padding: 10px; /* Added padding for better mobile view */
-          scrollbar-width: thin; /* Firefox */
-          scrollbar-color: #cbd5e0 #f1f5f9; /* Thumb and Track for Firefox */
+          padding: 10px;
+          scrollbar-width: thin;
+          scrollbar-color: #bfbfbf #f1f5f9; /* Light grey thumb and track */
         }
         .bracket-container::-webkit-scrollbar {
-            height: 8px; /* Height of the scrollbar */
+            height: 8px;
         }
         .bracket-container::-webkit-scrollbar-track {
-            background: #f1f5f9; /* Color of the track */
+            background: #f1f5f9;
             border-radius: 10px;
         }
         .bracket-container::-webkit-scrollbar-thumb {
-            background-color: #cbd5e0; /* Color of the scroll thumb */
+            background-color: #bfbfbf; /* Light Grey */
             border-radius: 10px;
-            border: 2px solid #f1f5f9; /* Padding around thumb */
+            border: 2px solid #f1f5f9;
         }
 
 
@@ -651,56 +650,55 @@ const App = () => {
           display: flex;
           flex-direction: column;
           align-items: center;
-          min-width: 180px; /* Slightly wider columns */
+          min-width: 180px;
           text-align: center;
-          background: #fff; /* White background for rounds */
+          background: #fff;
           padding: 15px;
           border-radius: 8px;
           box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-          flex-shrink: 0; /* Prevent shrinking on overflow */
+          flex-shrink: 0;
         }
 
         .bracket-round-label {
           font-weight: bold;
           margin-bottom: 15px;
           font-size: 18px;
-          color: #3f51b5; /* Matching primary color */
-          border-bottom: 2px solid #e0e0e0;
+          color: #0070c0; /* Primary Blue */
+          border-bottom: 2px solid #bfbfbf; /* Light Grey */
           padding-bottom: 8px;
           width: 100%;
         }
 
         .bracket-match {
-          background: #f9f9f9; /* Lighter background for matches */
+          background: #ffffff; /* White background */
           padding: 12px;
-          border: 1px solid #e0e0e0;
+          border: 1px solid #bfbfbf; /* Light grey border */
           margin: 10px 0;
           border-radius: 6px;
           box-shadow: 1px 1px 4px rgba(0,0,0,0.05);
           font-size: 15px;
           min-width: 160px;
-          width: 100%; /* Take full width of round column */
+          width: 100%;
         }
 
         .bracket-match-player {
             display: flex;
-            align-items: center; /* Align items vertically in center */
+            align-items: center;
             font-weight: 500;
-            margin-bottom: 4px; /* Space between player rows */
+            margin-bottom: 4px;
         }
-        /* Remove bottom margin for the last player in a match */
         .bracket-match-player:last-of-type {
             margin-bottom: 0;
         }
 
         .bracket-match-player strong {
-            color: #6200EE; /* Deep purple for seeds */
-            flex-shrink: 0; /* Prevent seed from shrinking */
-            margin-right: 6px; /* Reduced space after seed */
+            color: #0070c0; /* Primary Blue for seeds */
+            flex-shrink: 0;
+            margin-right: 6px;
         }
 
         .bracket-match-player span {
-            flex-grow: 1; /* Allow team name to take available space */
+            flex-grow: 1;
             text-align: left;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -712,7 +710,7 @@ const App = () => {
           font-size: 13px;
           color: #666;
           font-style: italic;
-          font-weight: normal; /* Override potential bold from parent */
+          font-weight: normal;
         }
 
         .bracket-bye {
@@ -723,7 +721,7 @@ const App = () => {
         }
 
         .dotted-line {
-          border-top: 1px dotted #a0a0a0;
+          border-top: 1px dotted #bfbfbf; /* Light Grey */
           margin: 40px auto 30px;
           max-width: 500px;
           width: 90%;
@@ -733,45 +731,45 @@ const App = () => {
           display: flex;
           flex-wrap: wrap;
           justify-content: center;
-          gap: 12px; /* Reduced gap for more compactness */
+          gap: 12px;
           text-align: center;
-          max-width: 600px; /* Constrain width */
+          max-width: 600px;
           width: 100%;
         }
 
         .lower-seed-box {
-          background: #eef2ff; /* Light blue background */
+          background: #f8f8f8; /* Very light grey, almost white */
           padding: 10px 15px;
-          border: 1px solid #c3dafe; /* Lighter border */
+          border: 1px solid #bfbfbf; /* Light Grey */
           border-radius: 6px;
           box-shadow: 1px 1px 3px rgba(0,0,0,0.05);
           font-size: 14px;
           min-width: 110px;
-          flex-basis: calc(33% - 12px); /* 3 items per row on larger screens */
+          flex-basis: calc(33% - 12px);
           max-width: calc(33% - 12px);
-          box-sizing: border-box; /* Include padding/border in width */
+          box-sizing: border-box;
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: center;
         }
         .lower-seed-box strong {
-            color: #6200EE; /* Deep purple for seeds */
+            color: #0070c0; /* Primary Blue for seeds */
         }
         .lower-seed-box span {
-            color: #2D3748; /* Even darker for team names */
+            color: #2D3748; /* Darker text */
         }
 
 
         @media (max-width: 600px) {
           .bracket-container {
-            flex-direction: column; /* Stack rounds vertically on small screens */
+            flex-direction: column;
             align-items: center;
           }
           .bracket-round {
             margin-bottom: 20px;
-            width: 90%; /* Take more width on small screens */
-            min-width: unset; /* Remove min-width to allow shrinking */
+            width: 90%;
+            min-width: unset;
           }
           .bracket-match {
             font-size: 14px;
@@ -781,30 +779,30 @@ const App = () => {
             font-size: 16px;
           }
           .lower-seeds-grid {
-            gap: 8px; /* Smaller gap on small screens */
+            gap: 8px;
           }
           .lower-seed-box {
-            flex-basis: calc(50% - 8px); /* 2 items per row on small screens */
+            flex-basis: calc(50% - 8px);
             max-width: calc(50% - 8px);
           }
         }
         @media (max-width: 400px) {
           .lower-seed-box {
-            flex-basis: calc(100% - 8px); /* 1 item per row on very small screens */
+            flex-basis: calc(100% - 8px);
             max-width: calc(100% - 8px);
           }
         }
       `}</style>
 
       {/* Header Section */}
-      <header className="w-full max-w-4xl bg-gradient-to-r from-purple-600 to-indigo-700 text-white p-6 rounded-xl shadow-lg mb-8 text-center">
+      <header className="w-full max-w-4xl bg-gradient-to-r from-[#0070c0] to-[#005f9f] text-white p-6 rounded-xl shadow-lg mb-8 text-center">
         <h1 className="text-4xl font-extrabold mb-2">Fantasy League Dashboard</h1>
         <p className="text-xl">Your one-stop shop for league insights!</p>
       </header>
 
       {/* Current League Status (Sleeper API) */}
       <section className="w-full max-w-4xl bg-white p-6 rounded-xl shadow-md mb-8">
-        <h2 className="text-2xl font-bold text-indigo-700 mb-4 border-b-2 border-indigo-200 pb-2">
+        <h2 className="text-2xl font-bold text-[#0070c0] mb-4 border-b-2 border-[#bfbfbf] pb-2">
           Current League Status
         </h2>
         {loadingSleeper ? (
@@ -813,29 +811,29 @@ const App = () => {
           <p className="text-red-500">Error: {errorSleeper}</p>
         ) : sleeperLeagueData ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div className="bg-purple-50 p-4 rounded-lg shadow-sm">
+            <div className="bg-white p-4 rounded-lg shadow-sm border border-[#bfbfbf]">
               <p className="font-semibold text-lg">League Name:</p>
-              <p className="text-xl font-bold text-purple-800">{sleeperLeagueData.name}</p>
+              <p className="text-xl font-bold text-[#0070c0]">{sleeperLeagueData.name}</p>
             </div>
-            <div className="bg-purple-50 p-4 rounded-lg shadow-sm">
+            <div className="bg-white p-4 rounded-lg shadow-sm border border-[#bfbfbf]">
               <p className="font-semibold text-lg">Season:</p>
-              <p className="text-xl font-bold text-purple-800">{sleeperLeagueData.season}</p>
+              <p className="text-xl font-bold text-[#0070c0]">{sleeperLeagueData.season}</p>
             </div>
-            <div className="bg-purple-50 p-4 rounded-lg shadow-sm">
+            <div className="bg-white p-4 rounded-lg shadow-sm border border-[#bfbfbf]">
               <p className="font-semibold text-lg">Total Rosters:</p>
-              <p className="text-xl font-bold text-purple-800">{sleeperLeagueData.total_rosters}</p>
+              <p className="text-xl font-bold text-[#0070c0]">{sleeperLeagueData.total_rosters}</p>
             </div>
-            <div className="bg-purple-50 p-4 rounded-lg shadow-sm">
+            <div className="bg-white p-4 rounded-lg shadow-sm border border-[#bfbfbf]">
               <p className="font-semibold text-lg">Status:</p>
-              <p className="text-xl font-bold text-purple-800">{sleeperLeagueData.status}</p>
+              <p className="text-xl font-bold text-[#0070c0]">{sleeperLeagueData.status}</p>
             </div>
-            <div className="bg-purple-50 p-4 rounded-lg shadow-sm">
+            <div className="bg-white p-4 rounded-lg shadow-sm border border-[#bfbfbf]">
               <p className="font-semibold text-lg">Draft ID:</p>
-              <p className="text-xl font-bold text-purple-800">{sleeperLeagueData.draft_id}</p>
+              <p className="text-xl font-bold text-[#0070c0]">{sleeperLeagueData.draft_id}</p>
             </div>
-             <div className="bg-purple-50 p-4 rounded-lg shadow-sm">
+             <div className="bg-white p-4 rounded-lg shadow-sm border border-[#bfbfbf]">
               <p className="font-semibold text-lg">Last Updated:</p>
-              <p className="text-xl font-bold text-purple-800">
+              <p className="text-xl font-bold text-[#0070c0]">
                 {new Date(sleeperLeagueData.last_updated_at).toLocaleDateString()}
               </p>
             </div>
@@ -847,7 +845,7 @@ const App = () => {
 
       {/* League Managers / Teams Section (Sleeper API) */}
       <section className="w-full max-w-4xl bg-white p-6 rounded-xl shadow-md mb-8">
-        <h2 className="text-2xl font-bold text-blue-700 mb-4 border-b-2 border-blue-200 pb-2">
+        <h2 className="text-2xl font-bold text-[#0070c0] mb-4 border-b-2 border-[#bfbfbf] pb-2">
           League Managers & Teams
         </h2>
         {loadingManagers ? (
@@ -857,10 +855,10 @@ const App = () => {
         ) : leagueManagers && leagueManagers.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {leagueManagers.map(manager => (
-              <div key={manager.userId} className="bg-blue-50 p-4 rounded-lg shadow-sm flex items-center gap-4">
-                <img src={manager.avatar} alt={`${manager.displayName}'s avatar`} className="w-12 h-12 rounded-full object-cover border-2 border-blue-400" onError={(e) => e.target.src = 'https://placehold.co/40x40/cccccc/333333?text=M' } />
+              <div key={manager.userId} className="bg-white p-4 rounded-lg shadow-sm flex items-center gap-4 border border-[#bfbfbf]">
+                <img src={manager.avatar} alt={`${manager.displayName}'s avatar`} className="w-12 h-12 rounded-full object-cover border-2 border-[#0070c0]" onError={(e) => e.target.src = 'https://placehold.co/40x40/cccccc/333333?text=M' } />
                 <div>
-                  <p className="font-semibold text-lg text-blue-800">{manager.teamName}</p>
+                  <p className="font-semibold text-lg text-[#0070c0]">{manager.teamName}</p>
                   <p className="text-md text-gray-700">Manager: {manager.formattedDisplayNameForManagerLine}</p>
                 </div>
               </div>
@@ -883,15 +881,15 @@ const App = () => {
                 {/* Duplicate content for continuous scrolling effect */}
                 {[...recentTrades, ...recentTrades].map((trade, index) => (
                   <div key={`${trade.transaction_id}-${index}`} className="
-                    bg-white/90 border border-blue-100 rounded-md shadow-sm p-2.5 flex flex-col gap-2
+                    bg-white/90 border border-[#bfbfbf] rounded-md shadow-sm p-2.5 flex flex-col gap-2
                     flex-shrink-0
                     min-w-[280px]
-                    h-auto /* Auto height to fit content dynamically */
-                    overflow-y-hidden /* Hide vertical scrollbar within card */
+                    h-auto
+                    overflow-y-hidden
                   ">
                     <h3 className="
                       flex justify-center font-semibold text-[11px] text-gray-700 tracking-wide
-                      pb-1 mb-1 border-b-2 border-blue-500 text-center
+                      pb-1 mb-1 border-b-2 border-[#0070c0] text-center
                     ">
                       Trade Completed - Week {trade.week}
                     </h3>
@@ -899,9 +897,9 @@ const App = () => {
                       {trade.participants.map((participant, pIndex) => (
                         <React.Fragment key={participant.rosterId}>
                           <div className="flex flex-col flex-shrink-0 items-center p-0.5 min-w-[120px]">
-                            <div className="flex flex-col items-center gap-1 mb-1 pb-1.5 border-b border-red-400 w-full">
-                              <img src={participant.managerAvatar} alt={`${participant.teamName} avatar`} className="w-5 h-5 rounded-full object-cover border border-red-500" onError={(e) => e.target.src = 'https://placehold.co/32x32/cccccc/333333?text=M' } />
-                              <span className="font-semibold text-[10px] text-blue-600 text-center break-words max-w-full">{participant.teamName}</span>
+                            <div className="flex flex-col items-center gap-1 mb-1 pb-1.5 border-b border-[#ff0000] w-full"> {/* Red border for trades */}
+                              <img src={participant.managerAvatar} alt={`${participant.teamName} avatar`} className="w-5 h-5 rounded-full object-cover border border-[#ff0000]" onError={(e) => e.target.src = 'https://placehold.co/32x32/cccccc/333333?text=M' } />
+                              <span className="font-semibold text-[10px] text-[#0070c0] text-center break-words max-w-full">{participant.teamName}</span>
                             </div>
                             <div className="flex flex-col gap-1 flex-grow w-full">
                               {/* Received Assets */}
@@ -929,7 +927,7 @@ const App = () => {
 
       {/* Weekly Odds Section */}
       <section className="w-full max-w-4xl bg-white p-6 rounded-xl shadow-md mb-8 flex flex-col items-center">
-        <h2 className="text-2xl font-bold text-teal-700 mb-4 border-b-2 border-teal-200 pb-2 w-full text-center">
+        <h2 className="text-2xl font-bold text-[#0070c0] mb-4 border-b-2 border-[#bfbfbf] pb-2 w-full text-center">
           Weekly Odds & Results (Week {currentOddsWeek !== null ? currentOddsWeek + 1 : '...'})
         </h2>
         {loadingOdds ? (
@@ -992,7 +990,7 @@ const App = () => {
 
       {/* NEW: Playoff Bracket Section */}
       <section className="w-full max-w-4xl bg-white p-6 rounded-xl shadow-md mb-8 flex flex-col items-center">
-        <h2 className="text-2xl font-bold text-purple-700 mb-4 border-b-2 border-purple-200 pb-2 w-full text-center">
+        <h2 className="text-2xl font-bold text-[#0070c0] mb-4 border-b-2 border-[#bfbfbf] pb-2 w-full text-center">
           Projected Playoff Bracket
         </h2>
         {loadingBracket ? (
@@ -1073,7 +1071,7 @@ const App = () => {
 
       {/* League History Data Section (Google Sheet - general history/power rankings) */}
       <section className="w-full max-w-4xl bg-white p-6 rounded-xl shadow-md mb-8">
-        <h2 className="text-2xl font-bold text-green-700 mb-4 border-b-2 border-green-200 pb-2">
+        <h2 className="text-2xl font-bold text-[#0070c0] mb-4 border-b-2 border-[#bfbfbf] pb-2">
           League History (Power Rankings / General Data)
         </h2>
         {loadingGoogleSheet ? (
@@ -1085,10 +1083,10 @@ const App = () => {
             {googleSheetHistory.data && googleSheetHistory.data.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="min-w-full bg-white rounded-lg overflow-hidden shadow">
-                  <thead className="bg-green-100">
+                  <thead className="bg-[#bfbfbf]"> {/* Light Grey header background */}
                     <tr>
                       {Object.keys(googleSheetHistory.data[0]).map((header) => (
-                        <th key={header} className="py-3 px-4 text-left text-sm font-semibold text-green-800 uppercase tracking-wider">
+                        <th key={header} className="py-3 px-4 text-left text-sm font-semibold text-[#0070c0] uppercase tracking-wider">
                           {header.replace(/_/g, ' ')} {/* Replace underscores with spaces for display */}
                         </th>
                       ))}
@@ -1121,7 +1119,7 @@ const App = () => {
           <p className="text-gray-600">No Google Sheet history data available.</p>
         )}
         <p className="mt-4 text-sm text-gray-500">
-          <a href="https://developers.google.com/apps-script/guides/web" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+          <a href="https://developers.google.com/apps-script/guides/web" target="_blank" rel="noopener noreferrer" className="text-[#0070c0] hover:underline">
             Learn how to expose your Google Sheet as an API using Google Apps Script.
           </a>
         </p>
@@ -1129,7 +1127,7 @@ const App = () => {
 
       {/* Historical Champions / Awards Section (Google Sheet or Hardcoded) */}
       <section className="w-full max-w-4xl bg-white p-6 rounded-xl shadow-md mb-8">
-        <h2 className="text-2xl font-bold text-yellow-700 mb-4 border-b-2 border-yellow-200 pb-2">
+        <h2 className="text-2xl font-bold text-[#0070c0] mb-4 border-b-2 border-[#bfbfbf] pb-2">
           Historical Champions & Awards
         </h2>
         {loadingChampions ? (
@@ -1139,9 +1137,9 @@ const App = () => {
         ) : historicalChampions && historicalChampions.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {historicalChampions.map((champion, index) => (
-              <div key={index} className="bg-yellow-50 p-4 rounded-lg shadow-sm">
+              <div key={index} className="bg-white p-4 rounded-lg shadow-sm border border-[#bfbfbf]">
                 {/* Apply team name replacement for champion, runnerUp, mvp */}
-                {champion.champion && <p className="font-semibold text-lg text-yellow-800">🏆 {champion.year} Champion: {getMappedTeamName(champion.champion)}</p>}
+                {champion.champion && <p className="font-semibold text-lg text-[#0070c0]">🏆 {champion.year} Champion: {getMappedTeamName(champion.champion)}</p>}
                 {champion.runnerUp && <p className="text-md text-gray-700">🥈 Runner-Up: {getMappedTeamName(champion.runnerUp)}</p>}
                 {champion.mvp && <p className="text-md text-gray-700">⭐ MVP: {getMappedTeamName(champion.mvp)}</p>}
                 {/* Add more fields for other awards as needed */}
@@ -1162,7 +1160,7 @@ const App = () => {
         <p>Remember to replace placeholder `YOUR_SLEEPER_LEAGUE_ID`, `YOUR_GOOGLE_SHEET_API_URL`, and `YOUR_GOOGLE_SHEET_CHAMPIONS_API_URL` with your actual values.</p>
         <p className="mt-2">
           For Sleeper API documentation, visit:{" "}
-          <a href="https://docs.sleeper.com/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+          <a href="https://docs.sleeper.com/" target="_blank" rel="noopener noreferrer" className="text-[#0070c0] hover:underline">
             https://docs.sleeper.com/
           </a>
         </p>
