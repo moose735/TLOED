@@ -1038,7 +1038,8 @@ const App = () => {
           <section className="w-full">
             {/* Removed heading for Trade Ticker */}
             {loadingTrades ? (
-              <p className="text-gray-600 text-center">Loading recent trades data...</p>
+              // Display nothing while loading
+              <></>
             ) : errorTrades ? (
               <p className="text-red-500 px-4 md:px-0 text-center">Error: {errorTrades}</p>
             ) : recentTrades && recentTrades.length > 0 ? (
@@ -1047,7 +1048,7 @@ const App = () => {
                   {/* Duplicate content for continuous scrolling effect */}
                   {[...recentTrades, ...recentTrades].map((trade, index) => (
                     <div key={`${trade.transaction_id}-${index}`} className="
-                      bg-white border border-[#bfbfbf] rounded-md shadow-sm p-2.5
+                      /* REMOVED bg-white */ border border-[#bfbfbf] rounded-md shadow-sm p-2.5
                       flex flex-col flex-shrink-0
                       min-w-[280px] min-h-[220px]
                       overflow-y-hidden
