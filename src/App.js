@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react'; // Import useRef
 import {
   SLEEPER_LEAGUE_ID,
   GOOGLE_SHEET_API_URL,
@@ -15,6 +15,7 @@ const NAV_CATEGORIES = {
   LEAGUE_STATS: {
     label: 'League Stats',
     subTabs: [
+      { label: 'Live Matchups', tab: 'Live Matchups' }, // NEW: Live Matchups Tab
       { label: 'Weekly Odds', tab: 'Weekly Odds' },
       { label: 'Playoff Bracket', tab: 'Playoff Bracket' },
     ]
@@ -31,6 +32,7 @@ const NAV_CATEGORIES = {
 // Flattened list of all possible tabs for conditional rendering
 const TABS = {
   TRADES: 'Trades',
+  LIVE_MATCHUPS: 'Live Matchups', // NEW: Live Matchups Tab
   ODDS: 'Weekly Odds',
   BRACKET: 'Playoff Bracket',
   HISTORY: 'League History',
@@ -50,17 +52,24 @@ const App = () => {
   // State to store historical champions/awards data (potentially from Google Sheet or hardcoded)
   const [historicalChampions, setHistoricalChampions] = useState(null);
 
-  // New states for Weekly Odds
+  // States for Weekly Odds
   const [weeklyOddsData, setWeeklyOddsData] = useState({}); // Cache for fetched weeks
   const [currentOddsWeek, setCurrentOddsWeek] = useState(null); // 0-indexed current week for odds
   const [totalOddsWeeks, setTotalOddsWeeks] = useState(14); // Default, will be updated by API
   const [loadingOdds, setLoadingOdds] = useState(true);
   const [errorOdds, setErrorOdds] = useState(null);
 
-  // New states for Playoff Bracket
+  // States for Playoff Bracket
   const [bracketData, setBracketData] = useState(null);
   const [loadingBracket, setLoadingBracket] = useState(true);
   const [errorBracket, setErrorBracket] = useState(null);
+
+  // NEW STATES FOR LIVE MATCHUPS
+  const [liveMatchups, setLiveMatchups] = useState([]);
+  const [currentNFLWeek, setCurrentNFLWeek] = useState(null);
+  const [loadingLiveMatchups, setLoadingLiveMatchups] = useState(true);
+  const [errorLiveMatchups, setErrorLiveMatchups] = useState(null);
+  const intervalRef = useRef(null); // Ref to hold the interval ID
 
   // State to store a map of nickname/last name (from Google Sheets) to actual Sleeper team names
   const [playerNameToTeamNameMap, setPlayerNameToTeamNameMap] = useState({});
@@ -385,7 +394,7 @@ const App = () => {
   }, [WEEKLY_ODDS_API_URL, currentOddsWeek]);
 
 
-  // NEW: Effect hook to fetch Playoff Bracket data from Apps Script JSON API
+  // Effect hook to fetch Playoff Bracket data from Apps Script JSON API
   useEffect(() => {
     const fetchBracketData = async () => {
       if (BRACKET_API_URL === 'YOUR_BRACKET_APPS_SCRIPT_URL_HERE') {
@@ -421,6 +430,118 @@ const App = () => {
     fetchBracketData();
   }, [BRACKET_API_URL]);
 
+  // NEW: Effect hook for Live Matchups (fetch current week and then matchups)
+  useEffect(() => {
+    const fetchCurrentNFLWeek = async () => {
+      try {
+        const response = await fetch('https://api.sleeper.app/v1/state/nfl');
+        if (!response.ok) throw new Error(`Sleeper NFL State API HTTP error! status: ${response.status}`);
+        const data = await response.json();
+        setCurrentNFLWeek(data.week); // Set the current NFL week
+        return data.week;
+      } catch (error) {
+        console.error("Error fetching current NFL week:", error);
+        setErrorLiveMatchups(`Failed to get current NFL week: ${error.message}`);
+        return null;
+      }
+    };
+
+    const fetchLiveMatchups = async (week) => {
+      if (!week || SLEEPER_LEAGUE_ID === 'YOUR_SLEEPER_LEAGUE_ID') {
+        setLoadingLiveMatchups(false);
+        setErrorLiveMatchups("SLEEPER_LEAGUE_ID not set or current NFL week not determined.");
+        return;
+      }
+
+      setLoadingLiveMatchups(true);
+      setErrorLiveMatchups(null); // Clear previous errors
+
+      try {
+        const response = await fetch(`https://api.sleeper.app/v1/league/${SLEEPER_LEAGUE_ID}/matchups/${week}`);
+        if (!response.ok) throw new Error(`Sleeper Matchups API HTTP error! status: ${response.status}`);
+        const matchupsData = await response.json();
+
+        // Process matchups to group them by matchup_id
+        const groupedMatchups = {};
+        matchupsData.forEach(team => {
+          if (!groupedMatchups[team.matchup_id]) {
+            groupedMatchups[team.matchup_id] = [];
+          }
+          groupedMatchups[team.matchup_id].push(team);
+        });
+
+        // Convert the grouped matchups into an array of objects,
+        // each containing team1 and team2, along with their scores.
+        const formattedMatchups = Object.values(groupedMatchups).map(matchup => {
+          // Assuming there are always exactly two teams per matchup_id for regular season
+          const team1 = matchup[0];
+          const team2 = matchup[1];
+
+          // Find team names using leagueManagers data
+          const manager1 = leagueManagers?.find(m => m.userId === team1.owner_id);
+          const manager2 = leagueManagers?.find(m => m.userId === team2.owner_id);
+
+          return {
+            matchupId: team1.matchup_id,
+            team1: {
+              rosterId: team1.roster_id,
+              ownerId: team1.owner_id,
+              name: manager1 ? manager1.teamName : `Team ${team1.roster_id}`,
+              score: team1.points,
+              avatar: manager1 ? manager1.avatar : 'https://placehold.co/40x40/cccccc/333333?text=M'
+            },
+            team2: {
+              rosterId: team2.roster_id,
+              ownerId: team2.owner_id,
+              name: manager2 ? manager2.teamName : `Team ${team2.roster_id}`,
+              score: team2.points,
+              avatar: manager2 ? manager2.avatar : 'https://placehold.co/40x40/cccccc/333333?text=M'
+            }
+          };
+        });
+        setLiveMatchups(formattedMatchups);
+      } catch (error) {
+        console.error("Error fetching live matchups:", error);
+        setErrorLiveMatchups(`Failed to fetch live matchups: ${error.message}`);
+      } finally {
+        setLoadingLiveMatchups(false);
+      }
+    };
+
+    // This effect runs when activeTab changes, or on initial load
+    if (activeTab === TABS.LIVE_MATCHUPS) {
+      // Clear any existing interval when switching tabs or re-initializing
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+
+      const initiatePolling = async () => {
+        const week = await fetchCurrentNFLWeek();
+        if (week) {
+          fetchLiveMatchups(week); // Initial fetch
+          // Set up polling (e.g., every 30 seconds)
+          intervalRef.current = setInterval(() => {
+            fetchLiveMatchups(week);
+          }, 30000); // 30 seconds
+        }
+      };
+
+      initiatePolling();
+
+      // Cleanup function: clear the interval when the component unmounts or activeTab changes
+      return () => {
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+        }
+      };
+    } else {
+      // If not on the Live Matchups tab, ensure the interval is cleared
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    }
+  }, [activeTab, SLEEPER_LEAGUE_ID, leagueManagers]); // Depend on leagueManagers to ensure team names are available
 
   // Helper function to render an individual player or pick item within a trade card
   const renderTradeAsset = (item, type) => {
@@ -921,8 +1042,53 @@ const App = () => {
             border-radius: 0;
         }
 
-        /* No specific .trade-ticker-card CSS needed beyond Tailwind classes */
+        /* Live Matchups specific styles */
+        .live-matchup-card {
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            margin-bottom: 15px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            max-width: 450px; /* Adjust as needed */
+        }
 
+        .live-team-display {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 0;
+            font-size: 1.1em;
+            font-weight: 600;
+            border-bottom: 1px dashed #cccccc;
+        }
+        .live-team-display:last-of-type {
+            border-bottom: none;
+        }
+
+        .live-team-info {
+            display: flex;
+            align-items: center;
+            flex-grow: 1;
+        }
+
+        .live-team-info img {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin-right: 10px;
+            border: 2px solid #0070c0;
+        }
+
+        .live-score {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #0070c0;
+        }
 
         @media (max-width: 600px) {
           .navbar {
@@ -1084,6 +1250,44 @@ const App = () => {
             ) : (
               <p className="text-gray-600 px-4 md:px-0 text-center">No recent trades data available. Please ensure your Trade Ticker Apps Script URL is correct and data is being returned.</p>
             )}
+          </section>
+        )}
+
+        {/* NEW: Live Matchups Section */}
+        {activeTab === TABS.LIVE_MATCHUPS && (
+          <section className="w-full flex flex-col items-center">
+            <h2 className="text-2xl font-bold text-[#0070c0] mb-4 border-b-2 border-[#bfbfbf] pb-2 w-full text-center">
+              Live Matchups (Week {currentNFLWeek || '...'})
+            </h2>
+            {loadingLiveMatchups ? (
+              <p className="text-gray-600">Loading live matchups and scores...</p>
+            ) : errorLiveMatchups ? (
+              <p className="text-red-500">Error: {errorLiveMatchups}</p>
+            ) : liveMatchups && liveMatchups.length > 0 ? (
+              <div className="flex flex-col items-center w-full">
+                {liveMatchups.map((matchup) => (
+                  <div key={matchup.matchupId} className="live-matchup-card">
+                    <div className="live-team-display">
+                      <div className="live-team-info">
+                        <img src={matchup.team1.avatar} alt={`${matchup.team1.name} avatar`} onError={(e) => e.target.src = 'https://placehold.co/32x32/cccccc/333333?text=M' } />
+                        <span>{matchup.team1.name}</span>
+                      </div>
+                      <span className="live-score">{matchup.team1.score}</span>
+                    </div>
+                    <div className="live-team-display">
+                      <div className="live-team-info">
+                        <img src={matchup.team2.avatar} alt={`${matchup.team2.name} avatar`} onError={(e) => e.target.src = 'https://placehold.co/32x32/cccccc/333333?text=M' } />
+                        <span>{matchup.team2.name}</span>
+                      </div>
+                      <span className="live-score">{matchup.team2.score}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-600">No live matchups found for the current week. The season might not be active, or there might be an issue fetching data.</p>
+            )}
+            <p className="mt-4 text-sm text-gray-500">Scores update automatically every 30 seconds.</p>
           </section>
         )}
 
