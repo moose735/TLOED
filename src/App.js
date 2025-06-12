@@ -77,7 +77,7 @@ const App = () => {
   const intervalRef = useRef(null); // Ref to hold the interval ID
 
   // State to store a map of nickname/last name (from Google Sheets) to actual Sleeper team names.
-  // This map will be built based on the *current* league managers.
+  // This map will be built based on the `current` league managers.
   const [playerNameToTeamNameMap, setPlayerNameToTeamNameMap] = useState({});
 
   // State for active tab (now derived from dropdown selection)
@@ -1246,7 +1246,6 @@ const App = () => {
                       key={`${trade.transaction_id}-${index}`}
                       className="border border-[#bfbfbf] rounded-md shadow-sm p-2.5 flex flex-col flex-shrink-0 min-w-[280px] min-h-[220px] overflow-y-hidden"
                     >
-                      {/* FIX APPLIED HERE: className for h3 is now single line */}
                       <h3 className="flex justify-center font-semibold text-[11px] text-gray-700 tracking-wide pb-1 mb-1 border-b-2 border-[#0070c0] text-center">
                         Trade Completed - Week {trade.week}
                       </h3>
