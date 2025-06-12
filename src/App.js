@@ -1246,10 +1246,8 @@ const App = () => {
                       key={`${trade.transaction_id}-${index}`}
                       className="border border-[#bfbfbf] rounded-md shadow-sm p-2.5 flex flex-col flex-shrink-0 min-w-[280px] min-h-[220px] overflow-y-hidden"
                     >
-                      <h3 className="
-                        flex justify-center font-semibold text-[11px] text-gray-700 tracking-wide
-                        pb-1 mb-1 border-b-2 border-[#0070c0] text-center
-                      ">
+                      {/* FIX APPLIED HERE: className for h3 is now single line */}
+                      <h3 className="flex justify-center font-semibold text-[11px] text-gray-700 tracking-wide pb-1 mb-1 border-b-2 border-[#0070c0] text-center">
                         Trade Completed - Week {trade.week}
                       </h3>
                       <div className="flex flex-nowrap justify-center items-start w-full h-full gap-0">
