@@ -522,7 +522,7 @@ const App = () => {
           // Set up polling (e.g., every 30 seconds)
           intervalRef.current = setInterval(() => {
             fetchLiveMatchups(week);
-          }, 30000); // 30 seconds
+          }, 900000); // 15 minutes
         }
       };
 
