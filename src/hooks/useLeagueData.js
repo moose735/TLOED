@@ -3,8 +3,8 @@ import { useState, useEffect, useCallback } from 'react';
 // Define your API URLs here or pass them as arguments to the hook
 const SLEEPER_API_URL = 'YOUR_SLEEPER_API_URL';
 const TRADES_API_URL = 'YOUR_TRADES_APPS_SCRIPT_URL';
-const ODDS_API_URL = 'YOUR_ODDS_APPS_SCRIPT_URL';
-const BRACKET_API_URL = 'YOUR_BRACKET_APPS_SCRIPT_URL';
+const ODDS_API_URL = 'https://script.google.com/macros/s/AKfycbxIrqBFK5peO8mSQ1V5mqUxVtfY2kf3-gDP2_Gw9Qxi5LllYbwgM_GcnEvAeGsGpwk4_w/exec';
+const BRACKET_API_URL = 'https://script.google.com/macros/s/AKfycbyARvrGYRVnIsHg28e689hOpKHLt2uQ85uDnFDpB8GfnUvknxQRSitrszGPlf4xKWFBrA/exec';
 const GOOGLE_SHEET_HISTORY_API_URL = 'YOUR_GOOGLE_SHEET_HISTORY_APPS_SCRIPT_URL';
 const GOOGLE_SHEET_CHAMPIONS_API_URL = 'YOUR_GOOGLE_SHEET_CHAMPIONS_APPS_SCRIPT_URL';
 
