@@ -7,7 +7,7 @@
 // IMPORTANT: Replace these with your actual Sleeper League IDs for each season.
 // The key (year) should match the fantasy season.
 export const SLEEPER_LEAGUE_IDS = {
-  2021: 'YOUR_2021_SLEEPER_LEAGUE_ID_HERE',
+  2021: 'YOUR_2021_SLEEPER_LEAGUE_ID_HERE', //Yahoo year
   2022: '784200735733784576',
   2023: '918543989421416448',
   2024: '1048371694643060736',
