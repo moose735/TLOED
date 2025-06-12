@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  SLEEPER_LEAGUE_IDS, // Updated import
-  CURRENT_FANTASY_SEASON_YEAR, // NEW import
+  SLEEPER_LEAGUE_IDS,
+  CURRENT_FANTASY_SEASON_YEAR,
   GOOGLE_SHEET_API_URL,
   TRADE_TICKER_API_URL,
   GOOGLE_SHEET_CHAMPIONS_API_URL,
@@ -287,7 +287,7 @@ const App = () => {
     };
 
     fetchGoogleSheetData();
-  }, [GOOGLE_SHEET_API_URL]); // No dependency on currentLeagueId as the Apps Script URL is static
+  }, [GOOGLE_SHEET_API_URL]);
 
 
   // Effect hook to fetch historical champions data
@@ -1242,8 +1242,10 @@ const App = () => {
                 <div className="inline-flex gap-4 animate-ticker-scroll items-center"> {/* Increased gap to gap-4 */}
                   {/* Duplicate content for continuous scrolling effect */}
                   {[...recentTrades, ...recentTrades].map((trade, index) => (
-                                        <div key={`${trade.transaction_id}-${index}`} className="border border-[#bfbfbf] rounded-md shadow-sm p-2.5 flex flex-col flex-shrink-0 min-w-[280px] min-h-[220px] overflow-y-hidden">
-
+                    <div
+                      key={`${trade.transaction_id}-${index}`}
+                      className="border border-[#bfbfbf] rounded-md shadow-sm p-2.5 flex flex-col flex-shrink-0 min-w-[280px] min-h-[220px] overflow-y-hidden"
+                    >
                       <h3 className="
                         flex justify-center font-semibold text-[11px] text-gray-700 tracking-wide
                         pb-1 mb-1 border-b-2 border-[#0070c0] text-center
@@ -1255,7 +1257,7 @@ const App = () => {
                           <React.Fragment key={participant.rosterId}>
                             <div className="flex flex-col flex-shrink-0 items-center p-0.5 min-w-[120px]">
                               <div className="flex flex-col items-center gap-1 mb-1 pb-1.5 border-b border-[#ff0000] w-full"> {/* Red border for trades */}
-                                <img src={participant.managerAvatar} alt={`${participant.teamName} avatar`} className="w-5 h-5 rounded-full object-cover border border-[#ff0000]" onError={(e) => e.target.src = 'https://placehold.co/32x32/cccccc/333333?text=M' } />
+                                <img src={participant.managerAvatar} alt={`${participant.teamName} avatar`} onError={(e) => e.target.src = 'https://placehold.co/32x32/cccccc/333333?text=M' } />
                                 <span className="font-semibold text-[10px] text-[#0070c0] text-center break-words max-w-full">{getMappedTeamName(participant.teamName)}</span>
                               </div>
                               <div className="flex flex-col gap-1 flex-grow w-full">
