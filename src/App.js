@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+// App.js
+import React, { useState, useEffect, useCallback } from 'react'; // Added useCallback for memoization later
 import {
   SLEEPER_LEAGUE_ID,
   GOOGLE_SHEET_API_URL,
@@ -6,12 +7,13 @@ import {
   GOOGLE_SHEET_CHAMPIONS_API_URL,
   WEEKLY_ODDS_API_URL,
   BRACKET_API_URL,
+  HISTORICAL_MATCHUPS_API_URL, // <<< ADD THIS IMPORT
   NICKNAME_TO_SLEEPER_USER
-} from './config'; // Standard import path for sibling files
+} from './config';
 
 // Define the available tabs and their categories for the dropdown
 const NAV_CATEGORIES = {
-  HOME: { label: 'Home', tab: 'Trades' }, // Home directly maps to Trades ticker
+  HOME: { label: 'Home', tab: 'Trades' },
   LEAGUE_STATS: {
     label: 'League Stats',
     subTabs: [
@@ -24,6 +26,10 @@ const NAV_CATEGORIES = {
     subTabs: [
       { label: 'League History', tab: 'League History' },
       { label: 'Champions & Awards', tab: 'Champions' },
+      { label: 'All Matchups', tab: 'All Matchups' }, // <<< ADD THIS ENTRY
+      // { label: 'Team Records', tab: 'Team Records' }, // Future: Uncomment when ready
+      // { label: 'Head-to-Head', tab: 'Head-to-Head' }, // Future: Uncomment when ready
+      // { label: 'Points Champions', tab: 'Points Champions' }, // Future: Uncomment when ready
     ]
   }
 };
@@ -34,225 +40,198 @@ const TABS = {
   ODDS: 'Weekly Odds',
   BRACKET: 'Playoff Bracket',
   HISTORY: 'League History',
-  CHAMPIONS: 'Champions'
+  CHAMPIONS: 'Champions',
+  ALL_MATCHUPS: 'All Matchups' // <<< ADD THIS ENTRY
 };
 
 // Main App component
 const App = () => {
-  // State to store data fetched from Sleeper API (League details) - KEPT FOR HEADER DISPLAY
+  // --- State Variables ---
   const [sleeperLeagueData, setSleeperLeagueData] = useState(null);
-  // State to store data fetched from Google Sheet API (General historical data like power rankings)
-  const [googleSheetHistory, setGoogleSheetHistory] = useState(null);
-  // State to store league managers/teams data from Sleeper API - KEPT FOR TEAM TICKER AND NAME MAP
-  const [leagueManagers, setLeagueManagers] = useState(null);
-  // State to store recent transactions data from the new Apps Script JSON API
-  const [recentTrades, setRecentTrades] = useState(null);
-  // State to store historical champions/awards data (potentially from Google Sheet or hardcoded)
-  const [historicalChampions, setHistoricalChampions] = useState(null);
+  const [leagueManagers, setLeagueManagers] = useState([]);
+  const [playerNameToTeamNameMap, setPlayerNameToTeamNameMap] = useState({}); // New map for display names
+  const [activeTab, setActiveTab] = useState(TABS.TRADES); // Default active tab
+  const [activeDropdown, setActiveDropdown] = useState(null); // State for active dropdown menu
 
-  // New states for Weekly Odds
-  const [weeklyOddsData, setWeeklyOddsData] = useState({}); // Cache for fetched weeks
-  const [currentOddsWeek, setCurrentOddsWeek] = useState(null); // 0-indexed current week for odds
-  const [totalOddsWeeks, setTotalOddsWeeks] = useState(14); // Default, will be updated by API
+  // Trade Ticker States
+  const [recentTrades, setRecentTrades] = useState([]);
+  const [loadingTrades, setLoadingTrades] = useState(true);
+  const [errorTrades, setErrorTrades] = useState(null);
+
+  // Weekly Odds States
+  const [weeklyOddsData, setWeeklyOddsData] = useState({});
+  const [currentOddsWeek, setCurrentOddsWeek] = useState(null); // Use null initially to derive from data
+  const [totalOddsWeeks, setTotalOddsWeeks] = useState(0);
   const [loadingOdds, setLoadingOdds] = useState(true);
   const [errorOdds, setErrorOdds] = useState(null);
 
-  // New states for Playoff Bracket
+  // Playoff Bracket States
   const [bracketData, setBracketData] = useState(null);
   const [loadingBracket, setLoadingBracket] = useState(true);
   const [errorBracket, setErrorBracket] = useState(null);
 
-  // State to store a map of nickname/last name (from Google Sheets) to actual Sleeper team names
-  const [playerNameToTeamNameMap, setPlayerNameToTeamNameMap] = useState({});
-
-  // State for active tab (now derived from dropdown selection)
-  const [activeTab, setActiveTab] = useState(TABS.TRADES); // Default to Trades (Home) tab
-
-  // State for dropdown visibility
-  const [activeDropdown, setActiveDropdown] = useState(null); // Stores the label of the currently open dropdown
-
-  // States for loading indicators
+  // Google Sheet History (Power Rankings/General Data) States
+  const [googleSheetHistory, setGoogleSheetHistory] = useState(null);
   const [loadingGoogleSheet, setLoadingGoogleSheet] = useState(true);
-  const [loadingTrades, setLoadingTrades] = useState(true);
-  const [loadingChampions, setLoadingChampions] = useState(true);
-
-  // States for error messages
   const [errorGoogleSheet, setErrorGoogleSheet] = useState(null);
-  const [errorTrades, setErrorTrades] = useState(null);
+
+  // Historical Champions States
+  const [historicalChampions, setHistoricalChampions] = useState([]);
+  const [loadingChampions, setLoadingChampions] = useState(true);
   const [errorChampions, setErrorChampions] = useState(null);
 
+  // <<< START NEW STATE FOR HISTORICAL MATCHUPS >>>
+  const [historicalMatchups, setHistoricalMatchups] = useState(null);
+  const [loadingMatchups, setLoadingMatchups] = useState(true);
+  const [errorMatchups, setErrorMatchups] = useState(null);
+  // <<< END NEW STATE FOR HISTORICAL MATCHUPS >>>
 
-  // Helper function to replace a given name (from Google Sheet) with its mapped Sleeper team name.
-  // Uses the `playerNameToTeamNameMap` populated from Sleeper data.
-  const getMappedTeamName = (originalName) => {
-    if (!originalName || typeof originalName !== 'string') return originalName;
-    const normalizedName = originalName.trim().toLowerCase();
-    return playerNameToTeamNameMap[normalizedName] || originalName;
+
+  // --- Helper Functions ---
+  // Universal function to get mapped team name from any source
+  const getMappedTeamName = useCallback((originalName) => {
+    if (!originalName) return originalName; // Handle null/undefined input
+
+    // First, try direct mapping from Sleeper display_name/username
+    if (playerNameToTeamNameMap[originalName]) {
+      return playerNameToTeamNameMap[originalName];
+    }
+
+    // If not found, try the NICKNAME_TO_SLEEPER_USER mapping
+    const mappedSleeperUser = NICKNAME_TO_SLEEPER_USER[originalName.toLowerCase()];
+    if (mappedSleeperUser && playerNameToTeamNameMap[mappedSleeperUser]) {
+      return playerNameToTeamNameMap[mappedSleeperUser];
+    }
+
+    // Handle cases where Google Sheet names might be just the Sleeper team_name
+    const foundManager = leagueManagers.find(manager => manager.teamName === originalName);
+    if (foundManager) {
+      return originalName;
+    }
+
+    // Fallback for names not found, or if it's already a seed number
+    if (!isNaN(originalName) && !isNaN(parseFloat(originalName))) {
+      return originalName; // If it looks like a number (seed), return as is
+    }
+
+    // Final fallback if no mapping or direct match is found
+    return originalName;
+  }, [playerNameToTeamNameMap, leagueManagers]); // Dependencies for useCallback
+
+  const renderTradeAsset = (asset, type) => {
+    const textColor = type === 'received' ? 'text-green-600' : 'text-red-600';
+    const sign = type === 'received' ? '+' : '-';
+
+    if (asset.type === 'player') {
+      return (
+        <div className={`text-[10px] ${textColor} font-semibold flex items-center gap-1`}>
+          {sign} {asset.name} <span className="text-gray-500 font-normal">({asset.position})</span>
+        </div>
+      );
+    } else if (asset.type === 'pick') {
+      return (
+        <div className={`text-[10px] ${textColor} font-semibold flex items-center gap-1`}>
+          {sign} {asset.year} Pick {asset.round}.{asset.originalPick}
+        </div>
+      );
+    }
+    return null;
   };
 
 
-  // Effect hook to fetch general league data from Sleeper API (KEPT FOR HEADER DISPLAY)
+  // --- useEffect Hooks for Data Fetching ---
+
+  // Effect hook to fetch Sleeper League data and Managers
   useEffect(() => {
     const fetchSleeperData = async () => {
-      if (SLEEPER_LEAGUE_ID === 'YOUR_SLEEPER_LEAGUE_ID') {
-        // console.warn("SLEEPER_LEAGUE_ID not set. Skipping Sleeper league data fetch.");
-        return;
-      }
-
       try {
-        const sleeperApiUrl = `https://api.sleeper.app/v1/league/${SLEEPER_LEAGUE_ID}`;
-        const response = await fetch(sleeperApiUrl);
+        // Fetch league data
+        const leagueResponse = await fetch(`https://api.sleeper.app/v1/league/${SLEEPER_LEAGUE_ID}`);
+        if (!leagueResponse.ok) throw new Error('Failed to fetch league data');
+        const leagueData = await leagueResponse.json();
+        setSleeperLeagueData(leagueData);
 
-        if (!response.ok) {
-          throw new Error(`Sleeper API HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        setSleeperLeagueData(data);
-      } catch (error) {
-        console.error("Error fetching Sleeper data for header:", error);
-      }
-    };
-
-    fetchSleeperData();
-  }, [SLEEPER_LEAGUE_ID]);
-
-
-  // Helper function to format manager display name by replacing last name with team name (KEPT FOR MAP)
-  // This is no longer used for display, but kept for consistency if needed in the future.
-  const getFormattedManagerName = (displayName, teamName) => {
-    if (!displayName || !teamName) return displayName || teamName;
-
-    const nameParts = displayName.trim().split(/\s+/);
-    if (nameParts.length > 1) {
-      nameParts[nameParts.length - 1] = teamName;
-      return nameParts.join(' ');
-    }
-    return displayName;
-  };
-
-
-  // Effect hook to fetch league managers/users data from Sleeper API and build the team name map
-  // This is crucial for `getMappedTeamName` and the new team ticker.
-  useEffect(() => {
-    const fetchManagersData = async () => {
-      if (SLEEPER_LEAGUE_ID === 'YOUR_SLEEPER_LEAGUE_ID') {
-        setLeagueManagers([]); // Set empty array if ID not configured
-        return;
-      }
-
-      try {
-        const usersApiUrl = `https://api.sleeper.app/v1/league/${SLEEPER_LEAGUE_ID}/users`;
-        const rostersApiUrl = `https://api.sleeper.app/v1/league/${SLEEPER_LEAGUE_ID}/rosters`;
-
+        // Fetch users and rosters
         const [usersResponse, rostersResponse] = await Promise.all([
-          fetch(usersApiUrl),
-          fetch(rostersApiUrl)
+          fetch(`https://api.sleeper.app/v1/league/${SLEEPER_LEAGUE_ID}/users`),
+          fetch(`https://api.sleeper.app/v1/league/${SLEEPER_LEAGUE_ID}/rosters`)
         ]);
 
-        if (!usersResponse.ok) throw new Error(`Users API HTTP error! status: ${usersResponse.status}`);
-        if (!rostersResponse.ok) throw new Error(`Rosters API HTTP error! status: ${rostersResponse.status}`);
+        if (!usersResponse.ok) throw new Error('Failed to fetch users data');
+        if (!rostersResponse.ok) throw new Error('Failed to fetch rosters data');
 
         const usersData = await usersResponse.json();
         const rostersData = await rostersResponse.json();
 
-        const combinedManagers = usersData.map(user => {
-          const userRoster = rostersData.find(roster => roster.owner_id === user.user_id);
-          const teamName = user.metadata?.team_name || userRoster?.metadata?.team_name || `Team ${user.display_name || user.username}`;
-          const displayName = user.display_name || user.username;
+        // Create a map from user_id to display_name/username
+        const userIdToUserMap = {};
+        usersData.forEach(user => {
+          userIdToUserMap[user.user_id] = user.display_name || user.username;
+        });
+
+        // Create an initial playerNameToTeamNameMap (user_id/display_name -> team_name)
+        const initialPlayerToTeamMap = {};
+        const managers = rostersData.map(roster => {
+          const user = usersData.find(u => u.user_id === roster.owner_id);
+          const teamName = user ? (user.metadata?.team_name || user.display_name || user.username) : 'Unknown Team';
+          const avatar = user?.avatar ? `https://sleepercdn.com/avatars/thumbs/${user.avatar}` : 'https://placehold.co/30x30/cccccc/333333?text=M'; // Placeholder avatar
+
+          // Populate the map for direct Sleeper display names/usernames
+          if (user) {
+            initialPlayerToTeamMap[user.display_name] = teamName;
+            initialPlayerToTeamMap[user.username] = teamName;
+            if (user.metadata?.team_name) {
+              initialPlayerToTeamMap[user.metadata.team_name] = teamName;
+            }
+          }
 
           return {
-            userId: user.user_id,
-            displayName: displayName,
+            userId: roster.owner_id,
             teamName: teamName,
-            formattedDisplayNameForManagerLine: getFormattedManagerName(displayName, teamName), // Retained but not used for display
-            wins: userRoster ? userRoster.settings.wins : 0,
-            losses: userRoster ? userRoster.settings.losses : 0,
-            avatar: user.avatar ? `https://sleepercdn.com/avatars/thumbs/${user.avatar}` : 'https://placehold.co/40x40/cccccc/333333?text=M'
+            avatar: avatar,
+            wins: roster.settings.wins,
+            losses: roster.settings.losses,
+            ties: roster.settings.ties
           };
         });
-        setLeagueManagers(combinedManagers);
-
-        // Build the playerNameToTeamNameMap
-        const newPlayerNameToTeamNameMap = {};
-        Object.entries(NICKNAME_TO_SLEEPER_USER).forEach(([nicknameKey, sleeperUserIdentifier]) => {
-          const matchingManager = combinedManagers.find(manager =>
-            manager.displayName.toLowerCase() === sleeperUserIdentifier.toLowerCase()
-          );
-          if (matchingManager) {
-            newPlayerNameToTeamNameMap[nicknameKey.toLowerCase()] = matchingManager.teamName;
-          }
-        });
-        setPlayerNameToTeamNameMap(newPlayerNameToTeamNameMap);
-
+        setLeagueManagers(managers);
+        setPlayerNameToTeamNameMap(initialPlayerToTeamMap); // Set the initial map
       } catch (error) {
-        console.error("Error fetching managers data for map and ticker:", error);
+        console.error("Error fetching Sleeper data:", error);
+        // Handle error for sleeper data, maybe display a message on the header
       }
     };
-
-    fetchManagersData();
+    fetchSleeperData();
   }, [SLEEPER_LEAGUE_ID]);
 
 
-  // Effect hook to fetch recent trades data from the new Apps Script JSON API
-  useEffect(() => {
-    const fetchTradesData = async () => {
-      if (TRADE_TICKER_API_URL === 'YOUR_TRADE_TICKER_APPS_SCRIPT_URL') {
-        setLoadingTrades(false);
-        setErrorTrades("Please update TRADE_TICKER_API_URL in config.js with your actual Apps Script URL for trades.");
-        return;
-      }
-
-      try {
-        const response = await fetch(TRADE_TICKER_API_URL, { mode: 'cors' });
-
-        if (!response.ok) {
-          throw new Error(`Trade Ticker API HTTP error! status: ${response.status}. Response: ${await response.text()}.`);
-        }
-
-        const data = await response.json();
-        setRecentTrades(data.data); // Assuming the Apps Script returns { data: [...] }
-
-      } catch (error) {
-        console.error("Error fetching trades data:", error);
-        setErrorTrades(
-          `Error: ${error.message}. ` +
-          `Please ensure your Trade Ticker Apps Script URL (${TRADE_TICKER_API_URL}) is correct and publicly accessible. ` +
-          `**Crucially, try opening this URL directly in your browser. If it doesn't show JSON data, there's an issue with your Apps Script deployment or code (check Apps Script 'Executions' logs!).**`
-        );
-      } finally {
-        setLoadingTrades(false);
-      }
-    };
-
-    fetchTradesData();
-  }, [TRADE_TICKER_API_URL]);
-
-
-  // Effect hook to fetch data from Google Sheet API (general historical data like power rankings)
+  // Effect hook to fetch Google Sheet history data
   useEffect(() => {
     const fetchGoogleSheetData = async () => {
-      if (GOOGLE_SHEET_API_URL === 'YOUR_GOOGLE_SHEET_APPS_SCRIPT_URL') {
+      if (GOOGLE_SHEET_API_URL === 'YOUR_GOOGLE_SHEET_API_URL') {
         setLoadingGoogleSheet(false);
-        setErrorGoogleSheet("Please update GOOGLE_SHEET_API_URL in config.js with your actual Apps Script URL for general history.");
+        setErrorGoogleSheet("Please update GOOGLE_SHEET_API_URL in config.js with your actual Apps Script URL.");
         return;
       }
 
+      setLoadingGoogleSheet(true);
+      setErrorGoogleSheet(null);
       try {
         const response = await fetch(GOOGLE_SHEET_API_URL, { mode: 'cors' });
-
         if (!response.ok) {
-          throw new Error(`Google Sheet API HTTP error! status: ${response.status}`);
+          throw new Error(`HTTP error! status: ${response.status}. Response: ${await response.text()}.`);
         }
-
         const data = await response.json();
-        setGoogleSheetHistory(data);
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        setGoogleSheetHistory(data); // Assuming data is { data: [], lastUpdated: '' }
       } catch (error) {
         console.error("Error fetching Google Sheet data:", error);
         setErrorGoogleSheet(
           `Error: ${error.message}. ` +
-          `Please ensure your Google Apps Script web app URL (${GOOGLE_SHEET_API_URL}) is correct and publicly accessible. ` +
-          `Try opening this URL directly in your browser. If it doesn't show JSON data, there's an issue with your Apps Script deployment or code.`
+          `Please ensure your Google Sheet Apps Script URL (${GOOGLE_SHEET_API_URL}) is correct and publicly accessible. ` +
+          `Try opening this URL directly in your browser.`
         );
       } finally {
         setLoadingGoogleSheet(false);
@@ -262,37 +241,163 @@ const App = () => {
     fetchGoogleSheetData();
   }, [GOOGLE_SHEET_API_URL]);
 
-
-  // Effect hook to fetch historical champions data (if using a separate Apps Script or static data)
+  // Effect hook to fetch Trade Ticker data
   useEffect(() => {
-    const fetchHistoricalChampions = async () => {
-      // For demonstration, let's use some hardcoded data if no specific API URL is provided.
-      if (GOOGLE_SHEET_CHAMPIONS_API_URL === 'YOUR_GOOGLE_SHEET_CHAMPIONS_API_URL') {
-        setHistoricalChampions([
-          { year: 2023, champion: "The GOATs", runnerUp: "Fantasy Fails", mvp: "Patrick Mahomes" },
-          { year: 2022, champion: "Gridiron Gurus", runnerUp: "Touchdown Titans", mvp: "Justin Jefferson" },
-          { year: 2021, champion: "Fantasy Pharaohs", runnerUp: "League Legends", mvp: "Jonathan Taylor" },
-        ]);
-        setLoadingChampions(false);
+    const fetchTradeTickerData = async () => {
+      if (TRADE_TICKER_API_URL === 'YOUR_TRADE_TICKER_API_URL') {
+        setLoadingTrades(false);
+        setErrorTrades("Please update TRADE_TICKER_API_URL in config.js with your actual Apps Script URL.");
         return;
       }
 
+      setLoadingTrades(true);
+      setErrorTrades(null);
       try {
-        const response = await fetch(GOOGLE_SHEET_CHAMPIONS_API_URL, { mode: 'cors' });
+        const response = await fetch(TRADE_TICKER_API_URL, { mode: 'cors' });
         if (!response.ok) {
-          throw new Error(`Champions API HTTP error! status: ${response.status}`);
+          throw new Error(`Trade Ticker API HTTP error! status: ${response.status}. Response: ${await response.text()}.`);
         }
         const data = await response.json();
-        setHistoricalChampions(data.data); // Assuming 'data' key as per previous Apps Script structure
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        setRecentTrades(data.trades); // Assuming the Apps Script returns { trades: [...] }
       } catch (error) {
-        console.error("Error fetching historical champions:", error);
-        setErrorChampions(
+        console.error("Error fetching trade ticker data:", error);
+        setErrorTrades(
           `Error: ${error.message}. ` +
-          `Ensure '${GOOGLE_SHEET_CHAMPIONS_API_URL}' is a valid Apps Script URL returning JSON. ` +
-          `If not, consider using the hardcoded example or setting up a new Apps Script.`
+          `Please ensure your Trade Ticker Apps Script URL (${TRADE_TICKER_API_URL}) is correct and publicly accessible. ` +
+          `Try opening this URL directly in your browser.`
         );
       } finally {
+        setLoadingTrades(false);
+      }
+    };
+
+    fetchTradeTickerData();
+  }, [TRADE_TICKER_API_URL]);
+
+  // Effect hook to fetch Weekly Odds data
+  useEffect(() => {
+    const fetchWeeklyOdds = async () => {
+      if (WEEKLY_ODDS_API_URL === 'YOUR_WEEKLY_ODDS_API_URL') {
+        setLoadingOdds(false);
+        setErrorOdds("Please update WEEKLY_ODDS_API_URL in config.js with your actual Apps Script URL.");
+        return;
+      }
+
+      setLoadingOdds(true);
+      setErrorOdds(null);
+      try {
+        const response = await fetch(WEEKLY_ODDS_API_URL, { mode: 'cors' });
+        if (!response.ok) {
+          throw new Error(`Weekly Odds API HTTP error! status: ${response.status}. Response: ${await response.text()}.`);
+        }
+        const data = await response.json();
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        // Assuming data is an object where keys are week numbers and values are arrays of matches
+        setWeeklyOddsData(data.weeks);
+        const weeks = Object.keys(data.weeks);
+        if (weeks.length > 0) {
+          setTotalOddsWeeks(weeks.length);
+          // Set current week to the last available week
+          setCurrentOddsWeek(weeks.length - 1);
+        }
+      } catch (error) {
+        console.error("Error fetching weekly odds data:", error);
+        setErrorOdds(
+          `Error: ${error.message}. ` +
+          `Please ensure your Weekly Odds Apps Script URL (${WEEKLY_ODDS_API_URL}) is correct and publicly accessible. ` +
+          `Try opening this URL directly in your browser.`
+        );
+      } finally {
+        setLoadingOdds(false);
+      }
+    };
+
+    fetchWeeklyOdds();
+  }, [WEEKLY_ODDS_API_URL]);
+
+  // Effect hook to fetch Playoff Bracket data
+  useEffect(() => {
+    const fetchPlayoffBracket = async () => {
+      if (BRACKET_API_URL === 'YOUR_BRACKET_API_URL') {
+        setLoadingBracket(false);
+        setErrorBracket("Please update BRACKET_API_URL in config.js with your actual Apps Script URL.");
+        return;
+      }
+
+      setLoadingBracket(true);
+      setErrorBracket(null);
+      try {
+        const response = await fetch(BRACKET_API_URL, { mode: 'cors' });
+        if (!response.ok) {
+          throw new Error(`Playoff Bracket API HTTP error! status: ${response.status}. Response: ${await response.text()}.`);
+        }
+        const data = await response.json();
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        setBracketData(data); // Assuming data structure directly matches
+      } catch (error) {
+        console.error("Error fetching playoff bracket data:", error);
+        setErrorBracket(
+          `Error: ${error.message}. ` +
+          `Please ensure your Playoff Bracket Apps Script URL (${BRACKET_API_URL}) is correct and publicly accessible. ` +
+          `Try opening this URL directly in your browser.`
+        );
+      } finally {
+        setLoadingBracket(false);
+      }
+    };
+
+    fetchPlayoffBracket();
+  }, [BRACKET_API_URL]);
+
+  // Effect hook to fetch Historical Champions data
+  useEffect(() => {
+    const fetchHistoricalChampions = async () => {
+      // If a specific API URL is provided, try to fetch from it
+      if (GOOGLE_SHEET_CHAMPIONS_API_URL && GOOGLE_SHEET_CHAMPIONS_API_URL !== 'YOUR_GOOGLE_SHEET_CHAMPIONS_API_URL') {
+        setLoadingChampions(true);
+        setErrorChampions(null);
+        try {
+          const response = await fetch(GOOGLE_SHEET_CHAMPIONS_API_URL, { mode: 'cors' });
+          if (!response.ok) {
+            throw new Error(`Champions API HTTP error! status: ${response.status}. Response: ${await response.text()}.`);
+          }
+          const data = await response.json();
+          if (data.error) {
+            throw new Error(data.error);
+          }
+          setHistoricalChampions(data.data); // Assuming { data: [...] }
+        } catch (error) {
+          console.error("Error fetching historical champions data:", error);
+          setErrorChampions(
+            `Error: ${error.message}. ` +
+            `Please ensure your Champions Apps Script URL (${GOOGLE_SHEET_CHAMPIONS_API_URL}) is correct and publicly accessible.`
+          );
+          // Fallback to hardcoded if API fails
+          setHistoricalChampions([
+            // { year: 2023, champion: "Default Champ 2023", runnerUp: "Default RunnerUp 2023", mvp: "Default MVP 2023" },
+            // { year: 2022, champion: "Default Champ 2022", runnerUp: "Default RunnerUp 2022", mvp: "Default MVP 2022" },
+          ]);
+        } finally {
+          setLoadingChampions(false);
+        }
+      } else {
+        // Fallback to hardcoded data if no valid API URL is set
         setLoadingChampions(false);
+        setErrorChampions(null);
+        setHistoricalChampions([
+          { year: 2023, champion: "Irwin", runnerUp: "Blumbergs", mvp: "Irwin" },
+          { year: 2022, champion: "Boilard", runnerUp: "Irwin", mvp: "Boilard" },
+          { year: 2021, champion: "Randall", runnerUp: "Meer", mvp: "Randall" },
+          { year: 2020, champion: "Tomczak", runnerUp: "Boilard", mvp: "Tomczak" },
+          { year: 2019, champion: "Neufeglise", runnerUp: "Blumbergs", mvp: "Neufeglise" },
+        ]);
       }
     };
 
@@ -300,666 +405,485 @@ const App = () => {
   }, [GOOGLE_SHEET_CHAMPIONS_API_URL]);
 
 
-  // Effect hook to fetch Weekly Odds data from Apps Script JSON API
+  // <<< START NEW EFFECT HOOK FOR HISTORICAL MATCHUPS >>>
   useEffect(() => {
-    const fetchWeeklyOdds = async (weekNum) => {
-      if (WEEKLY_ODDS_API_URL === 'YOUR_WEEKLY_ODDS_APPS_SCRIPT_URL_HERE') {
-        setLoadingOdds(false);
-        setErrorOdds("Please update WEEKLY_ODDS_API_URL in config.js with your actual Apps Script URL for weekly odds.");
+    const fetchHistoricalMatchups = async () => {
+      if (HISTORICAL_MATCHUPS_API_URL === 'YOUR_NEW_HISTORICAL_MATCHUPS_APPS_SCRIPT_URL') {
+        setLoadingMatchups(false);
+        setErrorMatchups("Please update HISTORICAL_MATCHUPS_API_URL in config.js with your actual Apps Script URL for historical matchups.");
         return;
       }
 
-      // Check cache first
-      if (weeklyOddsData[weekNum]) {
-        setCurrentOddsWeek(weekNum);
-        return;
-      }
-
-      setLoadingOdds(true);
-      setErrorOdds(null);
+      setLoadingMatchups(true);
+      setErrorMatchups(null);
 
       try {
-        // Append week parameter to the URL
-        const apiUrl = `${WEEKLY_ODDS_API_URL}?week=${weekNum}`;
-        const response = await fetch(apiUrl, { mode: 'cors' });
+        const response = await fetch(HISTORICAL_MATCHUPS_API_URL, { mode: 'cors' });
 
         if (!response.ok) {
-          throw new Error(`Weekly Odds API HTTP error! status: ${response.status}. Response: ${await response.text()}.`);
+          throw new Error(`Historical Matchups API HTTP error! status: ${response.status}. Response: ${await response.text()}.`);
         }
 
         const data = await response.json();
         if (data.error) {
           throw new Error(data.error);
         }
+        setHistoricalMatchups(data.data); // Assuming the Apps Script returns { data: [...] }
 
-        setWeeklyOddsData(prevData => ({
-          ...prevData,
-          [weekNum]: data.matches
-        }));
-        setCurrentOddsWeek(data.currentWeekInSheet - 1); // Set current week to the one just loaded
-        setTotalOddsWeeks(data.totalWeeks); // Update total weeks from API
       } catch (error) {
-        console.error("Error fetching weekly odds data:", error);
-        setErrorOdds(
+        console.error("Error fetching historical matchups data:", error);
+        setErrorMatchups(
           `Error: ${error.message}. ` +
-          `Please ensure your Weekly Odds Apps Script URL (${WEEKLY_ODDS_API_URL}) is correct and publicly accessible. ` +
-          `Try opening this URL directly in your browser with '?week=0' appended. If it doesn't show JSON data, there's an issue with your Apps Script deployment or code (check Apps Script 'Executions' logs!).`
+          `Please ensure your Historical Matchups Apps Script URL (${HISTORICAL_MATCHUPS_API_URL}) is correct and publicly accessible. ` +
+          `Try opening this URL directly in your browser. If it doesn't show JSON data, there's an issue with your Apps Script deployment or code (check Apps Script 'Executions' logs!).`
         );
       } finally {
-        setLoadingOdds(false);
+        setLoadingMatchups(false);
       }
     };
 
-    // Initial load: Fetch the current week from the sheet via the API without a 'week' parameter
-    if (currentOddsWeek === null && WEEKLY_ODDS_API_URL !== 'YOUR_WEEKLY_ODDS_APPS_SCRIPT_URL_HERE') {
-      const fetchInitialWeek = async () => {
-        setLoadingOdds(true);
-        setErrorOdds(null);
-        try {
-          const response = await fetch(WEEKLY_ODDS_API_URL, { mode: 'cors' });
-          if (!response.ok) {
-            throw new Error(`Initial Weekly Odds API HTTP error! status: ${response.status}. Response: ${await response.text()}.`);
-          }
-          const data = await response.json();
-          if (data.error) {
-            throw new Error(data.error);
-          }
-          setWeeklyOddsData(prevData => ({
-            ...prevData,
-            [data.currentWeekInSheet - 1]: data.matches
-          }));
-          setCurrentOddsWeek(data.currentWeekInSheet - 1);
-          setTotalOddsWeeks(data.totalWeeks);
-        } catch (error) {
-          console.error("Error fetching initial weekly odds data:", error);
-          setErrorOdds(`Error fetching initial odds: ${error.message}`);
-        } finally {
-          setLoadingOdds(false);
-        }
-      };
-      fetchInitialWeek();
-    } else if (currentOddsWeek !== null) {
-      fetchWeeklyOdds(currentOddsWeek);
-    }
-
-  }, [WEEKLY_ODDS_API_URL, currentOddsWeek]);
+    fetchHistoricalMatchups();
+  }, [HISTORICAL_MATCHUPS_API_URL]);
+  // <<< END NEW EFFECT HOOK FOR HISTORICAL MATCHUPS >>>
 
 
-  // NEW: Effect hook to fetch Playoff Bracket data from Apps Script JSON API
-  useEffect(() => {
-    const fetchBracketData = async () => {
-      if (BRACKET_API_URL === 'YOUR_BRACKET_APPS_SCRIPT_URL_HERE') {
-        setLoadingBracket(false);
-        setErrorBracket("Please update BRACKET_API_URL in config.js with your actual Apps Script URL for the playoff bracket.");
-        return;
-      }
-
-      setLoadingBracket(true);
-      setErrorBracket(null);
-
-      try {
-        const response = await fetch(BRACKET_API_URL, { mode: 'cors' });
-
-        if (!response.ok) {
-          throw new Error(`Bracket API HTTP error! status: ${response.status}. Response: ${await response.text()}.`);
-        }
-
-        const data = await response.json();
-        setBracketData(data);
-      } catch (error) {
-        console.error("Error fetching bracket data:", error);
-        setErrorBracket(
-          `Error: ${error.message}. ` +
-          `Please ensure your Bracket Apps Script URL (${BRACKET_API_URL}) is correct and publicly accessible. ` +
-          `Try opening this URL directly in your browser. If it doesn't show JSON data, there's an issue with your Apps Script deployment or code.`
-        );
-      } finally {
-        setLoadingBracket(false);
-      }
-    };
-
-    fetchBracketData();
-  }, [BRACKET_API_URL]);
-
-
-  // Helper function to render an individual player or pick item within a trade card
-  const renderTradeAsset = (item, type) => {
-    const signClass = type === 'received' ? 'text-[#0070c0]' : 'text-[#ff0000]'; // Blue for received, Red for sent
-    const signText = type === 'received' ? '+' : '−';
-
-    if (item.type === 'pick') {
-      return (
-        <div key={item.name} className="flex items-center justify-center gap-1 text-[9px] font-semibold text-gray-700">
-          <span className={`${signClass} font-extrabold w-3 h-3 rounded-full flex items-center justify-center text-center mr-0.5 select-none flex-shrink-0`}>{signText}</span>
-          <span className="text-orange-800">{item.name}</span> {/* Keep orange for picks */}
-        </div>
-      );
-    } else { // Player
-      const imageUrl = item.id ? `https://sleepercdn.com/content/nfl/players/${item.id}.jpg` : 'https://placehold.co/16x16/cccccc/333333?text=?';
-      return (
-        <div key={item.id} className="flex items-center justify-center gap-1 text-[9px] text-gray-800">
-          <span className={`${signClass} font-extrabold w-3 h-3 rounded-full flex items-center justify-center text-center mr-0.5 select-none flex-shrink-0`}>{signText}</span>
-          <img src={imageUrl} alt={item.name} className="w-4 h-4 rounded-full object-cover border border-gray-300 flex-shrink-0" onError={(e) => e.target.src = 'https://placehold.co/16x16/cccccc/333333?text=?' } />
-          <span className="font-medium">{item.name}</span>
-        </div>
-      );
-    }
-  };
-
-
+  // --- JSX (Return Statement) ---
   return (
-    // Main container with Tailwind CSS for styling
-    <div className="w-full bg-gray-100 flex flex-col items-center p-4 font-inter text-gray-800">
-      <script src="https://cdn.tailwindcss.com"></script> {/* Tailwind CSS CDN */}
-      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+    <div className="min-h-screen bg-gray-100 text-gray-800 flex flex-col items-center p-4">
+      {/* Tailwind CSS CDN - ONLY FOR DEVELOPMENT/DEMO. For production, install via npm. */}
+      <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
+
+      {/* Custom CSS for specific elements and animations */}
       <style>{`
-        /* Hide scrollbar for the entire page */
-        html, body {
-          overflow-x: hidden; /* Prevent horizontal scroll */
-          overflow-y: scroll; /* Allow vertical scroll */
-          scrollbar-width: none;  /* For Firefox */
-        }
+         /* Global Styles & Utilities */
+         body {
+             font-family: 'Inter', sans-serif;
+             background-color: #f0f2f5; /* Light background */
+         }
 
-        html::-webkit-scrollbar, body::-webkit-scrollbar {
-          display: none; /* For Chrome, Safari, and Opera */
-        }
+         .max-w-4xl {
+             max-width: 900px;
+         }
 
-        /* Hide scrollbar for the trade ticker container */
-        #trade-ticker-container, #team-ticker-container {
-          scrollbar-width: none; /* Firefox */
-        }
-        #trade-ticker-container::-webkit-scrollbar, #team-ticker-container::-webkit-scrollbar {
-          display: none; /* Chrome, Safari, Opera */
-        }
+         /* Animations */
+         @keyframes ticker-scroll {
+             0% { transform: translateX(0%); }
+             100% { transform: translateX(-50%); } /* Scrolls half the width of duplicated content */
+         }
 
-        /* Ticker animation styles */
-        @keyframes ticker-scroll {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
-        }
-        .animate-ticker-scroll {
-          animation: ticker-scroll 175s linear infinite; /* Adjust speed as needed */
-          animation-play-state: running; /* Ensure animation is running */
-        }
-        .animate-ticker-scroll:hover {
-          animation-play-state: paused; /* Pause on hover */
-        }
+         .animate-ticker-scroll {
+             animation: ticker-scroll linear infinite;
+             animation-duration: 40s; /* Adjust speed as needed */
+             animation-play-state: running;
+         }
 
-        /* Styles for Weekly Odds section */
-        .odds-matchup {
-          background: white;
-          margin: 15px 0;
-          padding: 15px;
-          border-radius: 8px;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.1); /* Stronger shadow */
-          transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out; /* Smooth transitions */
-          overflow-x: auto;
-          max-width: 500px;
-          width: 100%;
-        }
-        .odds-matchup:hover {
-          transform: translateY(-3px); /* Subtle lift effect */
-          box-shadow: 0 6px 16px rgba(0,0,0,0.15); /* More prominent shadow on hover */
-        }
-        .odds-player {
-          display: flex;
-          flex-direction: row;
-          justify-content: space-between;
-          align-items: center;
-          margin: 8px 0; /* Increased vertical margin */
-          font-size: 17px; /* Slightly larger player name font */
-          font-weight: 600; /* Bolder player names */
-          color: #333; /* Darker player names */
-          flex-wrap: nowrap;
-        }
-        .odds-player > div:first-child {
-          flex-shrink: 1;
-          min-width: 0;
-          overflow: hidden;
-          white-space: nowrap;
-          text-overflow: ellipsis;
-          margin-right: 15px; /* More space before odds bubbles */
-        }
-        .odds-bubbles {
-          display: flex;
-          flex-direction: row;
-          gap: 8px; /* Slightly more space between bubbles */
-          flex-shrink: 0;
-          min-width: 120px;
-          justify-content: flex-end;
-        }
-        .odds-value, .odds-ou-box {
-          background: #bfbfbf; /* Light Grey */
-          padding: 8px 12px;
-          border-radius: 25px;
-          font-weight: bold;
-          font-size: 15px;
-          min-width: 55px;
-          text-align: center;
-          white-space: nowrap;
-          border: 1px solid #a0a0a0; /* Slightly darker grey border */
-          transition: background 0.2s ease-in-out, border-color 0.2s ease-in-out;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-        }
-        .odds-ou-box {
-          flex-direction: column;
-          line-height: 1.2;
-        }
+         .animate-ticker-scroll:hover {
+             animation-play-state: paused; /* Pause on hover */
+         }
 
-        .odds-ou-box small {
-          font-size: 0.7em;
-          font-weight: normal;
-          color: #666; /* Default dark grey text */
-        }
-        .odds-win {
-            background: linear-gradient(135deg, #0070c0 0%, #005f9f 100%) !important; /* Blue gradient */
-            color: white !important;
-            border-color: #005f9f !important;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        }
-        /* FIX: Ensure -110 text is visible on blue background */
-        .odds-ou-box.odds-win small {
-            color: white !important; /* Make the small text white when the box is winning */
-        }
-        .odds-lose {
-            background: #ffffff !important; /* White for loser */
-            color: #888 !important;
-            border-color: #bfbfbf !important; /* Light grey border */
-            opacity: 0.85;
-        }
-        .odds-score {
-          margin-left: 10px;
-          font-size: 14px;
-          color: #444;
-          font-weight: 700;
-        }
-        .odds-button {
-          margin: 12px;
-          padding: 12px 20px;
-          background: linear-gradient(135deg, #0070c0 0%, #005f9f 100%); /* Primary blue gradient */
-          color: white;
-          border: none;
-          border-radius: 8px;
-          cursor: pointer;
-          font-weight: bold;
-          font-size: 16px;
-          transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out, background 0.2s ease-in-out;
-          box-shadow: 0 3px 6px rgba(0,0,0,0.2);
-        }
-        .odds-button:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-          background: linear-gradient(135deg, #005f9f 0%, #004c80 100%); /* Darker blue on hover */
-        }
-        .odds-button:disabled {
-          background: #cccccc;
-          cursor: not-allowed;
-          transform: translateY(0);
-          box-shadow: none;
-          opacity: 0.7;
-        }
+         /* Odds Section Specific Styles */
+         .week-buttons-container {
+             display: flex;
+             flex-wrap: wrap;
+             justify-content: center;
+             gap: 8px;
+             margin-bottom: 20px;
+             max-width: 800px;
+             width: 100%;
+             padding: 0 10px;
+         }
 
-        .week-nav-button {
-          background: #bfbfbf; /* Light Grey */
-          color: #0070c0; /* Primary Blue */
-          font-weight: 600;
-          padding: 8px 12px;
-          border-radius: 6px;
-          cursor: pointer;
-          transition: background 0.2s, color 0.2s, transform 0.1s;
-          border: 1px solid #a0a0a0; /* Slightly darker grey border */
-          margin: 4px;
-          min-width: 40px;
-        }
+         .week-nav-button {
+             background-color: #e0e0e0;
+             color: #333;
+             border: 1px solid #bfbfbf;
+             border-radius: 4px;
+             padding: 6px 12px;
+             font-size: 14px;
+             cursor: pointer;
+             transition: background-color 0.2s ease, transform 0.1s ease;
+             min-width: 40px;
+         }
 
-        .week-nav-button:hover {
-          background: #e0e0e0; /* Lighter grey on hover */
-          color: #005f9f; /* Darker blue on hover */
-          transform: translateY(-1px);
-        }
+         .week-nav-button:hover {
+             background-color: #d0d0d0;
+             transform: translateY(-1px);
+         }
 
-        .week-nav-button.active {
-          background: #0070c0; /* Primary Blue for active week */
-          color: white;
-          border-color: #005f9f;
-          box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-          transform: translateY(-1px);
-        }
+         .week-nav-button.active {
+             background-color: #0070c0; /* Primary blue */
+             color: white;
+             border-color: #0070c0;
+             font-weight: 600;
+         }
 
-        /* Adjustments for better wrapping on small screens for week buttons */
-        .week-buttons-container {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-            gap: 8px;
-            margin-bottom: 1rem;
-            max-width: 100%;
-            overflow-x: auto;
-            padding-bottom: 8px;
-            scrollbar-width: none;
-        }
-        .week-buttons-container::-webkit-scrollbar {
-            display: none;
-        }
+         .odds-matchup {
+             display: flex;
+             flex-direction: column;
+             background: #ffffff;
+             border: 1px solid #e0e0e0;
+             border-radius: 8px;
+             padding: 15px;
+             margin-bottom: 12px;
+             width: 100%;
+             max-width: 450px;
+             box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+             font-size: 15px;
+         }
 
-        /* Playoff Bracket Specific Styles */
-        .bracket-container {
-          display: flex;
-          justify-content: center;
-          gap: 20px;
-          flex-wrap: nowrap;
-          overflow-x: auto;
-          max-width: 100%;
-          padding: 10px;
-          scrollbar-width: thin;
-          scrollbar-color: #bfbfbf #f1f5f9; /* Light grey thumb and track */
-        }
-        .bracket-container::-webkit-scrollbar {
-            height: 8px;
-        }
-        .bracket-container::-webkit-scrollbar-track {
-            background: #f1f5f9;
-            border-radius: 10px;
-        }
-        .bracket-container::-webkit-scrollbar-thumb {
-            background-color: #bfbfbf; /* Light Grey */
-            border-radius: 10px;
-            border: 2px solid #f1f5f9;
-        }
+         .odds-player {
+             display: flex;
+             justify-content: space-between;
+             align-items: center;
+             padding: 8px 0;
+             border-bottom: 1px solid #f0f0f0;
+             font-weight: 500;
+         }
+         .odds-player:last-of-type {
+             border-bottom: none;
+         }
 
+         .odds-bubbles {
+             display: flex;
+             gap: 8px;
+             align-items: center;
+         }
 
-        .bracket-round {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          min-width: 180px;
-          text-align: center;
-          background: #fff;
-          padding: 15px;
-          border-radius: 8px;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-          flex-shrink: 0;
-        }
+         .odds-value {
+             background: #0070c0; /* Blue for default/player odds */
+             color: white;
+             padding: 6px 10px;
+             border-radius: 20px;
+             font-weight: 600;
+             min-width: 60px;
+             text-align: center;
+             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+             flex-shrink: 0;
+         }
 
-        .bracket-round-label {
-          font-weight: bold;
-          margin-bottom: 15px;
-          font-size: 18px;
-          color: #0070c0; /* Primary Blue */
-          border-bottom: 2px solid #bfbfbf; /* Light Grey */
-          padding-bottom: 8px;
-          width: 100%;
-        }
+         .odds-ou-box {
+             background: #4a5568; /* Dark grey for OU default */
+             color: white;
+             padding: 4px 8px;
+             border-radius: 6px;
+             font-size: 11px;
+             line-height: 1.2;
+             min-width: 55px;
+             text-align: center;
+             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+             flex-shrink: 0;
+         }
 
-        .bracket-match {
-          background: #ffffff; /* White background */
-          padding: 12px;
-          border: 1px solid #bfbfbf; /* Light grey border */
-          margin: 10px 0;
-          border-radius: 6px;
-          box-shadow: 1px 1px 4px rgba(0,0,0,0.05);
-          font-size: 15px;
-          min-width: 160px;
-          width: 100%;
-        }
+         /* Win/Loss Styles for Odds */
+         .odds-win {
+             background-color: #28a745; /* Green for win */
+         }
+         .odds-lose {
+             background-color: #dc3545; /* Red for loss */
+         }
+         .odds-score {
+             font-weight: 700;
+             color: #2D3748;
+             margin-left: 8px;
+         }
 
-        .bracket-match-player {
-            display: flex;
-            align-items: center;
-            font-weight: 500;
-            margin-bottom: 4px;
-        }
-        .bracket-match-player:last-of-type {
-            margin-bottom: 0;
-        }
+         /* Bracket Specific Styles */
+         .bracket-container {
+             display: flex;
+             justify-content: center;
+             gap: 20px;
+             flex-wrap: wrap;
+             max-width: 700px; /* Adjust as needed */
+             width: 100%;
+         }
 
-        .bracket-match-player strong {
-            color: #0070c0; /* Primary Blue for seeds */
-            flex-shrink: 0;
-            margin-right: 6px;
-        }
+         .bracket-round {
+             display: flex;
+             flex-direction: column;
+             align-items: center;
+             flex-grow: 1;
+             min-width: 200px; /* Ensure rounds don't collapse too much */
+         }
 
-        .bracket-match-player span {
-            flex-grow: 1;
-            text-align: left;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
+         .bracket-round-label {
+             font-size: 1.1em;
+             font-weight: 600;
+             color: #0070c0;
+             margin-bottom: 15px;
+             padding-bottom: 5px;
+             border-bottom: 2px solid #bfbfbf;
+             width: 100%;
+             text-align: center;
+         }
 
-        .bracket-vs {
-          margin: 6px 0;
-          font-size: 13px;
-          color: #666;
-          font-style: italic;
-          font-weight: normal;
-        }
+         .bracket-match {
+             background: #fdfdfd;
+             border: 1px solid #e0e0e0;
+             border-radius: 8px;
+             padding: 10px 15px;
+             margin-bottom: 20px; /* Space between matches */
+             width: 100%;
+             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+             display: flex;
+             flex-direction: column;
+             align-items: center;
+         }
 
-        .bracket-bye {
-          color: #888;
-          font-style: italic;
-          font-size: 14px;
-          font-weight: normal;
-        }
+         .bracket-match-player {
+             display: flex;
+             align-items: center;
+             font-weight: 500;
+             margin-bottom: 4px;
+         }
+         .bracket-match-player:last-of-type {
+             margin-bottom: 0;
+         }
 
-        .dotted-line {
-          border-top: 1px dotted #bfbfbf; /* Light Grey */
-          margin: 40px auto 30px;
-          max-width: 500px;
-          width: 90%;
-        }
+         .bracket-match-player strong {
+             color: #0070c0; /* Primary Blue for seeds */
+             flex-shrink: 0;
+             margin-right: 6px;
+         }
 
-        .lower-seeds-grid {
-          display: flex;
-          flex-wrap: wrap;
-          justify-content: center;
-          gap: 12px;
-          text-align: center;
-          max-width: 600px;
-          width: 100%;
-        }
+         .bracket-match-player span {
+             flex-grow: 1;
+             text-align: left;
+             overflow: hidden;
+             text-overflow: ellipsis;
+             white-space: nowrap;
+         }
 
-        .lower-seed-box {
-          background: #f8f8f8; /* Very light grey, almost white */
-          padding: 10px 15px;
-          border: 1px solid #bfbfbf; /* Light Grey */
-          border-radius: 6px;
-          box-shadow: 1px 1px 3px rgba(0,0,0,0.05);
-          font-size: 14px;
-          min-width: 110px;
-          flex-basis: calc(33% - 12px);
-          max-width: calc(33% - 12px);
-          box-sizing: border-box;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-        }
-        .lower-seed-box strong {
-            color: #0070c0; /* Primary Blue for seeds */
-        }
-        .lower-seed-box span {
-            color: #2D3748; /* Darker text */
-        }
+         .bracket-vs {
+           margin: 6px 0;
+           font-size: 13px;
+           color: #666;
+           font-style: italic;
+           font-weight: normal;
+         }
 
-        /* Dropdown Navigation Styles */
-        .navbar {
-            display: flex;
-            justify-content: center;
-            width: 100%;
-            max-width: 4xl;
-            background: #0070c0; /* Darker blue for navbar */
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-            padding: 0 10px;
-            z-index: 1000; /* Ensure it stays on top */
-            position: relative;
-        }
+         .bracket-bye {
+           color: #888;
+           font-style: italic;
+           font-size: 14px;
+           font-weight: normal;
+         }
 
-        .nav-item {
-            position: relative;
-            cursor: pointer;
-            padding: 15px 20px;
-            color: white;
-            font-weight: 600;
-            transition: background-color 0.3s ease;
-            white-space: nowrap; /* Prevent wrapping */
-        }
+         .dotted-line {
+           border-top: 1px dotted #bfbfbf; /* Light Grey */
+           margin: 40px auto 30px;
+           max-width: 500px;
+           width: 90%;
+         }
 
-        .nav-item:hover {
-            background-color: #005f9f; /* Slightly darker on hover */
-        }
+         .lower-seeds-grid {
+           display: flex;
+           flex-wrap: wrap;
+           justify-content: center;
+           gap: 12px;
+           text-align: center;
+           max-width: 600px;
+           width: 100%;
+         }
 
-        .nav-item.active-category {
-            background-color: #005f9f; /* Active category styling */
-        }
+         .lower-seed-box {
+           background: #f8f8f8; /* Very light grey, almost white */
+           padding: 10px 15px;
+           border: 1px solid #bfbfbf; /* Light Grey */
+           border-radius: 6px;
+           box-shadow: 1px 1px 3px rgba(0,0,0,0.05);
+           font-size: 14px;
+           min-width: 110px;
+           flex-basis: calc(33% - 12px);
+           max-width: calc(33% - 12px);
+           box-sizing: border-box;
+           display: flex;
+           flex-direction: column;
+           align-items: center;
+           justify-content: center;
+         }
+         .lower-seed-box strong {
+             color: #0070c0; /* Primary Blue for seeds */
+         }
+         .lower-seed-box span {
+             color: #2D3748; /* Darker text */
+         }
 
-        .dropdown-content {
-            display: none;
-            position: absolute;
-            background-color: #f9f9f9; /* Light background for dropdown */
-            min-width: 160px;
-            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
-            z-index: 1001;
-            left: 0; /* Align dropdown with its parent nav-item */
-            top: 100%; /* Position below the nav-item */
-            border-radius: 0 0 8px 8px;
-            overflow: hidden;
-            border-top: 2px solid #0070c0; /* Blue line at top of dropdown */
-        }
+         /* Dropdown Navigation Styles */
+         .navbar {
+             display: flex;
+             justify-content: center;
+             width: 100%;
+             max-width: 4xl;
+             background: #0070c0; /* Darker blue for navbar */
+             border-radius: 8px;
+             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+             padding: 0 10px;
+             z-index: 1000; /* Ensure it stays on top */
+             position: relative;
+         }
 
-        .nav-item:hover .dropdown-content, .dropdown-content.active {
-            display: block;
-        }
+         .nav-item {
+             position: relative;
+             cursor: pointer;
+             padding: 15px 20px;
+             color: white;
+             font-weight: 600;
+             transition: background-color 0.3s ease;
+             white-space: nowrap; /* Prevent wrapping */
+         }
 
-        .dropdown-item {
-            color: #333;
-            padding: 12px 16px;
-            text-decoration: none;
-            display: block;
-            text-align: left;
-            font-weight: normal;
-        }
+         .nav-item:hover {
+             background-color: #005f9f; /* Slightly darker on hover */
+         }
 
-        .dropdown-item:hover {
-            background-color: #e0e0e0;
-            color: #0070c0;
-        }
-        .dropdown-item.active-tab {
-            background-color: #0070c0; /* Active tab in dropdown */
-            color: white;
-        }
+         .nav-item.active-category {
+             background-color: #005f9f; /* Active category styling */
+         }
+
+         .dropdown-content {
+             display: none;
+             position: absolute;
+             background-color: #f9f9f9; /* Light background for dropdown */
+             min-width: 160px;
+             box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+             z-index: 1001;
+             left: 0; /* Align dropdown with its parent nav-item */
+             top: 100%; /* Position below the nav-item */
+             border-radius: 0 0 8px 8px;
+             overflow: hidden;
+             border-top: 2px solid #0070c0; /* Blue line at top of dropdown */
+         }
+
+         .nav-item:hover .dropdown-content, .dropdown-content.active {
+             display: block;
+         }
+
+         .dropdown-item {
+             color: #333;
+             padding: 12px 16px;
+             text-decoration: none;
+             display: block;
+             text-align: left;
+             font-weight: normal;
+         }
+
+         .dropdown-item:hover {
+             background-color: #e0e0e0;
+             color: #0070c0;
+         }
+         .dropdown-item.active-tab {
+             background-color: #0070c0; /* Active tab in dropdown */
+             color: white;
+         }
 
 
-        .content-container {
-            background: white;
-            padding: 25px;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            width: 100%;
-            max-width: 4xl;
-            min-height: 400px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            margin-top: 20px; /* Space between nav and content */
-        }
+         .content-container {
+             background: white;
+             padding: 25px;
+             border-radius: 8px;
+             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+             width: 100%;
+             max-width: 4xl;
+             min-height: 400px;
+             display: flex;
+             flex-direction: column;
+             align-items: center;
+             margin-top: 20px; /* Space between nav and content */
+         }
 
-        /* Team Ticker specific styles */
-        #team-ticker-container {
-          overflow-x: auto;
-          white-space: nowrap;
-          padding: 8px 0;
-          width: 100%;
-          background: #e0e0e0; /* Light grey background */
-          margin-bottom: 20px; /* Space between team ticker and navbar */
-          box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
-        }
+         /* Team Ticker specific styles */
+         #team-ticker-container {
+           overflow-x: auto;
+           white-space: nowrap;
+           padding: 8px 0;
+           width: 100%;
+           background: #e0e0e0; /* Light grey background */
+           margin-bottom: 20px; /* Space between team ticker and navbar */
+           box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+         }
 
-        .team-ticker-item {
-          display: inline-flex; /* Use inline-flex to allow flex properties while being in a row */
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 0 15px;
-          margin: 0 5px;
-          border-right: 1px solid #bfbfbf; /* Separator */
-          height: 70px; /* Fixed height for consistent alignment */
-          flex-shrink: 0;
-          font-size: 13px;
-          color: #444;
-        }
-        .team-ticker-item:last-child {
-            border-right: none;
-        }
-        .team-ticker-item img {
-          width: 30px;
-          height: 30px;
-          border-radius: 50%;
-          object-fit: cover;
-          margin-bottom: 4px;
-          border: 1px solid #0070c0;
-        }
-        .team-ticker-item .team-name {
-          font-weight: 600;
-          color: #0070c0;
-          white-space: nowrap;
-        }
-        .team-ticker-item .team-record {
-          font-size: 11px;
-          color: #666;
-          white-space: nowrap;
-        }
+         .team-ticker-item {
+           display: inline-flex; /* Use inline-flex to allow flex properties while being in a row */
+           flex-direction: column;
+           align-items: center;
+           justify-content: center;
+           padding: 0 15px;
+           margin: 0 5px;
+           border-right: 1px solid #bfbfbf; /* Separator */
+           height: 70px; /* Fixed height for consistent alignment */
+           flex-shrink: 0;
+           font-size: 13px;
+           color: #444;
+         }
+         .team-ticker-item:last-child {
+             border-right: none;
+         }
+         .team-ticker-item img {
+           width: 30px;
+           height: 30px;
+           border-radius: 50%;
+           object-fit: cover;
+           margin-bottom: 4px;
+           border: 1px solid #0070c0;
+         }
+         .team-ticker-item .team-name {
+           font-weight: 600;
+           color: #0070c0;
+           white-space: nowrap;
+         }
+         .team-ticker-item .team-record {
+           font-size: 11px;
+           color: #666;
+           white-space: nowrap;
+         }
 
-        /* Trade Ticker Container (now transparent) */
-        #trade-ticker-container {
-            background-color: transparent;
-            box-shadow: none;
-            padding: 0; /* Remove vertical padding specific to this container */
-            border-radius: 0;
-        }
+         /* Trade Ticker Container (now transparent) */
+         #trade-ticker-container {
+             background-color: transparent;
+             box-shadow: none;
+             padding: 0; /* Remove vertical padding specific to this container */
+             border-radius: 0;
+         }
 
-        /* No specific .trade-ticker-card CSS needed beyond Tailwind classes */
+         /* No specific .trade-ticker-card CSS needed beyond Tailwind classes */
 
 
-        @media (max-width: 600px) {
-          .navbar {
-            padding: 0;
-            flex-wrap: wrap; /* Allow nav items to wrap */
-            border-radius: 8px; /* Maintain rounded corners if wrapped */
-          }
-          .nav-item {
-            padding: 10px 12px;
-            font-size: 0.9em;
-          }
-          .dropdown-content {
-            width: 100%; /* Full width for dropdown on small screens */
-            left: 0;
-            border-radius: 0 0 8px 8px; /* Adjust if navbar wraps */
-            position: static; /* Stack vertically for simpler mobile dropdowns */
-            box-shadow: none; /* Remove shadow to blend */
-            border-top: none;
-          }
-          .nav-item:hover .dropdown-content, .dropdown-content.active {
-            display: block; /* Always show when active for category */
-          }
-          .dropdown-item {
-            padding: 10px 12px;
-          }
-          .content-container {
-            padding: 15px;
-          }
-          .team-ticker-item {
-            padding: 0 10px;
-          }
-          .trade-ticker-card {
-            min-width: 250px;
-            min-height: 180px; /* Adjust for smaller screens if needed */
-          }
-        }
-      `}</style>
+         @media (max-width: 600px) {
+           .navbar {
+             padding: 0;
+             flex-wrap: wrap; /* Allow nav items to wrap */
+             border-radius: 8px; /* Maintain rounded corners if wrapped */
+           }
+           .nav-item {
+             padding: 10px 12px;
+             font-size: 0.9em;
+           }
+           .dropdown-content {
+             width: 100%; /* Full width for dropdown on small screens */
+             left: 0;
+             border-radius: 0 0 8px 8px; /* Adjust if navbar wraps */
+             position: static; /* Stack vertically for simpler mobile dropdowns */
+             box-shadow: none; /* Remove shadow to blend */
+             border-top: none;
+           }
+           .nav-item:hover .dropdown-content, .dropdown-content.active {
+             display: block; /* Always show when active for category */
+           }
+           .dropdown-item {
+             padding: 10px 12px;
+           }
+           .content-container {
+             padding: 15px;
+           }
+           .team-ticker-item {
+             padding: 0 10px;
+           }
+           .trade-ticker-card {
+             min-width: 250px;
+             min-height: 180px; /* Adjust for smaller screens if needed */
+           }
+         }
+       `}</style>
 
       {/* Header Section */}
       <header className="w-full max-w-4xl bg-gradient-to-r from-[#0070c0] to-[#005f9f] text-white p-6 rounded-xl shadow-lg mb-8 text-center">
@@ -970,7 +894,7 @@ const App = () => {
           </p>
         )}
         {!sleeperLeagueData && (
-            <p className="text-xl">Your one-stop shop for league insights!</p>
+          <p className="text-xl">Your one-stop shop for league insights!</p>
         )}
       </header>
 
@@ -980,8 +904,8 @@ const App = () => {
           <div className="inline-flex animate-ticker-scroll items-center h-full">
             {/* Duplicate content for continuous scrolling effect */}
             {[...leagueManagers, ...leagueManagers].map((manager, index) => (
-              <div key={`${manager.userId}-${index}`} className="team-ticker-item">
-                <img src={manager.avatar} alt={`${manager.teamName} avatar`} onError={(e) => e.target.src = 'https://placehold.co/30x30/cccccc/333333?text=M' } />
+              <div key={`<span class="math-inline">\{manager\.userId\}\-</span>{index}`} className="team-ticker-item">
+                <img src={manager.avatar} alt={`${manager.teamName} avatar`} onError={(e) => e.target.src = 'https://placehold.co/30x30/cccccc/333333?text=M'} />
                 <span className="team-name">{manager.teamName}</span>
                 <span className="team-record">{manager.wins}-{manager.losses}</span>
               </div>
@@ -991,7 +915,6 @@ const App = () => {
           <p className="text-gray-600 text-center py-2">Loading team data for ticker...</p>
         )}
       </section>
-
 
       {/* Dropdown Navigation */}
       <nav className="navbar mb-0">
@@ -1046,7 +969,7 @@ const App = () => {
                 <div className="inline-flex gap-4 animate-ticker-scroll items-center"> {/* Increased gap to gap-4 */}
                   {/* Duplicate content for continuous scrolling effect */}
                   {[...recentTrades, ...recentTrades].map((trade, index) => (
-                    <div key={`${trade.transaction_id}-${index}`} className="
+                    <div key={`<span class="math-inline">\{trade\.transaction\_id\}\-</span>{index}`} className="
                       bg-white border border-[#bfbfbf] rounded-md shadow-sm p-2.5
                       flex flex-col flex-shrink-0
                       min-w-[280px] min-h-[220px]
@@ -1063,7 +986,7 @@ const App = () => {
                           <React.Fragment key={participant.rosterId}>
                             <div className="flex flex-col flex-shrink-0 items-center p-0.5 min-w-[120px]">
                               <div className="flex flex-col items-center gap-1 mb-1 pb-1.5 border-b border-[#ff0000] w-full"> {/* Red border for trades */}
-                                <img src={participant.managerAvatar} alt={`${participant.teamName} avatar`} className="w-5 h-5 rounded-full object-cover border border-[#ff0000]" onError={(e) => e.target.src = 'https://placehold.co/32x32/cccccc/333333?text=M' } />
+                                <img src={participant.managerAvatar} alt={`${participant.teamName} avatar`} className="w-5 h-5 rounded-full object-cover border border-[#ff0000]" onError={(e) => e.target.src = 'https://placehold.co/32x32/cccccc/333333?text=M'} />
                                 <span className="font-semibold text-[10px] text-[#0070c0] text-center break-words max-w-full">{getMappedTeamName(participant.teamName)}</span>
                               </div>
                               <div className="flex flex-col gap-1 flex-grow w-full">
@@ -1132,14 +1055,14 @@ const App = () => {
                           <div dangerouslySetInnerHTML={{ __html: `${displayP1Name} ${p1ScoreDisplay}` }}></div>
                           <div className="odds-bubbles">
                             <div className={`odds-value ${p1Class}`}>{match.p1Odds}</div>
-                            <div className={`odds-ou-box ${ouOClass}`}>O {match.ou}<br/><small>-110</small></div>
+                            <div className={`odds-ou-box ${ouOClass}`}>O {match.ou}<br /><small>-110</small></div>
                           </div>
                         </div>
                         <div className="odds-player">
                           <div dangerouslySetInnerHTML={{ __html: `${displayP2Name} ${p2ScoreDisplay}` }}></div>
                           <div className="odds-bubbles">
                             <div className={`odds-value ${p2Class}`}>{match.p2Odds}</div>
-                            <div className={`odds-ou-box ${ouUClass}`}>U {match.ou}<br/><small>-110</small></div>
+                            <div className={`odds-ou-box ${ouUClass}`}>U {match.ou}<br /><small>-110</small></div>
                           </div>
                         </div>
                       </div>
@@ -1176,11 +1099,11 @@ const App = () => {
                       return (
                         <div key={`r1-match-${index}`} className="bracket-match">
                           <div className="bracket-match-player">
-                              <strong>{match.seed1}</strong> <span>{displayTeam1 || <span className="bracket-bye">Bye</span>}</span>
+                            <strong>{match.seed1}</strong> <span>{displayTeam1 || <span className="bracket-bye">Bye</span>}</span>
                           </div>
                           <div className="bracket-vs">vs</div>
                           <div className="bracket-match-player">
-                              <strong>{match.seed2}</strong> <span>{displayTeam2 || <span className="bracket-bye">Bye</span>}</span>
+                            <strong>{match.seed2}</strong> <span>{displayTeam2 || <span className="bracket-bye">Bye</span>}</span>
                           </div>
                         </div>
                       );
@@ -1197,12 +1120,12 @@ const App = () => {
                       return (
                         <div key={`r2-match-${index}`} className="bracket-match">
                           <div className="bracket-match-player">
-                              <strong>{match.seed}</strong> <span>{displayTeam || <span className="bracket-bye">Bye</span>}</span>
+                            <strong>{match.seed}</strong> <span>{displayTeam || <span className="bracket-bye">Bye</span>}</span>
                           </div>
                           <div className="bracket-vs">vs</div>
                           {/* Placeholder text for remaining seeds as per original */}
                           <div className="bracket-bye">
-                              {index === 0 ? "Lowest Seed Remaining" : "Highest Seed Remaining"}
+                            {index === 0 ? "Lowest Seed Remaining" : "Highest Seed Remaining"}
                           </div>
                         </div>
                       );
@@ -1214,7 +1137,7 @@ const App = () => {
 
                 {/* Lower seeds grid */}
                 <h3 className="text-xl font-bold text-gray-700 mb-4 mt-6 w-full text-center">
-                    Remaining Seeds
+                  Remaining Seeds
                 </h3>
                 <div className="lower-seeds-grid">
                   {bracketData.lowerSeeds.map((entry, index) => {
@@ -1322,6 +1245,53 @@ const App = () => {
             </p>
           </section>
         )}
+
+        {/* <<< START NEW SECTION FOR ALL HISTORICAL MATCHUPS >>> */}
+        {activeTab === TABS.ALL_MATCHUPS && (
+          <section className="w-full">
+            <h2 className="text-2xl font-bold text-[#0070c0] mb-4 border-b-2 border-[#bfbfbf] pb-2 text-center">
+              All Historical Matchups
+            </h2>
+            {loadingMatchups ? (
+              <p className="text-gray-600">Loading all historical matchup data...</p>
+            ) : errorMatchups ? (
+              <p className="text-red-500">Error: {errorMatchups}</p>
+            ) : historicalMatchups && historicalMatchups.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full bg-white rounded-lg overflow-hidden shadow">
+                  <thead className="bg-[#bfbfbf]">
+                    <tr>
+                      {historicalMatchups[0] && Object.keys(historicalMatchups[0]).map((header) => (
+                        <th key={header} className="py-3 px-4 text-left text-sm font-semibold text-[#0070c0] uppercase tracking-wider">
+                          {header.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} {/* Converts camelCase to "Camel Case" for display */}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historicalMatchups.map((match, index) => (
+                      <tr key={index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                        {Object.entries(match).map(([key, value], idx) => (
+                          <td key={idx} className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
+                            {/* Apply team name mapping only to relevant team name columns */}
+                            {key.includes('team1') || key.includes('team2') ? getMappedTeamName(value) : value}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-gray-600">No historical matchup data available. Please ensure your Apps Script is deployed correctly and your Google Sheet has data.</p>
+            )}
+            <p className="mt-4 text-sm text-gray-500">
+              This section loads all historical league matchups from a dedicated Google Sheet via Google Apps Script.
+            </p>
+          </section>
+        )}
+        {/* <<< END NEW SECTION FOR ALL HISTORICAL MATCHUPS >>> */}
+
       </div>
 
 
