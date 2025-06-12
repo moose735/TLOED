@@ -7,7 +7,7 @@
 // IMPORTANT: Replace these with your actual Sleeper League IDs for each season.
 // The key (year) should match the fantasy season.
 export const SLEEPER_LEAGUE_IDS = {
-  2021: 'YOUR_2021_SLEEPER_LEAGUE_ID_HERE', //Yahoo year
+  2021: 'YOUR_2021_SLEEPER_LEAGUE_ID_HERE', // Yahoo year - **REMEMBER TO REPLACE THIS IF YOU NEED 2021 DATA**
   2022: '784200735733784576',
   2023: '918543989421416448',
   2024: '1048371694643060736',
@@ -16,18 +16,20 @@ export const SLEEPER_LEAGUE_IDS = {
 
 // Set the current fantasy season year. This will determine which league ID is used for "live" data.
 export const CURRENT_FANTASY_SEASON_YEAR = 2025; // As per your request, 2025 is the current preseason/season
+
 // --- API Configuration ---
-// Replace with your actual Sleeper League ID
-export const SLEEPER_LEAGUE_ID = '1048371694643060736';
+// Derive the current Sleeper League ID from the map and current season year
+export const SLEEPER_LEAGUE_ID = SLEEPER_LEAGUE_IDS[CURRENT_FANTASY_SEASON_YEAR];
+
 
 // Replace with the deployed URL of your Google Apps Script Web App for general history/power rankings
-export const GOOGLE_SHEET_API_URL = 'https://script.google.com/macros/s/AKfycbxU2TLDiOxoym2VETq3qrfwUCjE9O0c_gbwHhfAgnrk2faxcBt30EW0jJIq6WXwtYhPdw/exec';
+export const GOOGLE_SHEET_API_URL = 'https://script.google.com/macros/s/AKfycbxU2TLDiOxoym2VETq3qrfwUCjE9O0c_gbhHhfAgnrk2faxcBt30EW0jJIq6WXwtYhPdw/exec';
 
 // Replace with the deployed URL of your Google Apps Script JSON API for the Trade Ticker
 export const TRADE_TICKER_API_URL = 'https://script.google.com/macros/s/AKfycbxFZStkx9SvST6inAbnzfljrRr39H8CsprmEuRh9VUkjRLiAx_-5deo91r7lPegyDkC8A/exec';
 
 // If you create a separate Apps Script for champions, use a new URL here
-export const GOOGLE_SHEET_CHAMPIONS_API_URL = 'YOUR_GOOGLE_SHEET_CHAMPIONS_API_URL'; // Placeholder for specific champions data
+export const GOOGLE_SHEET_CHAMPIONS_API_URL = 'YOUR_GOOGLE_SHEET_CHAMPIONS_API_URL'; // **REMEMBER TO REPLACE THIS WITH YOUR ACTUAL URL**
 
 // Replace with the deployed URL of your Google Apps Script JSON API for Weekly Odds
 export const WEEKLY_ODDS_API_URL = 'https://script.google.com/macros/s/AKfycbxIrqBFK5peO8mSQ1V5mqUxVtfY2kf3-gDP2_Gw9Qxi5LllYbwgM_GcnEvAeGsGpwk4_w/exec';
@@ -55,6 +57,3 @@ export const NICKNAME_TO_SLEEPER_USER = {
   "ainsworth": "wainsworth",
   "tomczak": "mavtzak",
 };
-
-
-
