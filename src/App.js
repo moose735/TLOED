@@ -1287,7 +1287,7 @@ const App = () => {
             ) : (
               <p className="text-gray-600">No live matchups found for the current week. The season might not be active, or there might be an issue fetching data.</p>
             )}
-            <p className="mt-4 text-sm text-gray-500">Scores update automatically every 30 seconds.</p>
+            <p className="mt-4 text-sm text-gray-500">Scores update automatically every 15 minutes.</p>
           </section>
         )}
 
