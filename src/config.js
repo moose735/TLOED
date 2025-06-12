@@ -4,6 +4,18 @@
  * This file holds various IDs, API URLs, and mappings for Sleeper and Google Sheet data.
  */
 
+// IMPORTANT: Replace these with your actual Sleeper League IDs for each season.
+// The key (year) should match the fantasy season.
+export const SLEEPER_LEAGUE_IDS = {
+  2021: 'YOUR_2021_SLEEPER_LEAGUE_ID_HERE',
+  2022: '784200735733784576',
+  2023: '918543989421416448',
+  2024: '1048371694643060736',
+  2025: '1181984921049018368', // This should be your *newest* league ID for the 2025 season
+};
+
+// Set the current fantasy season year. This will determine which league ID is used for "live" data.
+export const CURRENT_FANTASY_SEASON_YEAR = 2025; // As per your request, 2025 is the current preseason/season
 // --- API Configuration ---
 // Replace with your actual Sleeper League ID
 export const SLEEPER_LEAGUE_ID = '1048371694643060736';
@@ -43,3 +55,6 @@ export const NICKNAME_TO_SLEEPER_USER = {
   "ainsworth": "wainsworth",
   "tomczak": "mavtzak",
 };
+
+
+
