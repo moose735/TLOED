@@ -23,6 +23,8 @@ export const WEEKLY_ODDS_API_URL = 'https://script.google.com/macros/s/AKfycbxIr
 // Replace with the deployed URL of your Google Apps Script JSON API for Playoff Bracket
 export const BRACKET_API_URL = 'https://script.google.com/macros/s/AKfycbyARvrGYRVnIsHg28e689hOpKHLt2uQ85uDnFDpB8GfnUvknxQRSitrszGPlf4xKWFBrA/exec';
 
+export const HISTORICAL_MATCHUPS_API_URL = 'https://script.google.com/macros/s/AKfycbxpo21zzZgNamYShESfqe-SX09miJz2LK7SpdlYrtHXQplneB3bF2xu2byy0HhjM8e-/exec'; // Paste your URL here
+
 
 // --- Manager Name Mappings ---
 // Mapping of nicknames/last names (as they might appear in Google Sheets)
