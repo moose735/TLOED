@@ -1,14 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  SLEEPER_LEAGUE_IDS,
-  CURRENT_FANTASY_SEASON_YEAR,
+  SLEEPER_LEAGUE_ID,
   GOOGLE_SHEET_API_URL,
   TRADE_TICKER_API_URL,
   GOOGLE_SHEET_CHAMPIONS_API_URL,
   WEEKLY_ODDS_API_URL,
   BRACKET_API_URL,
   NICKNAME_TO_SLEEPER_USER
-} from './config';
+} from './config'; // Standard import path for sibling files
 
 // Define the available tabs and their categories for the dropdown
 const NAV_CATEGORIES = {
@@ -16,7 +15,6 @@ const NAV_CATEGORIES = {
   LEAGUE_STATS: {
     label: 'League Stats',
     subTabs: [
-      { label: 'Live Matchups', tab: 'Live Matchups' },
       { label: 'Weekly Odds', tab: 'Weekly Odds' },
       { label: 'Playoff Bracket', tab: 'Playoff Bracket' },
     ]
@@ -24,9 +22,8 @@ const NAV_CATEGORIES = {
   HISTORICAL_DATA: {
     label: 'Historical Data',
     subTabs: [
-      { label: `League History (${CURRENT_FANTASY_SEASON_YEAR})`, tab: 'League History' }, // Updated label
-      { label: `Champions & Awards (${CURRENT_FANTASY_SEASON_YEAR})`, tab: 'Champions' }, // Updated label
-      // TODO: If you implement multi-year historical data, you might add a "Select Year" dropdown here
+      { label: 'League History', tab: 'League History' },
+      { label: 'Champions & Awards', tab: 'Champions' },
     ]
   }
 };
@@ -34,7 +31,6 @@ const NAV_CATEGORIES = {
 // Flattened list of all possible tabs for conditional rendering
 const TABS = {
   TRADES: 'Trades',
-  LIVE_MATCHUPS: 'Live Matchups',
   ODDS: 'Weekly Odds',
   BRACKET: 'Playoff Bracket',
   HISTORY: 'League History',
@@ -43,41 +39,30 @@ const TABS = {
 
 // Main App component
 const App = () => {
-  // Determine the current league ID based on the configured year
-  const currentLeagueId = SLEEPER_LEAGUE_IDS[CURRENT_FANTASY_SEASON_YEAR];
-
-  // State to store data fetched from Sleeper API (League details)
+  // State to store data fetched from Sleeper API (League details) - KEPT FOR HEADER DISPLAY
   const [sleeperLeagueData, setSleeperLeagueData] = useState(null);
   // State to store data fetched from Google Sheet API (General historical data like power rankings)
   const [googleSheetHistory, setGoogleSheetHistory] = useState(null);
-  // State to store league managers/teams data from Sleeper API
+  // State to store league managers/teams data from Sleeper API - KEPT FOR TEAM TICKER AND NAME MAP
   const [leagueManagers, setLeagueManagers] = useState(null);
   // State to store recent transactions data from the new Apps Script JSON API
   const [recentTrades, setRecentTrades] = useState(null);
   // State to store historical champions/awards data (potentially from Google Sheet or hardcoded)
   const [historicalChampions, setHistoricalChampions] = useState(null);
 
-  // States for Weekly Odds
+  // New states for Weekly Odds
   const [weeklyOddsData, setWeeklyOddsData] = useState({}); // Cache for fetched weeks
   const [currentOddsWeek, setCurrentOddsWeek] = useState(null); // 0-indexed current week for odds
   const [totalOddsWeeks, setTotalOddsWeeks] = useState(14); // Default, will be updated by API
   const [loadingOdds, setLoadingOdds] = useState(true);
   const [errorOdds, setErrorOdds] = useState(null);
 
-  // States for Playoff Bracket
+  // New states for Playoff Bracket
   const [bracketData, setBracketData] = useState(null);
   const [loadingBracket, setLoadingBracket] = useState(true);
   const [errorBracket, setErrorBracket] = useState(null);
 
-  // States for Live Matchups
-  const [liveMatchups, setLiveMatchups] = useState([]);
-  const [currentNFLWeek, setCurrentNFLWeek] = useState(null);
-  const [loadingLiveMatchups, setLoadingLiveMatchups] = useState(true);
-  const [errorLiveMatchups, setErrorLiveMatchups] = useState(null);
-  const intervalRef = useRef(null); // Ref to hold the interval ID
-
-  // State to store a map of nickname/last name (from Google Sheets) to actual Sleeper team names.
-  // This map will be built based on the `current` league managers.
+  // State to store a map of nickname/last name (from Google Sheets) to actual Sleeper team names
   const [playerNameToTeamNameMap, setPlayerNameToTeamNameMap] = useState({});
 
   // State for active tab (now derived from dropdown selection)
@@ -106,18 +91,16 @@ const App = () => {
   };
 
 
-  // Effect hook to fetch general league data from Sleeper API (for header display)
-  // Now uses currentLeagueId
+  // Effect hook to fetch general league data from Sleeper API (KEPT FOR HEADER DISPLAY)
   useEffect(() => {
     const fetchSleeperData = async () => {
-      if (!currentLeagueId || currentLeagueId.includes('YOUR_')) {
-        // console.warn("Sleeper League ID not set or is a placeholder. Skipping Sleeper league data fetch.");
-        setSleeperLeagueData(null); // Clear data if ID is invalid
+      if (SLEEPER_LEAGUE_ID === 'YOUR_SLEEPER_LEAGUE_ID') {
+        // console.warn("SLEEPER_LEAGUE_ID not set. Skipping Sleeper league data fetch.");
         return;
       }
 
       try {
-        const sleeperApiUrl = `https://api.sleeper.app/v1/league/${currentLeagueId}`;
+        const sleeperApiUrl = `https://api.sleeper.app/v1/league/${SLEEPER_LEAGUE_ID}`;
         const response = await fetch(sleeperApiUrl);
 
         if (!response.ok) {
@@ -132,7 +115,7 @@ const App = () => {
     };
 
     fetchSleeperData();
-  }, [currentLeagueId]); // Dependency on currentLeagueId
+  }, [SLEEPER_LEAGUE_ID]);
 
 
   // Helper function to format manager display name by replacing last name with team name (KEPT FOR MAP)
@@ -150,18 +133,17 @@ const App = () => {
 
 
   // Effect hook to fetch league managers/users data from Sleeper API and build the team name map
-  // Now uses currentLeagueId
+  // This is crucial for `getMappedTeamName` and the new team ticker.
   useEffect(() => {
     const fetchManagersData = async () => {
-      if (!currentLeagueId || currentLeagueId.includes('YOUR_')) {
+      if (SLEEPER_LEAGUE_ID === 'YOUR_SLEEPER_LEAGUE_ID') {
         setLeagueManagers([]); // Set empty array if ID not configured
-        setPlayerNameToTeamNameMap({}); // Clear map
         return;
       }
 
       try {
-        const usersApiUrl = `https://api.sleeper.app/v1/league/${currentLeagueId}/users`;
-        const rostersApiUrl = `https://api.sleeper.app/v1/league/${currentLeagueId}/rosters`;
+        const usersApiUrl = `https://api.sleeper.app/v1/league/${SLEEPER_LEAGUE_ID}/users`;
+        const rostersApiUrl = `https://api.sleeper.app/v1/league/${SLEEPER_LEAGUE_ID}/rosters`;
 
         const [usersResponse, rostersResponse] = await Promise.all([
           fetch(usersApiUrl),
@@ -191,7 +173,7 @@ const App = () => {
         });
         setLeagueManagers(combinedManagers);
 
-        // Build the playerNameToTeamNameMap for the CURRENT league
+        // Build the playerNameToTeamNameMap
         const newPlayerNameToTeamNameMap = {};
         Object.entries(NICKNAME_TO_SLEEPER_USER).forEach(([nicknameKey, sleeperUserIdentifier]) => {
           const matchingManager = combinedManagers.find(manager =>
@@ -209,13 +191,10 @@ const App = () => {
     };
 
     fetchManagersData();
-  }, [currentLeagueId]); // Dependency on currentLeagueId
+  }, [SLEEPER_LEAGUE_ID]);
 
 
   // Effect hook to fetch recent trades data from the new Apps Script JSON API
-  // This API (TRADE_TICKER_API_URL) is assumed to already be configured to fetch
-  // trades for the appropriate current league/season based on its own backend logic.
-  // If it needs the currentLeagueId, you'd have to pass it as a URL parameter.
   useEffect(() => {
     const fetchTradesData = async () => {
       if (TRADE_TICKER_API_URL === 'YOUR_TRADE_TICKER_APPS_SCRIPT_URL') {
@@ -251,9 +230,6 @@ const App = () => {
 
 
   // Effect hook to fetch data from Google Sheet API (general historical data like power rankings)
-  // This currently fetches for one sheet. If you want multi-year history, you'd need
-  // to extend GOOGLE_SHEET_API_URL to accept a 'year' parameter, or have multiple URLs.
-  // For now, this will fetch data for the sheet linked to the current configuration.
   useEffect(() => {
     const fetchGoogleSheetData = async () => {
       if (GOOGLE_SHEET_API_URL === 'YOUR_GOOGLE_SHEET_APPS_SCRIPT_URL') {
@@ -263,9 +239,6 @@ const App = () => {
       }
 
       try {
-        // If your Apps Script can take a 'year' parameter:
-        // const apiUrl = `${GOOGLE_SHEET_API_URL}?year=${CURRENT_FANTASY_SEASON_YEAR}`;
-        // For now, assume it's just fetching the default sheet's data.
         const response = await fetch(GOOGLE_SHEET_API_URL, { mode: 'cors' });
 
         if (!response.ok) {
@@ -273,7 +246,7 @@ const App = () => {
         }
 
         const data = await response.json();
-        setGoogleSheetHistory(data); // This data will be for the sheet's default year
+        setGoogleSheetHistory(data);
       } catch (error) {
         console.error("Error fetching Google Sheet data:", error);
         setErrorGoogleSheet(
@@ -290,8 +263,7 @@ const App = () => {
   }, [GOOGLE_SHEET_API_URL]);
 
 
-  // Effect hook to fetch historical champions data
-  // Similar to googleSheetHistory, this assumes fetching for one sheet/year.
+  // Effect hook to fetch historical champions data (if using a separate Apps Script or static data)
   useEffect(() => {
     const fetchHistoricalChampions = async () => {
       // For demonstration, let's use some hardcoded data if no specific API URL is provided.
@@ -306,9 +278,6 @@ const App = () => {
       }
 
       try {
-        // If your Apps Script can take a 'year' parameter:
-        // const apiUrl = `${GOOGLE_SHEET_CHAMPIONS_API_URL}?year=${CURRENT_FANTASY_SEASON_YEAR}`;
-        // For now, assume it's just fetching the default sheet's data.
         const response = await fetch(GOOGLE_SHEET_CHAMPIONS_API_URL, { mode: 'cors' });
         if (!response.ok) {
           throw new Error(`Champions API HTTP error! status: ${response.status}`);
@@ -332,8 +301,6 @@ const App = () => {
 
 
   // Effect hook to fetch Weekly Odds data from Apps Script JSON API
-  // This API is assumed to implicitly get data for the current league/season based on its own backend logic.
-  // If it needs the currentLeagueId, you'd have to pass it as a URL parameter.
   useEffect(() => {
     const fetchWeeklyOdds = async (weekNum) => {
       if (WEEKLY_ODDS_API_URL === 'YOUR_WEEKLY_ODDS_APPS_SCRIPT_URL_HERE') {
@@ -352,8 +319,7 @@ const App = () => {
       setErrorOdds(null);
 
       try {
-        // If your Apps Script can take a 'year' parameter:
-        // const apiUrl = `${WEEKLY_ODDS_API_URL}?week=${weekNum}&year=${CURRENT_FANTASY_SEASON_YEAR}`;
+        // Append week parameter to the URL
         const apiUrl = `${WEEKLY_ODDS_API_URL}?week=${weekNum}`;
         const response = await fetch(apiUrl, { mode: 'cors' });
 
@@ -390,8 +356,6 @@ const App = () => {
         setLoadingOdds(true);
         setErrorOdds(null);
         try {
-          // If your Apps Script can take a 'year' parameter:
-          // const apiUrl = `${WEEKLY_ODDS_API_URL}?year=${CURRENT_FANTASY_SEASON_YEAR}`;
           const response = await fetch(WEEKLY_ODDS_API_URL, { mode: 'cors' });
           if (!response.ok) {
             throw new Error(`Initial Weekly Odds API HTTP error! status: ${response.status}. Response: ${await response.text()}.`);
@@ -421,9 +385,7 @@ const App = () => {
   }, [WEEKLY_ODDS_API_URL, currentOddsWeek]);
 
 
-  // Effect hook to fetch Playoff Bracket data from Apps Script JSON API
-  // This API is assumed to implicitly get data for the current league/season based on its own backend logic.
-  // If it needs the currentLeagueId, you'd have to pass it as a URL parameter.
+  // NEW: Effect hook to fetch Playoff Bracket data from Apps Script JSON API
   useEffect(() => {
     const fetchBracketData = async () => {
       if (BRACKET_API_URL === 'YOUR_BRACKET_APPS_SCRIPT_URL_HERE') {
@@ -436,8 +398,6 @@ const App = () => {
       setErrorBracket(null);
 
       try {
-        // If your Apps Script can take a 'year' parameter:
-        // const apiUrl = `${BRACKET_API_URL}?year=${CURRENT_FANTASY_SEASON_YEAR}`;
         const response = await fetch(BRACKET_API_URL, { mode: 'cors' });
 
         if (!response.ok) {
@@ -460,120 +420,6 @@ const App = () => {
 
     fetchBracketData();
   }, [BRACKET_API_URL]);
-
-  // Effect hook for Live Matchups (fetch current week and then matchups)
-  // This now explicitly uses currentLeagueId
-  useEffect(() => {
-    const fetchCurrentNFLWeek = async () => {
-      try {
-        const response = await fetch('https://api.sleeper.app/v1/state/nfl');
-        if (!response.ok) throw new Error(`Sleeper NFL State API HTTP error! status: ${response.status}`);
-        const data = await response.json();
-        setCurrentNFLWeek(data.week); // Set the current NFL week
-        return data.week;
-      } catch (error) {
-        console.error("Error fetching current NFL week:", error);
-        setErrorLiveMatchups(`Failed to get current NFL week: ${error.message}`);
-        return null;
-      }
-    };
-
-    const fetchLiveMatchups = async (week) => {
-      if (!week || !currentLeagueId || currentLeagueId.includes('YOUR_')) {
-        setLoadingLiveMatchups(false);
-        setErrorLiveMatchups("Sleeper League ID not set or current NFL week not determined.");
-        return;
-      }
-
-      setLoadingLiveMatchups(true);
-      setErrorLiveMatchups(null); // Clear previous errors
-
-      try {
-        const response = await fetch(`https://api.sleeper.app/v1/league/${currentLeagueId}/matchups/${week}`);
-        if (!response.ok) throw new Error(`Sleeper Matchups API HTTP error! status: ${response.status}`);
-        const matchupsData = await response.json();
-
-        // Process matchups to group them by matchup_id
-        const groupedMatchups = {};
-        matchupsData.forEach(team => {
-          if (!groupedMatchups[team.matchup_id]) {
-            groupedMatchups[team.matchup_id] = [];
-          }
-          groupedMatchups[team.matchup_id].push(team);
-        });
-
-        // Convert the grouped matchups into an array of objects,
-        // each containing team1 and team2, along with their scores.
-        const formattedMatchups = Object.values(groupedMatchups).map(matchup => {
-          // Assuming there are always exactly two teams per matchup_id for regular season
-          const team1 = matchup[0];
-          const team2 = matchup[1];
-
-          // Find team names using leagueManagers data
-          const manager1 = leagueManagers?.find(m => m.userId === team1.owner_id);
-          const manager2 = leagueManagers?.find(m => m.userId === team2.owner_id);
-
-          return {
-            matchupId: team1.matchup_id,
-            team1: {
-              rosterId: team1.roster_id,
-              ownerId: team1.owner_id,
-              name: manager1 ? manager1.teamName : `Team ${team1.roster_id}`,
-              score: team1.points,
-              avatar: manager1 ? manager1.avatar : 'https://placehold.co/40x40/cccccc/333333?text=M'
-            },
-            team2: {
-              rosterId: team2.roster_id,
-              ownerId: team2.owner_id,
-              name: manager2 ? manager2.teamName : `Team ${team2.roster_id}`,
-              score: team2.points,
-              avatar: manager2 ? manager2.avatar : 'https://placehold.co/40x40/cccccc/333333?text=M'
-            }
-          };
-        });
-        setLiveMatchups(formattedMatchups);
-      } catch (error) {
-        console.error("Error fetching live matchups:", error);
-        setErrorLiveMatchups(`Failed to fetch live matchups: ${error.message}`);
-      } finally {
-        setLoadingLiveMatchups(false);
-      }
-    };
-
-    // This effect runs when activeTab changes, or on initial load
-    if (activeTab === TABS.LIVE_MATCHUPS) {
-      // Clear any existing interval when switching tabs or re-initializing
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-
-      const initiatePolling = async () => {
-        const week = await fetchCurrentNFLWeek();
-        if (week) {
-          fetchLiveMatchups(week); // Initial fetch
-          // Set up polling (e.g., every 15 minutes)
-          intervalRef.current = setInterval(() => {
-            fetchLiveMatchups(week);
-          }, 900000); // 15 minutes (15 * 60 * 1000)
-        }
-      };
-
-      initiatePolling();
-
-      // Cleanup function: clear the interval when the component unmounts or activeTab changes
-      return () => {
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-        }
-      };
-    } else {
-      // If not on the Live Matchups tab, ensure the interval is cleared
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-    }
-  }, [activeTab, currentLeagueId, leagueManagers]); // Depend on currentLeagueId and leagueManagers
 
 
   // Helper function to render an individual player or pick item within a trade card
@@ -1075,53 +921,8 @@ const App = () => {
             border-radius: 0;
         }
 
-        /* Live Matchups specific styles */
-        .live-matchup-card {
-            background: #ffffff;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-            margin-bottom: 15px;
-            padding: 15px;
-            display: flex;
-            flex-direction: column;
-            width: 100%;
-            max-width: 450px; /* Adjust as needed */
-        }
+        /* No specific .trade-ticker-card CSS needed beyond Tailwind classes */
 
-        .live-team-display {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 8px 0;
-            font-size: 1.1em;
-            font-weight: 600;
-            border-bottom: 1px dashed #cccccc;
-        }
-        .live-team-display:last-of-type {
-            border-bottom: none;
-        }
-
-        .live-team-info {
-            display: flex;
-            align-items: center;
-            flex-grow: 1;
-        }
-
-        .live-team-info img {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            object-fit: cover;
-            margin-right: 10px;
-            border: 2px solid #0070c0;
-        }
-
-        .live-score {
-            font-size: 1.3em;
-            font-weight: bold;
-            color: #0070c0;
-        }
 
         @media (max-width: 600px) {
           .navbar {
@@ -1163,10 +964,11 @@ const App = () => {
       {/* Header Section */}
       <header className="w-full max-w-4xl bg-gradient-to-r from-[#0070c0] to-[#005f9f] text-white p-6 rounded-xl shadow-lg mb-8 text-center">
         <h1 className="text-4xl font-extrabold mb-2">The League of Extraordinary Douchebags</h1>
-        {/* Display the current fantasy season year */}
-        <p className="text-xl">
-          {CURRENT_FANTASY_SEASON_YEAR} Season
-        </p>
+        {sleeperLeagueData && (
+          <p className="text-xl">
+            {sleeperLeagueData.season} Season
+          </p>
+        )}
       </header>
 
       {/* New Team Ticker */}
@@ -1242,11 +1044,16 @@ const App = () => {
                 <div className="inline-flex gap-4 animate-ticker-scroll items-center"> {/* Increased gap to gap-4 */}
                   {/* Duplicate content for continuous scrolling effect */}
                   {[...recentTrades, ...recentTrades].map((trade, index) => (
-                    <div
-                      key={`${trade.transaction_id}-${index}`}
-                      className="border border-[#bfbfbf] rounded-md shadow-sm p-2.5 flex flex-col flex-shrink-0 min-w-[280px] min-h-[220px] overflow-y-hidden"
-                    >
-                      <h3 className="flex justify-center font-semibold text-[11px] text-gray-700 tracking-wide pb-1 mb-1 border-b-2 border-[#0070c0] text-center">
+                    <div key={`${trade.transaction_id}-${index}`} className="
+                      /* REMOVED bg-white */ border border-[#bfbfbf] rounded-md shadow-sm p-2.5
+                      flex flex-col flex-shrink-0
+                      min-w-[280px] min-h-[220px]
+                      overflow-y-hidden
+                    ">
+                      <h3 className="
+                        flex justify-center font-semibold text-[11px] text-gray-700 tracking-wide
+                        pb-1 mb-1 border-b-2 border-[#0070c0] text-center
+                      ">
                         Trade Completed - Week {trade.week}
                       </h3>
                       <div className="flex flex-nowrap justify-center items-start w-full h-full gap-0">
@@ -1254,7 +1061,7 @@ const App = () => {
                           <React.Fragment key={participant.rosterId}>
                             <div className="flex flex-col flex-shrink-0 items-center p-0.5 min-w-[120px]">
                               <div className="flex flex-col items-center gap-1 mb-1 pb-1.5 border-b border-[#ff0000] w-full"> {/* Red border for trades */}
-                                <img src={participant.managerAvatar} alt={`${participant.teamName} avatar`} onError={(e) => e.target.src = 'https://placehold.co/32x32/cccccc/333333?text=M' } />
+                                <img src={participant.managerAvatar} alt={`${participant.teamName} avatar`} className="w-5 h-5 rounded-full object-cover border border-[#ff0000]" onError={(e) => e.target.src = 'https://placehold.co/32x32/cccccc/333333?text=M' } />
                                 <span className="font-semibold text-[10px] text-[#0070c0] text-center break-words max-w-full">{getMappedTeamName(participant.teamName)}</span>
                               </div>
                               <div className="flex flex-col gap-1 flex-grow w-full">
@@ -1277,43 +1084,6 @@ const App = () => {
             ) : (
               <p className="text-gray-600 px-4 md:px-0 text-center">No recent trades data available. Please ensure your Trade Ticker Apps Script URL is correct and data is being returned.</p>
             )}
-          </section>
-        )}
-
-        {activeTab === TABS.LIVE_MATCHUPS && (
-          <section className="w-full flex flex-col items-center">
-            <h2 className="text-2xl font-bold text-[#0070c0] mb-4 border-b-2 border-[#bfbfbf] pb-2 w-full text-center">
-              Live Matchups (Week {currentNFLWeek || '...'})
-            </h2>
-            {loadingLiveMatchups ? (
-              <p className="text-gray-600">Loading live matchups and scores...</p>
-            ) : errorLiveMatchups ? (
-              <p className="text-red-500">Error: {errorLiveMatchups}</p>
-            ) : liveMatchups && liveMatchups.length > 0 ? (
-              <div className="flex flex-col items-center w-full">
-                {liveMatchups.map((matchup) => (
-                  <div key={matchup.matchupId} className="live-matchup-card">
-                    <div className="live-team-display">
-                      <div className="live-team-info">
-                        <img src={matchup.team1.avatar} alt={`${matchup.team1.name} avatar`} onError={(e) => e.target.src = 'https://placehold.co/32x32/cccccc/333333?text=M' } />
-                        <span>{matchup.team1.name}</span>
-                      </div>
-                      <span className="live-score">{matchup.team1.score}</span>
-                    </div>
-                    <div className="live-team-display">
-                      <div className="live-team-info">
-                        <img src={matchup.team2.avatar} alt={`${matchup.team2.name} avatar`} onError={(e) => e.target.src = 'https://placehold.co/32x32/cccccc/333333?text=M' } />
-                        <span>{matchup.team2.name}</span>
-                      </div>
-                      <span className="live-score">{matchup.team2.score}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-600">No live matchups found for the current week. The season might not be active, or there might be an issue fetching data.</p>
-            )}
-            <p className="mt-4 text-sm text-gray-500">Scores update automatically every 15 minutes.</p>
           </section>
         )}
 
@@ -1466,15 +1236,8 @@ const App = () => {
         {activeTab === TABS.HISTORY && (
           <section className="w-full">
             <h2 className="text-2xl font-bold text-[#0070c0] mb-4 border-b-2 border-[#bfbfbf] pb-2 text-center">
-              League History (Power Rankings / General Data) - {CURRENT_FANTASY_SEASON_YEAR}
+              League History (Power Rankings / General Data)
             </h2>
-            {/* TODO: To display historical data for ALL years, you would need to:
-                1. Modify your GOOGLE_SHEET_API_URL Apps Script to accept a 'year' parameter,
-                   and fetch data from the corresponding sheet for that year.
-                2. In this App.js, loop through SLEEPER_LEAGUE_IDS to fetch data for each year,
-                   storing it in a state like `allYearsGoogleSheetHistory = { 2021: data, 2022: data, ... }`.
-                3. Add a dropdown or buttons here to allow users to select which year's history to view.
-            */}
             {loadingGoogleSheet ? (
               <p className="text-gray-600">Loading league history from Google Sheet...</p>
             ) : errorGoogleSheet ? (
@@ -1513,7 +1276,7 @@ const App = () => {
                     </table>
                   </div>
                 ) : (
-                  <p className="text-gray-600">No general historical data found in Google Sheet for {CURRENT_FANTASY_SEASON_YEAR}.</p>
+                  <p className="text-gray-600">No general historical data found in Google Sheet.</p>
                 )}
               </div>
             ) : (
@@ -1530,14 +1293,8 @@ const App = () => {
         {activeTab === TABS.CHAMPIONS && (
           <section className="w-full">
             <h2 className="text-2xl font-bold text-[#0070c0] mb-4 border-b-2 border-[#bfbfbf] pb-2 text-center">
-              Historical Champions & Awards - {CURRENT_FANTASY_SEASON_YEAR}
+              Historical Champions & Awards
             </h2>
-            {/* TODO: Similar to League History, to display historical champions for ALL years:
-                1. Modify your GOOGLE_SHEET_CHAMPIONS_API_URL Apps Script to accept a 'year' parameter.
-                2. In this App.js, loop through SLEEPER_LEAGUE_IDS to fetch data for each year,
-                   storing it in a state like `allYearsHistoricalChampions = { 2021: data, ... }`.
-                3. Add a dropdown or buttons here to allow users to select which year's champions to view.
-            */}
             {loadingChampions ? (
               <p className="text-gray-600">Loading historical champions data...</p>
             ) : errorChampions ? (
@@ -1548,14 +1305,14 @@ const App = () => {
                   <div key={index} className="bg-white p-4 rounded-lg shadow-sm border border-[#bfbfbf]">
                     {/* Apply team name replacement for champion, runnerUp, mvp */}
                     {champion.champion && <p className="font-semibold text-lg text-[#0070c0]">🏆 {champion.year} Champion: {getMappedTeamName(champion.champion)}</p>}
-                    {champion.runnerUp && <p className="text-md text-gray-700}>🥈 Runner-Up: {getMappedTeamName(champion.runnerUp)}</p>}
-                    {champion.mvp && <p className="text-md text-gray-700}>⭐ MVP: {getMappedTeamName(champion.mvp)}</p>}
+                    {champion.runnerUp && <p className="text-md text-gray-700">🥈 Runner-Up: {getMappedTeamName(champion.runnerUp)}</p>}
+                    {champion.mvp && <p className="text-md text-gray-700">⭐ MVP: {getMappedTeamName(champion.mvp)}</p>}
                     {/* Add more fields for other awards as needed */}
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-gray-600">No historical champions/awards data available for {CURRENT_FANTASY_SEASON_YEAR}. Consider populating a Google Sheet for this section.</p>
+              <p className="text-gray-600">No historical champions/awards data available. Consider populating a Google Sheet for this section.</p>
             )}
             <p className="mt-4 text-sm text-gray-500">
               If you want to fetch this data from a Google Sheet, you'll need to set up a dedicated Apps Script deployment for it,
