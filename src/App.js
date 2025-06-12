@@ -1242,12 +1242,8 @@ const App = () => {
                 <div className="inline-flex gap-4 animate-ticker-scroll items-center"> {/* Increased gap to gap-4 */}
                   {/* Duplicate content for continuous scrolling effect */}
                   {[...recentTrades, ...recentTrades].map((trade, index) => (
-                    <div key={`${trade.transaction_id}-${index}`} className="
-                      /* REMOVED bg-white */ border border-[#bfbfbf] rounded-md shadow-sm p-2.5
-                      flex flex-col flex-shrink-0
-                      min-w-[280px] min-h-[220px]
-                      overflow-y-hidden
-                    ">
+                                        <div key={`${trade.transaction_id}-${index}`} className="border border-[#bfbfbf] rounded-md shadow-sm p-2.5 flex flex-col flex-shrink-0 min-w-[280px] min-h-[220px] overflow-y-hidden">
+
                       <h3 className="
                         flex justify-center font-semibold text-[11px] text-gray-700 tracking-wide
                         pb-1 mb-1 border-b-2 border-[#0070c0] text-center
