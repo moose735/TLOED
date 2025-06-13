@@ -155,10 +155,10 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         bestAllPlayWinPct: { value: -Infinity, teams: [], years: [] },
         mostWeeklyTopScores: { value: -Infinity, teams: [], years: [] },
         mostWeeklyTop3Scores: { value: -Infinity, teams: [], years: [] },
-        mostBlowoutWins: { value: -Infinity, teams: [], years: [] },
-        mostBlowoutLosses: { value: -Infinity, teams: [], years: [] },
-        mostSlimWins: { value: -Infinity, teams: [], years: [] },
-        mostSlimLosses: { value: -Infinity, teams: [], years: [] },
+        mostBlowoutWins: { value: -Infinity, teams: [] },
+        mostBlowoutLosses: { value: -Infinity, teams: [] },
+        mostSlimWins: { value: -Infinity, teams: [] },
+        mostSlimLosses: { value: -Infinity, teams: [] },
         mostPoints: { value: -Infinity, teams: [], years: [] },
         fewestPoints: { value: Infinity, teams: [], years: [] },
         // Removed highestWeeklyScore and lowestWeeklyScore from aggregated records
@@ -265,10 +265,10 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
           <thead className="bg-gray-100">
             <tr>
-              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-2/5">Record</th>
-              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/5">Value</th>
-              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/3">Team</th> {/* Increased Team column width */}
-              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/6">Season</th> {/* Reduced Season column width */}
+              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/4">Record</th> {/* Adjusted width */}
+              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/6">Value</th> {/* Adjusted width */}
+              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-2/5">Team</th> {/* Adjusted width */}
+              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/10">Season</th> {/* Adjusted width */}
             </tr>
           </thead>
           <tbody>
@@ -301,7 +301,7 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
                     </span>
                   </td>
                   {/* Conditional display for Season column with adjusted horizontal padding */}
-                  <td className="py-2 px-3 text-sm text-gray-700"> {/* Removed pl-4 pr-4 here as overall column width will dictate space */}
+                  <td className="py-2 px-3 text-sm text-gray-700">
                     {recordData.teams.length > 1 ? '---' : recordData.years.join(' , ')}
                   </td>
                 </tr>
