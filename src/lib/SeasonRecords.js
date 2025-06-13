@@ -267,8 +267,8 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
             <tr>
               <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-2/5">Record</th>
               <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/5">Value</th>
-              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/5">Team</th>
-              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/5">Season</th>
+              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/3">Team</th> {/* Increased Team column width */}
+              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/6">Season</th> {/* Reduced Season column width */}
             </tr>
           </thead>
           <tbody>
@@ -287,7 +287,7 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
                   <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{recordDef.label}</td>
                   <td className="py-2 px-3 text-sm text-gray-800">{formatDisplayValue(recordData.value, recordDef.key)}</td>
                   <td className="py-2 px-3 text-sm text-gray-700">
-                    <span className="flex items-center space-x-1">
+                    <span className="flex items-center space-x-2 pr-4"> {/* Increased space-x and added pr-4 for internal padding */}
                       {recordData.teams.map(teamName => (
                         <img
                           key={teamName}
@@ -300,8 +300,8 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
                       <span className="ml-1">{recordData.teams.join(' , ')}</span>
                     </span>
                   </td>
-                  {/* Conditional display for Season column with horizontal padding */}
-                  <td className="py-2 px-3 text-sm text-gray-700 pl-4 pr-4"> {/* Added pl-4 pr-4 */}
+                  {/* Conditional display for Season column with adjusted horizontal padding */}
+                  <td className="py-2 px-3 text-sm text-gray-700"> {/* Removed pl-4 pr-4 here as overall column width will dictate space */}
                     {recordData.teams.length > 1 ? '---' : recordData.years.join(' , ')}
                   </td>
                 </tr>
