@@ -1,7 +1,7 @@
 // src/lib/RecordBook.js
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import LeagueRecords from './LeagueRecords';
-import { HISTORICAL_MATCHUPS_API_URL } from '../config';
+import SeasonRecords from './SeasonRecords'; // Import the new component
 
 // Define internal tabs for the RecordBook
 const RECORD_TABS = {
@@ -13,10 +13,8 @@ const RECORD_TABS = {
 };
 
 const RecordBook = ({ historicalMatchups, loading, error, getDisplayTeamName }) => {
-  // Ensure activeRecordTab is declared and initialized clearly at the top
   const [activeRecordTab, setActiveRecordTab] = useState(RECORD_TABS.LEAGUE_RECORDS);
 
-  // Debugging log for activeRecordTab
   console.log("RecordBook: activeRecordTab is", activeRecordTab);
 
   return (
@@ -94,7 +92,10 @@ const RecordBook = ({ historicalMatchups, loading, error, getDisplayTeamName }) 
             />
           )}
           {activeRecordTab === RECORD_TABS.SEASON_RECORDS && (
-            <div className="p-4 text-center text-gray-600">Season Records content will go here.</div>
+            <SeasonRecords // Render the new SeasonRecords component
+              historicalMatchups={historicalMatchups}
+              getDisplayTeamName={getDisplayTeamName}
+            />
           )}
           {activeRecordTab === RECORD_TABS.MATCHUP_RECORDS && (
             <div className="p-4 text-center text-gray-600">Matchup Records content will go here.</div>
