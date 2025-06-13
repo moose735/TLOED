@@ -1,14 +1,13 @@
 // App.js
-import React, { useState, useEffect, useCallback } from 'react'; // Added useCallback for memoization later
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   SLEEPER_LEAGUE_ID,
   GOOGLE_SHEET_API_URL,
-  // TRADE_TICKER_API_URL, // No longer directly used for Sleeper API trades
   GOOGLE_SHEET_CHAMPIONS_API_URL,
   WEEKLY_ODDS_API_URL,
   BRACKET_API_URL,
   HISTORICAL_MATCHUPS_API_URL,
-  NICKNAME_TO_SLEEPER_USER
+  NICKNAME_TO_SLEEPER_USER // Ensure this is correctly defined in your config.js
 } from './config';
 
 // Define the available tabs and their categories for the dropdown
@@ -26,10 +25,7 @@ const NAV_CATEGORIES = {
     subTabs: [
       { label: 'League History', tab: 'League History' },
       { label: 'Champions & Awards', tab: 'Champions' },
-      { label: 'All Matchups', tab: 'All Matchups' }, // <<< ADD THIS ENTRY
-      // { label: 'Team Records', tab: 'Team Records' }, // Future: Uncomment when ready
-      // { label: 'Head-to-Head', tab: 'Head-to-Head' }, // Future: Uncomment when ready
-      // { label: 'Points Champions', tab: 'Points Champions' }, // Future: Uncomment when ready
+      { label: 'All Matchups', tab: 'All Matchups' },
     ]
   }
 };
@@ -41,7 +37,7 @@ const TABS = {
   BRACKET: 'Playoff Bracket',
   HISTORY: 'League History',
   CHAMPIONS: 'Champions',
-  ALL_MATCHUPS: 'All Matchups' // <<< ADD THIS ENTRY
+  ALL_MATCHUPS: 'All Matchups'
 };
 
 // Main App component
@@ -49,9 +45,11 @@ const App = () => {
   // --- State Variables ---
   const [sleeperLeagueData, setSleeperLeagueData] = useState(null);
   const [leagueManagers, setLeagueManagers] = useState([]);
-  const [playerNameToTeamNameMap, setPlayerNameToTeamNameMap] = useState({}); // New map for display names
+  // playerNameToTeamNameMap will store Sleeper's internal names (lower-cased) mapped to your custom names.
+  // Example: { "john_doe": "Awesome Team", "fantasyking": "Gridiron Heroes" }
+  const [playerNameToTeamNameMap, setPlayerNameToTeamNameMap] = useState({});
   const [activeTab, setActiveTab] = useState(TABS.TRADES); // Default active tab
-  const [activeDropdown, setActiveDropdown] = useState(null); // State for active dropdown menu
+  const [activeDropdown, setActiveDropdown] = useState(null);
 
   // Trade Ticker States
   const [recentTrades, setRecentTrades] = useState([]);
@@ -61,7 +59,7 @@ const App = () => {
 
   // Weekly Odds States
   const [weeklyOddsData, setWeeklyOddsData] = useState({});
-  const [currentOddsWeek, setCurrentOddsWeek] = useState(null); // Use null initially to derive from data
+  const [currentOddsWeek, setCurrentOddsWeek] = useState(null);
   const [totalOddsWeeks, setTotalOddsWeeks] = useState(0);
   const [loadingOdds, setLoadingOdds] = useState(true);
   const [errorOdds, setErrorOdds] = useState(null);
@@ -90,33 +88,20 @@ const App = () => {
   // --- Helper Functions ---
   // Universal function to get mapped team name from any source
   const getMappedTeamName = useCallback((originalName) => {
-    if (!originalName) return originalName; // Handle null/undefined input
+    if (!originalName) return originalName;
 
-    // First, try direct mapping from Sleeper display_name/username
-    if (playerNameToTeamNameMap[originalName]) {
-      return playerNameToTeamNameMap[originalName];
+    // Convert the original name to lowercase for case-insensitive lookup
+    const lowerOriginalName = String(originalName).toLowerCase();
+
+    // Look up in the pre-built map (Sleeper's name -> Custom name)
+    if (playerNameToTeamNameMap[lowerOriginalName]) {
+      return playerNameToTeamNameMap[lowerOriginalName];
     }
 
-    // If not found, try the NICKNAME_TO_SLEEPER_USER mapping
-    const mappedSleeperUser = NICKNAME_TO_SLEEPER_USER[originalName.toLowerCase()];
-    if (mappedSleeperUser && playerNameToTeamNameMap[mappedSleeperUser]) {
-      return playerNameToTeamNameMap[mappedSleeperUser];
-    }
-
-    // Handle cases where Google Sheet names might be just the Sleeper team_name
-    const foundManager = leagueManagers.find(manager => manager.teamName === originalName);
-    if (foundManager) {
-      return originalName;
-    }
-
-    // Fallback for names not found, or if it's already a seed number
-    if (!isNaN(originalName) && !isNaN(parseFloat(originalName))) {
-      return originalName; // If it looks like a number (seed), return as is
-    }
-
-    // Final fallback if no mapping or direct match is found
+    // If not found, return the original name (as it might be already correct or a seed number)
     return originalName;
-  }, [playerNameToTeamNameMap, leagueManagers]); // Dependencies for useCallback
+  }, [playerNameToTeamNameMap]);
+
 
   const renderTradeAsset = (asset, type) => {
     const textColor = type === 'received' ? 'text-green-600' : 'text-red-600';
@@ -125,7 +110,7 @@ const App = () => {
     if (asset.type === 'player') {
       return (
         <div className={`text-[10px] ${textColor} font-semibold flex items-center gap-1`}>
-          <img src={asset.avatar} alt={`${asset.name} avatar`} className="w-3 h-3 rounded-full mr-1 object-cover" onError={(e) => e.target.src = 'https://placehold.co/12x12/cccccc/333333?text=P'} /> {/* Added player avatar */}
+          <img src={asset.avatar} alt={`${asset.name} avatar`} className="w-3 h-3 rounded-full mr-1 object-cover" onError={(e) => e.target.src = 'https://placehold.co/12x12/cccccc/333333?text=P'} />
           {sign} {asset.name} <span className="text-gray-500 font-normal">({asset.position})</span>
         </div>
       );
@@ -147,13 +132,11 @@ const App = () => {
   useEffect(() => {
     const fetchSleeperData = async () => {
       try {
-        // Fetch league data
         const leagueResponse = await fetch(`https://api.sleeper.app/v1/league/${SLEEPER_LEAGUE_ID}`);
         if (!leagueResponse.ok) throw new Error('Failed to fetch league data');
         const leagueData = await leagueResponse.json();
         setSleeperLeagueData(leagueData);
 
-        // Fetch users and rosters
         const [usersResponse, rostersResponse] = await Promise.all([
           fetch(`https://api.sleeper.app/v1/league/${SLEEPER_LEAGUE_ID}/users`),
           fetch(`https://api.sleeper.app/v1/league/${SLEEPER_LEAGUE_ID}/rosters`)
@@ -165,32 +148,49 @@ const App = () => {
         const usersData = await usersResponse.json();
         const rostersData = await rostersResponse.json();
 
-        // Create a map from user_id to display_name/username
-        const userIdToUserMap = {};
-        usersData.forEach(user => {
-          userIdToUserMap[user.user_id] = user.display_name || user.username;
-        });
+        // Build the sleeper-to-custom name map first from NICKNAME_TO_SLEEPER_USER
+        const sleeperToCustomMap = {};
+        for (const [customNickname, sleeperIdentifier] of Object.entries(NICKNAME_TO_SLEEPER_USER)) {
+            sleeperToCustomMap[String(sleeperIdentifier).toLowerCase()] = customNickname;
+        }
 
-        // Create an initial playerNameToTeamNameMap (user_id/display_name -> team_name)
-        const initialPlayerToTeamMap = {};
         const managers = rostersData.map(roster => {
           const user = usersData.find(u => u.user_id === roster.owner_id);
-          const teamName = user ? (user.metadata?.team_name || user.display_name || user.username) : 'Unknown Team';
-          const avatar = user?.avatar ? `https://sleepercdn.com/avatars/thumbs/${user.avatar}` : 'https://placehold.co/30x30/cccccc/333333?text=M'; // Placeholder avatar
 
-          // Populate the map for direct Sleeper display names/usernames
-          if (user) {
-            initialPlayerToTeamMap[user.display_name] = teamName;
-            initialPlayerToTeamMap[user.username] = teamName;
-            if (user.metadata?.team_name) {
-              initialPlayerToTeamMap[user.metadata.team_name] = teamName;
-            }
+          // Determine the team name for display on the dashboard based on custom mappings
+          let managerDisplayTeamName = 'Unknown Team';
+          let sleeperRawName = user?.metadata?.team_name || user?.display_name || user?.username;
+
+          if (sleeperRawName && sleeperToCustomMap[String(sleeperRawName).toLowerCase()]) {
+              managerDisplayTeamName = sleeperToCustomMap[String(sleeperRawName).toLowerCase()];
+          } else if (user?.display_name && sleeperToCustomMap[String(user.display_name).toLowerCase()]) {
+              managerDisplayTeamName = sleeperToCustomMap[String(user.display_name).toLowerCase()];
+          } else if (user?.username && sleeperToCustomMap[String(user.username).toLowerCase()]) {
+              managerDisplayTeamName = sleeperToCustomMap[String(user.username).toLowerCase()];
+          } else {
+              // If no custom mapping found, fall back to Sleeper's available names
+              managerDisplayTeamName = sleeperRawName || 'Unknown Team';
+          }
+
+          const avatar = user?.avatar ? `https://sleepercdn.com/avatars/thumbs/${user.avatar}` : 'https://placehold.co/30x30/cccccc/333333?text=M';
+
+          // Also populate playerNameToTeamNameMap (which is used by getMappedTeamName)
+          // with various Sleeper identifiers mapped to the final managerDisplayTeamName.
+          // This ensures that getMappedTeamName works for raw Sleeper names too.
+          if (sleeperRawName) {
+            sleeperToCustomMap[String(sleeperRawName).toLowerCase()] = managerDisplayTeamName;
+          }
+          if (user?.display_name) {
+            sleeperToCustomMap[String(user.display_name).toLowerCase()] = managerDisplayTeamName;
+          }
+          if (user?.username) {
+            sleeperToCustomMap[String(user.username).toLowerCase()] = managerDisplayTeamName;
           }
 
           return {
             userId: roster.owner_id,
-            rosterId: roster.roster_id, // Add rosterId for direct linking
-            teamName: teamName,
+            rosterId: roster.roster_id,
+            teamName: managerDisplayTeamName, // This is the mapped team name for manager objects
             avatar: avatar,
             wins: roster.settings.wins,
             losses: roster.settings.losses,
@@ -198,14 +198,15 @@ const App = () => {
           };
         });
         setLeagueManagers(managers);
-        setPlayerNameToTeamNameMap(initialPlayerToTeamMap); // Set the initial map
+        setPlayerNameToTeamNameMap(sleeperToCustomMap); // Use the comprehensive map here
+
       } catch (error) {
         console.error("Error fetching Sleeper data:", error);
         // Handle error for sleeper data, maybe display a message on the header
       }
     };
     fetchSleeperData();
-  }, [SLEEPER_LEAGUE_ID]);
+  }, [SLEEPER_LEAGUE_ID, NICKNAME_TO_SLEEPER_USER]); // Add NICKNAME_TO_SLEEPER_USER to dependencies
 
 
   // Effect hook to fetch all NFL player data (for trade player name resolution)
@@ -239,14 +240,10 @@ const App = () => {
       try {
         // Determine the current week to fetch recent trades from
         const currentYear = new Date().getFullYear();
-        const currentSeason = sleeperLeagueData?.season || currentYear.toString(); // Use actual season or current year
+        const currentSeason = sleeperLeagueData?.season || currentYear.toString();
 
-        // Fetch transaction data for a few recent weeks
-        // Sleeper API doesn't have a 'latest transactions' endpoint across all weeks.
-        // We'll fetch from a reasonable range (e.g., Week 1 to 18 or less if the season is not that long yet)
         const fetchWeeks = [];
-        // Assuming regular season weeks are 1-18 for simplicity, adjust as needed
-        const maxWeeks = 18; // Or fetch from sleeperLeagueData.settings.playoff_week if available
+        const maxWeeks = 18; // Adjust based on your league's season length if known, or fetch dynamically
 
         for (let week = 1; week <= maxWeeks; week++) {
           fetchWeeks.push(week);
@@ -264,26 +261,22 @@ const App = () => {
         const transactionsByWeek = await Promise.all(fetchPromises);
 
         transactionsByWeek.forEach(txns => {
-          if (Array.isArray(txns)) { // Ensure it's an array
+          if (Array.isArray(txns)) {
             const tradesInWeek = txns.filter(t => t.type === 'trade');
             allTrades = allTrades.concat(tradesInWeek);
           }
         });
 
-        // Sort by most recent (status_updated or created timestamp)
         allTrades.sort((a, b) => (b.status_updated || b.created) - (a.status_updated || a.created));
 
-        // Process trades to match the structure expected by renderTradeAsset
         const processedTrades = allTrades.map(trade => {
-          const participants = {}; // Key: roster_id, Value: { received: [], sent: [] }
+          const participants = {};
 
-          // Initialize participants for all rosters involved in the trade for display purposes
-          // This covers both active trade participants and those affected by pick changes
           const allRosterIdsInTrade = new Set([
-            ...(trade.roster_ids || []), // Rosters directly involved in player adds/drops
+            ...(trade.roster_ids || []),
             ...(trade.draft_picks || []).map(p => p.owner_id),
             ...(trade.draft_picks || []).map(p => p.previous_owner_id)
-          ].filter(Boolean)); // Filter out null/undefined
+          ].filter(Boolean));
 
           allRosterIdsInTrade.forEach(rosterId => {
             participants[rosterId] = { receivedAssets: [], sentAssets: [] };
@@ -294,21 +287,13 @@ const App = () => {
           if (trade.adds) {
             Object.entries(trade.adds).forEach(([playerId, rosterId]) => {
               const player = playerDetailsMap[playerId];
-              if (player) {
+              if (participants[rosterId]) { // Ensure participant object exists
                 participants[rosterId].receivedAssets.push({
                   type: 'player',
                   id: playerId,
-                  name: player.full_name || `${player.first_name} ${player.last_name}`,
-                  position: player.position,
-                  avatar: `https://sleepercdn.com/content/nfl/players/${playerId}.jpg`, // Added player avatar URL
-                });
-              } else {
-                participants[rosterId].receivedAssets.push({
-                  type: 'player',
-                  id: playerId,
-                  name: `Unknown Player (${playerId})`,
-                  position: 'N/A',
-                  avatar: 'https://placehold.co/12x12/cccccc/333333?text=P', // Placeholder for unknown
+                  name: player?.full_name || `${player?.first_name || ''} ${player?.last_name || ''}`.trim() || `Unknown Player (${playerId})`,
+                  position: player?.position || 'N/A',
+                  avatar: player ? `https://sleepercdn.com/content/nfl/players/${playerId}.jpg` : 'https://placehold.co/12x12/cccccc/333333?text=P',
                 });
               }
             });
@@ -317,21 +302,13 @@ const App = () => {
           if (trade.drops) {
             Object.entries(trade.drops).forEach(([playerId, rosterId]) => {
               const player = playerDetailsMap[playerId];
-              if (player) {
+              if (participants[rosterId]) { // Ensure participant object exists
                 participants[rosterId].sentAssets.push({
                   type: 'player',
                   id: playerId,
-                  name: player.full_name || `${player.first_name} ${player.last_name}`,
-                  position: player.position,
-                  avatar: `https://sleepercdn.com/content/nfl/players/${playerId}.jpg`, // Added player avatar URL
-                });
-              } else {
-                participants[rosterId].sentAssets.push({
-                  type: 'player',
-                  id: playerId,
-                  name: `Unknown Player (${playerId})`,
-                  position: 'N/A',
-                  avatar: 'https://placehold.co/12x12/cccccc/333333?text=P', // Placeholder for unknown
+                  name: player?.full_name || `${player?.first_name || ''} ${player?.last_name || ''}`.trim() || `Unknown Player (${playerId})`,
+                  position: player?.position || 'N/A',
+                  avatar: player ? `https://sleepercdn.com/content/nfl/players/${playerId}.jpg` : 'https://placehold.co/12x12/cccccc/333333?text=P',
                 });
               }
             });
@@ -340,26 +317,27 @@ const App = () => {
           // Process draft picks
           if (trade.draft_picks) {
             trade.draft_picks.forEach(pick => {
-              // The pick is RECEIVED by `pick.owner_id`
+              const fromRosterManager = leagueManagers.find(m => m.rosterId === pick.previous_owner_id);
+              const toRosterManager = leagueManagers.find(m => m.rosterId === pick.owner_id);
+
               if (participants[pick.owner_id]) {
-                const originalRosterManager = leagueManagers.find(m => m.rosterId === pick.previous_owner_id);
                 participants[pick.owner_id].receivedAssets.push({
                   type: 'pick',
                   year: pick.season,
                   round: pick.round,
-                  originalPick: pick.draft_slot || '?', // draft_slot is the original pick number in that round
-                  original_roster_name: originalRosterManager ? getMappedTeamName(originalRosterManager.teamName) : `Roster ${pick.previous_owner_id}` // Apply mapping
+                  originalPick: pick.draft_slot || '?',
+                  // Use getMappedTeamName for the original roster name from which the pick came
+                  original_roster_name: fromRosterManager ? getMappedTeamName(fromRosterManager.teamName) : `Roster ${pick.previous_owner_id}`
                 });
               }
-              // The pick is SENT by `pick.previous_owner_id`
               if (participants[pick.previous_owner_id]) {
-                const originalRosterManager = leagueManagers.find(m => m.rosterId === pick.owner_id);
-                 participants[pick.previous_owner_id].sentAssets.push({
+                participants[pick.previous_owner_id].sentAssets.push({
                   type: 'pick',
                   year: pick.season,
                   round: pick.round,
                   originalPick: pick.draft_slot || '?',
-                  original_roster_name: originalRosterManager ? getMappedTeamName(originalRosterManager.teamName) : `Roster ${pick.owner_id}` // Apply mapping
+                  // Use getMappedTeamName for the roster name to which the pick went
+                  original_roster_name: toRosterManager ? getMappedTeamName(toRosterManager.teamName) : `Roster ${pick.owner_id}`
                 });
               }
             });
@@ -370,8 +348,8 @@ const App = () => {
             const manager = leagueManagers.find(m => m.rosterId === rosterId);
             return {
               rosterId: rosterId,
-              // Ensure teamName is always mapped and has a fallback
-              teamName: manager ? getMappedTeamName(manager.teamName) : getMappedTeamName(`Roster ${rosterId}`),
+              // Use manager's already mapped teamName, or fallback to a mapped Roster ID
+              teamName: manager ? manager.teamName : getMappedTeamName(`Roster ${rosterId}`),
               managerAvatar: manager ? manager.avatar : 'https://placehold.co/32x32/cccccc/333333?text=M',
               receivedAssets: participants[rosterId].receivedAssets,
               sentAssets: participants[rosterId].sentAssets,
@@ -380,7 +358,7 @@ const App = () => {
 
           return {
             transaction_id: trade.transaction_id,
-            week: trade.metadata?.scoring_period || trade.leg || 'N/A', // Use scoring_period or leg for week, fallback to N/A
+            week: trade.metadata?.scoring_period || trade.leg || 'N/A',
             status_updated: trade.status_updated,
             participants: participantsArray,
           };
@@ -398,7 +376,6 @@ const App = () => {
       }
     };
 
-    // Only fetch trades if league managers and player details are loaded
     if (SLEEPER_LEAGUE_ID !== 'YOUR_SLEEPER_LEAGUE_ID' && leagueManagers.length > 0 && Object.keys(playerDetailsMap).length > 0) {
       fetchSleeperTrades();
     } else if (SLEEPER_LEAGUE_ID === 'YOUR_SLEEPER_LEAGUE_ID') {
@@ -428,7 +405,7 @@ const App = () => {
         if (data.error) {
           throw new Error(data.error);
         }
-        setGoogleSheetHistory(data); // Assuming data is { data: [], lastUpdated: '' }
+        setGoogleSheetHistory(data);
       } catch (error) {
         console.error("Error fetching Google Sheet data:", error);
         setErrorGoogleSheet(
@@ -465,12 +442,10 @@ const App = () => {
         if (data.error) {
           throw new Error(data.error);
         }
-        // Assuming data is an object where keys are week numbers and values are arrays of matches
         setWeeklyOddsData(data.weeks);
         const weeks = Object.keys(data.weeks);
         if (weeks.length > 0) {
           setTotalOddsWeeks(weeks.length);
-          // Set current week to the last available week
           setCurrentOddsWeek(weeks.length - 1);
         }
       } catch (error) {
@@ -508,7 +483,7 @@ const App = () => {
         if (data.error) {
           throw new Error(data.error);
         }
-        setBracketData(data); // Assuming data structure directly matches
+        setBracketData(data);
       } catch (error) {
         console.error("Error fetching playoff bracket data:", error);
         setErrorBracket(
@@ -527,7 +502,6 @@ const App = () => {
   // Effect hook to fetch Historical Champions data
   useEffect(() => {
     const fetchHistoricalChampions = async () => {
-      // If a specific API URL is provided, try to fetch from it
       if (GOOGLE_SHEET_CHAMPIONS_API_URL && GOOGLE_SHEET_CHAMPIONS_API_URL !== 'YOUR_GOOGLE_SHEET_CHAMPIONS_API_URL') {
         setLoadingChampions(true);
         setErrorChampions(null);
@@ -540,23 +514,18 @@ const App = () => {
           if (data.error) {
             throw new Error(data.error);
           }
-          setHistoricalChampions(data.data); // Assuming { data: [...] }
+          setHistoricalChampions(data.data);
         } catch (error) {
           console.error("Error fetching historical champions data:", error);
           setErrorChampions(
             `Error: ${error.message}. ` +
             `Please ensure your Champions Apps Script URL (${GOOGLE_SHEET_CHAMPIONS_API_URL}) is correct and publicly accessible.`
           );
-          // Fallback to hardcoded if API fails
-          setHistoricalChampions([
-            // { year: 2023, champion: "Default Champ 2023", runnerUp: "Default RunnerUp 2023", mvp: "Default MVP 2023" },
-            // { year: 2022, champion: "Default Champ 2022", runnerUp: "Default RunnerUp 2022", mvp: "Default MVP 2022" },
-          ]);
+          setHistoricalChampions([]); // Set to empty array on error
         } finally {
           setLoadingChampions(false);
         }
       } else {
-        // Fallback to hardcoded data if no valid API URL is set
         setLoadingChampions(false);
         setErrorChampions(null);
         setHistoricalChampions([
@@ -596,8 +565,7 @@ const App = () => {
         if (data.error) {
           throw new Error(data.error);
         }
-        // Ensure data.data is an array before setting state
-        setHistoricalMatchups(Array.isArray(data.data) ? data.data : []); // Ensure it's an array
+        setHistoricalMatchups(Array.isArray(data.data) ? data.data : []);
 
       } catch (error) {
         console.error("Error fetching historical matchups data:", error);
@@ -641,7 +609,7 @@ const App = () => {
 
          .animate-ticker-scroll {
              animation: ticker-scroll linear infinite;
-             animation-duration: 40s; /* Adjust speed as needed */
+             animation-duration: 80s; /* Adjusted from 40s to 80s for slower speed */
              animation-play-state: running;
          }
 
@@ -1133,9 +1101,8 @@ const App = () => {
             ) : errorTrades ? (
               <p className="text-red-500 px-4 md:px-0 text-center">Error: {errorTrades}</p>
             ) : recentTrades && recentTrades.length > 0 ? (
-              <div id="trade-ticker-container" className="overflow-x-auto whitespace-nowrap"> {/* Removed py-2 here */}
-                <div className="inline-flex gap-4 animate-ticker-scroll items-center"> {/* Increased gap to gap-4 */}
-                  {/* Duplicate content for continuous scrolling effect */}
+              <div id="trade-ticker-container" className="overflow-x-auto whitespace-nowrap">
+                <div className="inline-flex gap-4 animate-ticker-scroll items-center">
                   {[...recentTrades, ...recentTrades].map((trade, index) => (
                     <div key={`trade-${trade.transaction_id}-${index}`} className="
                       bg-white border border-[#bfbfbf] rounded-md shadow-sm p-2.5
@@ -1153,14 +1120,12 @@ const App = () => {
                         {trade.participants.map((participant, pIndex) => (
                           <React.Fragment key={participant.rosterId}>
                             <div className="flex flex-col flex-shrink-0 items-center p-0.5 min-w-[120px]">
-                              <div className="flex flex-col items-center gap-1 mb-1 pb-1.5 border-b border-[#ff0000] w-full"> {/* Red border for trades */}
+                              <div className="flex flex-col items-center gap-1 mb-1 pb-1.5 border-b border-[#ff0000] w-full">
                                 <img src={participant.managerAvatar} alt={`${participant.teamName} avatar`} className="w-5 h-5 rounded-full object-cover border border-[#ff0000]" onError={(e) => e.target.src = 'https://placehold.co/32x32/cccccc/333333?text=M'} />
                                 <span className="font-semibold text-[10px] text-[#0070c0] text-center break-words max-w-full">{getMappedTeamName(participant.teamName)}</span>
                               </div>
                               <div className="flex flex-col gap-1 flex-grow w-full">
-                                {/* Received Assets */}
                                 {participant.receivedAssets.length > 0 && participant.receivedAssets.map((asset, assetIndex) => <div key={assetIndex}>{renderTradeAsset(asset, 'received')}</div>)}
-                                {/* Sent Assets (add separator if both exist) */}
                                 {participant.receivedAssets.length > 0 && participant.sentAssets.length > 0 && (
                                   <div className="pt-2"></div>
                                 )}
@@ -1204,7 +1169,6 @@ const App = () => {
                 </div>
                 <div className="flex flex-col items-center w-full">
                   {weeklyOddsData[currentOddsWeek].map((match, idx) => {
-                    // Apply team name replacement using the universal helper
                     const displayP1Name = getMappedTeamName(match.p1Name);
                     const displayP2Name = getMappedTeamName(match.p2Name);
 
@@ -1260,7 +1224,6 @@ const App = () => {
                   <div className="bracket-round">
                     <div className="bracket-round-label">Round 1</div>
                     {bracketData.round1.map((match, index) => {
-                      // Apply team name replacement using the universal helper
                       const displayTeam1 = getMappedTeamName(match.team1);
                       const displayTeam2 = getMappedTeamName(match.team2);
 
@@ -1282,7 +1245,6 @@ const App = () => {
                   <div className="bracket-round">
                     <div className="bracket-round-label">Round 2</div>
                     {bracketData.round2.map((match, index) => {
-                      // Apply team name replacement using the universal helper
                       const displayTeam = getMappedTeamName(match.team);
 
                       return (
@@ -1291,7 +1253,6 @@ const App = () => {
                             <strong>{match.seed}</strong> <span>{displayTeam || <span className="bracket-bye">Bye</span>}</span>
                           </div>
                           <div className="bracket-vs">vs</div>
-                          {/* Placeholder text for remaining seeds as per original */}
                           <div className="bracket-bye">
                             {index === 0 ? "Lowest Seed Remaining" : "Highest Seed Remaining"}
                           </div>
@@ -1309,7 +1270,6 @@ const App = () => {
                 </h3>
                 <div className="lower-seeds-grid">
                   {bracketData.lowerSeeds.map((entry, index) => {
-                    // Apply team name replacement using the universal helper
                     const displayTeam = getMappedTeamName(entry.team);
 
                     return (
@@ -1340,18 +1300,17 @@ const App = () => {
                 {googleSheetHistory.data && googleSheetHistory.data.length > 0 ? (
                   <div className="overflow-x-auto">
                     <table className="min-w-full bg-white rounded-lg overflow-hidden shadow">
-                      <thead className="bg-[#bfbfbf]"> {/* Light Grey header background */}
+                      <thead className="bg-[#bfbfbf]">
                         <tr>
                           {Object.keys(googleSheetHistory.data[0]).map((header) => (
                             <th key={header} className="py-3 px-4 text-left text-sm font-semibold text-[#0070c0] uppercase tracking-wider">
-                              {header.replace(/_/g, ' ')} {/* Replace underscores with spaces for display */}
+                              {header.replace(/_/g, ' ')}
                             </th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
                         {googleSheetHistory.data.map((row, index) => {
-                          // Apply team name replacement for each cell in the row
                           const processedRow = Object.values(row).map(value =>
                             getMappedTeamName(value)
                           );
@@ -1396,11 +1355,9 @@ const App = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {historicalChampions.map((champion, index) => (
                   <div key={index} className="bg-white p-4 rounded-lg shadow-sm border border-[#bfbfbf]">
-                    {/* Apply team name replacement for champion, runnerUp, mvp */}
                     {champion.champion && <p className="font-semibold text-lg text-[#0070c0]">🏆 {champion.year} Champion: {getMappedTeamName(champion.champion)}</p>}
                     {champion.runnerUp && <p className="text-md text-gray-700">🥈 Runner-Up: {getMappedTeamName(champion.runnerUp)}</p>}
                     {champion.mvp && <p className="text-md text-gray-700">⭐ MVP: {getMappedTeamName(champion.mvp)}</p>}
-                    {/* Add more fields for other awards as needed */}
                   </div>
                 ))}
               </div>
@@ -1414,7 +1371,7 @@ const App = () => {
           </section>
         )}
 
-        {/* <<< START NEW SECTION FOR ALL HISTORICAL MATCHUPS >>> */}
+        {/* Historical Matchups */}
         {activeTab === TABS.ALL_MATCHUPS && (
           <section className="w-full">
             <h2 className="text-2xl font-bold text-[#0070c0] mb-4 border-b-2 border-[#bfbfbf] pb-2 text-center">
@@ -1429,10 +1386,9 @@ const App = () => {
                 <table className="min-w-full bg-white rounded-lg overflow-hidden shadow">
                   <thead className="bg-[#bfbfbf]">
                     <tr>
-                      {/* Added check for historicalMatchups[0] and its type for robustness */}
                       {historicalMatchups[0] && typeof historicalMatchups[0] === 'object' && Object.keys(historicalMatchups[0]).map((header) => (
                         <th key={header} className="py-3 px-4 text-left text-sm font-semibold text-[#0070c0] uppercase tracking-wider">
-                          {header.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} {/* Converts camelCase to "Camel Case" for display */}
+                          {header.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
                         </th>
                       ))}
                     </tr>
@@ -1440,10 +1396,8 @@ const App = () => {
                   <tbody>
                     {historicalMatchups.map((match, index) => (
                       <tr key={index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                        {/* Added check for 'match' and its type for robustness */}
                         {match && typeof match === 'object' && Object.entries(match).map(([key, value], idx) => (
                           <td key={idx} className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
-                            {/* Apply team name mapping only to relevant team name columns */}
                             {key.includes('team1') || key.includes('team2') ? getMappedTeamName(value) : value}
                           </td>
                         ))}
@@ -1460,10 +1414,8 @@ const App = () => {
             </p>
           </section>
         )}
-        {/* <<< END NEW SECTION FOR ALL HISTORICAL MATCHUPS >>> */}
 
       </div>
-
 
       {/* Footer / Instructions */}
       <footer className="mt-8 text-center text-gray-600 text-sm pb-8">
