@@ -192,7 +192,7 @@ const MatchupRecords = ({ historicalMatchups, getDisplayTeamName }) => {
                       <span className="text-left flex-1 pr-1 whitespace-nowrap">
                         {entry.winner} ({winnerScore})
                       </span>
-                      <span className="px-2 font-semibold text-gray-600">def.</span>
+                      <span className="px-2 font-semibold text-gray-600">vs</span> {/* Changed 'def.' to 'vs' */}
                       <span className="text-right flex-1 pl-1 whitespace-nowrap">
                         {entry.loser} ({loserScore})
                       </span>
