@@ -4,7 +4,7 @@ import { HISTORICAL_MATCHUPS_API_URL } from '../config';
 import Head2HeadGrid from './Head2HeadGrid';
 import RecordBook from './RecordBook';
 
-// Helper function to get ordinal suffix (1st, 2nd, 3rd, 4th, etc.)
+// Helper function to get ordinal suffix (1st, 2nd, 3rd, 4th, etc.) - MOVED OUTSIDE COMPONENT
 const getOrdinalSuffix = (n) => {
   if (typeof n !== 'number' || isNaN(n)) return '';
   const s = ["th", "st", "nd", "rd"];
@@ -12,8 +12,23 @@ const getOrdinalSuffix = (n) => {
   return (s[v - 20] || s[v] || s[0]);
 };
 
-// MatchupHistory now receives only getMappedTeamName
-const MatchupHistory = ({ getMappedTeamName }) => { // Removed leagueManagers from props
+// Helper to get the descriptive name of a final seeding game (e.g., "Championship Game") - MOVED OUTSIDE COMPONENT
+const getFinalSeedingGamePurpose = (value) => {
+  if (value === 1) return 'Championship Game';
+  if (value === 3) return '3rd Place Game';
+  if (value === 5) return '5th Place Game';
+  if (value === 7) return '7th Place Game';
+  if (value === 9) return '9th Place Game';
+  if (value === 11) return '11th Place Game';
+  // Generic fallback for other odd numeric values or unexpected values
+  if (typeof value === 'number' && value > 0 && value % 2 !== 0) {
+      return `${value}${getOrdinalSuffix(value)} Place Game`;
+  }
+  return 'Final Seeding Game'; // Generic fallback
+};
+
+
+const MatchupHistory = ({ getMappedTeamName }) => {
   const [historicalMatchups, setHistoricalMatchups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -22,10 +37,7 @@ const MatchupHistory = ({ getMappedTeamName }) => { // Removed leagueManagers fr
   const [championshipGames, setChampionshipGames] = useState([]);
 
   // Use the passed-down getMappedTeamName from App.js for display consistency
-  // It's still named getDisplayTeamName internally for clarity within this file
   const getDisplayTeamName = useCallback((originalName) => {
-    // If getMappedTeamName is provided by App.js, use it. Otherwise, fallback to original.
-    // In this context, App.js's getMappedTeamName just returns originalName.
     return getMappedTeamName ? getMappedTeamName(originalName) : originalName;
   }, [getMappedTeamName]);
 
@@ -141,7 +153,7 @@ const MatchupHistory = ({ getMappedTeamName }) => { // Removed leagueManagers fr
               team2: team2,
               team1Score: team1Score,
               team2Score: team2Score,
-              purpose: getFinalSeedingGamePurpose(match.finalSeedingGame),
+              purpose: getFinalSeedingGamePurpose(match.finalSeedingGame), // Now globally accessible
               winner: winner,
               loser: loser,
               winnerScore: winnerScore,
@@ -160,7 +172,7 @@ const MatchupHistory = ({ getMappedTeamName }) => { // Removed leagueManagers fr
       return a.winnerPlace - b.winnerPlace;
     }));
 
-  }, [historicalMatchups, getDisplayTeamName, getFinalSeedingGamePurpose]);
+  }, [historicalMatchups, getDisplayTeamName]); // Removed getFinalSeedingGamePurpose from dependencies as it's global
 
   const renderRecord = (record) => {
     if (!record) return '0-0-0';
@@ -257,7 +269,6 @@ const MatchupHistory = ({ getMappedTeamName }) => { // Removed leagueManagers fr
             <RecordBook
               historicalMatchups={historicalMatchups}
               getDisplayTeamName={getDisplayTeamName}
-              // Removed leagueManagers prop
             />
           </section>
         </>
