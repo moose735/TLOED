@@ -101,7 +101,8 @@ const StreaksRecords = ({ historicalMatchups, getDisplayTeamName }) => {
 
       for (let i = 0; i < games.length; i++) {
         const game = games[i];
-        const gameId = `${game.year}-${game.week}`;
+        // Updated format for gameId
+        const gameId = `${game.year}. Week ${game.week}`;
 
         // Win Streak Logic
         if (game.isWin) {
@@ -132,10 +133,10 @@ const StreaksRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       }
       // After loop, check for any active streaks
       if (currentWinStreak > 0) {
-        updateStreakRecord(newAggregatedStreaks.longestWinStreak, currentWinStreak, { team: teamName, streak: currentWinStreak, start: winStreakStart, end: `${games[games.length - 1].year}-${games[games.length - 1].week}` });
+        updateStreakRecord(newAggregatedStreaks.longestWinStreak, currentWinStreak, { team: teamName, streak: currentWinStreak, start: winStreakStart, end: `${games[games.length - 1].year}. Week ${games[games.length - 1].week}` });
       }
       if (currentLossStreak > 0) {
-        updateStreakRecord(newAggregatedStreaks.longestLosingStreak, currentLossStreak, { team: teamName, streak: currentLossStreak, start: lossStreakStart, end: `${games[games.length - 1].year}-${games[games.length - 1].week}` });
+        updateStreakRecord(newAggregatedStreaks.longestLosingStreak, currentLossStreak, { team: teamName, streak: currentLossStreak, start: lossStreakStart, end: `${games[games.length - 1].year}. Week ${games[games.length - 1].week}` });
       }
 
 
@@ -149,7 +150,8 @@ const StreaksRecords = ({ historicalMatchups, getDisplayTeamName }) => {
 
       for (let i = 0; i < games.length; i++) {
         const game = games[i];
-        const gameId = `${game.year}-${game.week}`;
+        // Updated format for gameId
+        const gameId = `${game.year}. Week ${game.week}`;
         const weekRanking = weeklyRankings[game.year]?.[game.week];
 
         if (!weekRanking) continue; // Skip if no ranking data for this week
@@ -160,7 +162,7 @@ const StreaksRecords = ({ historicalMatchups, getDisplayTeamName }) => {
           currentHighestScoreStreak++;
         } else {
           if (currentHighestScoreStreak > 0) {
-            updateStreakRecord(newAggregatedStreaks.longestConsecutiveHighestScoreWeeks, currentHighestScoreStreak, { team: teamName, streak: currentHighestScoreStreak, start: highestScoreStreakStart, end: games[i-1] ? `${games[i-1].year}-${games[i-1].week}` : highestScoreStreakStart });
+            updateStreakRecord(newAggregatedStreaks.longestConsecutiveHighestScoreWeeks, currentHighestScoreStreak, { team: teamName, streak: currentHighestScoreStreak, start: highestScoreStreakStart, end: games[i-1] ? `${games[i-1].year}. Week ${games[i-1].week}` : highestScoreStreakStart });
           }
           currentHighestScoreStreak = 0;
           highestScoreStreakStart = null;
@@ -172,7 +174,7 @@ const StreaksRecords = ({ historicalMatchups, getDisplayTeamName }) => {
           currentLowestScoreStreak++;
         } else {
           if (currentLowestScoreStreak > 0) {
-            updateStreakRecord(newAggregatedStreaks.longestConsecutiveLowestScoreWeeks, currentLowestScoreStreak, { team: teamName, streak: currentLowestScoreStreak, start: lowestScoreStreakStart, end: games[i-1] ? `${games[i-1].year}-${games[i-1].week}` : lowestScoreStreakStart });
+            updateStreakRecord(newAggregatedStreaks.longestConsecutiveLowestScoreWeeks, currentLowestScoreStreak, { team: teamName, streak: currentLowestScoreStreak, start: lowestScoreStreakStart, end: games[i-1] ? `${games[i-1].year}. Week ${games[i-1].week}` : lowestScoreStreakStart });
           }
           currentLowestScoreStreak = 0;
           lowestScoreStreakStart = null;
@@ -184,7 +186,7 @@ const StreaksRecords = ({ historicalMatchups, getDisplayTeamName }) => {
           currentTop3Streak++;
         } else {
           if (currentTop3Streak > 0) {
-            updateStreakRecord(newAggregatedStreaks.longestConsecutiveTop3Weeks, currentTop3Streak, { team: teamName, streak: currentTop3Streak, start: top3StreakStart, end: games[i-1] ? `${games[i-1].year}-${games[i-1].week}` : top3StreakStart });
+            updateStreakRecord(newAggregatedStreaks.longestConsecutiveTop3Weeks, currentTop3Streak, { team: teamName, streak: currentTop3Streak, start: top3StreakStart, end: games[i-1] ? `${games[i-1].year}. Week ${games[i-1].week}` : top3StreakStart });
           }
           currentTop3Streak = 0;
           top3StreakStart = null;
@@ -193,13 +195,13 @@ const StreaksRecords = ({ historicalMatchups, getDisplayTeamName }) => {
 
       // Check after loop for any ending streaks
       if (currentHighestScoreStreak > 0) {
-        updateStreakRecord(newAggregatedStreaks.longestConsecutiveHighestScoreWeeks, currentHighestScoreStreak, { team: teamName, streak: currentHighestScoreStreak, start: highestScoreStreakStart, end: `${games[games.length - 1].year}-${games[games.length - 1].week}` });
+        updateStreakRecord(newAggregatedStreaks.longestConsecutiveHighestScoreWeeks, currentHighestScoreStreak, { team: teamName, streak: currentHighestScoreStreak, start: highestScoreStreakStart, end: `${games[games.length - 1].year}. Week ${games[games.length - 1].week}` });
       }
       if (currentLowestScoreStreak > 0) {
-        updateStreakRecord(newAggregatedStreaks.longestConsecutiveLowestScoreWeeks, currentLowestScoreStreak, { team: teamName, streak: currentLowestScoreStreak, start: lowestScoreStreakStart, end: `${games[games.length - 1].year}-${games[games.length - 1].week}` });
+        updateStreakRecord(newAggregatedStreaks.longestConsecutiveLowestScoreWeeks, currentLowestScoreStreak, { team: teamName, streak: currentLowestScoreStreak, start: lowestScoreStreakStart, end: `${games[games.length - 1].year}. Week ${games[games.length - 1].week}` });
       }
       if (currentTop3Streak > 0) {
-        updateStreakRecord(newAggregatedStreaks.longestConsecutiveTop3Weeks, currentTop3Streak, { team: teamName, streak: currentTop3Streak, start: top3StreakStart, end: `${games[games.length - 1].year}-${games[games.length - 1].week}` });
+        updateStreakRecord(newAggregatedStreaks.longestConsecutiveTop3Weeks, currentTop3Streak, { team: teamName, streak: currentTop3Streak, start: top3StreakStart, end: `${games[games.length - 1].year}. Week ${games[games.length - 1].week}` });
       }
     });
 
