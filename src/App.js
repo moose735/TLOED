@@ -1,7 +1,7 @@
 // App.js
 import React from 'react';
-// Import the new PowerRankings component
-import PowerRankings from './PowerRankings';
+// Corrected import path for PowerRankings component
+import PowerRankings from './lib/PowerRankings';
 
 const App = () => {
   return (
