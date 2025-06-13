@@ -189,9 +189,13 @@ const MatchupRecords = ({ historicalMatchups, getDisplayTeamName }) => {
                   const loserScore = (entry.loser === entry.team1 ? entry.team1Score : entry.team2Score).toFixed(2);
                   matchupDisplay = (
                     <div className="flex items-center justify-center w-full">
-                      <span className="text-left flex-1 pr-1 whitespace-nowrap"><u>{entry.winner}</u></span>
+                      <span className="text-left flex-1 pr-1 whitespace-nowrap">
+                        <u>{entry.winner}</u> ({winnerScore})
+                      </span>
                       <span className="px-2 font-semibold text-gray-600">def.</span>
-                      <span className="text-right flex-1 pl-1 whitespace-nowrap">{entry.loser} ({winnerScore}-{loserScore})</span>
+                      <span className="text-right flex-1 pl-1 whitespace-nowrap">
+                        {entry.loser} ({loserScore})
+                      </span>
                     </div>
                   );
                 } else { // For Highest/Lowest Combined Score
