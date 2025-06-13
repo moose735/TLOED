@@ -125,6 +125,7 @@ const App = () => {
     if (asset.type === 'player') {
       return (
         <div className={`text-[10px] ${textColor} font-semibold flex items-center gap-1`}>
+          <img src={asset.avatar} alt={`${asset.name} avatar`} className="w-3 h-3 rounded-full mr-1 object-cover" onError={(e) => e.target.src = 'https://placehold.co/12x12/cccccc/333333?text=P'} /> {/* Added player avatar */}
           {sign} {asset.name} <span className="text-gray-500 font-normal">({asset.position})</span>
         </div>
       );
@@ -237,8 +238,6 @@ const App = () => {
 
       try {
         // Determine the current week to fetch recent trades from
-        // For simplicity, fetch the last 4 weeks of transactions.
-        // In a live app, you might get current week from Sleeper API or config.
         const currentYear = new Date().getFullYear();
         const currentSeason = sleeperLeagueData?.season || currentYear.toString(); // Use actual season or current year
 
@@ -301,7 +300,7 @@ const App = () => {
                   id: playerId,
                   name: player.full_name || `${player.first_name} ${player.last_name}`,
                   position: player.position,
-                  avatar: `https://sleepercdn.com/content/nfl/players/${playerId}.jpg`,
+                  avatar: `https://sleepercdn.com/content/nfl/players/${playerId}.jpg`, // Added player avatar URL
                 });
               } else {
                 participants[rosterId].receivedAssets.push({
@@ -309,7 +308,7 @@ const App = () => {
                   id: playerId,
                   name: `Unknown Player (${playerId})`,
                   position: 'N/A',
-                  avatar: 'https://placehold.co/12x12/cccccc/333333?text=P',
+                  avatar: 'https://placehold.co/12x12/cccccc/333333?text=P', // Placeholder for unknown
                 });
               }
             });
@@ -324,7 +323,7 @@ const App = () => {
                   id: playerId,
                   name: player.full_name || `${player.first_name} ${player.last_name}`,
                   position: player.position,
-                  avatar: `https://sleepercdn.com/content/nfl/players/${playerId}.jpg`,
+                  avatar: `https://sleepercdn.com/content/nfl/players/${playerId}.jpg`, // Added player avatar URL
                 });
               } else {
                 participants[rosterId].sentAssets.push({
@@ -332,7 +331,7 @@ const App = () => {
                   id: playerId,
                   name: `Unknown Player (${playerId})`,
                   position: 'N/A',
-                  avatar: 'https://placehold.co/12x12/cccccc/333333?text=P',
+                  avatar: 'https://placehold.co/12x12/cccccc/333333?text=P', // Placeholder for unknown
                 });
               }
             });
@@ -349,7 +348,7 @@ const App = () => {
                   year: pick.season,
                   round: pick.round,
                   originalPick: pick.draft_slot || '?', // draft_slot is the original pick number in that round
-                  original_roster_name: originalRosterManager ? originalRosterManager.teamName : `Roster ${pick.previous_owner_id}`
+                  original_roster_name: originalRosterManager ? getMappedTeamName(originalRosterManager.teamName) : `Roster ${pick.previous_owner_id}` // Apply mapping
                 });
               }
               // The pick is SENT by `pick.previous_owner_id`
@@ -360,7 +359,7 @@ const App = () => {
                   year: pick.season,
                   round: pick.round,
                   originalPick: pick.draft_slot || '?',
-                  original_roster_name: originalRosterManager ? originalRosterManager.teamName : `Roster ${pick.owner_id}`
+                  original_roster_name: originalRosterManager ? getMappedTeamName(originalRosterManager.teamName) : `Roster ${pick.owner_id}` // Apply mapping
                 });
               }
             });
@@ -371,7 +370,8 @@ const App = () => {
             const manager = leagueManagers.find(m => m.rosterId === rosterId);
             return {
               rosterId: rosterId,
-              teamName: manager ? manager.teamName : getMappedTeamName(`Roster ${rosterId}`),
+              // Ensure teamName is always mapped and has a fallback
+              teamName: manager ? getMappedTeamName(manager.teamName) : getMappedTeamName(`Roster ${rosterId}`),
               managerAvatar: manager ? manager.avatar : 'https://placehold.co/32x32/cccccc/333333?text=M',
               receivedAssets: participants[rosterId].receivedAssets,
               sentAssets: participants[rosterId].sentAssets,
@@ -1047,7 +1047,7 @@ const App = () => {
              padding: 0 10px;
            }
            .trade-ticker-card {
-             min-width: 250px;
+             min-w: 250px;
              min-height: 180px; /* Adjust for smaller screens if needed */
            }
          }
