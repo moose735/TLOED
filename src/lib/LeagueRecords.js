@@ -98,7 +98,6 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
           allWeeklyScores[weekKey] = [];
       }
       allWeeklyScores[weekKey].push({ team: team1, score: team1Score });
-      // TYPO FIXED HERE: Changed team22Score to team2Score
       allWeeklyScores[weekKey].push({ team: team2, score: team2Score });
     });
 
@@ -253,28 +252,22 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     <section className="mb-6 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
       <h4 className="text-xl font-bold text-gray-800 mb-2">{title}</h4>
       <p className="text-sm text-gray-600 mb-4">{description}</p>
-      <div className="overflow-x-auto">
-        <table className="min-w-full bg-white border border-gray-200">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/4">Record</th>
-              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-3/4">Member</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.slice(0, 5).map((entry, index) => ( // Show top 5 for brevity
-              <tr key={index} className="border-b border-gray-100 last:border-b-0">
-                <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{entry.displayValue}</td>
-                <td className="py-2 px-3 text-sm text-gray-700">{entry.memberDisplay}</td>
-              </tr>
-            ))}
-            {data.length === 0 && (
-                <tr>
-                    <td colSpan="2" className="py-4 text-center text-gray-500">No data available.</td>
-                </tr>
-            )}
-          </tbody>
-        </table>
+      <div className="flex flex-col space-y-3"> {/* Changed to flex column for mobile stacking */}
+        {data.slice(0, 5).map((entry, index) => ( // Show top 5 for brevity
+          <div key={index} className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-gray-50 p-3 rounded-md border border-gray-100 shadow-xs">
+            <div className="flex flex-col mb-1 sm:mb-0"> {/* Left side: rank, description */}
+              <span className="text-lg font-bold text-blue-700">{index + 1}.</span>
+              <span className="text-sm text-gray-700">{description.split('. ')[0]}</span> {/* Shows "Most total league wins" part */}
+            </div>
+            <div className="flex flex-grow justify-between items-center w-full sm:w-auto ml-0 sm:ml-4"> {/* Right side: value and member */}
+              <span className="text-xl font-bold text-blue-800 mr-4">{entry.displayValue}</span>
+              <span className="text-base font-semibold text-gray-900 flex-shrink-0">{entry.memberDisplay}</span>
+            </div>
+          </div>
+        ))}
+        {data.length === 0 && (
+            <div className="py-4 text-center text-gray-500">No data available.</div>
+        )}
       </div>
     </section>
   );
