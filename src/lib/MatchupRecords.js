@@ -171,24 +171,42 @@ const MatchupRecords = ({ historicalMatchups, getDisplayTeamName }) => {
                   const opponentScore = (recordHolder === entry.team1 ? entry.team2Score : entry.team1Score).toFixed(2);
 
                   matchupDisplay = (
-                    <>
-                      {recordHolder === entry.team1 ? (
-                        <><u>{entry.team1}</u> ({recordScore}) vs {entry.team2} ({opponentScore})</>
-                      ) : (
-                        <>{entry.team1} ({opponentScore}) vs <u>{entry.team2}</u> ({recordScore})</>
-                      )}
-                    </>
+                    <div className="flex items-center justify-between w-full">
+                      <span className="text-left whitespace-nowrap">
+                        {recordHolder === entry.team1 ? (
+                          <><u>{entry.team1}</u> ({recordScore})</>
+                        ) : (
+                          <>{entry.team1} ({opponentScore})</>
+                        )}
+                      </span>
+                      <span className="mx-2 font-semibold text-gray-600">vs</span>
+                      <span className="text-right whitespace-nowrap">
+                        {recordHolder === entry.team2 ? (
+                          <><u>{entry.team2}</u> ({recordScore})</>
+                        ) : (
+                          <>{entry.team2} ({opponentScore})</>
+                        )}
+                      </span>
+                    </div>
                   );
                 } else if (recordDef.key === 'biggestBlowout' || recordDef.key === 'slimmestWin') {
                   const winnerScore = (entry.winner === entry.team1 ? entry.team1Score : entry.team2Score).toFixed(2);
                   const loserScore = (entry.loser === entry.team1 ? entry.team1Score : entry.team2Score).toFixed(2);
                   matchupDisplay = (
-                    <>
-                      <u>{entry.winner}</u> def. {entry.loser} ({winnerScore}-{loserScore})
-                    </>
+                    <div className="flex items-center justify-between w-full">
+                      <span className="text-left whitespace-nowrap"><u>{entry.winner}</u></span>
+                      <span className="mx-2 font-semibold text-gray-600">def.</span>
+                      <span className="text-right whitespace-nowrap">{entry.loser} ({winnerScore}-{loserScore})</span>
+                    </div>
                   );
                 } else { // For Highest/Lowest Combined Score
-                  matchupDisplay = `${entry.team1} (${entry.team1Score.toFixed(2)}) vs ${entry.team2} (${entry.team2Score.toFixed(2)})`;
+                  matchupDisplay = (
+                    <div className="flex items-center justify-between w-full">
+                      <span className="text-left whitespace-nowrap">{entry.team1} ({entry.team1Score.toFixed(2)})</span>
+                      <span className="mx-2 font-semibold text-gray-600">vs</span>
+                      <span className="text-right whitespace-nowrap">{entry.team2} ({entry.team2Score.toFixed(2)})</span>
+                    </div>
+                  );
                 }
 
                 return (
