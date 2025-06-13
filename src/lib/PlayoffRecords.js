@@ -77,6 +77,8 @@ const PlayoffRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         }
 
         const finalPlacement = parseInt(match.finalSeedingGame);
+        console.log(`DEBUG PlayoffMatchup: Year ${year}, Week ${match.week}, Team1: ${team1} (${team1Score}), Team2: ${team2} (${team2Score}), Playoff: ${match.playoffs}, FinalSeedingGame: ${match.finalSeedingGame} (Parsed: ${finalPlacement}), Winner: ${winner}`);
+
         if (!isNaN(finalPlacement)) {
           if (finalPlacement === 1) {
             if (winner) { // If there's a winner (not a tie for 1st)
@@ -89,11 +91,9 @@ const PlayoffRecords = ({ historicalMatchups, getDisplayTeamName }) => {
           } else if (finalPlacement === 3) {
             if (winner) { // Winner of the 3rd place game gets 3rd place
               teamPlayoffStats[winner].medals[3]++;
-              // Debug log to check if 3rd place winner is found
-              console.log(`DEBUG: Team ${winner} won 3rd place in ${year} (Final Seeding Game: ${finalPlacement}).`);
+              console.log(`DEBUG: *** Successfully recorded 3rd place for Team ${winner} in ${year}.`);
             } else {
-              // Debug log for tied 3rd place games (if applicable in your data)
-              console.log(`DEBUG: Tie for 3rd place in ${year} between ${team1} and ${team2}. No single winner for 3rd place recorded.`);
+              console.log(`DEBUG: No winner detected for 3rd place game in ${year} between ${team1} and ${team2}. Is it a tie?`);
             }
           }
           // Can add logic for other final placements (e.g., 5th place) if desired
@@ -142,7 +142,7 @@ const PlayoffRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       updateRecord(newAggregatedRecords.mostChampionships, stats.championships, { team, championships: stats.championships });
       updateRecord(newAggregatedRecords.most2ndPlaceFinishes, stats.medals[2], { team, place: stats.medals[2] });
       // Debug log before updating most3rdPlaceFinishes
-      console.log(`DEBUG: Team ${team} has ${stats.medals[3]} 3rd place finishes.`);
+      console.log(`DEBUG: Final check for Team ${team} - 3rd place finishes: ${stats.medals[3]}`);
       updateRecord(newAggregatedRecords.most3rdPlaceFinishes, stats.medals[3], { team, place: stats.medals[3] });
     });
 
