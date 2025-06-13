@@ -101,6 +101,14 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       allWeeklyScores[weekKey].push({ team: team2, score: team2Score });
     });
 
+    // After iterating all matches, calculate win percentage for allTimeRecords
+    Object.keys(newAllTimeRecords).forEach(team => {
+        const record = newAllTimeRecords[team];
+        const totalGames = record.wins + record.losses + record.ties;
+        record.winPercentage = totalGames > 0 ? ((record.wins + (record.ties / 2)) / totalGames) : 0;
+    });
+
+
     // Calculate Weekly High Scores and Top 3 Scores
     Object.values(allWeeklyScores).forEach(weeklyMatchups => {
         const sortedWeeklyScores = [...weeklyMatchups].sort((a, b) => b.score - a.score);
@@ -148,11 +156,16 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
             if (!newSeasonRecordsSummary[team]) newSeasonRecordsSummary[team] = { winningSeasons: 0, losingSeasons: 0, tiedSeasons: 0 };
             const totalGamesInSeason = record.wins + record.losses + record.ties;
             if (totalGamesInSeason > 0) {
+                // A season with a winning record has more wins than losses
                 if (record.wins > record.losses) {
                     newSeasonRecordsSummary[team].winningSeasons++;
-                } else if (record.losses > record.wins) {
+                }
+                // A season with a losing record has more losses than wins
+                else if (record.losses > record.wins) {
                     newSeasonRecordsSummary[team].losingSeasons++;
-                } else {
+                }
+                // Tied seasons are where wins == losses and there are ties
+                else if (record.wins === record.losses && record.ties > 0) {
                     newSeasonRecordsSummary[team].tiedSeasons++;
                 }
             }
@@ -173,19 +186,26 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     const rawData = Object.keys(dataMap).map(team => {
       let value;
       // Safely access value, defaulting to 0 if undefined/null
-      if (sortKey === null) {
-        value = dataMap[team] || 0; // Direct value
+      if (sortKey === null) { // Direct value (e.g., weeklyHighScoresData, allPlayWinPercentage)
+        value = dataMap[team] || 0;
+      } else if (dataMap[team] && dataMap[team][sortKey] !== undefined) { // Nested value (e.g., allTimeRecords.wins, allTimeRecords.winPercentage)
+        value = dataMap[team][sortKey];
       } else {
-        value = (dataMap[team] && dataMap[team][sortKey] !== undefined) ? dataMap[team][sortKey] : 0; // Nested value
+        value = 0; // Default if data is missing
       }
       return { team, value };
     });
 
+    // Sort to find the top value(s)
     rawData.sort((a, b) => ascending ? a.value - b.value : b.value - a.value);
 
-    // Group by value to handle ties
+    // Filter to get only the top unique value(s)
+    const topValue = rawData.length > 0 ? rawData[0].value : null;
+    const topEntries = rawData.filter(entry => entry.value === topValue && topValue !== null);
+
+    // Group by value (though for "top only", it will likely be one group)
     const groupedData = new Map();
-    rawData.forEach(entry => {
+    topEntries.forEach(entry => {
         const key = entry.value;
         if (!groupedData.has(key)) {
             groupedData.set(key, []);
@@ -202,7 +222,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
 
         let finalDisplayValue;
         if (isPercentage) {
-            finalDisplayValue = `${(value * 100).toFixed(3)}%`; // Percentage always to 3 decimal places as per image
+            finalDisplayValue = `${(value * 100).toFixed(3)}%`; // Percentage always to 3 decimal places
         } else if (sortKey === 'scored' || sortKey === 'against') {
             finalDisplayValue = value.toFixed(2); // Points to 2 decimal places
         } else {
@@ -212,7 +232,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         result.push({
             value: value,
             displayValue: finalDisplayValue,
-            teams: teams,
+            teams: teams, // Array of team names
             memberDisplay: (
                 <span className="flex items-center space-x-1">
                     {teams.map(teamName => (
@@ -230,14 +250,15 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         });
     });
 
-    return result;
+    return result; // This will return only the top entry/tied entries
   };
 
 
   // Prepare data for specific leaderboards
   const mostWinsLeaderboard = getLeaderboardData(allTimeRecords, 'wins');
   const mostLossesLeaderboard = getLeaderboardData(allTimeRecords, 'losses');
-  const bestWinPctLeaderboard = getLeaderboardData(allTimeRecords, 'winPercentage', false, true); // This will pass the winPercentage value, not from allTimeRecords object directly
+  // Pass 'winPercentage' as the sortKey for allTimeRecords
+  const bestWinPctLeaderboard = getLeaderboardData(allTimeRecords, 'winPercentage', false, true);
   const bestAllPlayWinPctLeaderboard = getLeaderboardData(allPlayWinPercentage, null, false, true);
   const mostWeeklyHighScoresLeaderboard = getLeaderboardData(weeklyHighScoresData, null);
   const mostWeeklyTop3ScoresLeaderboard = getLeaderboardData(weeklyTop3ScoresData, null);
@@ -248,29 +269,39 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
 
 
   // Helper to render a leaderboard section with the new layout
-  const renderLeaderboardSection = (title, description, data) => (
-    <section className="mb-6 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-      <h4 className="text-xl font-bold text-gray-800 mb-2">{title}</h4>
-      <p className="text-sm text-gray-600 mb-4">{description}</p>
-      <div className="flex flex-col space-y-3"> {/* Changed to flex column for mobile stacking */}
-        {data.slice(0, 5).map((entry, index) => ( // Show top 5 for brevity
-          <div key={index} className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-gray-50 p-3 rounded-md border border-gray-100 shadow-xs">
-            <div className="flex flex-col mb-1 sm:mb-0"> {/* Left side: rank, description */}
-              <span className="text-lg font-bold text-blue-700">{index + 1}.</span>
-              <span className="text-sm text-gray-700">{description.split('. ')[0]}</span> {/* Shows "Most total league wins" part */}
+  const renderLeaderboardSection = (title, description, data) => {
+    // We only need to render the first entry (or tied entries) from the 'data' array
+    const topEntry = data.length > 0 ? data[0] : null;
+
+    if (!topEntry) {
+      return (
+        <section className="mb-6 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+          <h4 className="text-xl font-bold text-gray-800 mb-2">{title}</h4>
+          <p className="text-sm text-gray-600 mb-4">{description}</p>
+          <div className="py-4 text-center text-gray-500">No data available.</div>
+        </section>
+      );
+    }
+
+    return (
+      <section className="mb-6 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+        <h4 className="text-xl font-bold text-gray-800 mb-2">{title}</h4>
+        <p className="text-sm text-gray-600 mb-4">{description}</p>
+        <div className="flex flex-col space-y-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-gray-50 p-3 rounded-md border border-gray-100 shadow-xs">
+            <div className="flex flex-col mb-1 sm:mb-0">
+              <span className="text-lg font-bold text-blue-700"></span> {/* Removed index, as only top is shown */}
+              <span className="text-sm text-gray-700">{description.split('. ')[0]}</span>
             </div>
-            <div className="flex flex-grow justify-between items-center w-full sm:w-auto ml-0 sm:ml-4"> {/* Right side: value and member */}
-              <span className="text-xl font-bold text-blue-800 mr-4">{entry.displayValue}</span>
-              <span className="text-base font-semibold text-gray-900 flex-shrink-0">{entry.memberDisplay}</span>
+            <div className="flex flex-grow justify-between items-center w-full sm:w-auto ml-0 sm:ml-4">
+              <span className="text-xl font-bold text-blue-800 mr-4">{topEntry.displayValue}</span>
+              <span className="text-base font-semibold text-gray-900 flex-shrink-0">{topEntry.memberDisplay}</span>
             </div>
           </div>
-        ))}
-        {data.length === 0 && (
-            <div className="py-4 text-center text-gray-500">No data available.</div>
-        )}
-      </div>
-    </section>
-  );
+        </div>
+      </section>
+    );
+  };
 
 
   return (
