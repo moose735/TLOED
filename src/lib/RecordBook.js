@@ -1,13 +1,14 @@
 // src/lib/RecordBook.js
 import React, { useState } from 'react';
 import LeagueRecords from './LeagueRecords';
-import SeasonRecords from './SeasonRecords'; // Import the new component
+import SeasonRecords from './SeasonRecords';
+import MatchupRecords from './MatchupRecords'; // Import the new component
 
 // Define internal tabs for the RecordBook
 const RECORD_TABS = {
   LEAGUE_RECORDS: 'leagueRecords',
   SEASON_RECORDS: 'seasonRecords',
-  MATCHUP_RECORDS: 'matchupRecords',
+  MATCHUP_RECORDS: 'matchupRecords', // New tab for Matchup Records
   VERSUS_RECORDS: 'versusRecords',
   PLAYOFF_RECORDS: 'playoffRecords',
 };
@@ -47,11 +48,11 @@ const RecordBook = ({ historicalMatchups, loading, error, getDisplayTeamName }) 
         </button>
         <button
           className={`px-4 py-2 rounded-md font-semibold text-md transition-colors ${
-            activeRecordTab === RECORD_TABS.MATCHUP_RECORDS
+            activeRecordTab === RECORD_TABS.MATCHUP_RECORDS // New button
               ? 'bg-blue-600 text-white shadow-md'
               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
           }`}
-          onClick={() => setActiveRecordTab(RECORD_TABS.MATCHUP_RECORDS)}
+          onClick={() => setActiveRecordTab(RECORD_TABS.MATCHUP_RECORDS)} // New handler
         >
           Matchup Records
         </button>
@@ -92,13 +93,16 @@ const RecordBook = ({ historicalMatchups, loading, error, getDisplayTeamName }) 
             />
           )}
           {activeRecordTab === RECORD_TABS.SEASON_RECORDS && (
-            <SeasonRecords // Render the new SeasonRecords component
+            <SeasonRecords
               historicalMatchups={historicalMatchups}
               getDisplayTeamName={getDisplayTeamName}
             />
           )}
-          {activeRecordTab === RECORD_TABS.MATCHUP_RECORDS && (
-            <div className="p-4 text-center text-gray-600">Matchup Records content will go here.</div>
+          {activeRecordTab === RECORD_TABS.MATCHUP_RECORDS && ( // Render new component
+            <MatchupRecords
+              historicalMatchups={historicalMatchups}
+              getDisplayTeamName={getDisplayTeamName}
+            />
           )}
           {activeRecordTab === RECORD_TABS.VERSUS_RECORDS && (
             <div className="p-4 text-center text-gray-600">Versus Records content will go here.</div>
