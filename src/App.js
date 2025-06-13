@@ -3,11 +3,11 @@ import React, { useState, useEffect, useCallback } from 'react'; // Added useCal
 import {
   SLEEPER_LEAGUE_ID,
   GOOGLE_SHEET_API_URL,
-  TRADE_TICKER_API_URL,
+  // TRADE_TICKER_API_URL, // No longer directly used for Sleeper API trades
   GOOGLE_SHEET_CHAMPIONS_API_URL,
   WEEKLY_ODDS_API_URL,
   BRACKET_API_URL,
-  HISTORICAL_MATCHUPS_API_URL, // <<< ADD THIS IMPORT
+  HISTORICAL_MATCHUPS_API_URL,
   NICKNAME_TO_SLEEPER_USER
 } from './config';
 
@@ -57,6 +57,7 @@ const App = () => {
   const [recentTrades, setRecentTrades] = useState([]);
   const [loadingTrades, setLoadingTrades] = useState(true);
   const [errorTrades, setErrorTrades] = useState(null);
+  const [playerDetailsMap, setPlayerDetailsMap] = useState({}); // Stores full player details from Sleeper
 
   // Weekly Odds States
   const [weeklyOddsData, setWeeklyOddsData] = useState({});
@@ -80,12 +81,10 @@ const App = () => {
   const [loadingChampions, setLoadingChampions] = useState(true);
   const [errorChampions, setErrorChampions] = useState(null);
 
-  // <<< START NEW STATE FOR HISTORICAL MATCHUPS >>>
-  // Changed initial state to an empty array for more robust array checks
+  // Historical Matchups States
   const [historicalMatchups, setHistoricalMatchups] = useState([]);
   const [loadingMatchups, setLoadingMatchups] = useState(true);
   const [errorMatchups, setErrorMatchups] = useState(null);
-  // <<< END NEW STATE FOR HISTORICAL MATCHUPS >>>
 
 
   // --- Helper Functions ---
@@ -132,7 +131,8 @@ const App = () => {
     } else if (asset.type === 'pick') {
       return (
         <div className={`text-[10px] ${textColor} font-semibold flex items-center gap-1`}>
-          {sign} {asset.year} Pick {asset.round}.{asset.originalPick}
+          {sign} {asset.year} Pick {asset.round}{asset.originalPick ? `.${asset.originalPick}` : ''}
+          {asset.original_roster_name && <span className="text-gray-500 font-normal"> ({asset.original_roster_name})</span>}
         </div>
       );
     }
@@ -188,6 +188,7 @@ const App = () => {
 
           return {
             userId: roster.owner_id,
+            rosterId: roster.roster_id, // Add rosterId for direct linking
             teamName: teamName,
             avatar: avatar,
             wins: roster.settings.wins,
@@ -204,6 +205,207 @@ const App = () => {
     };
     fetchSleeperData();
   }, [SLEEPER_LEAGUE_ID]);
+
+
+  // Effect hook to fetch all NFL player data (for trade player name resolution)
+  useEffect(() => {
+    const fetchPlayerDetails = async () => {
+      try {
+        const response = await fetch('https://api.sleeper.app/v1/players/nfl');
+        if (!response.ok) throw new Error('Failed to fetch NFL player data');
+        const data = await response.json();
+        setPlayerDetailsMap(data);
+      } catch (error) {
+        console.error("Error fetching NFL player data:", error);
+      }
+    };
+    fetchPlayerDetails();
+  }, []); // Run once on component mount
+
+  // Effect hook to fetch Sleeper API Trade Ticker data
+  useEffect(() => {
+    const fetchSleeperTrades = async () => {
+      if (SLEEPER_LEAGUE_ID === 'YOUR_SLEEPER_LEAGUE_ID') {
+        setLoadingTrades(false);
+        setErrorTrades("Please update SLEEPER_LEAGUE_ID in config.js to fetch trades directly from Sleeper API.");
+        return;
+      }
+
+      setLoadingTrades(true);
+      setErrorTrades(null);
+      let allTrades = [];
+
+      try {
+        // Determine the current week to fetch recent trades from
+        // For simplicity, fetch the last 4 weeks of transactions.
+        // In a live app, you might get current week from Sleeper API or config.
+        const currentYear = new Date().getFullYear();
+        const currentSeason = sleeperLeagueData?.season || currentYear.toString(); // Use actual season or current year
+
+        // Fetch transaction data for a few recent weeks
+        // Sleeper API doesn't have a 'latest transactions' endpoint across all weeks.
+        // We'll fetch from a reasonable range (e.g., Week 1 to 18 or less if the season is not that long yet)
+        const fetchWeeks = [];
+        // Assuming regular season weeks are 1-18 for simplicity, adjust as needed
+        const maxWeeks = 18; // Or fetch from sleeperLeagueData.settings.playoff_week if available
+
+        for (let week = 1; week <= maxWeeks; week++) {
+          fetchWeeks.push(week);
+        }
+
+        const fetchPromises = fetchWeeks.map(async (week) => {
+          const response = await fetch(`https://api.sleeper.app/v1/league/${SLEEPER_LEAGUE_ID}/transactions/${week}`);
+          if (!response.ok) {
+            console.warn(`Failed to fetch transactions for week ${week}: ${response.statusText}`);
+            return [];
+          }
+          return response.json();
+        });
+
+        const transactionsByWeek = await Promise.all(fetchPromises);
+
+        transactionsByWeek.forEach(txns => {
+          if (Array.isArray(txns)) { // Ensure it's an array
+            const tradesInWeek = txns.filter(t => t.type === 'trade');
+            allTrades = allTrades.concat(tradesInWeek);
+          }
+        });
+
+        // Sort by most recent (status_updated or created timestamp)
+        allTrades.sort((a, b) => (b.status_updated || b.created) - (a.status_updated || a.created));
+
+        // Process trades to match the structure expected by renderTradeAsset
+        const processedTrades = allTrades.map(trade => {
+          const participants = {}; // Key: roster_id, Value: { received: [], sent: [] }
+
+          // Initialize participants for all rosters involved in the trade for display purposes
+          // This covers both active trade participants and those affected by pick changes
+          const allRosterIdsInTrade = new Set([
+            ...(trade.roster_ids || []), // Rosters directly involved in player adds/drops
+            ...(trade.draft_picks || []).map(p => p.owner_id),
+            ...(trade.draft_picks || []).map(p => p.previous_owner_id)
+          ].filter(Boolean)); // Filter out null/undefined
+
+          allRosterIdsInTrade.forEach(rosterId => {
+            participants[rosterId] = { receivedAssets: [], sentAssets: [] };
+          });
+
+
+          // Process players (adds and drops)
+          if (trade.adds) {
+            Object.entries(trade.adds).forEach(([playerId, rosterId]) => {
+              const player = playerDetailsMap[playerId];
+              if (player) {
+                participants[rosterId].receivedAssets.push({
+                  type: 'player',
+                  id: playerId,
+                  name: player.full_name || `${player.first_name} ${player.last_name}`,
+                  position: player.position,
+                  avatar: `https://sleepercdn.com/content/nfl/players/${playerId}.jpg`,
+                });
+              } else {
+                participants[rosterId].receivedAssets.push({
+                  type: 'player',
+                  id: playerId,
+                  name: `Unknown Player (${playerId})`,
+                  position: 'N/A',
+                  avatar: 'https://placehold.co/12x12/cccccc/333333?text=P',
+                });
+              }
+            });
+          }
+
+          if (trade.drops) {
+            Object.entries(trade.drops).forEach(([playerId, rosterId]) => {
+              const player = playerDetailsMap[playerId];
+              if (player) {
+                participants[rosterId].sentAssets.push({
+                  type: 'player',
+                  id: playerId,
+                  name: player.full_name || `${player.first_name} ${player.last_name}`,
+                  position: player.position,
+                  avatar: `https://sleepercdn.com/content/nfl/players/${playerId}.jpg`,
+                });
+              } else {
+                participants[rosterId].sentAssets.push({
+                  type: 'player',
+                  id: playerId,
+                  name: `Unknown Player (${playerId})`,
+                  position: 'N/A',
+                  avatar: 'https://placehold.co/12x12/cccccc/333333?text=P',
+                });
+              }
+            });
+          }
+
+          // Process draft picks
+          if (trade.draft_picks) {
+            trade.draft_picks.forEach(pick => {
+              // The pick is RECEIVED by `pick.owner_id`
+              if (participants[pick.owner_id]) {
+                const originalRosterManager = leagueManagers.find(m => m.rosterId === pick.previous_owner_id);
+                participants[pick.owner_id].receivedAssets.push({
+                  type: 'pick',
+                  year: pick.season,
+                  round: pick.round,
+                  originalPick: pick.draft_slot || '?', // draft_slot is the original pick number in that round
+                  original_roster_name: originalRosterManager ? originalRosterManager.teamName : `Roster ${pick.previous_owner_id}`
+                });
+              }
+              // The pick is SENT by `pick.previous_owner_id`
+              if (participants[pick.previous_owner_id]) {
+                const originalRosterManager = leagueManagers.find(m => m.rosterId === pick.owner_id);
+                 participants[pick.previous_owner_id].sentAssets.push({
+                  type: 'pick',
+                  year: pick.season,
+                  round: pick.round,
+                  originalPick: pick.draft_slot || '?',
+                  original_roster_name: originalRosterManager ? originalRosterManager.teamName : `Roster ${pick.owner_id}`
+                });
+              }
+            });
+          }
+
+          // Convert participants object to an array for rendering
+          const participantsArray = Object.keys(participants).map(rosterId => {
+            const manager = leagueManagers.find(m => m.rosterId === rosterId);
+            return {
+              rosterId: rosterId,
+              teamName: manager ? manager.teamName : getMappedTeamName(`Roster ${rosterId}`),
+              managerAvatar: manager ? manager.avatar : 'https://placehold.co/32x32/cccccc/333333?text=M',
+              receivedAssets: participants[rosterId].receivedAssets,
+              sentAssets: participants[rosterId].sentAssets,
+            };
+          });
+
+          return {
+            transaction_id: trade.transaction_id,
+            week: trade.metadata?.scoring_period || trade.leg || 'N/A', // Use scoring_period or leg for week, fallback to N/A
+            status_updated: trade.status_updated,
+            participants: participantsArray,
+          };
+        });
+
+        setRecentTrades(processedTrades);
+      } catch (error) {
+        console.error("Error fetching Sleeper trade data:", error);
+        setErrorTrades(
+          `Error fetching trades: ${error.message}. ` +
+          `Please ensure your SLEEPER_LEAGUE_ID is correct and check your network connection.`
+        );
+      } finally {
+        setLoadingTrades(false);
+      }
+    };
+
+    // Only fetch trades if league managers and player details are loaded
+    if (SLEEPER_LEAGUE_ID !== 'YOUR_SLEEPER_LEAGUE_ID' && leagueManagers.length > 0 && Object.keys(playerDetailsMap).length > 0) {
+      fetchSleeperTrades();
+    } else if (SLEEPER_LEAGUE_ID === 'YOUR_SLEEPER_LEAGUE_ID') {
+        setLoadingTrades(false);
+        setErrorTrades("Please update SLEEPER_LEAGUE_ID in config.js to fetch trades directly from Sleeper API.");
+    }
+  }, [SLEEPER_LEAGUE_ID, leagueManagers, playerDetailsMap, getMappedTeamName, sleeperLeagueData]);
 
 
   // Effect hook to fetch Google Sheet history data
@@ -242,41 +444,6 @@ const App = () => {
     fetchGoogleSheetData();
   }, [GOOGLE_SHEET_API_URL]);
 
-  // Effect hook to fetch Trade Ticker data
-  useEffect(() => {
-    const fetchTradeTickerData = async () => {
-      if (TRADE_TICKER_API_URL === 'YOUR_TRADE_TICKER_API_URL') {
-        setLoadingTrades(false);
-        setErrorTrades("Please update TRADE_TICKER_API_URL in config.js with your actual Apps Script URL.");
-        return;
-      }
-
-      setLoadingTrades(true);
-      setErrorTrades(null);
-      try {
-        const response = await fetch(TRADE_TICKER_API_URL, { mode: 'cors' });
-        if (!response.ok) {
-          throw new Error(`Trade Ticker API HTTP error! status: ${response.status}. Response: ${await response.text()}.`);
-        }
-        const data = await response.json();
-        if (data.error) {
-          throw new Error(data.error);
-        }
-        setRecentTrades(data.trades); // Assuming the Apps Script returns { trades: [...] }
-      } catch (error) {
-        console.error("Error fetching trade ticker data:", error);
-        setErrorTrades(
-          `Error: ${error.message}. ` +
-          `Please ensure your Trade Ticker Apps Script URL (${TRADE_TICKER_API_URL}) is correct and publicly accessible. ` +
-          `Try opening this URL directly in your browser.`
-        );
-      } finally {
-        setLoadingTrades(false);
-      }
-    };
-
-    fetchTradeTickerData();
-  }, [TRADE_TICKER_API_URL]);
 
   // Effect hook to fetch Weekly Odds data
   useEffect(() => {
@@ -406,7 +573,7 @@ const App = () => {
   }, [GOOGLE_SHEET_CHAMPIONS_API_URL]);
 
 
-  // <<< START NEW EFFECT HOOK FOR HISTORICAL MATCHUPS >>>
+  // Historical Matchups
   useEffect(() => {
     const fetchHistoricalMatchups = async () => {
       if (HISTORICAL_MATCHUPS_API_URL === 'YOUR_NEW_HISTORICAL_MATCHUPS_APPS_SCRIPT_URL') {
@@ -446,7 +613,6 @@ const App = () => {
 
     fetchHistoricalMatchups();
   }, [HISTORICAL_MATCHUPS_API_URL]);
-  // <<< END NEW EFFECT HOOK FOR HISTORICAL MATCHUPS >>>
 
 
   // --- JSX (Return Statement) ---
@@ -1009,7 +1175,7 @@ const App = () => {
                 </div>
               </div>
             ) : (
-              <p className="text-gray-600 px-4 md:px-0 text-center">No recent trades data available. Please ensure your Trade Ticker Apps Script URL is correct and data is being returned.</p>
+              <p className="text-gray-600 px-4 md:px-0 text-center">No recent trades data available. Please ensure your Sleeper League ID is correct and there are trades in your league.</p>
             )}
           </section>
         )}
