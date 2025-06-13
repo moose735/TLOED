@@ -215,8 +215,9 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
                 </tr>
               </thead>
               <tbody>
-                {Object.keys(newSeasonRecords[year]).sort().map(team => {
-                  const record = newSeasonRecords[year][team];
+                {/* Corrected: Access seasonRecords state instead of newSeasonRecords local variable */}
+                {Object.keys(seasonRecords[year]).sort().map(team => {
+                  const record = seasonRecords[year][team];
                   const totalGames = record.wins + record.losses + record.ties;
                   const winPercentage = totalGames > 0 ? ((record.wins + (record.ties / 2)) / totalGames * 100).toFixed(1) : '0.0';
                   return (
