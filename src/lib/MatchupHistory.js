@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { HISTORICAL_MATCHUPS_API_URL } from '../config';
 import Head2HeadGrid from './Head2HeadGrid';
-import RecordBook from './RecordBook';
+// Removed import RecordBook from './RecordBook'; // RecordBook is now a main tab
 
 // Helper function to get ordinal suffix (1st, 2nd, 3rd, 4th, etc.) - MOVED OUTSIDE COMPONENT
 const getOrdinalSuffix = (n) => {
@@ -36,7 +36,6 @@ const MatchupHistory = ({ getMappedTeamName }) => {
   const [seasonRecords, setSeasonRecords] = useState({});
   const [championshipGames, setChampionshipGames] = useState([]);
 
-  // Use the passed-down getMappedTeamName from App.js for display consistency
   const getDisplayTeamName = useCallback((originalName) => {
     return getMappedTeamName ? getMappedTeamName(originalName) : originalName;
   }, [getMappedTeamName]);
@@ -153,7 +152,7 @@ const MatchupHistory = ({ getMappedTeamName }) => {
               team2: team2,
               team1Score: team1Score,
               team2Score: team2Score,
-              purpose: getFinalSeedingGamePurpose(match.finalSeedingGame), // Now globally accessible
+              purpose: getFinalSeedingGamePurpose(match.finalSeedingGame),
               winner: winner,
               loser: loser,
               winnerScore: winnerScore,
@@ -172,7 +171,7 @@ const MatchupHistory = ({ getMappedTeamName }) => {
       return a.winnerPlace - b.winnerPlace;
     }));
 
-  }, [historicalMatchups, getDisplayTeamName]); // Removed getFinalSeedingGamePurpose from dependencies as it's global
+  }, [historicalMatchups, getDisplayTeamName]);
 
   const renderRecord = (record) => {
     if (!record) return '0-0-0';
@@ -264,13 +263,7 @@ const MatchupHistory = ({ getMappedTeamName }) => {
             />
           </section>
 
-          {/* RecordBook section */}
-          <section>
-            <RecordBook
-              historicalMatchups={historicalMatchups}
-              getDisplayTeamName={getDisplayTeamName}
-            />
-          </section>
+          {/* Removed RecordBook section from here */}
         </>
       )}
     </div>
