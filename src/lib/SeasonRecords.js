@@ -1,22 +1,22 @@
 // src/lib/SeasonRecords.js
 import React, { useState, useEffect } from 'react';
 
-// Helper to render record (W-L-T)
+// Helper to render record (W-L-T) - Not used in this component's final display
 const renderRecord = (record) => {
   if (!record) return '0-0-0';
   return `${record.wins || 0}-${record.losses || 0}-${record.ties || 0}`;
 };
 
 const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
-  const [seasonData, setSeasonData] = useState({}); // Stores all processed data per year and team
+  const [aggregatedSeasonRecords, setAggregatedSeasonRecords] = useState({});
 
   useEffect(() => {
     if (!historicalMatchups || historicalMatchups.length === 0) {
-      setSeasonData({});
+      setAggregatedSeasonRecords({});
       return;
     }
 
-    const newSeasonData = {}; // { year: { teamName: { wins, losses, ties, totalPointsScored, weeklyScores[], ... } } }
+    const newSeasonData = {}; // Intermediate: { year: { teamName: { wins, losses, ... } } }
 
     historicalMatchups.forEach(match => {
       const team1 = getDisplayTeamName(String(match.team1 || '').trim());
@@ -26,7 +26,7 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       const team1Score = parseFloat(match.team1Score);
       const team2Score = parseFloat(match.team2Score);
 
-      // Skip invalid or non-regular season data
+      // Skip invalid or non-regular season data (only count regular season for these records)
       if (!team1 || !team2 || isNaN(year) || isNaN(week) || isNaN(team1Score) || isNaN(team2Score) || !match.regSeason) {
         return;
       }
@@ -34,7 +34,7 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       const isTie = team1Score === team2Score;
       const team1Won = team1Score > team2Score;
 
-      // Initialize year and team data structures
+      // Initialize year and team data structures in newSeasonData
       if (!newSeasonData[year]) newSeasonData[year] = {};
       [team1, team2].forEach(team => {
         if (!newSeasonData[year][team]) {
@@ -45,8 +45,8 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
             weeklyScores: [], // To calculate weekly top scores and All-Play Win %
             blowoutWins: 0, blowoutLosses: 0,
             slimWins: 0, slimLosses: 0,
-            highestWeeklyScore: -Infinity,
-            lowestWeeklyScore: Infinity,
+            highestWeeklyScore: -Infinity, // For Most Points (Single Game) - not requested now but good to track
+            lowestWeeklyScore: Infinity, // For Fewest Points (Single Game) - not requested now but good to track
             weeklyHighScoresCount: 0,
             weeklyTop3ScoresCount: 0,
           };
@@ -60,42 +60,42 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       } else if (team1Won) {
         newSeasonData[year][team1].wins++;
         newSeasonData[year][team2].losses++;
-      } else {
+      } else { // team2Won
         newSeasonData[year][team2].wins++;
         newSeasonData[year][team1].losses++;
       }
 
-      // Update total points
+      // Update total points for the season
       newSeasonData[year][team1].totalPointsScored += team1Score;
       newSeasonData[year][team1].totalPointsAgainst += team2Score;
       newSeasonData[year][team2].totalPointsScored += team2Score;
       newSeasonData[year][team2].totalPointsAgainst += team1Score;
 
       // Store weekly scores for later calculations (All-Play, weekly high/top 3)
-      newSeasonData[year][team1].weeklyScores.push({ week, score: team1Score, opponentScore: team2Score, isWin: team1Won, isTie: isTie });
-      newSeasonData[year][team2].weeklyScores.push({ week, score: team2Score, opponentScore: team1Score, isWin: team2Score > team1Score, isTie: isTie });
+      newSeasonData[year][team1].weeklyScores.push({ week, score: team1Score, opponentScore: team2Score });
+      newSeasonData[year][team2].weeklyScores.push({ week, score: team2Score, opponentScore: team1Score });
 
-      // Update highest/lowest weekly scores
-      newSeasonData[year][team1].highestWeeklyScore = Math.max(newSeasonData[year][team1].highestWeeklyScore, team1Score);
-      newSeasonData[year][team1].lowestWeeklyScore = Math.min(newSeasonData[year][team1].lowestWeeklyScore, team1Score);
-      newSeasonData[year][team2].highestWeeklyScore = Math.max(newSeasonData[year][team2].highestWeeklyScore, team2Score);
-      newSeasonData[year][team2].lowestWeeklyScore = Math.min(newSeasonData[year][team2].lowestWeeklyScore, team2Score);
-
-      // Calculate blowout/slim wins/losses on a per-match basis (only for games that aren't ties)
+      // Calculate blowout/slim wins/losses on a per-match basis (only for regular season games that aren't ties)
       if (!isTie) {
-          const margin1 = (team1Score - team2Score) / team2Score; // Margin as percentage of opponent's score
-          const margin2 = (team2Score - team1Score) / team1Score;
+          const margin1 = team1Score > 0 ? (team1Score - team2Score) / team1Score : (team1Score - team2Score); // Margin as percentage of winner's score, handle zero score
+          const margin2 = team2Score > 0 ? (team2Score - team1Score) / team2Score : (team2Score - team1Score);
 
+          // Blowout win/loss: Win/lose by 40% or more
           if (team1Won) {
               if (margin1 >= 0.40) newSeasonData[year][team1].blowoutWins++;
-              if (margin1 > 0 && margin1 < 0.025) newSeasonData[year][team1].slimWins++;
-              if (margin2 >= 0.40) newSeasonData[year][team2].blowoutLosses++; // Opponent's loss is team2's blowout loss
-              if (margin2 > 0 && margin2 < 0.025) newSeasonData[year][team2].slimLosses++;
+              if (Math.abs(margin1) >= 0.40) newSeasonData[year][team2].blowoutLosses++; // Team2 lost by 40% to Team1
           } else { // team2Won
               if (margin2 >= 0.40) newSeasonData[year][team2].blowoutWins++;
+              if (Math.abs(margin2) >= 0.40) newSeasonData[year][team1].blowoutLosses++; // Team1 lost by 40% to Team2
+          }
+
+          // Slim win/loss: Win/lose by less than 2.5%
+          if (team1Won) {
+              if (margin1 > 0 && margin1 < 0.025) newSeasonData[year][team1].slimWins++;
+              if (Math.abs(margin1) > 0 && Math.abs(margin1) < 0.025) newSeasonData[year][team2].slimLosses++;
+          } else { // team2Won
               if (margin2 > 0 && margin2 < 0.025) newSeasonData[year][team2].slimWins++;
-              if (margin1 >= 0.40) newSeasonData[year][team1].blowoutLosses++; // Opponent's loss is team1's blowout loss
-              if (margin1 > 0 && margin1 < 0.025) newSeasonData[year][team1].slimLosses++;
+              if (Math.abs(margin2) > 0 && Math.abs(margin2) < 0.025) newSeasonData[year][team1].slimLosses++;
           }
       }
     });
@@ -117,7 +117,7 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
 
             const sortedWeeklyScores = [...weeklyMatchups].sort((a, b) => b.score - a.score);
 
-            // Most Weekly High Scores
+            // Most Weekly High Scores (the highest score in that specific week)
             newSeasonData[year][sortedWeeklyScores[0].team].weeklyHighScoresCount++;
 
             // Most Weekly Top 3 Scores
@@ -148,191 +148,168 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         });
     });
 
-    setSeasonData(newSeasonData);
-  }, [historicalMatchups, getDisplayTeamName]);
+    // --- AGGREGATE SEASON RECORDS ACROSS ALL YEARS ---
+    const newAggregatedRecords = {
+        mostWins: { value: -Infinity, teams: [], years: [] },
+        mostLosses: { value: -Infinity, teams: [], years: [] },
+        bestAllPlayWinPct: { value: -Infinity, teams: [], years: [] },
+        mostWeeklyTopScores: { value: -Infinity, teams: [], years: [] },
+        mostWeeklyTop3Scores: { value: -Infinity, teams: [], years: [] },
+        mostBlowoutWins: { value: -Infinity, teams: [], years: [] },
+        mostBlowoutLosses: { value: -Infinity, teams: [], years: [] },
+        mostSlimWins: { value: -Infinity, teams: [], years: [] },
+        mostSlimLosses: { value: -Infinity, teams: [], years: [] },
+        mostPoints: { value: -Infinity, teams: [], years: [] },
+        fewestPoints: { value: Infinity, teams: [], years: [] },
+        highestWeeklyScore: { value: -Infinity, teams: [], years: [] }, // Individual highest weekly score
+        lowestWeeklyScore: { value: Infinity, teams: [], years: [] }, // Individual lowest weekly score
+    };
 
-  // Helper to format leaderboard data for display (for a specific year and metric)
-  const getLeaderboardData = (year, metricKey, sortKey, ascending = false, isPercentage = false) => {
-    if (!seasonData[year]) return [];
+    Object.keys(newSeasonData).forEach(year => {
+        Object.keys(newSeasonData[year]).forEach(teamName => {
+            const teamStats = newSeasonData[year][teamName];
 
-    const rawData = Object.keys(seasonData[year]).map(team => {
-      let value;
-      if (sortKey === null) { // Direct metric key (e.g., 'weeklyHighScoresCount')
-        value = seasonData[year][team][metricKey] || 0;
-      } else { // Nested metric key (e.g., 'totalPointsData.scored') -- not directly used here but kept for flexibility
-        value = (seasonData[year][team][metricKey] && seasonData[year][team][metricKey][sortKey] !== undefined) ? seasonData[year][team][metricKey][sortKey] : 0;
-      }
-      return { team, value };
-    });
+            // Helper to update a record if current value is better (or equal for ties)
+            const updateRecord = (recordObj, newValue, isMin = false) => {
+                if (isMin) { // For "fewest" / "lowest"
+                    if (newValue < recordObj.value) {
+                        recordObj.value = newValue;
+                        recordObj.teams = [teamName];
+                        recordObj.years = [year];
+                    } else if (newValue === recordObj.value) {
+                        recordObj.teams.push(teamName);
+                        recordObj.years.push(year);
+                    }
+                } else { // For "most" / "best" (max)
+                    if (newValue > recordObj.value) {
+                        recordObj.value = newValue;
+                        recordObj.teams = [teamName];
+                        recordObj.years = [year];
+                    } else if (newValue === recordObj.value) {
+                        recordObj.teams.push(teamName);
+                        recordObj.years.push(year);
+                    }
+                }
+            };
 
-    // Sort to find the top value(s)
-    rawData.sort((a, b) => ascending ? a.value - b.value : b.value - a.value);
+            // Update all aggregated records
+            updateRecord(newAggregatedRecords.mostWins, teamStats.wins);
+            updateRecord(newAggregatedRecords.mostLosses, teamStats.losses);
+            updateRecord(newAggregatedRecords.bestAllPlayWinPct, teamStats.allPlayWinPercentage);
+            updateRecord(newAggregatedRecords.mostWeeklyTopScores, teamStats.weeklyHighScoresCount);
+            updateRecord(newAggregatedRecords.mostWeeklyTop3Scores, teamStats.weeklyTop3ScoresCount);
+            updateRecord(newAggregatedRecords.mostBlowoutWins, teamStats.blowoutWins);
+            updateRecord(newAggregatedRecords.mostBlowoutLosses, teamStats.blowoutLosses);
+            updateRecord(newAggregatedRecords.mostSlimWins, teamStats.slimWins);
+            updateRecord(newAggregatedRecords.mostSlimLosses, teamStats.slimLosses);
+            updateRecord(newAggregatedRecords.mostPoints, teamStats.totalPointsScored);
+            updateRecord(newAggregatedRecords.fewestPoints, teamStats.totalPointsScored, true);
+            updateRecord(newAggregatedRecords.highestWeeklyScore, teamStats.highestWeeklyScore);
+            updateRecord(newAggregatedRecords.lowestWeeklyScore, teamStats.lowestWeeklyScore, true);
 
-    // Filter to get only the top unique value(s) (handles ties)
-    const topValue = rawData.length > 0 ? rawData[0].value : null;
-    const topEntries = rawData.filter(entry => entry.value === topValue && (topValue !== null || entry.value === 0));
-
-    const groupedData = new Map();
-    topEntries.forEach(entry => {
-        const key = entry.value;
-        if (!groupedData.has(key)) {
-            groupedData.set(key, []);
-        }
-        groupedData.get(key).push(entry.team);
-    });
-
-    const result = [];
-    const sortedUniqueValues = Array.from(groupedData.keys()).sort((a, b) => ascending ? a - b : b - a);
-
-    sortedUniqueValues.forEach(value => {
-        const teams = groupedData.get(value);
-        teams.sort();
-
-        let finalDisplayValue;
-        if (isPercentage) {
-            finalDisplayValue = `${(value * 100).toFixed(3)}%`; // Display as X.XXX%
-        } else if (['totalPointsScored', 'totalPointsAgainst', 'highestWeeklyScore', 'lowestWeeklyScore'].includes(metricKey)) {
-            finalDisplayValue = value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        } else {
-            finalDisplayValue = value;
-        }
-
-        result.push({
-            value: value,
-            displayValue: finalDisplayValue,
-            teams: teams,
-            memberDisplay: (
-                <span className="flex items-center space-x-1">
-                    {teams.map(teamName => (
-                        <img
-                            key={teamName}
-                            src={'https://placehold.co/20x20/cccccc/333333?text=M'} // Generic placeholder
-                            alt={`${teamName} avatar`}
-                            className="w-5 h-5 rounded-full object-cover"
-                            title={teamName}
-                        />
-                    ))}
-                    <span className="ml-1">{teams.join(' , ')}</span>
-                </span>
-            )
         });
     });
 
-    return result;
+    // Clean up: filter out initial -Infinity/Infinity values if no data for a category
+    Object.keys(newAggregatedRecords).forEach(key => {
+        const record = newAggregatedRecords[key];
+        if (record.value === -Infinity || record.value === Infinity) {
+            record.value = 0; // Default to 0 for display if no data
+            record.teams = [];
+            record.years = [];
+        }
+        // Sort teams and years arrays for consistent display
+        record.teams.sort();
+        record.years.sort((a, b) => parseInt(a) - parseInt(b)); // Sort years numerically
+    });
+
+    setAggregatedSeasonRecords(newAggregatedRecords);
+  }, [historicalMatchups, getDisplayTeamName]);
+
+  // Helper to format values for display
+  const formatDisplayValue = (value, metricKey) => {
+      if (metricKey === 'bestAllPlayWinPct') {
+          return `${(value * 100).toFixed(3)}%`; // Percentage format
+      } else if (['mostPoints', 'fewestPoints', 'highestWeeklyScore', 'lowestWeeklyScore'].includes(metricKey)) {
+          return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); // Points with 2 decimals and commas
+      } else {
+          return value; // Integer for counts/wins/losses
+      }
   };
 
-  const sortedYears = Object.keys(seasonData).sort((a, b) => parseInt(b) - parseInt(a));
+  // Define the order and labels for the records to display
+  const recordsToDisplay = [
+    { key: 'mostWins', label: 'Most Wins' },
+    { key: 'mostLosses', label: 'Most Losses' },
+    { key: 'bestAllPlayWinPct', label: 'Best All-Play Win %' },
+    { key: 'mostWeeklyTopScores', label: 'Most Weekly Top Scores' },
+    { key: 'mostWeeklyTop3Scores', label: 'Most Weekly Top 3 Scores' },
+    { key: 'mostBlowoutWins', label: 'Most Blowout Wins' },
+    { key: 'mostBlowoutLosses', label: 'Most Blowout Losses' },
+    { key: 'mostSlimWins', label: 'Most Slim Wins' },
+    { key: 'mostSlimLosses', label: 'Most Slim Losses' },
+    { key: 'mostPoints', label: 'Most Points' },
+    { key: 'fewestPoints', label: 'Fewest Points' },
+    { key: 'highestWeeklyScore', label: 'Highest Single Game Score' },
+    { key: 'lowestWeeklyScore', label: 'Lowest Single Game Score' },
+  ];
+
 
   return (
     <div className="w-full">
       <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">SEASONAL RECORD HOLDERS - ( SEASON )</h3>
-      <p className="text-sm text-gray-600 mb-6">Records members hold for individual seasons.</p>
+      <p className="text-sm text-gray-600 mb-6">Records members hold for individual seasons, by the best value across all seasons.</p>
 
-      {sortedYears.length === 0 && (
+      {Object.keys(aggregatedSeasonRecords).length === 0 && (
         <p className="text-center text-gray-600">No regular season data available to display season records.</p>
       )}
 
-      {sortedYears.map(year => (
-        <section key={year} className="mb-8 bg-white p-6 rounded-lg shadow-md border border-gray-200">
-          <h4 className="text-2xl font-bold text-blue-700 mb-4 border-b pb-2">{year} Season Records</h4>
-          <div className="overflow-x-auto">
-            <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
-              <thead className="bg-gray-100">
-                <tr>
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-2/5">Record</th>
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/5">Value</th>
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-2/5">Team</th>
+      <div className="overflow-x-auto">
+        <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
+          <thead className="bg-gray-100">
+            <tr>
+              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-2/5">Record</th>
+              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/5">Value</th>
+              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/5">Team</th>
+              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/5">Season</th>
+            </tr>
+          </thead>
+          <tbody>
+            {recordsToDisplay.map((recordDef) => {
+              const recordData = aggregatedSeasonRecords[recordDef.key];
+              if (!recordData || recordData.teams.length === 0) {
+                return (
+                  <tr key={recordDef.key}>
+                    <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{recordDef.label}</td>
+                    <td colSpan="3" className="py-2 px-3 text-sm text-gray-500 text-center">N/A</td>
+                  </tr>
+                );
+              }
+              return (
+                <tr key={recordDef.key} className="border-b border-gray-100 last:border-b-0">
+                  <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{recordDef.label}</td>
+                  <td className="py-2 px-3 text-sm text-gray-800">{formatDisplayValue(recordData.value, recordDef.key)}</td>
+                  <td className="py-2 px-3 text-sm text-gray-700">
+                    <span className="flex items-center space-x-1">
+                      {recordData.teams.map(teamName => (
+                        <img
+                          key={teamName}
+                          src={'https://placehold.co/20x20/cccccc/333333?text=M'} // Generic placeholder
+                          alt={`${teamName} avatar`}
+                          className="w-5 h-5 rounded-full object-cover"
+                          title={teamName}
+                        />
+                      ))}
+                      <span className="ml-1">{recordData.teams.join(' , ')}</span>
+                    </span>
+                  </td>
+                  <td className="py-2 px-3 text-sm text-gray-700">{recordData.years.join(' , ')}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {getLeaderboardData(year, 'wins').map((entry, index) => (
-                  <tr key={`wins-${year}-${index}`} className="border-b border-gray-100 last:border-b-0">
-                    <td className="py-2 px-3 text-sm text-gray-800 font-semibold">Most Wins</td>
-                    <td className="py-2 px-3 text-sm text-gray-800">{entry.displayValue}</td>
-                    <td className="py-2 px-3 text-sm text-gray-700">{entry.memberDisplay}</td>
-                  </tr>
-                ))}
-                 {getLeaderboardData(year, 'losses').map((entry, index) => (
-                  <tr key={`losses-${year}-${index}`} className="border-b border-gray-100 last:border-b-0">
-                    <td className="py-2 px-3 text-sm text-gray-800 font-semibold">Most Losses</td>
-                    <td className="py-2 px-3 text-sm text-gray-800">{entry.displayValue}</td>
-                    <td className="py-2 px-3 text-sm text-gray-700">{entry.memberDisplay}</td>
-                  </tr>
-                ))}
-                {getLeaderboardData(year, 'allPlayWinPercentage', null, false, true).map((entry, index) => (
-                  <tr key={`allplay-win-pct-${year}-${index}`} className="border-b border-gray-100 last:border-b-0">
-                    <td className="py-2 px-3 text-sm text-gray-800 font-semibold">Best All-Play Win %</td>
-                    <td className="py-2 px-3 text-sm text-gray-800">{entry.displayValue}</td>
-                    <td className="py-2 px-3 text-sm text-gray-700">{entry.memberDisplay}</td>
-                  </tr>
-                ))}
-                {getLeaderboardData(year, 'weeklyHighScoresCount').map((entry, index) => (
-                  <tr key={`weekly-high-scores-${year}-${index}`} className="border-b border-gray-100 last:border-b-0">
-                    <td className="py-2 px-3 text-sm text-gray-800 font-semibold">Most Weekly Top Scores</td>
-                    <td className="py-2 px-3 text-sm text-gray-800">{entry.displayValue}</td>
-                    <td className="py-2 px-3 text-sm text-gray-700">{entry.memberDisplay}</td>
-                  </tr>
-                ))}
-                {getLeaderboardData(year, 'weeklyTop3ScoresCount').map((entry, index) => (
-                  <tr key={`weekly-top3-scores-${year}-${index}`} className="border-b border-gray-100 last:border-b-0">
-                    <td className="py-2 px-3 text-sm text-gray-800 font-semibold">Most Weekly Top 3 Scores</td>
-                    <td className="py-2 px-3 text-sm text-gray-800">{entry.displayValue}</td>
-                    <td className="py-2 px-3 text-sm text-gray-700">{entry.memberDisplay}</td>
-                  </tr>
-                ))}
-                {getLeaderboardData(year, 'blowoutWins').map((entry, index) => (
-                  <tr key={`blowout-wins-${year}-${index}`} className="border-b border-gray-100 last:border-b-0">
-                    <td className="py-2 px-3 text-sm text-gray-800 font-semibold">Most Blowout Wins</td>
-                    <td className="py-2 px-3 text-sm text-gray-800">{entry.displayValue}</td>
-                    <td className="py-2 px-3 text-sm text-gray-700">{entry.memberDisplay}</td>
-                  </tr>
-                ))}
-                {getLeaderboardData(year, 'blowoutLosses').map((entry, index) => (
-                  <tr key={`blowout-losses-${year}-${index}`} className="border-b border-gray-100 last:border-b-0">
-                    <td className="py-2 px-3 text-sm text-gray-800 font-semibold">Most Blowout Losses</td>
-                    <td className="py-2 px-3 text-sm text-gray-800">{entry.displayValue}</td>
-                    <td className="py-2 px-3 text-sm text-gray-700">{entry.memberDisplay}</td>
-                  </tr>
-                ))}
-                {getLeaderboardData(year, 'slimWins').map((entry, index) => (
-                  <tr key={`slim-wins-${year}-${index}`} className="border-b border-gray-100 last:border-b-0">
-                    <td className="py-2 px-3 text-sm text-gray-800 font-semibold">Most Slim Wins</td>
-                    <td className="py-2 px-3 text-sm text-gray-800">{entry.displayValue}</td>
-                    <td className="py-2 px-3 text-sm text-gray-700">{entry.memberDisplay}</td>
-                  </tr>
-                ))}
-                {getLeaderboardData(year, 'slimLosses').map((entry, index) => (
-                  <tr key={`slim-losses-${year}-${index}`} className="border-b border-gray-100 last:border-b-0">
-                    <td className="py-2 px-3 text-sm text-gray-800 font-semibold">Most Slim Losses</td>
-                    <td className="py-2 px-3 text-sm text-gray-800">{entry.displayValue}</td>
-                    <td className="py-2 px-3 text-sm text-gray-700">{entry.memberDisplay}</td>
-                  </tr>
-                ))}
-                {getLeaderboardData(year, 'totalPointsScored').map((entry, index) => (
-                  <tr key={`most-points-${year}-${index}`} className="border-b border-gray-100 last:border-b-0">
-                    <td className="py-2 px-3 text-sm text-gray-800 font-semibold">Most Points</td>
-                    <td className="py-2 px-3 text-sm text-gray-800">{entry.displayValue}</td>
-                    <td className="py-2 px-3 text-sm text-gray-700">{entry.memberDisplay}</td>
-                  </tr>
-                ))}
-                {getLeaderboardData(year, 'totalPointsScored', true).map((entry, index) => ( // true for ascending (fewest points)
-                  <tr key={`fewest-points-${year}-${index}`} className="border-b border-gray-100 last:border-b-0">
-                    <td className="py-2 px-3 text-sm text-gray-800 font-semibold">Fewest Points</td>
-                    <td className="py-2 px-3 text-sm text-gray-800">{entry.displayValue}</td>
-                    <td className="py-2 px-3 text-sm text-gray-700">{entry.memberDisplay}</td>
-                  </tr>
-                ))}
-                {/* No data message for specific year */}
-                {Object.keys(seasonData[year]).length === 0 && (
-                  <tr>
-                    <td colSpan="3" className="py-4 text-center text-gray-500">No record data for this season.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      ))}
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };
