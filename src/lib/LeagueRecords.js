@@ -179,7 +179,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
                 else if (record.losses > record.wins) {
                     newSeasonRecordsSummary[team].losingSeasons++;
                 }
-                // Tied seasons are where wins == losses and there are ties (no explicit ties needed, just equality)
+                // Tied seasons are where wins === losses and there are ties (no explicit ties needed, just equality)
                 else if (record.wins === record.losses) { // If wins === losses, it's a tied record season (could have 0 ties)
                     newSeasonRecordsSummary[team].tiedSeasons++;
                 }
@@ -285,51 +285,109 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
   const mostTotalPointsAgainstLeaderboard = getLeaderboardData(totalPointsData, 'against');
 
 
-  // Helper to render the leaderboard table
-  const renderLeaderboardTable = (data) => (
-    <div className="overflow-x-auto">
-      <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
-        <thead className="bg-gray-100">
-          <tr>
-            <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/4">Record</th>
-            <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-3/4">Member</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.map((entry, index) => ( // Iterate over all top entries (for ties)
-            <tr key={index} className="border-b border-gray-100 last:border-b-0">
-              <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{entry.displayValue}</td>
-              <td className="py-2 px-3 text-sm text-gray-700">{entry.memberDisplay}</td>
-            </tr>
-          ))}
-          {data.length === 0 && (
-            <tr>
-              <td colSpan="2" className="py-4 text-center text-gray-500">No data available.</td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
-
-
   return (
     <div className="w-full">
-      {/* Removed "All-Time Team Records" table to combine into general leaderboards */}
       <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">ALL-TIME RECORD HOLDERS - ( LEAGUE )</h3>
       <p className="text-sm text-gray-600 mb-6">Records members hold across your entire league history.</p>
 
-      {renderLeaderboardTable(mostWinsLeaderboard)}
-      {renderLeaderboardTable(mostLossesLeaderboard)}
-      {renderLeaderboardTable(bestWinPctLeaderboard)}
-      {renderLeaderboardTable(bestAllPlayWinPctLeaderboard)}
-      {renderLeaderboardTable(mostWeeklyHighScoresLeaderboard)}
-      {renderLeaderboardTable(mostWeeklyTop3ScoresLeaderboard)}
-      {renderLeaderboardTable(mostWinningSeasonsLeaderboard)}
-      {renderLeaderboardTable(mostLosingSeasonsLeaderboard)}
-      {renderLeaderboardTable(mostTotalPointsScoredLeaderboard)}
-      {renderLeaderboardTable(mostTotalPointsAgainstLeaderboard)}
-
+      <div className="overflow-x-auto">
+        <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
+          <thead className="bg-gray-100">
+            <tr>
+              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-2/5">Record</th>
+              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/5">Value</th> {/* Changed from Record to Value */}
+              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-2/5">Team</th> {/* Changed from Member to Team */}
+            </tr>
+          </thead>
+          <tbody>
+            {mostWinsLeaderboard.map((entry, index) => (
+              <tr key={`most-wins-${index}`} className="border-b border-gray-100 last:border-b-0">
+                <td className="py-2 px-3 text-sm text-gray-800 font-semibold">Most Wins</td>
+                <td className="py-2 px-3 text-sm text-gray-800">{entry.displayValue}</td>
+                <td className="py-2 px-3 text-sm text-gray-700">{entry.memberDisplay}</td>
+              </tr>
+            ))}
+            {mostLossesLeaderboard.map((entry, index) => (
+              <tr key={`most-losses-${index}`} className="border-b border-gray-100 last:border-b-0">
+                <td className="py-2 px-3 text-sm text-gray-800 font-semibold">Most Losses</td>
+                <td className="py-2 px-3 text-sm text-gray-800">{entry.displayValue}</td>
+                <td className="py-2 px-3 text-sm text-gray-700">{entry.memberDisplay}</td>
+              </tr>
+            ))}
+            {bestWinPctLeaderboard.map((entry, index) => (
+              <tr key={`best-win-pct-${index}`} className="border-b border-gray-100 last:border-b-0">
+                <td className="py-2 px-3 text-sm text-gray-800 font-semibold">Best Win Percentage</td>
+                <td className="py-2 px-3 text-sm text-gray-800">{entry.displayValue}</td>
+                <td className="py-2 px-3 text-sm text-gray-700">{entry.memberDisplay}</td>
+              </tr>
+            ))}
+            {bestAllPlayWinPctLeaderboard.map((entry, index) => (
+              <tr key={`best-all-play-win-pct-${index}`} className="border-b border-gray-100 last:border-b-0">
+                <td className="py-2 px-3 text-sm text-gray-800 font-semibold">Best All-Play Win Percentage</td>
+                <td className="py-2 px-3 text-sm text-gray-800">{entry.displayValue}</td>
+                <td className="py-2 px-3 text-sm text-gray-700">{entry.memberDisplay}</td>
+              </tr>
+            ))}
+            {mostWeeklyHighScoresLeaderboard.map((entry, index) => (
+              <tr key={`most-weekly-high-${index}`} className="border-b border-gray-100 last:border-b-0">
+                <td className="py-2 px-3 text-sm text-gray-800 font-semibold">Most Weekly High Scores</td>
+                <td className="py-2 px-3 text-sm text-gray-800">{entry.displayValue}</td>
+                <td className="py-2 px-3 text-sm text-gray-700">{entry.memberDisplay}</td>
+              </tr>
+            ))}
+            {mostWeeklyTop3ScoresLeaderboard.map((entry, index) => (
+              <tr key={`most-weekly-top3-${index}`} className="border-b border-gray-100 last:border-b-0">
+                <td className="py-2 px-3 text-sm text-gray-800 font-semibold">Most Weekly Top 3 Scores</td>
+                <td className="py-2 px-3 text-sm text-gray-800">{entry.displayValue}</td>
+                <td className="py-2 px-3 text-sm text-gray-700">{entry.memberDisplay}</td>
+              </tr>
+            ))}
+            {mostWinningSeasonsLeaderboard.map((entry, index) => (
+              <tr key={`most-winning-seasons-${index}`} className="border-b border-gray-100 last:border-b-0">
+                <td className="py-2 px-3 text-sm text-gray-800 font-semibold">Most Seasons with Winning Record</td>
+                <td className="py-2 px-3 text-sm text-gray-800">{entry.displayValue}</td>
+                <td className="py-2 px-3 text-sm text-gray-700">{entry.memberDisplay}</td>
+              </tr>
+            ))}
+            {mostLosingSeasonsLeaderboard.map((entry, index) => (
+              <tr key={`most-losing-seasons-${index}`} className="border-b border-gray-100 last:border-b-0">
+                <td className="py-2 px-3 text-sm text-gray-800 font-semibold">Most Seasons with Losing Record</td>
+                <td className="py-2 px-3 text-sm text-gray-800">{entry.displayValue}</td>
+                <td className="py-2 px-3 text-sm text-gray-700">{entry.memberDisplay}</td>
+              </tr>
+            ))}
+            {mostTotalPointsScoredLeaderboard.map((entry, index) => (
+              <tr key={`most-total-points-scored-${index}`} className="border-b border-gray-100 last:border-b-0">
+                <td className="py-2 px-3 text-sm text-gray-800 font-semibold">Most Total Points Scored</td>
+                <td className="py-2 px-3 text-sm text-gray-800">{entry.displayValue}</td>
+                <td className="py-2 px-3 text-sm text-gray-700">{entry.memberDisplay}</td>
+              </tr>
+            ))}
+            {mostTotalPointsAgainstLeaderboard.map((entry, index) => (
+              <tr key={`most-total-points-against-${index}`} className="border-b border-gray-100 last:border-b-0">
+                <td className="py-2 px-3 text-sm text-gray-800 font-semibold">Most Total Points Against</td>
+                <td className="py-2 px-3 text-sm text-gray-800">{entry.displayValue}</td>
+                <td className="py-2 px-3 text-sm text-gray-700">{entry.memberDisplay}</td>
+              </tr>
+            ))}
+            {/* Conditional message if no data is available across all leaderboards */}
+            {mostWinsLeaderboard.length === 0 && // Check if at least one leaderboard has data
+             mostLossesLeaderboard.length === 0 &&
+             bestWinPctLeaderboard.length === 0 &&
+             bestAllPlayWinPctLeaderboard.length === 0 &&
+             mostWeeklyHighScoresLeaderboard.length === 0 &&
+             mostWeeklyTop3ScoresLeaderboard.length === 0 &&
+             mostWinningSeasonsLeaderboard.length === 0 &&
+             mostLosingSeasonsLeaderboard.length === 0 &&
+             mostTotalPointsScoredLeaderboard.length === 0 &&
+             mostTotalPointsAgainstLeaderboard.length === 0 && (
+                <tr>
+                    <td colSpan="3" className="py-4 text-center text-gray-500">No data available for any league records.</td>
+                </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };
