@@ -1,21 +1,62 @@
 // App.js
-import React, { useState, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import PowerRankings from './lib/PowerRankings';
 import MatchupHistory from './lib/MatchupHistory';
-import RecordBook from './lib/RecordBook'; // Import RecordBook directly
+import RecordBook from './lib/RecordBook';
+import { HISTORICAL_MATCHUPS_API_URL } from './config'; // Import the API URL
 
 const TABS = {
   POWER_RANKINGS: 'powerRankings',
-  LEAGUE_HISTORY: 'leagueHistory', // Renamed from MATCHUP_HISTORY for clarity
-  RECORD_BOOK: 'recordBook',      // New main tab for RecordBook
+  LEAGUE_HISTORY: 'leagueHistory',
+  RECORD_BOOK: 'recordBook',
 };
 
 const App = () => {
   const [activeTab, setActiveTab] = useState(TABS.POWER_RANKINGS);
+  const [historicalMatchups, setHistoricalMatchups] = useState([]);
+  const [loadingHistoricalData, setLoadingHistoricalData] = useState(true);
+  const [historicalDataError, setHistoricalDataError] = useState(null);
 
   const getMappedTeamName = useCallback((originalName) => {
     return originalName;
   }, []);
+
+  // Centralized data fetching for historical matchups
+  useEffect(() => {
+    const fetchMatchups = async () => {
+      if (HISTORICAL_MATCHUPS_API_URL === 'YOUR_NEW_HISTORICAL_MATCHUPS_APPS_SCRIPT_URL' || !HISTORICAL_MATCHUPS_API_URL) {
+        setLoadingHistoricalData(false);
+        setHistoricalDataError("Please update HISTORICAL_MATCHUPS_API_URL in config.js with your actual Apps Script URL for historical matchups.");
+        return;
+      }
+
+      setLoadingHistoricalData(true);
+      setHistoricalDataError(null);
+
+      try {
+        const response = await fetch(HISTORICAL_MATCHUPS_API_URL, { mode: 'cors' });
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}. Response: ${await response.text()}.`);
+        }
+        const data = await response.json();
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        setHistoricalMatchups(Array.isArray(data.data) ? data.data : []);
+      } catch (err) {
+        console.error("Error fetching historical matchups in App.js:", err);
+        setHistoricalDataError(
+          `Failed to fetch historical matchups: ${err.message}. ` +
+          `Ensure your Apps Script URL (${HISTORICAL_MATCHUPS_API_URL}) is correct and publicly accessible.`
+        );
+      } finally {
+        setLoadingHistoricalData(false);
+      }
+    };
+
+    fetchMatchups();
+  }, [HISTORICAL_MATCHUPS_API_URL]);
+
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col items-center p-4">
@@ -51,11 +92,11 @@ const App = () => {
         </button>
         <button
           className={`px-6 py-2 rounded-md font-semibold text-lg transition-colors ${
-            activeTab === TABS.RECORD_BOOK // New tab
+            activeTab === TABS.RECORD_BOOK
               ? 'bg-blue-600 text-white shadow-md'
               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
           }`}
-          onClick={() => setActiveTab(TABS.RECORD_BOOK)} // New tab handler
+          onClick={() => setActiveTab(TABS.RECORD_BOOK)}
         >
           Record Book
         </button>
@@ -65,12 +106,17 @@ const App = () => {
         {activeTab === TABS.POWER_RANKINGS && <PowerRankings />}
         {activeTab === TABS.LEAGUE_HISTORY && (
           <MatchupHistory
+            historicalMatchups={historicalMatchups}
+            loading={loadingHistoricalData}
+            error={historicalDataError}
             getMappedTeamName={getMappedTeamName}
           />
         )}
-        {activeTab === TABS.RECORD_BOOK && ( // Render RecordBook when its tab is active
+        {activeTab === TABS.RECORD_BOOK && (
           <RecordBook
-            historicalMatchups={[]} // Will fetch in RecordBook, or pass down from MatchupHistory
+            historicalMatchups={historicalMatchups}
+            loading={loadingHistoricalData}
+            error={historicalDataError}
             getDisplayTeamName={getMappedTeamName}
           />
         )}
