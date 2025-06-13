@@ -1,7 +1,7 @@
 // PowerRankings.js
 import React, { useState, useEffect } from 'react';
-// Import your configuration variables from config.js (assuming config.js is in the parent directory)
-import { GOOGLE_SHEET_POWER_RANKINGS_API_URL } from './config';
+// CORRECTED PATH: Import from '../config' because config.js is in the parent directory (src/)
+import { GOOGLE_SHEET_POWER_RANKINGS_API_URL } from '../config';
 
 const PowerRankings = () => {
   // State to hold the power rankings data
