@@ -2,14 +2,15 @@
 import React, { useState } from 'react';
 import LeagueRecords from './LeagueRecords';
 import SeasonRecords from './SeasonRecords';
-import MatchupRecords from './MatchupRecords'; // Import the new component
+import MatchupRecords from './MatchupRecords';
+import VersusRecords from './VersusRecords'; // Import the new component
 
 // Define internal tabs for the RecordBook
 const RECORD_TABS = {
   LEAGUE_RECORDS: 'leagueRecords',
   SEASON_RECORDS: 'seasonRecords',
-  MATCHUP_RECORDS: 'matchupRecords', // New tab for Matchup Records
-  VERSUS_RECORDS: 'versusRecords',
+  MATCHUP_RECORDS: 'matchupRecords',
+  VERSUS_RECORDS: 'versusRecords', // New tab for Versus Records
   PLAYOFF_RECORDS: 'playoffRecords',
 };
 
@@ -48,21 +49,21 @@ const RecordBook = ({ historicalMatchups, loading, error, getDisplayTeamName }) 
         </button>
         <button
           className={`px-4 py-2 rounded-md font-semibold text-md transition-colors ${
-            activeRecordTab === RECORD_TABS.MATCHUP_RECORDS // New button
+            activeRecordTab === RECORD_TABS.MATCHUP_RECORDS
               ? 'bg-blue-600 text-white shadow-md'
               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
           }`}
-          onClick={() => setActiveRecordTab(RECORD_TABS.MATCHUP_RECORDS)} // New handler
+          onClick={() => setActiveRecordTab(RECORD_TABS.MATCHUP_RECORDS)}
         >
           Matchup Records
         </button>
         <button
           className={`px-4 py-2 rounded-md font-semibold text-md transition-colors ${
-            activeRecordTab === RECORD_TABS.VERSUS_RECORDS
+            activeRecordTab === RECORD_TABS.VERSUS_RECORDS // New button
               ? 'bg-blue-600 text-white shadow-md'
               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
           }`}
-          onClick={() => setActiveRecordTab(RECORD_TABS.VERSUS_RECORDS)}
+          onClick={() => setActiveRecordTab(RECORD_TABS.VERSUS_RECORDS)} // New handler
         >
           Versus Records
         </button>
@@ -98,14 +99,17 @@ const RecordBook = ({ historicalMatchups, loading, error, getDisplayTeamName }) 
               getDisplayTeamName={getDisplayTeamName}
             />
           )}
-          {activeRecordTab === RECORD_TABS.MATCHUP_RECORDS && ( // Render new component
+          {activeRecordTab === RECORD_TABS.MATCHUP_RECORDS && (
             <MatchupRecords
               historicalMatchups={historicalMatchups}
               getDisplayTeamName={getDisplayTeamName}
             />
           )}
-          {activeRecordTab === RECORD_TABS.VERSUS_RECORDS && (
-            <div className="p-4 text-center text-gray-600">Versus Records content will go here.</div>
+          {activeRecordTab === RECORD_TABS.VERSUS_RECORDS && ( // Render new component
+            <VersusRecords
+              historicalMatchups={historicalMatchups}
+              getDisplayTeamName={getDisplayTeamName}
+            />
           )}
           {activeRecordTab === RECORD_TABS.PLAYOFF_RECORDS && (
             <div className="p-4 text-center text-gray-600">Playoff Records content will go here.</div>
