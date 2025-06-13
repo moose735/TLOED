@@ -1,5 +1,5 @@
 // src/lib/MatchupRecords.js
-import React, { useState, useEffect } => 'react';
+import React, { useState, useEffect } from 'react'; // Corrected import syntax
 
 const MatchupRecords = ({ historicalMatchups, getDisplayTeamName }) => {
   const [aggregatedMatchupRecords, setAggregatedMatchupRecords] = useState({});
@@ -165,12 +165,12 @@ const MatchupRecords = ({ historicalMatchups, getDisplayTeamName }) => {
               // Display all tied entries for the record
               return recordData.entries.map((entry, index) => {
                 let matchupDisplay;
-                // These are now declared outside the specific `if` blocks
+                // These are now declared outside the specific `if` blocks for wider scope
                 const team1ScoreFormatted = entry.team1Score.toFixed(2);
                 const team2ScoreFormatted = entry.team2Score.toFixed(2);
+                // Ensure winnerScore and loserScore are defined where used
                 const winnerScore = (entry.winner === entry.team1 ? entry.team1Score : entry.team2Score).toFixed(2);
                 const loserScore = (entry.loser === entry.team1 ? entry.team1Score : entry.team2Score).toFixed(2);
-
 
                 if (recordDef.key === 'mostPointsScored' || recordDef.key === 'fewestPointsScored') {
                   const recordHolder = entry.team;
