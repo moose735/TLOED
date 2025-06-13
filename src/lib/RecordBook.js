@@ -1,7 +1,7 @@
 // src/lib/RecordBook.js
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react'; // Removed useEffect
 import LeagueRecords from './LeagueRecords';
-import { HISTORICAL_MATCHUPS_API_URL } from '../config'; // Import the URL for fetching
+// Removed import of HISTORICAL_MATCHUPS_API_URL
 
 // Define internal tabs for the RecordBook
 const RECORD_TABS = {
@@ -12,47 +12,10 @@ const RECORD_TABS = {
   PLAYOFF_RECORDS: 'playoffRecords',
 };
 
-const RecordBook = ({ getDisplayTeamName }) => { // Removed historicalMatchups from props, will fetch here
+// RecordBook now receives historicalMatchups, loading, and error as props
+const RecordBook = ({ historicalMatchups, loading, error, getDisplayTeamName }) => {
   const [activeRecordTab, setActiveRecordTab] = useState(RECORD_TABS.LEAGUE_RECORDS);
-  const [historicalMatchups, setHistoricalMatchups] = useState([]); // New state for fetched data
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  // --- Data Fetching (Moved from MatchupHistory to RecordBook) ---
-  useEffect(() => {
-    const fetchMatchups = async () => {
-      if (HISTORICAL_MATCHUPS_API_URL === 'YOUR_NEW_HISTORICAL_MATCHUPS_APPS_SCRIPT_URL' || !HISTORICAL_MATCHUPS_API_URL) {
-        setLoading(false);
-        setError("Please update HISTORICAL_MATCHUPS_API_URL in config.js with your actual Apps Script URL for historical matchups.");
-        return;
-      }
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        const response = await fetch(HISTORICAL_MATCHUPS_API_URL, { mode: 'cors' });
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}. Response: ${await response.text()}.`);
-        }
-        const data = await response.json();
-        if (data.error) {
-          throw new Error(data.error);
-        }
-        setHistoricalMatchups(Array.isArray(data.data) ? data.data : []);
-      } catch (err) {
-        console.error("Error fetching historical matchups in RecordBook:", err);
-        setError(
-          `Failed to fetch historical matchups: ${err.message}. ` +
-          `Ensure your Apps Script URL (${HISTORICAL_MATCHUPS_API_URL}) is correct and publicly accessible.`
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchMatchups();
-  }, [HISTORICAL_MATCHUPS_API_URL]);
+  // Removed internal historicalMatchups, loading, error states
 
 
   return (
@@ -105,7 +68,7 @@ const RecordBook = ({ getDisplayTeamName }) => { // Removed historicalMatchups f
         </button>
         <button
           className={`px-4 py-2 rounded-md font-semibold text-md transition-colors ${
-            activeRecordTab === RECORD_TABS.PLAYOFF_RECORDS
+            activeTab === RECORD_TABS.PLAYOFF_RECORDS
               ? 'bg-blue-600 text-white shadow-md'
               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
           }`}
@@ -123,10 +86,9 @@ const RecordBook = ({ getDisplayTeamName }) => { // Removed historicalMatchups f
         <p className="text-center text-gray-600">No historical matchup data found for the Record Book. Please check your Apps Script URL.</p>
       ) : (
         <>
-          {/* Conditional rendering of sub-components */}
           {activeRecordTab === RECORD_TABS.LEAGUE_RECORDS && (
             <LeagueRecords
-              historicalMatchups={historicalMatchups} // Pass fetched data
+              historicalMatchups={historicalMatchups}
               getDisplayTeamName={getDisplayTeamName}
             />
           )}
