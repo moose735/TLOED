@@ -243,7 +243,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
             finalDisplayValue = `${value.toFixed(3)}%`;
         } else if (sortKey === 'scored' || sortKey === 'against') {
             // Format with commas and 2 decimal places
-            finalDisplayValue = value.toFixed(2).toLocaleString('en-US'); // Added toLocaleString
+            finalDisplayValue = parseFloat(value).toFixed(2).toLocaleString('en-US'); // Ensure it's a number before toFixed
         } else {
             finalDisplayValue = value; // Other numbers (wins, losses, counts) as is (integers)
         }
