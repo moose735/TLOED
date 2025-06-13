@@ -245,12 +245,12 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
           return;
         }
 
-        // Calculate actual win percentage
-        stats.winPercentage = (stats.wins + 0.5 * stats.ties) / totalGames;
+        // Calculate actual win percentage - Explicit parentheses added here
+        stats.winPercentage = ((stats.wins + (0.5 * stats.ties)) / totalGames);
 
-        // Calculate All-Play Win Percentage
+        // Calculate All-Play Win Percentage - Explicit parentheses added here
         const totalAllPlayGames = stats.allPlayWins + stats.allPlayLosses + stats.allPlayTies;
-        stats.allPlayWinPercentage = totalAllPlayGames > 0 ? (stats.allPlayWins + 0.5 * stats.allPlayTies) / totalAllPlayGames : 0;
+        stats.allPlayWinPercentage = totalAllPlayGames > 0 ? ((stats.allPlayWins + (0.5 * stats.allPlayTies)) / totalAllPlayGames) : 0;
 
         // Raw DPR Calculation: ((Points Scored * 6) + ((Points Scored Max + Points Scored Min) * 2) + ((Win% * 200) * 2)) / 10
         stats.rawDPR = (
