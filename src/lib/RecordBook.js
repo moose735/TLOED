@@ -6,7 +6,8 @@ import MatchupRecords from './MatchupRecords';
 import VersusRecords from './VersusRecords';
 import StreaksRecords from './StreaksRecords';
 import PlayoffRecords from './PlayoffRecords';
-import DPRHistory from './DPRHistory'; // Updated import name from DPRRecords
+// DPRHistory import removed as it's being integrated into other components
+// import DPRHistory from './DPRHistory'; 
 
 // Define internal tabs for the RecordBook
 const RECORD_TABS = {
@@ -16,7 +17,7 @@ const RECORD_TABS = {
   VERSUS_RECORDS: 'versusRecords',
   STREAKS_RECORDS: 'streaksRecords',
   PLAYOFF_RECORDS: 'playoffRecords',
-  DPR_HISTORY: 'dprHistory', // Updated tab key name
+  // DPR_HISTORY removed from tabs
 };
 
 const RecordBook = ({ historicalMatchups, loading, error, getDisplayTeamName }) => {
@@ -92,16 +93,7 @@ const RecordBook = ({ historicalMatchups, loading, error, getDisplayTeamName }) 
         >
           Playoff Records
         </button>
-        <button
-          className={`px-4 py-2 rounded-md font-semibold text-md transition-colors ${
-            activeRecordTab === RECORD_TABS.DPR_HISTORY // Updated button key
-              ? 'bg-blue-600 text-white shadow-md'
-              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-          }`}
-          onClick={() => setActiveRecordTab(RECORD_TABS.DPR_HISTORY)} // Updated handler
-        >
-          DPR History {/* Updated button label */}
-        </button>
+        {/* DPR_HISTORY button removed */}
       </nav>
 
       {loading ? (
@@ -148,12 +140,7 @@ const RecordBook = ({ historicalMatchups, loading, error, getDisplayTeamName }) 
               getDisplayTeamName={getDisplayTeamName}
             />
           )}
-          {activeRecordTab === RECORD_TABS.DPR_HISTORY && ( // Render updated component
-            <DPRHistory
-              historicalMatchups={historicalMatchups}
-              getDisplayTeamName={getDisplayTeamName}
-            />
-          )}
+          {/* DPR_HISTORY component rendering removed */}
         </>
       )}
     </div>
