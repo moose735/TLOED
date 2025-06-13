@@ -1,10 +1,10 @@
 // src/lib/MatchupHistory.js
 import React, { useState, useEffect, useCallback } from 'react';
-import { HISTORICAL_MATCHUPS_API_URL } from '../config';
+// Removed import of HISTORICAL_MATCHUPS_API_URL
 import Head2HeadGrid from './Head2HeadGrid';
-// Removed import RecordBook from './RecordBook'; // RecordBook is now a main tab
+// Removed import of RecordBook
 
-// Helper function to get ordinal suffix (1st, 2nd, 3rd, 4th, etc.) - MOVED OUTSIDE COMPONENT
+// Helper function to get ordinal suffix (1st, 2nd, 3rd, 4th, etc.)
 const getOrdinalSuffix = (n) => {
   if (typeof n !== 'number' || isNaN(n)) return '';
   const s = ["th", "st", "nd", "rd"];
@@ -12,7 +12,7 @@ const getOrdinalSuffix = (n) => {
   return (s[v - 20] || s[v] || s[0]);
 };
 
-// Helper to get the descriptive name of a final seeding game (e.g., "Championship Game") - MOVED OUTSIDE COMPONENT
+// Helper to get the descriptive name of a final seeding game (e.g., "Championship Game")
 const getFinalSeedingGamePurpose = (value) => {
   if (value === 1) return 'Championship Game';
   if (value === 3) return '3rd Place Game';
@@ -20,18 +20,16 @@ const getFinalSeedingGamePurpose = (value) => {
   if (value === 7) return '7th Place Game';
   if (value === 9) return '9th Place Game';
   if (value === 11) return '11th Place Game';
-  // Generic fallback for other odd numeric values or unexpected values
   if (typeof value === 'number' && value > 0 && value % 2 !== 0) {
       return `${value}${getOrdinalSuffix(value)} Place Game`;
   }
-  return 'Final Seeding Game'; // Generic fallback
+  return 'Final Seeding Game';
 };
 
 
-const MatchupHistory = ({ getMappedTeamName }) => {
-  const [historicalMatchups, setHistoricalMatchups] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+// MatchupHistory now receives historicalMatchups, loading, and error as props
+const MatchupHistory = ({ historicalMatchups, loading, error, getMappedTeamName }) => {
+  // Removed internal historicalMatchups, loading, error states
 
   const [seasonRecords, setSeasonRecords] = useState({});
   const [championshipGames, setChampionshipGames] = useState([]);
@@ -41,45 +39,9 @@ const MatchupHistory = ({ getMappedTeamName }) => {
   }, [getMappedTeamName]);
 
 
-  // --- Data Fetching ---
-  useEffect(() => {
-    const fetchMatchups = async () => {
-      if (HISTORICAL_MATCHUPS_API_URL === 'YOUR_NEW_HISTORICAL_MATCHUPS_APPS_SCRIPT_URL' || !HISTORICAL_MATCHUPS_API_URL) {
-        setLoading(false);
-        setError("Please update HISTORICAL_MATCHUPS_API_URL in config.js with your actual Apps Script URL for historical matchups.");
-        return;
-      }
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        const response = await fetch(HISTORICAL_MATCHUPS_API_URL, { mode: 'cors' });
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}. Response: ${await response.text()}.`);
-        }
-        const data = await response.json();
-        if (data.error) {
-          throw new Error(data.error);
-        }
-        setHistoricalMatchups(Array.isArray(data.data) ? data.data : []);
-      } catch (err) {
-        console.error("Error fetching historical matchups:", err);
-        setError(
-          `Failed to fetch historical matchups: ${err.message}. ` +
-          `Ensure your Apps Script URL (${HISTORICAL_MATCHUPS_API_URL}) is correct and publicly accessible.`
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchMatchups();
-  }, [HISTORICAL_MATCHUPS_API_URL]);
-
   // --- Data Processing (for sections remaining in MatchupHistory) ---
   useEffect(() => {
-    if (historicalMatchups.length === 0) {
+    if (!historicalMatchups || historicalMatchups.length === 0) {
       setSeasonRecords({});
       setChampionshipGames([]);
       return;
@@ -262,8 +224,6 @@ const MatchupHistory = ({ getMappedTeamName }) => {
               getDisplayTeamName={getDisplayTeamName}
             />
           </section>
-
-          {/* Removed RecordBook section from here */}
         </>
       )}
     </div>
