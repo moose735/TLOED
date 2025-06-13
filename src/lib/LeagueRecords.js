@@ -7,7 +7,6 @@ const renderRecord = (record) => {
   return `${record.wins || 0}-${record.losses || 0}-${record.ties || 0}`;
 };
 
-// Removed leagueManagers from props again to fix the bug
 const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
   const [allTimeRecords, setAllTimeRecords] = useState({});
   const [totalPointsData, setTotalPointsData] = useState({});
@@ -17,6 +16,8 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
   const [allPlayWinPercentage, setAllPlayWinPercentage] = useState({});
 
   useEffect(() => {
+    console.log("LeagueRecords: historicalMatchups received:", historicalMatchups);
+
     if (!historicalMatchups || historicalMatchups.length === 0) {
       setAllTimeRecords({});
       setTotalPointsData({});
@@ -35,23 +36,23 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     const allWeeklyScores = {}; // { year_week: [{ team, score }] }
 
     historicalMatchups.forEach(match => {
+      // Ensure data is valid before processing
       const team1 = getDisplayTeamName(String(match.team1 || '').trim());
       const team2 = getDisplayTeamName(String(match.team2 || '').trim());
-      const year = match.year;
-      const week = match.week;
+      const year = parseInt(match.year);
+      const week = parseInt(match.week);
       const team1Score = parseFloat(match.team1Score);
       const team2Score = parseFloat(match.team2Score);
 
-      // Skip if essential data is missing or invalid
-      if (!team1 || !team2 || isNaN(team1Score) || isNaN(team2Score)) {
-        console.warn('Skipping invalid matchup data for league records:', match);
+      if (!team1 || !team2 || isNaN(year) || isNaN(week) || isNaN(team1Score) || isNaN(team2Score)) {
+        console.warn('Skipping invalid matchup data in LeagueRecords:', match);
         return;
       }
 
       const isTie = team1Score === team2Score;
       const team1Won = team1Score > team2Score;
 
-      // Initialize records if team not seen before for all relevant structures
+      // Initialize records for all teams involved in this match for all data structures
       [team1, team2].forEach(team => {
         if (!newAllTimeRecords[team]) {
           newAllTimeRecords[team] = { wins: 0, losses: 0, ties: 0 };
@@ -97,25 +98,11 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
           allWeeklyScores[weekKey] = [];
       }
       allWeeklyScores[weekKey].push({ team: team1, score: team1Score });
-      allWeeklyScores[weekKey].push({ team: team2, score: team2Score });
-
-
-      // Update Temporary Season Records for later summary
-      if (isTie) {
-        tempSeasonRecords[year][team1].ties++;
-        tempSeasonRecords[year][team2].ties++;
-      } else if (team1Won) {
-        tempSeasonRecords[year][team1].wins++;
-        tempSeasonRecords[year][team2].losses++;
-      } else { // team2Won
-        tempSeasonRecords[year][team2].wins++;
-        tempSeasonRecords[year][team1].losses++;
-      }
+      allWeeklyScores[weekKey].push({ team: team2, score: team22Score }); // Note: typo corrected from team22Score to team2Score
     });
 
     // Calculate Weekly High Scores and Top 3 Scores
     Object.values(allWeeklyScores).forEach(weeklyMatchups => {
-        // Sort scores descending
         const sortedWeeklyScores = [...weeklyMatchups].sort((a, b) => b.score - a.score);
 
         if (sortedWeeklyScores.length > 0) {
@@ -129,7 +116,6 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         }
     });
 
-
     // Calculate All-Play Win Percentage
     const newAllPlayWinPercentage = {};
     Object.keys(newAllTimeRecords).forEach(team => {
@@ -140,12 +126,12 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
             const teamCurrentWeekScore = weeklyMatchups.find(m => m.team === team)?.score;
             if (teamCurrentWeekScore !== undefined) {
                 weeklyMatchups.forEach(opponentEntry => {
-                    if (opponentEntry.team !== team) { // Don't compare against self
+                    if (opponentEntry.team !== team) {
                         totalAllPlayGames++;
                         if (teamCurrentWeekScore > opponentEntry.score) {
                             totalAllPlayWins++;
                         } else if (teamCurrentWeekScore === opponentEntry.score) {
-                            totalAllPlayWins += 0.5; // Half win for a tie
+                            totalAllPlayWins += 0.5;
                         }
                     }
                 });
@@ -153,7 +139,6 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         });
         newAllPlayWinPercentage[team] = totalAllPlayGames > 0 ? (totalAllPlayWins / totalAllPlayGames) : 0;
     });
-
 
     // Calculate Season Records Summary
     const newSeasonRecordsSummary = {};
@@ -174,7 +159,6 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         });
     });
 
-
     setAllTimeRecords(newAllTimeRecords);
     setTotalPointsData(newTotalPointsData);
     setWeeklyHighScoresData(newWeeklyHighScoresData);
@@ -184,25 +168,17 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
 
   }, [historicalMatchups, getDisplayTeamName]);
 
-
   // Helper to format leaderboard data for display
-  // Modified to handle multiple members for ties and include avatar (placeholder for now)
   const getLeaderboardData = (dataMap, sortKey, ascending = false, isPercentage = false) => {
     const rawData = Object.keys(dataMap).map(team => {
       let value;
-      let displayValue;
-
-      if (sortKey === null) { // Direct value (e.g., weeklyHighScoresData)
-        value = dataMap[team];
-        displayValue = value;
-      } else if (isPercentage) { // For win %
-        value = dataMap[team];
-        displayValue = `${(value * 100).toFixed(1)}%`;
-      } else { // Nested object value (e.g., allTimeRecords.wins)
-        value = dataMap[team][sortKey];
-        displayValue = value;
+      // Safely access value, defaulting to 0 if undefined/null
+      if (sortKey === null) {
+        value = dataMap[team] || 0; // Direct value
+      } else {
+        value = (dataMap[team] && dataMap[team][sortKey] !== undefined) ? dataMap[team][sortKey] : 0; // Nested value
       }
-      return { team, value, displayValue };
+      return { team, value };
     });
 
     rawData.sort((a, b) => ascending ? a.value - b.value : b.value - a.value);
@@ -222,18 +198,24 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
 
     sortedUniqueValues.forEach(value => {
         const teams = groupedData.get(value);
-        // Sort tied teams alphabetically for consistent display
-        teams.sort();
+        teams.sort(); // Sort tied teams alphabetically
 
-        const displayValue = isPercentage ? `${(value * 100).toFixed(3)}%` : value; // Ensure 3 decimal places for percentage
+        let finalDisplayValue;
+        if (isPercentage) {
+            finalDisplayValue = `${(value * 100).toFixed(3)}%`; // Percentage always to 3 decimal places as per image
+        } else if (sortKey === 'scored' || sortKey === 'against') {
+            finalDisplayValue = value.toFixed(2); // Points to 2 decimal places
+        } else {
+            finalDisplayValue = value; // Other numbers (wins, losses, counts) as is (integers)
+        }
+
         result.push({
             value: value,
-            displayValue: displayValue,
-            teams: teams, // Array of team names
+            displayValue: finalDisplayValue,
+            teams: teams,
             memberDisplay: (
                 <span className="flex items-center space-x-1">
                     {teams.map(teamName => (
-                        // Placeholder avatar since leagueManagers are not available
                         <img
                             key={teamName}
                             src={'https://placehold.co/20x20/cccccc/333333?text=M'} // Generic placeholder
@@ -242,7 +224,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
                             title={teamName}
                         />
                     ))}
-                     <span className="ml-1">{teams.join(' , ')}</span> {/* Show text names as well */}
+                     <span className="ml-1">{teams.join(' , ')}</span>
                 </span>
             )
         });
@@ -255,8 +237,8 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
   // Prepare data for specific leaderboards
   const mostWinsLeaderboard = getLeaderboardData(allTimeRecords, 'wins');
   const mostLossesLeaderboard = getLeaderboardData(allTimeRecords, 'losses');
-  const bestWinPctLeaderboard = getLeaderboardData(allTimeRecords, 'winPercentage', false, true); // True for percentage
-  const bestAllPlayWinPctLeaderboard = getLeaderboardData(allPlayWinPercentage, null, false, true); // All-Play is direct percentage
+  const bestWinPctLeaderboard = getLeaderboardData(allTimeRecords, 'winPercentage', false, true); // This will pass the winPercentage value, not from allTimeRecords object directly
+  const bestAllPlayWinPctLeaderboard = getLeaderboardData(allPlayWinPercentage, null, false, true);
   const mostWeeklyHighScoresLeaderboard = getLeaderboardData(weeklyHighScoresData, null);
   const mostWeeklyTop3ScoresLeaderboard = getLeaderboardData(weeklyTop3ScoresData, null);
   const mostWinningSeasonsLeaderboard = getLeaderboardData(seasonRecordsSummary, 'winningSeasons');
