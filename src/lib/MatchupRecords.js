@@ -165,6 +165,10 @@ const MatchupRecords = ({ historicalMatchups, getDisplayTeamName }) => {
               // Display all tied entries for the record
               return recordData.entries.map((entry, index) => {
                 let matchupDisplay;
+                // Determine which team's score belongs to which team
+                const team1ScoreFormatted = entry.team1Score.toFixed(2);
+                const team2ScoreFormatted = entry.team2Score.toFixed(2);
+
                 if (recordDef.key === 'mostPointsScored' || recordDef.key === 'fewestPointsScored') {
                   const recordHolder = entry.team;
                   const recordScore = entry.score.toFixed(2);
@@ -185,25 +189,24 @@ const MatchupRecords = ({ historicalMatchups, getDisplayTeamName }) => {
                     </div>
                   );
                 } else if (recordDef.key === 'biggestBlowout' || recordDef.key === 'slimmestWin') {
-                  const winnerScore = (entry.winner === entry.team1 ? entry.team1Score : entry.team2Score).toFixed(2);
-                  const loserScore = (entry.loser === entry.team1 ? entry.team1Score : entry.team2Score).toFixed(2);
+                  // For these records, ensure winner is always on the left, loser on the right
                   matchupDisplay = (
                     <div className="flex items-center justify-center w-full">
                       <span className="text-left flex-1 pr-1 whitespace-nowrap">
-                        {entry.winner} ({winnerScore})
+                        {entry.winner} ({winnerScore}) {/* This should be winnerScore for winner */}
                       </span>
-                      <span className="px-2 font-semibold text-gray-600">vs</span> {/* Changed 'def.' to 'vs' */}
+                      <span className="px-2 font-semibold text-gray-600">vs</span>
                       <span className="text-right flex-1 pl-1 whitespace-nowrap">
-                        {entry.loser} ({loserScore})
+                        {entry.loser} ({loserScore}) {/* This should be loserScore for loser */}
                       </span>
                     </div>
                   );
                 } else { // For Highest/Lowest Combined Score
                   matchupDisplay = (
                     <div className="flex items-center justify-center w-full">
-                      <span className="text-left flex-1 pr-1 whitespace-nowrap">{entry.team1} ({entry.team1Score.toFixed(2)})</span>
+                      <span className="text-left flex-1 pr-1 whitespace-nowrap">{entry.team1} ({team1ScoreFormatted})</span>
                       <span className="px-2 font-semibold text-gray-600">vs</span>
-                      <span className="text-right flex-1 pl-1 whitespace-nowrap">{entry.team2} ({entry.team2Score.toFixed(2)})</span>
+                      <span className="text-right flex-1 pl-1 whitespace-nowrap">{entry.team2} ({team2ScoreFormatted})</span>
                     </div>
                   );
                 }
@@ -214,7 +217,7 @@ const MatchupRecords = ({ historicalMatchups, getDisplayTeamName }) => {
                       {index === 0 ? recordDef.label : ''} {/* Only show label for the first entry if multiple */}
                     </td>
                     <td className="py-2 px-3 text-sm text-gray-800">{formatDisplayValue(recordData.value, recordDef.key)}</td>
-                    <td className="py-2 px-3 text-sm text-gray-700 text-center"> {/* Added text-center here for the cell */}
+                    <td className="py-2 px-3 text-sm text-gray-700 text-center">
                       {matchupDisplay}
                     </td>
                     <td className="py-2 px-3 text-sm text-gray-700">{entry.year}</td>
