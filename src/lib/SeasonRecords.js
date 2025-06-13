@@ -37,9 +37,8 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       return;
     }
 
-    const newSeasonRecords = {}; // { year: { team: { wins, losses, ties, pointsFor, totalGames, rawDPR, adjustedDPR, allPlayWins, allPlayLosses, allPlayTies, weeklyHighestScoreCount, weeklyTop3Count, blowoutWins, blowoutLosses, slimWins, slimLosses, winPercentage, allPlayWinPercentage } } }
+    const newSeasonRecords = {}; // { year: { team: { wins, losses, ties, pointsFor, totalGames, weeklyScores: [], rawDPR, adjustedDPR, allPlayWins, allPlayLosses, allPlayTies, weeklyHighestScoreCount, weeklyTop3Count, blowoutWins, blowoutLosses, slimWins, slimLosses, winPercentage, allPlayWinPercentage } } }
     const weeklyGameScoresByYear = {}; // { year: { week: [{ team: 'TeamA', score: 100 }, ...] } }
-    const seasonMaxMinScores = {}; // { year: { allGameScores: [] } }
 
     historicalMatchups.forEach(match => {
       const team1 = getDisplayTeamName(String(match.team1 || '').trim());
@@ -61,7 +60,6 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         if (!newSeasonRecords[year]) {
           newSeasonRecords[year] = {};
           weeklyGameScoresByYear[year] = {};
-          seasonMaxMinScores[year] = { allGameScores: [] };
         }
         if (!newSeasonRecords[year][team]) {
           newSeasonRecords[year][team] = {
@@ -70,15 +68,16 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
             ties: 0,
             pointsFor: 0,
             totalGames: 0,
+            weeklyScores: [], // To store individual team's weekly scores
             allPlayWins: 0,
             allPlayLosses: 0,
             allPlayTies: 0,
             weeklyHighestScoreCount: 0,
-            weeklyTop3Count: 0, // New
-            blowoutWins: 0, // New
-            blowoutLosses: 0, // New
-            slimWins: 0, // New
-            slimLosses: 0, // New
+            weeklyTop3Count: 0,
+            blowoutWins: 0,
+            blowoutLosses: 0,
+            slimWins: 0,
+            slimLosses: 0,
             rawDPR: 0,
             adjustedDPR: 0,
             winPercentage: 0,
@@ -103,6 +102,11 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       newSeasonRecords[year][team2].pointsFor += team2Score;
       newSeasonRecords[year][team1].totalGames++;
       newSeasonRecords[year][team2].totalGames++;
+
+      // Store individual team's weekly scores for DPR calculation
+      newSeasonRecords[year][team1].weeklyScores.push(team1Score);
+      newSeasonRecords[year][team2].weeklyScores.push(team2Score);
+
 
       // Calculate Blowout/Slim Wins/Losses for both teams
       // Team 1 perspective
@@ -147,10 +151,6 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         }
       }
 
-
-      // Collect all game scores for the season to find max/min for DPR calculation
-      seasonMaxMinScores[year].allGameScores.push(team1Score, team2Score);
-
       // Collect all scores for this specific week (for All-Play and Top 3 calculation)
       if (!weeklyGameScoresByYear[year][week]) {
         weeklyGameScoresByYear[year][week] = [];
@@ -164,13 +164,13 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     let currentMostLossesSeason = { value: 0, entries: [] };
     let currentBestAllPlayWinPctSeason = { value: -Infinity, entries: [] };
     let currentMostWeeklyHighScoresSeason = { value: 0, entries: [] };
-    let currentMostWeeklyTop3ScoresSeason = { value: 0, entries: [] }; // New
-    let currentMostBlowoutWinsSeason = { value: 0, entries: [] }; // New
-    let currentMostBlowoutLossesSeason = { value: 0, entries: [] }; // New
-    let currentMostSlimWinsSeason = { value: 0, entries: [] }; // New
-    let currentMostSlimLossesSeason = { value: 0, entries: [] }; // New
-    let currentMostPointsSeason = { value: 0, entries: [] }; // New
-    let currentFewestPointsSeason = { value: Infinity, entries: [] }; // New
+    let currentMostWeeklyTop3ScoresSeason = { value: 0, entries: [] };
+    let currentMostBlowoutWinsSeason = { value: 0, entries: [] };
+    let currentMostBlowoutLossesSeason = { value: 0, entries: [] };
+    let currentMostSlimWinsSeason = { value: 0, entries: [] };
+    let currentMostSlimLossesSeason = { value: 0, entries: [] };
+    let currentMostPointsSeason = { value: 0, entries: [] };
+    let currentFewestPointsSeason = { value: Infinity, entries: [] };
 
 
     const updateRecord = (recordObj, newValue, entryDetails, isMin = false) => {
@@ -231,9 +231,6 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         });
       });
 
-      const maxScoreInSeason = Math.max(...seasonMaxMinScores[year].allGameScores);
-      const minScoreInSeason = Math.min(...seasonMaxMinScores[year].allGameScores);
-
       let totalRawDPRForSeason = 0;
       let teamsWithValidDPR = 0;
 
@@ -245,18 +242,23 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
           return;
         }
 
-        // Calculate actual win percentage - Explicit parentheses added here
+        // Determine team's own max and min score for the season
+        const teamMaxScoreInSeason = stats.weeklyScores.length > 0 ? Math.max(...stats.weeklyScores) : 0;
+        const teamMinScoreInSeason = stats.weeklyScores.length > 0 ? Math.min(...stats.weeklyScores) : 0;
+
+
+        // Calculate actual win percentage
         stats.winPercentage = ((stats.wins + (0.5 * stats.ties)) / totalGames);
 
-        // Calculate All-Play Win Percentage - Explicit parentheses added here
+        // Calculate All-Play Win Percentage
         const totalAllPlayGames = stats.allPlayWins + stats.allPlayLosses + stats.allPlayTies;
         stats.allPlayWinPercentage = totalAllPlayGames > 0 ? ((stats.allPlayWins + (0.5 * stats.allPlayTies)) / totalAllPlayGames) : 0;
 
         // Raw DPR Calculation: ((Points Scored * 6) + ((Points Scored Max + Points Scored Min) * 2) + ((Win% * 200) * 2)) / 10
         stats.rawDPR = (
           (stats.pointsFor * 6) +
-          ((maxScoreInSeason + minScoreInSeason) * 2) +
-          ((stats.winPercentage * 200) * 2) // Using actual win percentage for DPR calculation
+          ((teamMaxScoreInSeason + teamMinScoreInSeason) * 2) + // Using team's own max/min scores
+          ((stats.winPercentage * 200) * 2)
         ) / 10;
 
         totalRawDPRForSeason += stats.rawDPR;
@@ -343,10 +345,6 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     if (!record) return '0-0-0';
     return `${record.wins || 0}-${record.losses || 0}-${record.ties || 0}`;
   };
-
-  // Sort years for consistent display (descending year)
-  // Removed as yearly standings section is being removed
-  // const sortedYears = Object.keys(seasonRecords).sort((a, b) => parseInt(b) - parseInt(a));
 
   const formatDPR = (dprValue) => {
     if (typeof dprValue === 'number' && !isNaN(dprValue)) {
