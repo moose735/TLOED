@@ -12,12 +12,12 @@ const MatchupRecords = ({ historicalMatchups, getDisplayTeamName }) => {
 
     // Initialize aggregated records with values for finding min/max
     const newAggregatedRecords = {
-      mostPointsScored: { value: -Infinity, entries: [] }, // team, score, matchup, year, week
-      fewestPointsScored: { value: Infinity, entries: [] }, // team, score, matchup, year, week
-      highestCombinedScore: { value: -Infinity, entries: [] }, // combinedScore, matchup, year, week
-      lowestCombinedScore: { value: Infinity, entries: [] }, // combinedScore, matchup, year, week
-      biggestBlowout: { value: -Infinity, entries: [] }, // margin, winner, loser, matchup, year, week
-      slimmestWin: { value: Infinity, entries: [] }, // margin, winner, loser, matchup, year, week
+      mostPointsScored: { value: -Infinity, entries: [] }, // team, score, matchup, year, week, team1, team2, team1Score, team2Score
+      fewestPointsScored: { value: Infinity, entries: [] }, // team, score, matchup, year, week, team1, team2, team1Score, team2Score
+      highestCombinedScore: { value: -Infinity, entries: [] }, // combinedScore, matchup, year, week, team1, team2, team1Score, team2Score
+      lowestCombinedScore: { value: Infinity, entries: [] }, // combinedScore, matchup, year, week, team1, team2, team1Score, team2Score
+      biggestBlowout: { value: -Infinity, entries: [] }, // margin, winner, loser, matchup, year, week, team1, team2, team1Score, team2Score
+      slimmestWin: { value: Infinity, entries: [] }, // margin, winner, loser, matchup, year, week, team1, team2, team1Score, team2Score
     };
 
     historicalMatchups.forEach(match => {
@@ -45,6 +45,17 @@ const MatchupRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         loser = team1Score > team2Score ? team2 : team1;
       }
 
+      // Base entry details to pass to updateRecord, includes all relevant match data
+      const baseEntryDetails = {
+        matchup: `${team1} vs ${team2}`,
+        year: year,
+        week: week,
+        team1: team1,
+        team2: team2,
+        team1Score: team1Score,
+        team2Score: team2Score,
+      };
+
       // Helper to update a record
       const updateRecord = (recordObj, newValue, entryDetails, isMin = false) => {
         if (isMin) {
@@ -67,27 +78,27 @@ const MatchupRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       // --- Update Records ---
 
       // Most Points Scored by a team
-      updateRecord(newAggregatedRecords.mostPointsScored, team1Score, { team: team1, score: team1Score, matchup: `${team1} vs ${team2}`, year: year, week: week });
-      updateRecord(newAggregatedRecords.mostPointsScored, team2Score, { team: team2, score: team2Score, matchup: `${team2} vs ${team1}`, year: year, week: week });
+      updateRecord(newAggregatedRecords.mostPointsScored, team1Score, { ...baseEntryDetails, team: team1, score: team1Score });
+      updateRecord(newAggregatedRecords.mostPointsScored, team2Score, { ...baseEntryDetails, team: team2, score: team2Score });
 
       // Fewest Points Scored by a team
-      updateRecord(newAggregatedRecords.fewestPointsScored, team1Score, { team: team1, score: team1Score, matchup: `${team1} vs ${team2}`, year: year, week: week }, true);
-      updateRecord(newAggregatedRecords.fewestPointsScored, team2Score, { team: team2, score: team2Score, matchup: `${team2} vs ${team1}`, year: year, week: week }, true);
+      updateRecord(newAggregatedRecords.fewestPointsScored, team1Score, { ...baseEntryDetails, team: team1, score: team1Score }, true);
+      updateRecord(newAggregatedRecords.fewestPointsScored, team2Score, { ...baseEntryDetails, team: team2, score: team2Score }, true);
 
       // Highest Combined Score
-      updateRecord(newAggregatedRecords.highestCombinedScore, combinedScore, { combinedScore: combinedScore, matchup: `${team1} vs ${team2}`, year: year, week: week });
+      updateRecord(newAggregatedRecords.highestCombinedScore, combinedScore, { ...baseEntryDetails, combinedScore: combinedScore });
 
       // Lowest Combined Score
-      updateRecord(newAggregatedRecords.lowestCombinedScore, combinedScore, { combinedScore: combinedScore, matchup: `${team1} vs ${team2}`, year: year, week: week }, true);
+      updateRecord(newAggregatedRecords.lowestCombinedScore, combinedScore, { ...baseEntryDetails, combinedScore: combinedScore }, true);
 
       // Biggest Blowout (largest absolute score difference in a non-tied game)
       if (!isTie) {
-        updateRecord(newAggregatedRecords.biggestBlowout, scoreDifference, { margin: scoreDifference, winner: winner, loser: loser, matchup: `${team1} vs ${team2}`, year: year, week: week });
+        updateRecord(newAggregatedRecords.biggestBlowout, scoreDifference, { ...baseEntryDetails, margin: scoreDifference, winner: winner, loser: loser });
       }
 
       // Slimmest Win (smallest positive score difference)
       if (!isTie && scoreDifference > 0) { // Ensure it's a win and not a tie
-        updateRecord(newAggregatedRecords.slimmestWin, scoreDifference, { margin: scoreDifference, winner: winner, loser: loser, matchup: `${team1} vs ${team2}`, year: year, week: week }, true);
+        updateRecord(newAggregatedRecords.slimmestWin, scoreDifference, { ...baseEntryDetails, margin: scoreDifference, winner: winner, loser: loser }, true);
       }
     });
 
@@ -105,10 +116,8 @@ const MatchupRecords = ({ historicalMatchups, getDisplayTeamName }) => {
 
   // Helper to format values for display
   const formatDisplayValue = (value, recordKey) => {
-    if (['mostPointsScored', 'fewestPointsScored', 'highestCombinedScore', 'lowestCombinedScore', 'biggestBlowout', 'slimmestWin'].includes(recordKey)) {
-        return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    }
-    return value;
+    // All these keys will have 2 decimal places and commas
+    return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
   // Define the order and labels for the records to display
@@ -154,24 +163,48 @@ const MatchupRecords = ({ historicalMatchups, getDisplayTeamName }) => {
               }
 
               // Display all tied entries for the record
-              return recordData.entries.map((entry, index) => (
-                <tr key={`${recordDef.key}-${index}`} className="border-b border-gray-100 last:border-b-0">
-                  <td className="py-2 px-3 text-sm text-gray-800 font-semibold">
-                    {index === 0 ? recordDef.label : ''} {/* Only show label for the first entry if multiple */}
-                  </td>
-                  <td className="py-2 px-3 text-sm text-gray-800">{formatDisplayValue(recordData.value, recordDef.key)}</td>
-                  <td className="py-2 px-3 text-sm text-gray-700">
-                    {recordDef.key === 'mostPointsScored' || recordDef.key === 'fewestPointsScored' ?
-                        `${entry.team} (${entry.score.toFixed(2)}) in ${entry.matchup}` :
-                    recordDef.key === 'biggestBlowout' || recordDef.key === 'slimmestWin' ?
-                        `${entry.winner} def. ${entry.loser} by ${entry.margin.toFixed(2)} pts in ${entry.matchup}` :
-                        `${entry.matchup}`
-                    }
-                  </td>
-                  <td className="py-2 px-3 text-sm text-gray-700">{entry.year}</td>
-                  <td className="py-2 px-3 text-sm text-gray-700">{entry.week}</td>
-                </tr>
-              ));
+              return recordData.entries.map((entry, index) => {
+                let matchupDisplay;
+                if (recordDef.key === 'mostPointsScored' || recordDef.key === 'fewestPointsScored') {
+                  const recordHolder = entry.team;
+                  const recordScore = entry.score.toFixed(2);
+                  const opponentScore = (recordHolder === entry.team1 ? entry.team2Score : entry.team1Score).toFixed(2);
+
+                  matchupDisplay = (
+                    <>
+                      {recordHolder === entry.team1 ? (
+                        <><u>{entry.team1}</u> ({recordScore}) vs {entry.team2} ({opponentScore})</>
+                      ) : (
+                        <>{entry.team1} ({opponentScore}) vs <u>{entry.team2}</u> ({recordScore})</>
+                      )}
+                    </>
+                  );
+                } else if (recordDef.key === 'biggestBlowout' || recordDef.key === 'slimmestWin') {
+                  const winnerScore = (entry.winner === entry.team1 ? entry.team1Score : entry.team2Score).toFixed(2);
+                  const loserScore = (entry.loser === entry.team1 ? entry.team1Score : entry.team2Score).toFixed(2);
+                  matchupDisplay = (
+                    <>
+                      <u>{entry.winner}</u> def. {entry.loser} ({winnerScore}-{loserScore})
+                    </>
+                  );
+                } else { // For Highest/Lowest Combined Score
+                  matchupDisplay = `${entry.team1} (${entry.team1Score.toFixed(2)}) vs ${entry.team2} (${entry.team2Score.toFixed(2)})`;
+                }
+
+                return (
+                  <tr key={`${recordDef.key}-${index}`} className="border-b border-gray-100 last:border-b-0">
+                    <td className="py-2 px-3 text-sm text-gray-800 font-semibold">
+                      {index === 0 ? recordDef.label : ''} {/* Only show label for the first entry if multiple */}
+                    </td>
+                    <td className="py-2 px-3 text-sm text-gray-800">{formatDisplayValue(recordData.value, recordDef.key)}</td>
+                    <td className="py-2 px-3 text-sm text-gray-700">
+                      {matchupDisplay}
+                    </td>
+                    <td className="py-2 px-3 text-sm text-gray-700">{entry.year}</td>
+                    <td className="py-2 px-3 text-sm text-gray-700">{entry.week}</td>
+                  </tr>
+                );
+              });
             })}
           </tbody>
         </table>
