@@ -98,7 +98,8 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
           allWeeklyScores[weekKey] = [];
       }
       allWeeklyScores[weekKey].push({ team: team1, score: team1Score });
-      allWeeklyScores[weekKey].push({ team: team2, score: team22Score }); // Note: typo corrected from team22Score to team2Score
+      // TYPO FIXED HERE: Changed team22Score to team2Score
+      allWeeklyScores[weekKey].push({ team: team2, score: team2Score });
     });
 
     // Calculate Weekly High Scores and Top 3 Scores
