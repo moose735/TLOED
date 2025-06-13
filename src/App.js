@@ -81,7 +81,8 @@ const App = () => {
   const [errorChampions, setErrorChampions] = useState(null);
 
   // <<< START NEW STATE FOR HISTORICAL MATCHUPS >>>
-  const [historicalMatchups, setHistoricalMatchups] = useState(null);
+  // Changed initial state to an empty array for more robust array checks
+  const [historicalMatchups, setHistoricalMatchups] = useState([]);
   const [loadingMatchups, setLoadingMatchups] = useState(true);
   const [errorMatchups, setErrorMatchups] = useState(null);
   // <<< END NEW STATE FOR HISTORICAL MATCHUPS >>>
@@ -428,7 +429,8 @@ const App = () => {
         if (data.error) {
           throw new Error(data.error);
         }
-        setHistoricalMatchups(data.data); // Assuming the Apps Script returns { data: [...] }
+        // Ensure data.data is an array before setting state
+        setHistoricalMatchups(Array.isArray(data.data) ? data.data : []); // Ensure it's an array
 
       } catch (error) {
         console.error("Error fetching historical matchups data:", error);
@@ -904,7 +906,7 @@ const App = () => {
           <div className="inline-flex animate-ticker-scroll items-center h-full">
             {/* Duplicate content for continuous scrolling effect */}
             {[...leagueManagers, ...leagueManagers].map((manager, index) => (
-              <div key={`<span class="math-inline">\{manager\.userId\}\-</span>{index}`} className="team-ticker-item">
+              <div key={`manager-${manager.userId}-${index}`} className="team-ticker-item">
                 <img src={manager.avatar} alt={`${manager.teamName} avatar`} onError={(e) => e.target.src = 'https://placehold.co/30x30/cccccc/333333?text=M'} />
                 <span className="team-name">{manager.teamName}</span>
                 <span className="team-record">{manager.wins}-{manager.losses}</span>
@@ -969,7 +971,7 @@ const App = () => {
                 <div className="inline-flex gap-4 animate-ticker-scroll items-center"> {/* Increased gap to gap-4 */}
                   {/* Duplicate content for continuous scrolling effect */}
                   {[...recentTrades, ...recentTrades].map((trade, index) => (
-                    <div key={`<span class="math-inline">\{trade\.transaction\_id\}\-</span>{index}`} className="
+                    <div key={`trade-${trade.transaction_id}-${index}`} className="
                       bg-white border border-[#bfbfbf] rounded-md shadow-sm p-2.5
                       flex flex-col flex-shrink-0
                       min-w-[280px] min-h-[220px]
@@ -1256,12 +1258,13 @@ const App = () => {
               <p className="text-gray-600">Loading all historical matchup data...</p>
             ) : errorMatchups ? (
               <p className="text-red-500">Error: {errorMatchups}</p>
-            ) : historicalMatchups && historicalMatchups.length > 0 ? (
+            ) : (historicalMatchups && Array.isArray(historicalMatchups) && historicalMatchups.length > 0) ? (
               <div className="overflow-x-auto">
                 <table className="min-w-full bg-white rounded-lg overflow-hidden shadow">
                   <thead className="bg-[#bfbfbf]">
                     <tr>
-                      {historicalMatchups[0] && Object.keys(historicalMatchups[0]).map((header) => (
+                      {/* Added check for historicalMatchups[0] and its type for robustness */}
+                      {historicalMatchups[0] && typeof historicalMatchups[0] === 'object' && Object.keys(historicalMatchups[0]).map((header) => (
                         <th key={header} className="py-3 px-4 text-left text-sm font-semibold text-[#0070c0] uppercase tracking-wider">
                           {header.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} {/* Converts camelCase to "Camel Case" for display */}
                         </th>
@@ -1271,7 +1274,8 @@ const App = () => {
                   <tbody>
                     {historicalMatchups.map((match, index) => (
                       <tr key={index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                        {Object.entries(match).map(([key, value], idx) => (
+                        {/* Added check for 'match' and its type for robustness */}
+                        {match && typeof match === 'object' && Object.entries(match).map(([key, value], idx) => (
                           <td key={idx} className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
                             {/* Apply team name mapping only to relevant team name columns */}
                             {key.includes('team1') || key.includes('team2') ? getMappedTeamName(value) : value}
