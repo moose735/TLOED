@@ -1,7 +1,14 @@
 // src/lib/MatchupHistory.js
 import React, { useState, useEffect, useCallback } from 'react';
-// Removed NICKNAME_TO_SLEEPER_USER as it's no longer used for mapping here
 import { HISTORICAL_MATCHUPS_API_URL } from '../config';
+
+// Helper function to get ordinal suffix (1st, 2nd, 3rd, 4th, etc.)
+const getOrdinalSuffix = (n) => {
+  if (typeof n !== 'number' || isNaN(n)) return '';
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return (s[v - 20] || s[v] || s[0]);
+};
 
 const MatchupHistory = () => {
   const [historicalMatchups, setHistoricalMatchups] = useState([]);
@@ -12,11 +19,26 @@ const MatchupHistory = () => {
   const [allTimeRecords, setAllTimeRecords] = useState({});
   const [seasonRecords, setSeasonRecords] = useState({});
   const [headToHeadRecords, setHeadToHeadRecords] = useState({});
+  const [championshipGames, setChampionshipGames] = useState([]); // New state for championship games
 
-  // getMappedTeamName and NICKNAME_TO_SLEEPER_USER removed as per user instruction
   // Teams names will be displayed as they are in the fetched data.
   const getDisplayTeamName = useCallback((originalName) => {
     return originalName; // Directly return original name, no mapping for now
+  }, []);
+
+  // Helper to get the descriptive name of a final seeding game (e.g., "Championship Game")
+  const getFinalSeedingGamePurpose = useCallback((value) => {
+    if (value === 1) return 'Championship Game';
+    if (value === 3) return '3rd Place Game';
+    if (value === 5) return '5th Place Game';
+    if (value === 7) return '7th Place Game';
+    if (value === 9) return '9th Place Game';
+    if (value === 11) return '11th Place Game';
+    // Generic fallback for other odd numeric values or unexpected values
+    if (typeof value === 'number' && value > 0 && value % 2 !== 0) {
+        return `${value}${getOrdinalSuffix(value)} Place Game`;
+    }
+    return 'Final Seeding Game'; // Generic fallback
   }, []);
 
 
@@ -63,16 +85,17 @@ const MatchupHistory = () => {
       setAllTimeRecords({});
       setSeasonRecords({});
       setHeadToHeadRecords({});
+      setChampionshipGames([]); // Clear championship games
       return;
     }
 
     const newAllTimeRecords = {};
     const newSeasonRecords = {}; // { year: { team: { wins, losses, ties } } }
     const newHeadToHeadRecords = {}; // { team1: { team2: { wins, losses, ties } } }
+    const newChampionshipGames = []; // Collect special games
 
     historicalMatchups.forEach(match => {
       // Ensure team names exist and are strings before processing
-      // Now using getDisplayTeamName which just returns the original name for now
       const team1 = getDisplayTeamName(String(match.team1 || '').trim());
       const team2 = getDisplayTeamName(String(match.team2 || '').trim());
       const year = match.year;
@@ -150,13 +173,59 @@ const MatchupHistory = () => {
         h2hRecord[team2].wins++;
         h2hRecord[team1].losses++;
       }
+
+      // Check for final seeding games
+      if (typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0) {
+          let winner = 'Tie';
+          let loser = 'Tie';
+          let winnerScore = team1Score;
+          let loserScore = team2Score; // Default for ties
+
+          if (team1Won) {
+              winner = team1;
+              loser = team2;
+              winnerScore = team1Score;
+              loserScore = team2Score;
+          } else if (team2Won) {
+              winner = team2;
+              loser = team1;
+              winnerScore = team2Score;
+              loserScore = team1Score;
+          }
+
+          const winningPlace = match.finalSeedingGame;
+          const losingPlace = match.finalSeedingGame + 1;
+
+          newChampionshipGames.push({
+              year: year,
+              week: match.week,
+              team1: team1,
+              team2: team2,
+              team1Score: team1Score,
+              team2Score: team2Score,
+              purpose: getFinalSeedingGamePurpose(match.finalSeedingGame),
+              winner: winner,
+              loser: loser, // Store the loser
+              winnerScore: winnerScore, // Store winner's score
+              loserScore: loserScore, // Store loser's score
+              winnerPlace: winningPlace,
+              loserPlace: losingPlace
+          });
+      }
     });
 
     setAllTimeRecords(newAllTimeRecords);
     setSeasonRecords(newSeasonRecords);
     setHeadToHeadRecords(newHeadToHeadRecords);
+    // Sort championship games by year descending, then by winnerPlace ascending (Championship first)
+    setChampionshipGames(newChampionshipGames.sort((a, b) => {
+      if (b.year !== a.year) {
+        return b.year - a.year;
+      }
+      return a.winnerPlace - b.winnerPlace; // Championship game (1st place) before 3rd, etc.
+    }));
 
-  }, [historicalMatchups, getDisplayTeamName]); // Recalculate if matchups or mapping changes
+  }, [historicalMatchups, getDisplayTeamName, getFinalSeedingGamePurpose]); // Recalculate if matchups or mapping changes
 
   // Helper to render record
   const renderRecord = (record) => {
@@ -186,6 +255,40 @@ const MatchupHistory = () => {
         <p className="text-center text-gray-600">No historical matchup data found. Ensure your Apps Script is correctly deployed and Google Sheet has data.</p>
       ) : (
         <>
+          {/* Championship and Final Seeding Games */}
+          <section className="mb-8">
+            <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Championship & Seeding Games</h3>
+            {championshipGames.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {championshipGames.map((game, index) => (
+                        <div key={index} className="bg-blue-50 p-4 rounded-lg shadow-sm border border-blue-200">
+                            <h4 className="font-bold text-blue-800 text-lg mb-2">{game.year} {game.purpose}</h4>
+                            <p className="text-sm text-gray-700">Week {game.week}</p>
+                            <p className="text-sm text-gray-700">
+                                <strong>{game.team1}</strong> ({game.team1Score}) vs <strong>{game.team2}</strong> ({game.team2Score})
+                            </p>
+                            {game.winner !== 'Tie' ? (
+                                <>
+                                    <p className="text-sm text-blue-700 font-semibold mt-1">
+                                        Winner: {game.winner} ({game.winnerScore}) - Finished {game.winnerPlace}{getOrdinalSuffix(game.winnerPlace)} Place
+                                    </p>
+                                    <p className="text-sm text-red-700 font-semibold">
+                                        Loser: {game.loser} ({game.loserScore}) - Finished {game.loserPlace}{getOrdinalSuffix(game.loserPlace)} Place
+                                    </p>
+                                </>
+                            ) : (
+                                <p className="text-sm text-gray-700 font-semibold mt-1">
+                                    Game was a Tie - Both teams finished {game.winnerPlace}{getOrdinalSuffix(game.winnerPlace)} Place
+                                </p>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <p className="text-gray-600">No championship or final seeding game data found.</p>
+            )}
+          </section>
+
           {/* All-Time Records */}
           <section className="mb-8">
             <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">All-Time Team Records</h3>
