@@ -168,24 +168,19 @@ const MatchupRecords = ({ historicalMatchups, getDisplayTeamName }) => {
                 if (recordDef.key === 'mostPointsScored' || recordDef.key === 'fewestPointsScored') {
                   const recordHolder = entry.team;
                   const recordScore = entry.score.toFixed(2);
+                  
+                  // Determine opponent and their score
+                  const opponent = recordHolder === entry.team1 ? entry.team2 : entry.team1;
                   const opponentScore = (recordHolder === entry.team1 ? entry.team2Score : entry.team1Score).toFixed(2);
 
                   matchupDisplay = (
                     <div className="flex items-center justify-center w-full">
                       <span className="text-left flex-1 whitespace-nowrap">
-                        {recordHolder === entry.team1 ? (
-                          <><u>{entry.team1}</u> ({recordScore})</>
-                        ) : (
-                          <>{entry.team1} ({opponentScore})</>
-                        )}
+                        <u>{recordHolder}</u> ({recordScore})
                       </span>
                       <span className="px-2 font-semibold text-gray-600">vs</span>
                       <span className="text-right flex-1 whitespace-nowrap">
-                        {recordHolder === entry.team2 ? (
-                          <><u>{entry.team2}</u> ({recordScore})</>
-                        ) : (
-                          <>{entry.team2} ({opponentScore})</>
-                        )}
+                        {opponent} ({opponentScore})
                       </span>
                     </div>
                   );
