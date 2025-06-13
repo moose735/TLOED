@@ -1,6 +1,6 @@
 // src/lib/MatchupHistory.js
 import React, { useState, useEffect, useCallback } from 'react';
-// Removed import of HISTORICAL_MATCHUPS_API_URL
+// Removed import of HISTORICAL_MATCHUPS_API_URL, as data is passed from App.js
 import Head2HeadGrid from './Head2HeadGrid';
 // Removed import of RecordBook
 
@@ -29,9 +29,9 @@ const getFinalSeedingGamePurpose = (value) => {
 
 // MatchupHistory now receives historicalMatchups, loading, and error as props
 const MatchupHistory = ({ historicalMatchups, loading, error, getMappedTeamName }) => {
-  // Removed internal historicalMatchups, loading, error states
+  // Removed internal historicalMatchups, loading, error states, as they are props now
 
-  const [seasonRecords, setSeasonRecords] = useState({});
+  // Removed seasonRecords state, as its data processing moved to SeasonRecords.js
   const [championshipGames, setChampionshipGames] = useState([]);
 
   const getDisplayTeamName = useCallback((originalName) => {
@@ -39,15 +39,15 @@ const MatchupHistory = ({ historicalMatchups, loading, error, getMappedTeamName 
   }, [getMappedTeamName]);
 
 
-  // --- Data Processing (for sections remaining in MatchupHistory) ---
+  // --- Data Processing (only for sections remaining in MatchupHistory, like championship games) ---
   useEffect(() => {
     if (!historicalMatchups || historicalMatchups.length === 0) {
-      setSeasonRecords({});
+      // Removed setSeasonRecords({});
       setChampionshipGames([]);
       return;
     }
 
-    const newSeasonRecords = {};
+    // Removed newSeasonRecords processing here
     const newChampionshipGames = [];
 
     historicalMatchups.forEach(match => {
@@ -58,33 +58,13 @@ const MatchupHistory = ({ historicalMatchups, loading, error, getMappedTeamName 
       const team2Score = parseFloat(match.team2Score);
 
       if (!team1 || !team2 || isNaN(team1Score) || isNaN(team2Score)) {
-        console.warn('Skipping invalid matchup data:', match);
+        console.warn('Skipping invalid matchup data in MatchupHistory for championship games:', match);
         return;
       }
 
       const isTie = team1Score === team2Score;
       const team1Won = team1Score > team2Score;
       const team2Won = team2Score > team1Score;
-
-      [team1, team2].forEach(team => {
-        if (!newSeasonRecords[year]) {
-          newSeasonRecords[year] = {};
-        }
-        if (!newSeasonRecords[year][team]) {
-          newSeasonRecords[year][team] = { wins: 0, losses: 0, ties: 0 };
-        }
-      });
-
-      if (isTie) {
-        newSeasonRecords[year][team1].ties++;
-        newSeasonRecords[year][team2].ties++;
-      } else if (team1Won) {
-        newSeasonRecords[year][team1].wins++;
-        newSeasonRecords[year][team2].losses++;
-      } else {
-        newSeasonRecords[year][team2].wins++;
-        newSeasonRecords[year][team1].losses++;
-      }
 
       if (typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0) {
           let winner = 'Tie';
@@ -125,7 +105,6 @@ const MatchupHistory = ({ historicalMatchups, loading, error, getMappedTeamName 
       }
     });
 
-    setSeasonRecords(newSeasonRecords);
     setChampionshipGames(newChampionshipGames.sort((a, b) => {
       if (b.year !== a.year) {
         return b.year - a.year;
@@ -133,15 +112,14 @@ const MatchupHistory = ({ historicalMatchups, loading, error, getMappedTeamName 
       return a.winnerPlace - b.winnerPlace;
     }));
 
-  }, [historicalMatchups, getDisplayTeamName]);
+  }, [historicalMatchups, getDisplayTeamName]); // historicalMatchups is a prop now
 
   const renderRecord = (record) => {
     if (!record) return '0-0-0';
     return `${record.wins || 0}-${record.losses || 0}-${record.ties || 0}`;
   };
 
-  const sortedYears = Object.keys(seasonRecords).sort((a, b) => parseInt(b) - parseInt(a));
-
+  // Removed sortedYears as seasonRecords state is gone
 
   return (
     <div className="w-full max-w-4xl bg-white p-8 rounded-lg shadow-md mt-8">
@@ -189,36 +167,11 @@ const MatchupHistory = ({ historicalMatchups, loading, error, getMappedTeamName 
             )}
           </section>
 
-          {/* Season-by-Season Records */}
-          <section className="mb-8">
-            <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Season-by-Season Records</h3>
-            {sortedYears.map(year => (
-              <div key={year} className="mb-6">
-                <h4 className="text-lg font-bold text-gray-700 mb-3 bg-gray-50 p-2 rounded-md border-l-4 border-blue-500">{year} Season</h4>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
-                    <thead className="bg-blue-50">
-                      <tr>
-                        <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
-                        <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record (W-L-T)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Object.keys(seasonRecords[year]).sort().map(team => (
-                        <tr key={team} className="border-b border-gray-100 last:border-b-0">
-                          <td className="py-2 px-3 text-sm text-gray-800">{team}</td>
-                          <td className="py-2 px-3 text-sm text-gray-700">{renderRecord(seasonRecords[year][team])}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ))}
-          </section>
+          {/* Removed Season-by-Season Records from here */}
 
           {/* Head-to-Head Rivalries / Versus History section handled by Head2HeadGrid */}
           <section className="mb-8">
+            <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Head-to-Head Rivalries</h3>
             <Head2HeadGrid
               historicalMatchups={historicalMatchups}
               getDisplayTeamName={getDisplayTeamName}
