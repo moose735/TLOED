@@ -226,13 +226,14 @@ const VersusRecords = ({ historicalMatchups, getDisplayTeamName }) => {
                   </tr>
                 );
               }
-              return recordData.entries.map((entry, index) => (
-                <tr key={`${recordDef.key}-${entry.team}-${entry.opponent}-${index}`} className="border-b border-gray-100 last:border-b-0">
+              // Map through entries, but conditionally render record label and value
+              return recordData.entries.map((entry, entryIndex) => (
+                <tr key={`${recordDef.key}-${entry.team}-${entry.opponent}-${entryIndex}`} className="border-b border-gray-100 last:border-b-0">
                   <td className="py-2 px-3 text-sm text-gray-800 font-semibold">
-                    {index === 0 ? recordDef.label : ''} {/* Only show label for the first entry */}
+                    {entryIndex === 0 ? recordDef.label : ''} {/* Show label only for the first entry of a record */}
                   </td>
                   <td className="py-2 px-3 text-sm text-gray-800">
-                    {formatDisplayValue(recordData.value, recordDef.key)}
+                    {entryIndex === 0 ? formatDisplayValue(recordData.value, recordDef.key) : ''} {/* Show value only for the first entry of a record */}
                   </td>
                   <td className="py-2 px-3 text-sm text-gray-700">{entry.team}</td>
                   <td className="py-2 px-3 text-sm text-gray-700">{entry.opponent}</td>
