@@ -1,8 +1,9 @@
-// src/lib/LeagueHistory.js
+// src/lib/MatchupHistory.js
 import React, { useState, useEffect, useCallback } from 'react';
-import { HISTORICAL_MATCHUPS_API_URL, NICKNAME_TO_SLEEPER_USER } from '../config';
+// Removed NICKNAME_TO_SLEEPER_USER as it's no longer used for mapping here
+import { HISTORICAL_MATCHUPS_API_URL } from '../config';
 
-const LeagueHistory = () => {
+const MatchupHistory = () => {
   const [historicalMatchups, setHistoricalMatchups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -12,24 +13,20 @@ const LeagueHistory = () => {
   const [seasonRecords, setSeasonRecords] = useState({});
   const [headToHeadRecords, setHeadToHeadRecords] = useState({});
 
-  // Helper to map team names using NICKNAME_TO_SLEEPER_USER from config
-  const getMappedTeamName = useCallback((originalName) => {
-    if (!originalName) return originalName;
-    const lowerOriginalName = String(originalName).toLowerCase();
-    // Find the original name in the NICKNAME_TO_SLEEPER_USER values
-    const foundCustomName = Object.keys(NICKNAME_TO_SLEEPER_USER).find(
-        key => String(NICKNAME_TO_SLEEPER_USER[key]).toLowerCase() === lowerOriginalName
-    );
-    // If a match is found, return the custom name, otherwise return the original name
-    return foundCustomName || originalName;
-}, []);
+  // getMappedTeamName and NICKNAME_TO_SLEEPER_USER removed as per user instruction
+  // Teams names will be displayed as they are in the fetched data.
+  const getDisplayTeamName = useCallback((originalName) => {
+    return originalName; // Directly return original name, no mapping for now
+  }, []);
+
 
   // --- Data Fetching ---
   useEffect(() => {
     const fetchMatchups = async () => {
-      if (HISTORICAL_MATCHUPS_API_URL === 'YOUR_NEW_HISTORICAL_MATCHUPS_APPS_SCRIPT_URL') {
+      // Adjusted placeholder check for clarity
+      if (HISTORICAL_MATCHUPS_API_URL === 'YOUR_NEW_HISTORICAL_MATCHUPS_APPS_SCRIPT_URL' || !HISTORICAL_MATCHUPS_API_URL) {
         setLoading(false);
-        setError("Please update HISTORICAL_MATCHUPS_API_URL in config.js with your actual Apps Script URL.");
+        setError("Please update HISTORICAL_MATCHUPS_API_URL in config.js with your actual Apps Script URL for historical matchups.");
         return;
       }
 
@@ -75,8 +72,9 @@ const LeagueHistory = () => {
 
     historicalMatchups.forEach(match => {
       // Ensure team names exist and are strings before processing
-      const team1 = getMappedTeamName(String(match.team1 || '').trim());
-      const team2 = getMappedTeamName(String(match.team2 || '').trim());
+      // Now using getDisplayTeamName which just returns the original name for now
+      const team1 = getDisplayTeamName(String(match.team1 || '').trim());
+      const team2 = getDisplayTeamName(String(match.team2 || '').trim());
       const year = match.year;
       const team1Score = parseFloat(match.team1Score);
       const team2Score = parseFloat(match.team2Score);
@@ -158,7 +156,7 @@ const LeagueHistory = () => {
     setSeasonRecords(newSeasonRecords);
     setHeadToHeadRecords(newHeadToHeadRecords);
 
-  }, [historicalMatchups, getMappedTeamName]); // Recalculate if matchups or mapping changes
+  }, [historicalMatchups, getDisplayTeamName]); // Recalculate if matchups or mapping changes
 
   // Helper to render record
   const renderRecord = (record) => {
@@ -274,4 +272,4 @@ const LeagueHistory = () => {
   );
 };
 
-export default LeagueHistory;
+export default MatchupHistory;
