@@ -82,7 +82,8 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         return;
       }
 
-      const careerWinPercentage = (stats.wins + 0.5 * stats.ties) / totalGames;
+      // Explicit parentheses added here
+      const careerWinPercentage = ((stats.wins + (0.5 * stats.ties)) / totalGames);
 
       // Raw DPR Calculation: ((Points Scored * 6) + ((Points Scored Max + Points Scored Min) * 2) + ((Win% * 200) * 2)) / 10
       stats.careerRawDPR = (
@@ -230,7 +231,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
               {sortedAllTimeTeams.map(team => {
                 const record = allTimeRecords[team];
                 const totalGames = record.wins + record.losses + record.ties;
-                const winPercentage = totalGames > 0 ? ((record.wins + (record.ties / 2)) / totalGames * 100).toFixed(1) : '0.0';
+                const winPercentage = totalGames > 0 ? ((record.wins + (0.5 * record.ties)) / totalGames * 100).toFixed(1) : '0.0'; // Explicit parentheses added here
                 return (
                   <tr key={team} className="border-b border-gray-100 last:border-b-0">
                     <td className="py-2 px-3 text-sm text-gray-800">{team}</td>
