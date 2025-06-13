@@ -176,7 +176,7 @@ const MatchupRecords = ({ historicalMatchups, getDisplayTeamName }) => {
                   matchupDisplay = (
                     <div className="flex items-center justify-center w-full">
                       <span className="text-left flex-1 pr-1 whitespace-nowrap">
-                        <u>{recordHolder}</u> ({recordScore})
+                        {recordHolder} ({recordScore})
                       </span>
                       <span className="px-2 font-semibold text-gray-600">vs</span>
                       <span className="text-right flex-1 pl-1 whitespace-nowrap">
@@ -190,7 +190,7 @@ const MatchupRecords = ({ historicalMatchups, getDisplayTeamName }) => {
                   matchupDisplay = (
                     <div className="flex items-center justify-center w-full">
                       <span className="text-left flex-1 pr-1 whitespace-nowrap">
-                        <u>{entry.winner}</u> ({winnerScore})
+                        {entry.winner} ({winnerScore})
                       </span>
                       <span className="px-2 font-semibold text-gray-600">def.</span>
                       <span className="text-right flex-1 pl-1 whitespace-nowrap">
