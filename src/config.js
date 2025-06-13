@@ -3,5 +3,9 @@
 // Example: const GOOGLE_SHEET_POWER_RANKINGS_API_URL = 'https://script.google.com/macros/s/AKfycbzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz/exec';
 export const GOOGLE_SHEET_POWER_RANKINGS_API_URL = 'https://script.google.com/macros/s/AKfycbxU2TLDiOxoym2VETq3qrfwUCjE9O0c_gbwHhfAgnrk2faxcBt30EW0jJIq6WXwtYhPdw/exec';
 
+// Google Apps Script URL for All Historical Matchups (from your query)
+export const HISTORICAL_MATCHUPS_API_URL = 'https://script.google.com/macros/s/AKfycbxpo21zzZgNamYShESfqe-SX09miJz2LK7SpdlYrtHXQplneB3bF2xu2byy0HhjM8e-/exec';
+
+
 // You might add other config variables here in the future if needed, e.g.,
 // export const SLEEPER_LEAGUE_ID = 'YOUR_SLEEPER_LEAGUE_ID';
