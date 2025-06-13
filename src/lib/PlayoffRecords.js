@@ -89,6 +89,11 @@ const PlayoffRecords = ({ historicalMatchups, getDisplayTeamName }) => {
           } else if (finalPlacement === 3) {
             if (winner) { // Winner of the 3rd place game gets 3rd place
               teamPlayoffStats[winner].medals[3]++;
+              // Debug log to check if 3rd place winner is found
+              console.log(`DEBUG: Team ${winner} won 3rd place in ${year} (Final Seeding Game: ${finalPlacement}).`);
+            } else {
+              // Debug log for tied 3rd place games (if applicable in your data)
+              console.log(`DEBUG: Tie for 3rd place in ${year} between ${team1} and ${team2}. No single winner for 3rd place recorded.`);
             }
           }
           // Can add logic for other final placements (e.g., 5th place) if desired
@@ -136,6 +141,8 @@ const PlayoffRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       updateRecord(newAggregatedRecords.mostPlayoffPointsAgainst, stats.pointsAgainst, { team, pointsAgainst: stats.pointsAgainst }); // Removed 'true' for isMin
       updateRecord(newAggregatedRecords.mostChampionships, stats.championships, { team, championships: stats.championships });
       updateRecord(newAggregatedRecords.most2ndPlaceFinishes, stats.medals[2], { team, place: stats.medals[2] });
+      // Debug log before updating most3rdPlaceFinishes
+      console.log(`DEBUG: Team ${team} has ${stats.medals[3]} 3rd place finishes.`);
       updateRecord(newAggregatedRecords.most3rdPlaceFinishes, stats.medals[3], { team, place: stats.medals[3] });
     });
 
