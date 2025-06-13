@@ -1,328 +1,239 @@
 // src/lib/SeasonRecords.js
 import React, { useState, useEffect } from 'react';
 
-// Helper to render record (W-L-T) - Not used in this component's final display
-const renderRecord = (record) => {
-  if (!record) return '0-0-0';
-  return `${record.wins || 0}-${record.losses || 0}-${record.ties || 0}`;
-};
-
 const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
-  const [aggregatedSeasonRecords, setAggregatedSeasonRecords] = useState({});
+  const [seasonRecords, setSeasonRecords] = useState({});
+  const [highestDPRSeasonRecord, setHighestDPRSeasonRecord] = useState(null);
+  const [lowestDPRSeasonRecord, setLowestDPRSeasonRecord] = useState(null);
 
   useEffect(() => {
     if (!historicalMatchups || historicalMatchups.length === 0) {
-      setAggregatedSeasonRecords({});
+      setSeasonRecords({});
+      setHighestDPRSeasonRecord(null);
+      setLowestDPRSeasonRecord(null);
       return;
     }
 
-    const newSeasonData = {}; // Intermediate: { year: { teamName: { wins, losses, ... } } }
+    const newSeasonRecords = {}; // { year: { team: { wins, losses, ties, pointsFor, totalGames, rawDPR, adjustedDPR } } }
+    const seasonLeagueScores = {}; // { year: { allGameScores: [] } }
 
     historicalMatchups.forEach(match => {
       const team1 = getDisplayTeamName(String(match.team1 || '').trim());
       const team2 = getDisplayTeamName(String(match.team2 || '').trim());
-      const year = parseInt(match.year);
-      const week = parseInt(match.week);
+      const year = match.year;
       const team1Score = parseFloat(match.team1Score);
       const team2Score = parseFloat(match.team2Score);
 
-      // Removed !match.regSeason condition to include playoff games
-      if (!team1 || !team2 || isNaN(year) || isNaN(week) || isNaN(team1Score) || isNaN(team2Score)) {
-        return;
+      if (!team1 || !team2 || isNaN(team1Score) || isNaN(team2Score)) {
+        return; // Skip invalid data
       }
 
       const isTie = team1Score === team2Score;
       const team1Won = team1Score > team2Score;
 
-      // Initialize year and team data structures in newSeasonData
-      if (!newSeasonData[year]) newSeasonData[year] = {};
+      // Initialize records if team/year not seen before
       [team1, team2].forEach(team => {
-        if (!newSeasonData[year][team]) {
-          newSeasonData[year][team] = {
-            wins: 0, losses: 0, ties: 0,
-            totalPointsScored: 0,
-            totalPointsAgainst: 0,
-            weeklyScores: [], // To calculate weekly top scores and All-Play Win %
-            blowoutWins: 0, blowoutLosses: 0,
-            slimWins: 0, slimLosses: 0,
-            // Removed highestWeeklyScore and lowestWeeklyScore from initialization
-            weeklyHighScoresCount: 0,
-            weeklyTop3ScoresCount: 0,
+        if (!newSeasonRecords[year]) {
+          newSeasonRecords[year] = {};
+        }
+        if (!newSeasonRecords[year][team]) {
+          newSeasonRecords[year][team] = {
+            wins: 0,
+            losses: 0,
+            ties: 0,
+            pointsFor: 0,
+            totalGames: 0,
+            rawDPR: 0,
+            adjustedDPR: 0,
           };
         }
       });
 
-      // Update season records (now includes playoffs)
+      // Update Season Records
       if (isTie) {
-        newSeasonData[year][team1].ties++;
-        newSeasonData[year][team2].ties++;
+        newSeasonRecords[year][team1].ties++;
+        newSeasonRecords[year][team2].ties++;
       } else if (team1Won) {
-        newSeasonData[year][team1].wins++;
-        newSeasonData[year][team2].losses++;
+        newSeasonRecords[year][team1].wins++;
+        newSeasonRecords[year][team2].losses++;
       } else { // team2Won
-        newSeasonData[year][team2].wins++;
-        newSeasonData[year][team1].losses++;
+        newSeasonRecords[year][team2].wins++;
+        newSeasonRecords[year][team1].losses++;
       }
 
-      // Update total points for the season (now includes playoffs)
-      newSeasonData[year][team1].totalPointsScored += team1Score;
-      newSeasonData[year][team1].totalPointsAgainst += team2Score;
-      newSeasonData[year][team2].totalPointsScored += team2Score;
-      newSeasonData[year][team2].totalPointsAgainst += team1Score;
+      newSeasonRecords[year][team1].pointsFor += team1Score;
+      newSeasonRecords[year][team2].pointsFor += team2Score;
+      newSeasonRecords[year][team1].totalGames++;
+      newSeasonRecords[year][team2].totalGames++;
 
-      // Store weekly scores for later calculations (All-Play, weekly high/top 3) (now includes playoffs)
-      newSeasonData[year][team1].weeklyScores.push({ week, score: team1Score, opponentScore: team2Score });
-      newSeasonData[year][team2].weeklyScores.push({ week, score: team2Score, opponentScore: team1Score });
+      // Collect all game scores for the season to find max/min for DPR calculation
+      if (!seasonLeagueScores[year]) seasonLeagueScores[year] = { allGameScores: [] };
+      seasonLeagueScores[year].allGameScores.push(team1Score, team2Score);
+    });
 
-      // Calculate blowout/slim wins/losses on a per-match basis (now includes playoffs, but still not ties)
-      if (!isTie) {
-          // Margin as percentage of winner's score, handle zero score to prevent division by zero
-          const margin1 = team1Score > 0 ? (team1Score - team2Score) / team1Score : (team1Score - team2Score);
-          const margin2 = team2Score > 0 ? (team2Score - team1Score) / team2Score : (team2Score - team1Score);
+    let currentHighestDPRSeason = { value: -Infinity, entries: [] };
+    let currentLowestDPRSeason = { value: Infinity, entries: [] };
 
-          // Blowout win/loss: Win/lose by 40% or more
-          if (team1Won) {
-              if (margin1 >= 0.40) newSeasonData[year][team1].blowoutWins++;
-              if (Math.abs(margin1) >= 0.40) newSeasonData[year][team2].blowoutLosses++; // Team2 lost by 40% to Team1
-          } else { // team2Won
-              if (margin2 >= 0.40) newSeasonData[year][team2].blowoutWins++;
-              if (Math.abs(margin2) >= 0.40) newSeasonData[year][team1].blowoutLosses++; // Team1 lost by 40% to Team2
-          }
-
-          // Slim win/loss: Win/lose by less than 2.5%
-          if (team1Won) {
-              if (margin1 > 0 && margin1 < 0.025) newSeasonData[year][team1].slimWins++;
-              if (Math.abs(margin1) > 0 && Math.abs(margin1) < 0.025) newSeasonData[year][team2].slimLosses++;
-          } else { // team2Won
-              if (margin2 > 0 && margin2 < 0.025) newSeasonData[year][team2].slimWins++;
-              if (Math.abs(margin2) > 0 && Math.abs(margin2) < 0.025) newSeasonData[year][team1].slimLosses++;
-          }
+    const updateRecord = (recordObj, newValue, entryDetails, isMin = false) => {
+      if (isMin) {
+        if (newValue < recordObj.value) {
+          recordObj.value = newValue;
+          recordObj.entries = [entryDetails];
+        } else if (newValue === recordObj.value) {
+          recordObj.entries.push(entryDetails);
+        }
+      } else {
+        if (newValue > recordObj.value) {
+          recordObj.value = newValue;
+          recordObj.entries = [entryDetails];
+        } else if (newValue === recordObj.value) {
+          recordObj.entries.push(entryDetails);
+        }
       }
-    });
-
-    // Post-processing for weekly high/top 3 scores and All-Play Win % (now includes playoffs)
-    Object.keys(newSeasonData).forEach(year => {
-        const teamsInYear = Object.keys(newSeasonData[year]);
-        // Group all scores for the current year by week to find weekly highs
-        const weeklyScoresByYear = {}; // { week: [{ team, score }] }
-        teamsInYear.forEach(teamName => {
-            newSeasonData[year][teamName].weeklyScores.forEach(entry => {
-                if (!weeklyScoresByYear[entry.week]) weeklyScoresByYear[entry.week] = [];
-                weeklyScoresByYear[entry.week].push({ team: teamName, score: entry.score });
-            });
-        });
-
-        Object.values(weeklyScoresByYear).forEach(weeklyMatchups => {
-            if (weeklyMatchups.length === 0) return;
-
-            const sortedWeeklyScores = [...weeklyMatchups].sort((a, b) => b.score - a.score);
-
-            // Most Weekly High Scores (the highest score in that specific week)
-            newSeasonData[year][sortedWeeklyScores[0].team].weeklyHighScoresCount++;
-
-            // Most Weekly Top 3 Scores
-            for (let i = 0; i < Math.min(3, sortedWeeklyScores.length); i++) {
-                newSeasonData[year][sortedWeeklyScores[i].team].weeklyTop3ScoresCount++;
-            }
-        });
-
-        // Calculate All-Play Win Percentage per team per year (now includes playoffs)
-        teamsInYear.forEach(teamName => {
-            let totalAllPlayWins = 0;
-            let totalAllPlayGames = 0;
-            newSeasonData[year][teamName].weeklyScores.forEach(teamWeekEntry => {
-                const currentTeamScore = teamWeekEntry.score;
-                // Compare against all other teams' scores in the same week of the same year
-                weeklyScoresByYear[teamWeekEntry.week].forEach(opponentEntry => {
-                    if (opponentEntry.team !== teamName) {
-                        totalAllPlayGames++;
-                        if (currentTeamScore > opponentEntry.score) {
-                            totalAllPlayWins++;
-                        } else if (currentTeamScore === opponentEntry.score) {
-                            totalAllPlayWins += 0.5;
-                        }
-                    }
-                });
-            });
-            newSeasonData[year][teamName].allPlayWinPercentage = totalAllPlayGames > 0 ? (totalAllPlayWins / totalAllPlayGames) : 0;
-        });
-    });
-
-    // --- AGGREGATE SEASON RECORDS ACROSS ALL YEARS ---
-    const newAggregatedRecords = {
-        mostWins: { value: -Infinity, teams: [], years: [] },
-        mostLosses: { value: -Infinity, teams: [], years: [] },
-        bestAllPlayWinPct: { value: -Infinity, teams: [], years: [] },
-        mostWeeklyTopScores: { value: -Infinity, teams: [], years: [] },
-        mostWeeklyTop3Scores: { value: -Infinity, teams: [], years: [] },
-        mostBlowoutWins: { value: -Infinity, teams: [] },
-        mostBlowoutLosses: { value: -Infinity, teams: [] },
-        mostSlimWins: { value: -Infinity, teams: [] },
-        mostSlimLosses: { value: -Infinity, teams: [] },
-        mostPoints: { value: -Infinity, teams: [], years: [] },
-        fewestPoints: { value: Infinity, teams: [], years: [] },
-        // Removed highestWeeklyScore and lowestWeeklyScore from aggregated records
     };
 
-    Object.keys(newSeasonData).forEach(year => {
-        Object.keys(newSeasonData[year]).forEach(teamName => {
-            const teamStats = newSeasonData[year][teamName];
+    Object.keys(newSeasonRecords).sort().forEach(year => {
+      const teamsInSeason = Object.keys(newSeasonRecords[year]);
+      if (teamsInSeason.length === 0) return;
 
-            // Helper to update a record if current value is better (or equal for ties)
-            const updateRecord = (recordObj, newValue, isMin = false) => {
-                if (isMin) { // For "fewest" / "lowest"
-                    if (newValue < recordObj.value) {
-                        recordObj.value = newValue;
-                        recordObj.teams = [teamName];
-                        recordObj.years = [year];
-                    } else if (newValue === recordObj.value) {
-                        recordObj.teams.push(teamName);
-                        recordObj.years.push(year);
-                    }
-                } else { // For "most" / "best" (max)
-                    if (newValue > recordObj.value) {
-                        recordObj.value = newValue;
-                        recordObj.teams = [teamName];
-                        recordObj.years = [year];
-                    } else if (newValue === recordObj.value) {
-                        recordObj.teams.push(teamName);
-                        recordObj.years.push(year);
-                    }
-                }
-            };
+      const maxScoreInSeason = Math.max(...seasonLeagueScores[year].allGameScores);
+      const minScoreInSeason = Math.min(...seasonLeagueScores[year].allGameScores);
 
-            // Update all aggregated records
-            updateRecord(newAggregatedRecords.mostWins, teamStats.wins);
-            updateRecord(newAggregatedRecords.mostLosses, teamStats.losses);
-            updateRecord(newAggregatedRecords.bestAllPlayWinPct, teamStats.allPlayWinPercentage);
-            updateRecord(newAggregatedRecords.mostWeeklyTopScores, teamStats.weeklyHighScoresCount);
-            updateRecord(newAggregatedRecords.mostWeeklyTop3Scores, teamStats.weeklyTop3ScoresCount);
-            updateRecord(newAggregatedRecords.mostBlowoutWins, teamStats.blowoutWins);
-            updateRecord(newAggregatedRecords.mostBlowoutLosses, teamStats.blowoutLosses);
-            updateRecord(newAggregatedRecords.mostSlimWins, teamStats.slimWins);
-            updateRecord(newAggregatedRecords.mostSlimLosses, teamStats.slimLosses);
-            updateRecord(newAggregatedRecords.mostPoints, teamStats.totalPointsScored);
-            updateRecord(newAggregatedRecords.fewestPoints, teamStats.totalPointsScored, true);
-            // Removed calls to update highestWeeklyScore and lowestWeeklyScore
-        });
-    });
+      let totalRawDPRForSeason = 0;
+      let teamsWithValidDPR = 0;
 
-    // Clean up: filter out initial -Infinity/Infinity values if no data for a category
-    Object.keys(newAggregatedRecords).forEach(key => {
-        const record = newAggregatedRecords[key];
-        if (record.value === -Infinity || record.value === Infinity) {
-            record.value = 0; // Default to 0 for display if no data
-            record.teams = [];
-            record.years = [];
+      teamsInSeason.forEach(team => {
+        const stats = newSeasonRecords[year][team];
+        const totalGames = stats.totalGames;
+
+        if (totalGames === 0) {
+          return;
         }
-        // Sort teams and years arrays for consistent display
-        record.teams.sort();
-        record.years.sort((a, b) => parseInt(a) - parseInt(b)); // Sort years numerically
+
+        const seasonWinPercentage = (stats.wins + 0.5 * stats.ties) / totalGames;
+
+        // Raw DPR Calculation: ((Points Scored * 6) + ((Points Scored Max + Points Scored Min) * 2) + ((Win% * 200) * 2)) / 10
+        stats.rawDPR = (
+          (stats.pointsFor * 6) +
+          ((maxScoreInSeason + minScoreInSeason) * 2) +
+          ((seasonWinPercentage * 200) * 2)
+        ) / 10;
+
+        totalRawDPRForSeason += stats.rawDPR;
+        teamsWithValidDPR++;
+      });
+
+      const avgRawDPRForSeason = teamsWithValidDPR > 0 ? totalRawDPRForSeason / teamsWithValidDPR : 0;
+
+      teamsInSeason.forEach(team => {
+        const stats = newSeasonRecords[year][team];
+        if (avgRawDPRForSeason > 0) {
+          stats.adjustedDPR = stats.rawDPR / avgRawDPRForSeason;
+        } else {
+          stats.adjustedDPR = 0;
+        }
+
+        // Update highest/lowest adjusted DPR season records
+        if (stats.adjustedDPR !== 0) {
+          updateRecord(currentHighestDPRSeason, stats.adjustedDPR, { team, year: parseInt(year), dpr: stats.adjustedDPR });
+          updateRecord(currentLowestDPRSeason, stats.adjustedDPR, { team, year: parseInt(year), dpr: stats.adjustedDPR }, true);
+        }
+      });
     });
 
-    setAggregatedSeasonRecords(newAggregatedRecords);
+    setSeasonRecords(newSeasonRecords);
+    setHighestDPRSeasonRecord(currentHighestDPRSeason);
+    setLowestDPRSeasonRecord(currentLowestDPRSeason);
+
   }, [historicalMatchups, getDisplayTeamName]);
 
-  // Helper to format values for display
-  const formatDisplayValue = (value, metricKey) => {
-      if (metricKey === 'bestAllPlayWinPct') {
-          // Display as .xxx% format
-          return `${value.toFixed(3).replace(/^0\./, '.')}%`;
-      } else if (['mostPoints', 'fewestPoints'].includes(metricKey)) { // Removed highestWeeklyScore, lowestWeeklyScore
-          return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); // Points with 2 decimals and commas
-      } else {
-          return value; // Integer for counts/wins/losses
-      }
+  // Helper to render record
+  const renderRecord = (record) => {
+    if (!record) return '0-0-0';
+    return `${record.wins || 0}-${record.losses || 0}-${record.ties || 0}`;
   };
 
-  // Define the order and labels for the records to display
-  const recordsToDisplay = [
-    { key: 'mostWins', label: 'Most Wins' },
-    { key: 'mostLosses', label: 'Most Losses' },
-    { key: 'bestAllPlayWinPct', label: 'Best All-Play Win %' },
-    { key: 'mostWeeklyTopScores', label: 'Most Weekly Top Scores' },
-    { key: 'mostWeeklyTop3Scores', label: 'Most Weekly Top 3 Scores' },
-    { key: 'mostBlowoutWins', label: 'Most Blowout Wins' },
-    { key: 'mostBlowoutLosses', label: 'Most Blowout Losses' },
-    { key: 'mostSlimWins', label: 'Most Slim Wins' },
-    { key: 'mostSlimLosses', label: 'Most Slim Losses' },
-    { key: 'mostPoints', label: 'Most Points' },
-    { key: 'fewestPoints', label: 'Fewest Points' },
-    // Removed 'highestWeeklyScore' and 'lowestWeeklyScore' from this list
-  ];
+  // Sort years for consistent display
+  const sortedYears = Object.keys(seasonRecords).sort((a, b) => parseInt(b) - parseInt(a)); // Descending year
 
+  const formatDPR = (dprValue) => {
+    if (typeof dprValue === 'number' && !isNaN(dprValue)) {
+      return dprValue.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+    }
+    return 'N/A';
+  };
 
   return (
     <div className="w-full">
-      <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">SEASONAL RECORD HOLDERS - ( SEASON )</h3>
-      <p className="text-sm text-gray-600 mb-6">Records members hold for individual seasons, by the best value across all seasons.</p>
+      <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">SEASON RECORDS - ( SEASON )</h3>
+      <p className="text-sm text-gray-600 mb-6">Team performance records calculated per season.</p>
 
-      {Object.keys(aggregatedSeasonRecords).length === 0 && (
-        <p className="text-center text-gray-600">No regular season data available to display season records.</p>
-      )}
-
-      <div className="overflow-x-auto">
-        <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/4">Record</th> {/* Adjusted width */}
-              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/6">Value</th> {/* Adjusted width */}
-              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-2/5">Team</th> {/* Adjusted width */}
-              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/10">Season</th> {/* Adjusted width */}
-            </tr>
-          </thead>
-          <tbody>
-            {recordsToDisplay.map((recordDef) => {
-              const recordData = aggregatedSeasonRecords[recordDef.key];
-              if (!recordData || recordData.teams.length === 0) {
-                return (
-                  <tr key={recordDef.key}>
-                    <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{recordDef.label}</td>
-                    <td colSpan="3" className="py-2 px-3 text-sm text-gray-500 text-center">N/A</td>
-                  </tr>
-                );
-              }
-              return (
-                <tr key={recordDef.key} className="border-b border-gray-100 last:border-b-0">
-                  <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{recordDef.label}</td>
-                  <td className="py-2 px-3 text-sm text-gray-800">{formatDisplayValue(recordData.value, recordDef.key)}</td>
+      {(highestDPRSeasonRecord?.entries.length > 0 || lowestDPRSeasonRecord?.entries.length > 0) && (
+        <section className="mb-8 p-4 bg-blue-50 rounded-lg shadow-sm border border-blue-200">
+          <h4 className="text-lg font-bold text-blue-800 mb-3">Season DPR Highlights</h4>
+          <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm text-sm">
+            <tbody>
+              {highestDPRSeasonRecord?.entries.length > 0 && (
+                <tr className="border-b border-gray-100 last:border-b-0 bg-white">
+                  <td className="py-2 px-3 text-sm font-semibold text-gray-800">Highest Adjusted DPR (Season)</td>
+                  <td className="py-2 px-3 text-sm text-gray-800">{formatDPR(highestDPRSeasonRecord.value)}</td>
                   <td className="py-2 px-3 text-sm text-gray-700">
-                    <span className="flex items-center space-x-2 pr-4">
-                      {/* Process and display team names with counts */}
-                      {(() => {
-                        const teamCounts = {};
-                        recordData.teams.forEach(teamName => {
-                          teamCounts[teamName] = (teamCounts[teamName] || 0) + 1;
-                        });
-
-                        const uniqueTeamDisplays = Object.keys(teamCounts).map(teamName => (
-                          <React.Fragment key={teamName}>
-                            <img
-                              src={'https://placehold.co/20x20/cccccc/333333?text=M'} // Generic placeholder
-                              alt={`${teamName} avatar`}
-                              className="w-5 h-5 rounded-full object-cover"
-                              title={teamName}
-                            />
-                            <span className="ml-1">
-                              {teamName}
-                              {teamCounts[teamName] > 1 ? ` x${teamCounts[teamName]}` : ''}
-                            </span>
-                          </React.Fragment>
-                        ));
-                        return uniqueTeamDisplays;
-                      })()}
-                    </span>
-                  </td>
-                  {/* Conditional display for Season column */}
-                  <td className="py-2 px-3 text-sm text-gray-700">
-                    {recordData.teams.length > 1 ? '---' : recordData.years.join(' , ')}
+                    {highestDPRSeasonRecord.entries.map((entry, idx) => (
+                      <div key={idx}>{entry.team} ({entry.year})</div>
+                    ))}
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              )}
+              {lowestDPRSeasonRecord?.entries.length > 0 && (
+                <tr className="border-b border-gray-100 last:border-b-0 bg-gray-50">
+                  <td className="py-2 px-3 text-sm font-semibold text-gray-800">Lowest Adjusted DPR (Season)</td>
+                  <td className="py-2 px-3 text-sm text-gray-800">{formatDPR(lowestDPRSeasonRecord.value)}</td>
+                  <td className="py-2 px-3 text-sm text-gray-700">
+                    {lowestDPRSeasonRecord.entries.map((entry, idx) => (
+                      <div key={idx}>{entry.team} ({entry.year})</div>
+                    ))}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      {sortedYears.map(year => (
+        <div key={year} className="mb-6">
+          <h4 className="text-lg font-bold text-gray-700 mb-3 bg-gray-50 p-2 rounded-md border-l-4 border-blue-500">{year} Season</h4>
+          <div className="overflow-x-auto">
+            <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
+              <thead className="bg-blue-50">
+                <tr>
+                  <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
+                  <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record (W-L-T)</th>
+                  <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Win %</th>
+                  <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Points For</th>
+                  <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Adjusted DPR</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.keys(newSeasonRecords[year]).sort().map(team => {
+                  const record = newSeasonRecords[year][team];
+                  const totalGames = record.wins + record.losses + record.ties;
+                  const winPercentage = totalGames > 0 ? ((record.wins + (record.ties / 2)) / totalGames * 100).toFixed(1) : '0.0';
+                  return (
+                    <tr key={team} className="border-b border-gray-100 last:border-b-0">
+                      <td className="py-2 px-3 text-sm text-gray-800">{team}</td>
+                      <td className="py-2 px-3 text-sm text-gray-700">{renderRecord(record)}</td>
+                      <td className="py-2 px-3 text-sm text-gray-700">{winPercentage}%</td>
+                      <td className="py-2 px-3 text-sm text-gray-700">{record.pointsFor.toFixed(2)}</td>
+                      <td className="py-2 px-3 text-sm text-gray-700">{formatDPR(record.adjustedDPR)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
     </div>
   );
 };
