@@ -7,7 +7,7 @@ const renderRecord = (record) => {
   return `${record.wins || 0}-${record.losses || 0}-${record.ties || 0}`;
 };
 
-// Removed leagueManagers from props
+// Removed leagueManagers from props again to fix the bug
 const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
   const [allTimeRecords, setAllTimeRecords] = useState({});
   const [totalPointsData, setTotalPointsData] = useState({});
