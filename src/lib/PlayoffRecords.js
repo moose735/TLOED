@@ -46,11 +46,14 @@ const PlayoffRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         }
       });
 
-      // Track Playoff Appearances (if it's a playoff or a final seeding game)
-      teamPlayoffStats[team1].appearances.add(year);
-      teamPlayoffStats[team2].appearances.add(year);
+      // Track Playoff Appearances ONLY if 'playoffs' flag is true for this match
+      // The Set ensures it's counted only once per season per team.
+      if (match.playoffs === true) {
+        teamPlayoffStats[team1].appearances.add(year);
+        teamPlayoffStats[team2].appearances.add(year);
+      }
 
-      // Track Playoff Wins/Losses/Ties, Points For/Against
+      // Track Playoff Wins/Losses/Ties, Points For/Against (this applies to both 'playoffs:true' and 'finalSeedingGame' matches)
       if (isTie) {
         teamPlayoffStats[team1].ties++;
         teamPlayoffStats[team2].ties++;
