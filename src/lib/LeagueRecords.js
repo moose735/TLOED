@@ -242,7 +242,8 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
             // Display as .xxx% format (e.g., 0.679%)
             finalDisplayValue = `${value.toFixed(3)}%`;
         } else if (sortKey === 'scored' || sortKey === 'against') {
-            finalDisplayValue = value.toFixed(2); // Points to 2 decimal places
+            // Format with commas and 2 decimal places
+            finalDisplayValue = value.toFixed(2).toLocaleString('en-US'); // Added toLocaleString
         } else {
             finalDisplayValue = value; // Other numbers (wins, losses, counts) as is (integers)
         }
@@ -295,8 +296,8 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
           <thead className="bg-gray-100">
             <tr>
               <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-2/5">Record</th>
-              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/5">Value</th> {/* Changed from Record to Value */}
-              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-2/5">Team</th> {/* Changed from Member to Team */}
+              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/5">Value</th>
+              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-2/5">Team</th>
             </tr>
           </thead>
           <tbody>
@@ -371,7 +372,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
               </tr>
             ))}
             {/* Conditional message if no data is available across all leaderboards */}
-            {mostWinsLeaderboard.length === 0 && // Check if at least one leaderboard has data
+            {mostWinsLeaderboard.length === 0 &&
              mostLossesLeaderboard.length === 0 &&
              bestWinPctLeaderboard.length === 0 &&
              bestAllPlayWinPctLeaderboard.length === 0 &&
