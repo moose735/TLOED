@@ -287,20 +287,33 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
                   <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{recordDef.label}</td>
                   <td className="py-2 px-3 text-sm text-gray-800">{formatDisplayValue(recordData.value, recordDef.key)}</td>
                   <td className="py-2 px-3 text-sm text-gray-700">
-                    <span className="flex items-center space-x-2 pr-4"> {/* Increased space-x and added pr-4 for internal padding */}
-                      {recordData.teams.map(teamName => (
-                        <img
-                          key={teamName}
-                          src={'https://placehold.co/20x20/cccccc/333333?text=M'} // Generic placeholder
-                          alt={`${teamName} avatar`}
-                          className="w-5 h-5 rounded-full object-cover"
-                          title={teamName}
-                        />
-                      ))}
-                      <span className="ml-1">{recordData.teams.join(' , ')}</span>
+                    <span className="flex items-center space-x-2 pr-4">
+                      {/* Process and display team names with counts */}
+                      {(() => {
+                        const teamCounts = {};
+                        recordData.teams.forEach(teamName => {
+                          teamCounts[teamName] = (teamCounts[teamName] || 0) + 1;
+                        });
+
+                        const uniqueTeamDisplays = Object.keys(teamCounts).map(teamName => (
+                          <React.Fragment key={teamName}>
+                            <img
+                              src={'https://placehold.co/20x20/cccccc/333333?text=M'} // Generic placeholder
+                              alt={`${teamName} avatar`}
+                              className="w-5 h-5 rounded-full object-cover"
+                              title={teamName}
+                            />
+                            <span className="ml-1">
+                              {teamName}
+                              {teamCounts[teamName] > 1 ? ` x${teamCounts[teamName]}` : ''}
+                            </span>
+                          </React.Fragment>
+                        ));
+                        return uniqueTeamDisplays;
+                      })()}
                     </span>
                   </td>
-                  {/* Conditional display for Season column with adjusted horizontal padding */}
+                  {/* Conditional display for Season column */}
                   <td className="py-2 px-3 text-sm text-gray-700">
                     {recordData.teams.length > 1 ? '---' : recordData.years.join(' , ')}
                   </td>
