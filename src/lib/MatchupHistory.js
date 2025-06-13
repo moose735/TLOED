@@ -1,7 +1,8 @@
 // src/lib/MatchupHistory.js
 import React, { useState, useEffect, useCallback } from 'react';
 import { HISTORICAL_MATCHUPS_API_URL } from '../config';
-import Head2HeadGrid from './Head2HeadGrid'; // Import the new Head2HeadGrid component
+import Head2HeadGrid from './Head2HeadGrid';
+import RecordBook from './RecordBook'; // Import the new RecordBook component
 
 // Helper function to get ordinal suffix (1st, 2nd, 3rd, 4th, etc.)
 const getOrdinalSuffix = (n) => {
@@ -16,9 +17,8 @@ const MatchupHistory = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Derived states for processed data (Head-to-Head moved to Head2HeadGrid.js)
-  const [allTimeRecords, setAllTimeRecords] = useState({});
-  const [seasonRecords, setSeasonRecords] = useState({});
+  // Derived states for processed data (All-Time Records moved to LeagueRecords.js)
+  const [seasonRecords, setSeasonRecords] = useState({}); // Keep season records here for now
   const [championshipGames, setChampionshipGames] = useState([]);
 
 
@@ -83,13 +83,13 @@ const MatchupHistory = () => {
   // --- Data Processing (for sections remaining in MatchupHistory) ---
   useEffect(() => {
     if (historicalMatchups.length === 0) {
-      setAllTimeRecords({});
+      // Removed setAllTimeRecords({});
       setSeasonRecords({});
       setChampionshipGames([]);
       return;
     }
 
-    const newAllTimeRecords = {};
+    // Removed newAllTimeRecords processing here
     const newSeasonRecords = {}; // { year: { team: { wins, losses, ties } } }
     const newChampionshipGames = []; // Collect special games
 
@@ -111,11 +111,10 @@ const MatchupHistory = () => {
       const team1Won = team1Score > team2Score;
       const team2Won = team2Score > team1Score;
 
-      // Initialize records if team not seen before
+      // Removed initialize and update All-Time Records here
+
+      // Initialize and Update Season Records
       [team1, team2].forEach(team => {
-        if (!newAllTimeRecords[team]) {
-          newAllTimeRecords[team] = { wins: 0, losses: 0, ties: 0 };
-        }
         if (!newSeasonRecords[year]) {
           newSeasonRecords[year] = {};
         }
@@ -124,19 +123,6 @@ const MatchupHistory = () => {
         }
       });
 
-      // Update All-Time Records
-      if (isTie) {
-        newAllTimeRecords[team1].ties++;
-        newAllTimeRecords[team2].ties++;
-      } else if (team1Won) {
-        newAllTimeRecords[team1].wins++;
-        newAllTimeRecords[team2].losses++;
-      } else { // team2Won
-        newAllTimeRecords[team2].wins++;
-        newAllTimeRecords[team1].losses++;
-      }
-
-      // Update Season Records
       if (isTie) {
         newSeasonRecords[year][team1].ties++;
         newSeasonRecords[year][team2].ties++;
@@ -188,7 +174,7 @@ const MatchupHistory = () => {
       }
     });
 
-    setAllTimeRecords(newAllTimeRecords);
+    // Removed setAllTimeRecords(newAllTimeRecords);
     setSeasonRecords(newSeasonRecords);
     // Sort championship games by year descending, then by winnerPlace ascending (Championship first)
     setChampionshipGames(newChampionshipGames.sort((a, b) => {
@@ -206,8 +192,7 @@ const MatchupHistory = () => {
     return `${record.wins || 0}-${record.losses || 0}-${record.ties || 0}`;
   };
 
-  // Sort teams for consistent display in all-time records
-  const sortedAllTimeTeams = Object.keys(allTimeRecords).sort();
+  // Removed sortedAllTimeTeams as it's no longer used here
 
   // Sort years for consistent display in season records
   const sortedYears = Object.keys(seasonRecords).sort((a, b) => parseInt(b) - parseInt(a)); // Descending year
@@ -259,36 +244,6 @@ const MatchupHistory = () => {
             )}
           </section>
 
-          {/* All-Time Records */}
-          <section className="mb-8">
-            <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">All-Time Team Records</h3>
-            <div className="overflow-x-auto">
-              <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
-                <thead className="bg-blue-50">
-                  <tr>
-                    <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
-                    <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record (W-L-T)</th>
-                    <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Win %</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedAllTimeTeams.map(team => {
-                    const record = allTimeRecords[team];
-                    const totalGames = record.wins + record.losses + record.ties;
-                    const winPercentage = totalGames > 0 ? ((record.wins + (record.ties / 2)) / totalGames * 100).toFixed(1) : '0.0';
-                    return (
-                      <tr key={team} className="border-b border-gray-100 last:border-b-0">
-                        <td className="py-2 px-3 text-sm text-gray-800">{team}</td>
-                        <td className="py-2 px-3 text-sm text-gray-700">{renderRecord(record)}</td>
-                        <td className="py-2 px-3 text-sm text-gray-700">{winPercentage}%</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
           {/* Season-by-Season Records */}
           <section className="mb-8">
             <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Season-by-Season Records</h3>
@@ -318,8 +273,16 @@ const MatchupHistory = () => {
           </section>
 
           {/* Head-to-Head Rivalries / Versus History section handled by Head2HeadGrid */}
-          <section>
+          <section className="mb-8"> {/* Added margin bottom for spacing */}
             <Head2HeadGrid
+              historicalMatchups={historicalMatchups}
+              getDisplayTeamName={getDisplayTeamName}
+            />
+          </section>
+
+          {/* New RecordBook section */}
+          <section>
+            <RecordBook
               historicalMatchups={historicalMatchups}
               getDisplayTeamName={getDisplayTeamName}
             />
