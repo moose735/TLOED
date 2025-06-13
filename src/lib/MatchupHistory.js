@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { HISTORICAL_MATCHUPS_API_URL } from '../config';
 import Head2HeadGrid from './Head2HeadGrid';
-import RecordBook from './RecordBook'; // Import the new RecordBook component
+import RecordBook from './RecordBook';
 
 // Helper function to get ordinal suffix (1st, 2nd, 3rd, 4th, etc.)
 const getOrdinalSuffix = (n) => {
@@ -12,41 +12,27 @@ const getOrdinalSuffix = (n) => {
   return (s[v - 20] || s[v] || s[0]);
 };
 
-const MatchupHistory = () => {
+// MatchupHistory now receives only getMappedTeamName
+const MatchupHistory = ({ getMappedTeamName }) => { // Removed leagueManagers from props
   const [historicalMatchups, setHistoricalMatchups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Derived states for processed data (All-Time Records moved to LeagueRecords.js)
-  const [seasonRecords, setSeasonRecords] = useState({}); // Keep season records here for now
+  const [seasonRecords, setSeasonRecords] = useState({});
   const [championshipGames, setChampionshipGames] = useState([]);
 
-
-  // Teams names will be displayed as they are in the fetched data.
+  // Use the passed-down getMappedTeamName from App.js for display consistency
+  // It's still named getDisplayTeamName internally for clarity within this file
   const getDisplayTeamName = useCallback((originalName) => {
-    return originalName; // Directly return original name, no mapping for now
-  }, []);
-
-  // Helper to get the descriptive name of a final seeding game (e.g., "Championship Game")
-  const getFinalSeedingGamePurpose = useCallback((value) => {
-    if (value === 1) return 'Championship Game';
-    if (value === 3) return '3rd Place Game';
-    if (value === 5) return '5th Place Game';
-    if (value === 7) return '7th Place Game';
-    if (value === 9) return '9th Place Game';
-    if (value === 11) return '11th Place Game';
-    // Generic fallback for other odd numeric values or unexpected values
-    if (typeof value === 'number' && value > 0 && value % 2 !== 0) {
-        return `${value}${getOrdinalSuffix(value)} Place Game`;
-    }
-    return 'Final Seeding Game'; // Generic fallback
-  }, []);
+    // If getMappedTeamName is provided by App.js, use it. Otherwise, fallback to original.
+    // In this context, App.js's getMappedTeamName just returns originalName.
+    return getMappedTeamName ? getMappedTeamName(originalName) : originalName;
+  }, [getMappedTeamName]);
 
 
   // --- Data Fetching ---
   useEffect(() => {
     const fetchMatchups = async () => {
-      // Adjusted placeholder check for clarity
       if (HISTORICAL_MATCHUPS_API_URL === 'YOUR_NEW_HISTORICAL_MATCHUPS_APPS_SCRIPT_URL' || !HISTORICAL_MATCHUPS_API_URL) {
         setLoading(false);
         setError("Please update HISTORICAL_MATCHUPS_API_URL in config.js with your actual Apps Script URL for historical matchups.");
@@ -83,25 +69,21 @@ const MatchupHistory = () => {
   // --- Data Processing (for sections remaining in MatchupHistory) ---
   useEffect(() => {
     if (historicalMatchups.length === 0) {
-      // Removed setAllTimeRecords({});
       setSeasonRecords({});
       setChampionshipGames([]);
       return;
     }
 
-    // Removed newAllTimeRecords processing here
-    const newSeasonRecords = {}; // { year: { team: { wins, losses, ties } } }
-    const newChampionshipGames = []; // Collect special games
+    const newSeasonRecords = {};
+    const newChampionshipGames = [];
 
     historicalMatchups.forEach(match => {
-      // Ensure team names exist and are strings before processing
       const team1 = getDisplayTeamName(String(match.team1 || '').trim());
       const team2 = getDisplayTeamName(String(match.team2 || '').trim());
       const year = match.year;
       const team1Score = parseFloat(match.team1Score);
       const team2Score = parseFloat(match.team2Score);
 
-      // Skip if essential data is missing or invalid
       if (!team1 || !team2 || isNaN(team1Score) || isNaN(team2Score)) {
         console.warn('Skipping invalid matchup data:', match);
         return;
@@ -111,9 +93,6 @@ const MatchupHistory = () => {
       const team1Won = team1Score > team2Score;
       const team2Won = team2Score > team1Score;
 
-      // Removed initialize and update All-Time Records here
-
-      // Initialize and Update Season Records
       [team1, team2].forEach(team => {
         if (!newSeasonRecords[year]) {
           newSeasonRecords[year] = {};
@@ -129,17 +108,16 @@ const MatchupHistory = () => {
       } else if (team1Won) {
         newSeasonRecords[year][team1].wins++;
         newSeasonRecords[year][team2].losses++;
-      } else { // team2Won
+      } else {
         newSeasonRecords[year][team2].wins++;
         newSeasonRecords[year][team1].losses++;
       }
 
-      // Check for final seeding games
       if (typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0) {
           let winner = 'Tie';
           let loser = 'Tie';
           let winnerScore = team1Score;
-          let loserScore = team2Score; // Default for ties
+          let loserScore = team2Score;
 
           if (team1Won) {
               winner = team1;
@@ -165,37 +143,31 @@ const MatchupHistory = () => {
               team2Score: team2Score,
               purpose: getFinalSeedingGamePurpose(match.finalSeedingGame),
               winner: winner,
-              loser: loser, // Store the loser
-              winnerScore: winnerScore, // Store winner's score
-              loserScore: loserScore, // Store loser's score
+              loser: loser,
+              winnerScore: winnerScore,
+              loserScore: loserScore,
               winnerPlace: winningPlace,
               loserPlace: losingPlace
           });
       }
     });
 
-    // Removed setAllTimeRecords(newAllTimeRecords);
     setSeasonRecords(newSeasonRecords);
-    // Sort championship games by year descending, then by winnerPlace ascending (Championship first)
     setChampionshipGames(newChampionshipGames.sort((a, b) => {
       if (b.year !== a.year) {
         return b.year - a.year;
       }
-      return a.winnerPlace - b.winnerPlace; // Championship game (1st place) before 3rd, etc.
+      return a.winnerPlace - b.winnerPlace;
     }));
 
-  }, [historicalMatchups, getDisplayTeamName, getFinalSeedingGamePurpose]); // Recalculate if matchups or mapping changes
+  }, [historicalMatchups, getDisplayTeamName, getFinalSeedingGamePurpose]);
 
-  // Helper to render record
   const renderRecord = (record) => {
     if (!record) return '0-0-0';
     return `${record.wins || 0}-${record.losses || 0}-${record.ties || 0}`;
   };
 
-  // Removed sortedAllTimeTeams as it's no longer used here
-
-  // Sort years for consistent display in season records
-  const sortedYears = Object.keys(seasonRecords).sort((a, b) => parseInt(b) - parseInt(a)); // Descending year
+  const sortedYears = Object.keys(seasonRecords).sort((a, b) => parseInt(b) - parseInt(a));
 
 
   return (
@@ -273,18 +245,19 @@ const MatchupHistory = () => {
           </section>
 
           {/* Head-to-Head Rivalries / Versus History section handled by Head2HeadGrid */}
-          <section className="mb-8"> {/* Added margin bottom for spacing */}
+          <section className="mb-8">
             <Head2HeadGrid
               historicalMatchups={historicalMatchups}
               getDisplayTeamName={getDisplayTeamName}
             />
           </section>
 
-          {/* New RecordBook section */}
+          {/* RecordBook section */}
           <section>
             <RecordBook
               historicalMatchups={historicalMatchups}
               getDisplayTeamName={getDisplayTeamName}
+              // Removed leagueManagers prop
             />
           </section>
         </>
