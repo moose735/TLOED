@@ -101,7 +101,7 @@ const PlayoffRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       mostPlayoffAppearances: { value: 0, entries: [] }, // team, appearances
       mostPlayoffWins: { value: 0, entries: [] }, // team, wins
       totalPlayoffPoints: { value: 0, entries: [] }, // team, points
-      lowestPlayoffPointsAgainst: { value: Infinity, entries: [] }, // team, pointsAgainst
+      mostPlayoffPointsAgainst: { value: -Infinity, entries: [] }, // Changed to Most, initialized to -Infinity
       mostChampionships: { value: 0, entries: [] }, // team, championships
       most2ndPlaceFinishes: { value: 0, entries: [] }, // team, 2nd places
       most3rdPlaceFinishes: { value: 0, entries: [] }, // team, 3rd places
@@ -133,7 +133,7 @@ const PlayoffRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       updateRecord(newAggregatedRecords.mostPlayoffAppearances, stats.appearances.size, { team, appearances: stats.appearances.size });
       updateRecord(newAggregatedRecords.mostPlayoffWins, stats.wins, { team, wins: stats.wins });
       updateRecord(newAggregatedRecords.totalPlayoffPoints, stats.pointsFor, { team, points: stats.pointsFor });
-      updateRecord(newAggregatedRecords.lowestPlayoffPointsAgainst, stats.pointsAgainst, { team, pointsAgainst: stats.pointsAgainst }, true);
+      updateRecord(newAggregatedRecords.mostPlayoffPointsAgainst, stats.pointsAgainst, { team, pointsAgainst: stats.pointsAgainst }); // Removed 'true' for isMin
       updateRecord(newAggregatedRecords.mostChampionships, stats.championships, { team, championships: stats.championships });
       updateRecord(newAggregatedRecords.most2ndPlaceFinishes, stats.medals[2], { team, place: stats.medals[2] });
       updateRecord(newAggregatedRecords.most3rdPlaceFinishes, stats.medals[3], { team, place: stats.medals[3] });
@@ -144,7 +144,7 @@ const PlayoffRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         const record = newAggregatedRecords[key];
         // If a record has -Infinity or Infinity value and no entries, it means no valid record was found
         if ((record.value === -Infinity || record.value === Infinity) && record.entries.length === 0) {
-            record.value = (key === 'lowestPlayoffPointsAgainst' ? 0 : 0); // Default to 0 for display
+            record.value = 0; // Default to 0 for display if no data
             record.entries = [];
         } else if (record.value === Infinity) { // If it's still Infinity, means no data, set to N/A for display
             record.value = 'N/A';
@@ -168,7 +168,7 @@ const PlayoffRecords = ({ historicalMatchups, getDisplayTeamName }) => {
   // Helper to format values for display
   const formatDisplayValue = (value, recordKey) => {
     if (value === 'N/A') return value;
-    if (recordKey.includes('points')) {
+    if (recordKey.includes('points') || recordKey === 'totalPlayoffPoints' || recordKey === 'mostPlayoffPointsAgainst') { // Ensure pointsAgainst is covered
       return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
     return value;
@@ -178,7 +178,7 @@ const PlayoffRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     { key: 'mostPlayoffAppearances', label: 'Most Playoff Appearances' },
     { key: 'mostPlayoffWins', label: 'Most Playoff Wins' },
     { key: 'totalPlayoffPoints', label: 'Total Playoff Points For' },
-    { key: 'lowestPlayoffPointsAgainst', label: 'Lowest Playoff Points Against' },
+    { key: 'mostPlayoffPointsAgainst', label: 'Most Playoff Points Against Total' }, // Changed label
     { key: 'mostChampionships', label: 'Most Championships' },
     { key: 'most2ndPlaceFinishes', label: 'Most 2nd Place Finishes' },
     { key: 'most3rdPlaceFinishes', label: 'Most 3rd Place Finishes' },
