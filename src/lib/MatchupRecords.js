@@ -1,5 +1,5 @@
 // src/lib/MatchupRecords.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } => 'react';
 
 const MatchupRecords = ({ historicalMatchups, getDisplayTeamName }) => {
   const [aggregatedMatchupRecords, setAggregatedMatchupRecords] = useState({});
@@ -165,9 +165,12 @@ const MatchupRecords = ({ historicalMatchups, getDisplayTeamName }) => {
               // Display all tied entries for the record
               return recordData.entries.map((entry, index) => {
                 let matchupDisplay;
-                // Determine which team's score belongs to which team
+                // These are now declared outside the specific `if` blocks
                 const team1ScoreFormatted = entry.team1Score.toFixed(2);
                 const team2ScoreFormatted = entry.team2Score.toFixed(2);
+                const winnerScore = (entry.winner === entry.team1 ? entry.team1Score : entry.team2Score).toFixed(2);
+                const loserScore = (entry.loser === entry.team1 ? entry.team1Score : entry.team2Score).toFixed(2);
+
 
                 if (recordDef.key === 'mostPointsScored' || recordDef.key === 'fewestPointsScored') {
                   const recordHolder = entry.team;
@@ -193,11 +196,11 @@ const MatchupRecords = ({ historicalMatchups, getDisplayTeamName }) => {
                   matchupDisplay = (
                     <div className="flex items-center justify-center w-full">
                       <span className="text-left flex-1 pr-1 whitespace-nowrap">
-                        {entry.winner} ({winnerScore}) {/* This should be winnerScore for winner */}
+                        {entry.winner} ({winnerScore})
                       </span>
                       <span className="px-2 font-semibold text-gray-600">vs</span>
                       <span className="text-right flex-1 pl-1 whitespace-nowrap">
-                        {entry.loser} ({loserScore}) {/* This should be loserScore for loser */}
+                        {entry.loser} ({loserScore})
                       </span>
                     </div>
                   );
