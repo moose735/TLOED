@@ -1,7 +1,7 @@
 // src/lib/RecordBook.js
-import React, { useState } from 'react'; // Removed useEffect
+import React, { useState, useEffect, useCallback } from 'react';
 import LeagueRecords from './LeagueRecords';
-// Removed import of HISTORICAL_MATCHUPS_API_URL
+import { HISTORICAL_MATCHUPS_API_URL } from '../config';
 
 // Define internal tabs for the RecordBook
 const RECORD_TABS = {
@@ -12,11 +12,12 @@ const RECORD_TABS = {
   PLAYOFF_RECORDS: 'playoffRecords',
 };
 
-// RecordBook now receives historicalMatchups, loading, and error as props
 const RecordBook = ({ historicalMatchups, loading, error, getDisplayTeamName }) => {
+  // Ensure activeRecordTab is declared and initialized clearly at the top
   const [activeRecordTab, setActiveRecordTab] = useState(RECORD_TABS.LEAGUE_RECORDS);
-  // Removed internal historicalMatchups, loading, error states
 
+  // Debugging log for activeRecordTab
+  console.log("RecordBook: activeRecordTab is", activeRecordTab);
 
   return (
     <div className="w-full bg-white p-8 rounded-lg shadow-md mt-8">
@@ -68,7 +69,7 @@ const RecordBook = ({ historicalMatchups, loading, error, getDisplayTeamName }) 
         </button>
         <button
           className={`px-4 py-2 rounded-md font-semibold text-md transition-colors ${
-            activeTab === RECORD_TABS.PLAYOFF_RECORDS
+            activeRecordTab === RECORD_TABS.PLAYOFF_RECORDS
               ? 'bg-blue-600 text-white shadow-md'
               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
           }`}
