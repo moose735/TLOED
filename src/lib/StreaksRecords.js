@@ -270,8 +270,8 @@ const StreaksRecords = ({ historicalMatchups, getDisplayTeamName }) => {
                 <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/4">Record</th>
                 <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/6">Value</th>
                 <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/4">Team</th>
-                <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/6">Start</th>
-                <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/6">End</th>
+                <th className="py-2 px-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/6">Start</th>
+                <th className="py-2 px-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/6">End</th>
               </tr>
             </thead>
             <tbody>
@@ -300,17 +300,17 @@ const StreaksRecords = ({ historicalMatchups, getDisplayTeamName }) => {
                       {entryIndex === 0 ? entry.streak : ''}
                     </td>
                     <td className="py-2 px-3 text-sm text-gray-700">{entry.team}</td>
-                    <td className="py-2 px-3 text-sm text-gray-700">
-                        <div className="flex items-center justify-center space-x-1">
+                    <td className="py-2 px-3 text-sm text-gray-700 text-center">
+                        <div className="flex items-center justify-center"> {/* Removed space-x-1 */}
                             <span>{entry.startYear}</span>
-                            <span className="self-center">.</span>
+                            <span>-</span> {/* Changed . to - */}
                             <span>Week {entry.startWeek}</span>
                         </div>
                     </td>
-                    <td className="py-2 px-3 text-sm text-gray-700">
-                        <div className="flex items-center justify-center space-x-1">
+                    <td className="py-2 px-3 text-sm text-gray-700 text-center">
+                        <div className="flex items-center justify-center"> {/* Removed space-x-1 */}
                             <span>{entry.endYear}</span>
-                            <span className="self-center">.</span>
+                            <span>-</span> {/* Changed . to - */}
                             <span>Week {entry.endWeek}</span>
                         </div>
                     </td>
