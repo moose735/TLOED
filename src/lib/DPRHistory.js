@@ -1,7 +1,7 @@
 // src/lib/DPRHistory.js
 import React, { useState, useEffect } from 'react';
 
-const DPRHistory = ({ historicalMatchups, getDisplayTeamName }) => { // Renamed component
+const DPRHistory = ({ historicalMatchups, getDisplayTeamName }) => {
   const [aggregatedDPRRecords, setAggregatedDPRRecords] = useState({});
 
   useEffect(() => {
@@ -27,7 +27,6 @@ const DPRHistory = ({ historicalMatchups, getDisplayTeamName }) => { // Renamed 
 
       const isTie = team1Score === team2Score;
       const team1Won = team1Score > team2Score;
-      const team2Won = team2Score > team1Score;
 
       // Initialize structures for year and teams
       if (!seasonalTeamStats[year]) seasonalTeamStats[year] = {};
@@ -50,7 +49,7 @@ const DPRHistory = ({ historicalMatchups, getDisplayTeamName }) => { // Renamed 
       seasonalTeamStats[year][team2].totalGames++;
 
       seasonalTeamStats[year][team1].totalPointsFor += team1Score;
-      seasonalTeamStats[year][team2].totalPointsFor += team2Score;
+      seasonalTeamStats[year][team2].totalPointsFor += team2Score; // Corrected: team2's score for team2
 
       if (isTie) {
         seasonalTeamStats[year][team1].ties++;
@@ -141,4 +140,94 @@ const DPRHistory = ({ historicalMatchups, getDisplayTeamName }) => { // Renamed 
           updateRecord(newAggregatedDPRRecords.highestAdjustedDPRSeason, stats.adjustedDPR, { team, year: parseInt(year), dpr: stats.adjustedDPR });
           updateRecord(newAggregatedDPRRecords.lowestAdjustedDPRSeason, stats.adjustedDPR, { team, year: parseInt(year), dpr: stats.adjustedDPR }, true);
         }
-      
+      });
+    });
+
+    // Clean up: filter out initial -Infinity/Infinity values, sort entries
+    Object.keys(newAggregatedDPRRecords).forEach(key => {
+        const record = newAggregatedDPRRecords[key];
+        if (record.value === -Infinity || record.value === Infinity) {
+            record.value = 0; // Default to 0 if no valid data for the record
+            record.entries = [];
+        }
+        if (record.entries.length > 1) {
+            record.entries.sort((a, b) => {
+                // Sort by year, then by team name for consistent display of ties
+                if (a.year !== b.year) return a.year - b.year;
+                return (a.team || '').localeCompare(b.team || '');
+            });
+        }
+    });
+
+    setAggregatedDPRRecords(newAggregatedDPRRecords);
+  }, [historicalMatchups, getDisplayTeamName]);
+
+  const formatDisplayValue = (value) => {
+    if (typeof value === 'number') {
+      return value.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+    }
+    return value;
+  };
+
+  const recordsToDisplay = [
+    { key: 'highestAdjustedDPRSeason', label: 'Highest Adjusted DPR (Season)' },
+    { key: 'lowestAdjustedDPRSeason', label: 'Lowest Adjusted DPR (Season)' },
+  ];
+
+  return (
+    <div className="w-full">
+      <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">DPR HISTORY - ( SEASON )</h3>
+      <p className="text-sm text-gray-600 mb-6">Highest and Lowest Adjusted DPR values per team per season.</p>
+
+      {Object.keys(aggregatedDPRRecords).length === 0 || recordsToDisplay.every(r => aggregatedDPRRecords[r.key]?.entries.length === 0) ? (
+        <p className="text-center text-gray-600">No DPR data available to display records. Ensure your historical matchups data is complete.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
+            <thead className="bg-gray-100">
+              <tr>
+                <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/4">Record</th>
+                <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/6">Value</th>
+                <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/4">Team</th>
+                <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/4">Season</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recordsToDisplay.map((recordDef, recordGroupIndex) => {
+                const recordData = aggregatedDPRRecords[recordDef.key];
+                if (!recordData || recordData.entries.length === 0) {
+                  return (
+                    <tr key={recordDef.key} className={recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                      <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{recordDef.label}</td>
+                      <td colSpan="3" className="py-2 px-3 text-sm text-gray-500 text-center">N/A</td>
+                    </tr>
+                  );
+                }
+                return recordData.entries.map((entry, entryIndex) => (
+                  <tr
+                    key={`${recordDef.key}-${entry.team}-${entry.year}-${entryIndex}`}
+                    className={`
+                      ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
+                      ${entryIndex === recordData.entries.length - 1 ? 'border-b border-gray-100' : ''}
+                    `}
+                  >
+                    <td className="py-2 px-3 text-sm text-gray-800 font-semibold">
+                      {entryIndex === 0 ? recordDef.label : ''}
+                    </td>
+                    <td className="py-2 px-3 text-sm text-gray-800">
+                      {entryIndex === 0 ? formatDisplayValue(recordData.value) : ''}
+                    </td>
+                    <td className="py-2 px-3 text-sm text-gray-700">{entry.team}</td>
+                    <td className="py-2 px-3 text-sm text-gray-700">{entry.year}</td>
+                  </tr>
+                ));
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default DPRHistory;
