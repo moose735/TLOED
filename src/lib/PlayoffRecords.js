@@ -19,8 +19,11 @@ const PlayoffRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       const team1Score = parseFloat(match.team1Score);
       const team2Score = parseFloat(match.team2Score);
 
-      // Skip invalid matchups or non-playoff games
-      if (!team1 || !team2 || isNaN(year) || isNaN(team1Score) || isNaN(team2Score) || !match.playoffs) {
+      // Condition to skip invalid matchups or non-playoff/non-seeding games
+      // A match is considered for playoff stats if:
+      // 1. It has valid team names, year, and scores.
+      // 2. EITHER 'playoffs' flag is true OR 'finalSeedingGame' has a valid numeric value.
+      if (!team1 || !team2 || isNaN(year) || isNaN(team1Score) || isNaN(team2Score) || (!match.playoffs && (typeof match.finalSeedingGame !== 'number' || match.finalSeedingGame <= 0))) {
         return;
       }
 
@@ -43,7 +46,7 @@ const PlayoffRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         }
       });
 
-      // Track Playoff Appearances
+      // Track Playoff Appearances (if it's a playoff or a final seeding game)
       teamPlayoffStats[team1].appearances.add(year);
       teamPlayoffStats[team2].appearances.add(year);
 
@@ -65,7 +68,7 @@ const PlayoffRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       teamPlayoffStats[team2].pointsAgainst += team1Score;
 
       // Handle Medals and Championships based on finalSeedingGame
-      if (match.finalSeedingGame) {
+      if (typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0) {
         let winner = '';
         let loser = '';
         if (team1Won) {
@@ -76,28 +79,22 @@ const PlayoffRecords = ({ historicalMatchups, getDisplayTeamName }) => {
           loser = team1;
         }
 
-        const finalPlacement = parseInt(match.finalSeedingGame);
-        console.log(`DEBUG PlayoffMatchup: Year ${year}, Week ${match.week}, Team1: ${team1} (${team1Score}), Team2: ${team2} (${team2Score}), Playoff: ${match.playoffs}, FinalSeedingGame: ${match.finalSeedingGame} (Parsed: ${finalPlacement}), Winner: ${winner}`);
+        const finalPlacement = match.finalSeedingGame;
 
-        if (!isNaN(finalPlacement)) {
-          if (finalPlacement === 1) {
-            if (winner) { // If there's a winner (not a tie for 1st)
-              teamPlayoffStats[winner].medals[1]++;
-              teamPlayoffStats[winner].championships++;
-              if (loser) { // The loser of the 1st place game gets 2nd place
-                teamPlayoffStats[loser].medals[2]++;
-              }
-            }
-          } else if (finalPlacement === 3) {
-            if (winner) { // Winner of the 3rd place game gets 3rd place
-              teamPlayoffStats[winner].medals[3]++;
-              console.log(`DEBUG: *** Successfully recorded 3rd place for Team ${winner} in ${year}.`);
-            } else {
-              console.log(`DEBUG: No winner detected for 3rd place game in ${year} between ${team1} and ${team2}. Is it a tie?`);
+        if (finalPlacement === 1) {
+          if (winner) { // If there's a winner (not a tie for 1st)
+            teamPlayoffStats[winner].medals[1]++;
+            teamPlayoffStats[winner].championships++;
+            if (loser) { // The loser of the 1st place game gets 2nd place
+              teamPlayoffStats[loser].medals[2]++;
             }
           }
-          // Can add logic for other final placements (e.g., 5th place) if desired
+        } else if (finalPlacement === 3) {
+          if (winner) { // Winner of the 3rd place game gets 3rd place
+            teamPlayoffStats[winner].medals[3]++;
+          }
         }
+        // Can add logic for other final placements (e.g., 5th place) if desired
       }
     });
 
@@ -106,7 +103,7 @@ const PlayoffRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       mostPlayoffAppearances: { value: 0, entries: [] }, // team, appearances
       mostPlayoffWins: { value: 0, entries: [] }, // team, wins
       totalPlayoffPoints: { value: 0, entries: [] }, // team, points
-      mostPlayoffPointsAgainst: { value: -Infinity, entries: [] }, // Changed to Most, initialized to -Infinity
+      mostPlayoffPointsAgainst: { value: -Infinity, entries: [] },
       mostChampionships: { value: 0, entries: [] }, // team, championships
       most2ndPlaceFinishes: { value: 0, entries: [] }, // team, 2nd places
       most3rdPlaceFinishes: { value: 0, entries: [] }, // team, 3rd places
@@ -138,11 +135,9 @@ const PlayoffRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       updateRecord(newAggregatedRecords.mostPlayoffAppearances, stats.appearances.size, { team, appearances: stats.appearances.size });
       updateRecord(newAggregatedRecords.mostPlayoffWins, stats.wins, { team, wins: stats.wins });
       updateRecord(newAggregatedRecords.totalPlayoffPoints, stats.pointsFor, { team, points: stats.pointsFor });
-      updateRecord(newAggregatedRecords.mostPlayoffPointsAgainst, stats.pointsAgainst, { team, pointsAgainst: stats.pointsAgainst }); // Removed 'true' for isMin
+      updateRecord(newAggregatedRecords.mostPlayoffPointsAgainst, stats.pointsAgainst, { team, pointsAgainst: stats.pointsAgainst });
       updateRecord(newAggregatedRecords.mostChampionships, stats.championships, { team, championships: stats.championships });
       updateRecord(newAggregatedRecords.most2ndPlaceFinishes, stats.medals[2], { team, place: stats.medals[2] });
-      // Debug log before updating most3rdPlaceFinishes
-      console.log(`DEBUG: Final check for Team ${team} - 3rd place finishes: ${stats.medals[3]}`);
       updateRecord(newAggregatedRecords.most3rdPlaceFinishes, stats.medals[3], { team, place: stats.medals[3] });
     });
 
@@ -175,7 +170,7 @@ const PlayoffRecords = ({ historicalMatchups, getDisplayTeamName }) => {
   // Helper to format values for display
   const formatDisplayValue = (value, recordKey) => {
     if (value === 'N/A') return value;
-    if (recordKey.includes('points') || recordKey === 'totalPlayoffPoints' || recordKey === 'mostPlayoffPointsAgainst') { // Ensure pointsAgainst is covered
+    if (recordKey.includes('points') || recordKey === 'totalPlayoffPoints' || recordKey === 'mostPlayoffPointsAgainst') {
       return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
     return value;
@@ -185,7 +180,7 @@ const PlayoffRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     { key: 'mostPlayoffAppearances', label: 'Most Playoff Appearances' },
     { key: 'mostPlayoffWins', label: 'Most Playoff Wins' },
     { key: 'totalPlayoffPoints', label: 'Total Playoff Points For' },
-    { key: 'mostPlayoffPointsAgainst', label: 'Most Playoff Points Against Total' }, // Changed label
+    { key: 'mostPlayoffPointsAgainst', label: 'Most Playoff Points Against Total' },
     { key: 'mostChampionships', label: 'Most Championships' },
     { key: 'most2ndPlaceFinishes', label: 'Most 2nd Place Finishes' },
     { key: 'most3rdPlaceFinishes', label: 'Most 3rd Place Finishes' },
