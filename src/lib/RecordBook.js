@@ -5,7 +5,8 @@ import SeasonRecords from './SeasonRecords';
 import MatchupRecords from './MatchupRecords';
 import VersusRecords from './VersusRecords';
 import StreaksRecords from './StreaksRecords';
-import PlayoffRecords from './PlayoffRecords'; // Import the new component
+import PlayoffRecords from './PlayoffRecords';
+import DPRHistory from './DPRHistory'; // Updated import name from DPRRecords
 
 // Define internal tabs for the RecordBook
 const RECORD_TABS = {
@@ -14,7 +15,8 @@ const RECORD_TABS = {
   MATCHUP_RECORDS: 'matchupRecords',
   VERSUS_RECORDS: 'versusRecords',
   STREAKS_RECORDS: 'streaksRecords',
-  PLAYOFF_RECORDS: 'playoffRecords', // New tab for Playoff Records
+  PLAYOFF_RECORDS: 'playoffRecords',
+  DPR_HISTORY: 'dprHistory', // Updated tab key name
 };
 
 const RecordBook = ({ historicalMatchups, loading, error, getDisplayTeamName }) => {
@@ -82,13 +84,23 @@ const RecordBook = ({ historicalMatchups, loading, error, getDisplayTeamName }) 
         </button>
         <button
           className={`px-4 py-2 rounded-md font-semibold text-md transition-colors ${
-            activeRecordTab === RECORD_TABS.PLAYOFF_RECORDS // New button
+            activeRecordTab === RECORD_TABS.PLAYOFF_RECORDS
               ? 'bg-blue-600 text-white shadow-md'
               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
           }`}
-          onClick={() => setActiveRecordTab(RECORD_TABS.PLAYOFF_RECORDS)} // New handler
+          onClick={() => setActiveRecordTab(RECORD_TABS.PLAYOFF_RECORDS)}
         >
           Playoff Records
+        </button>
+        <button
+          className={`px-4 py-2 rounded-md font-semibold text-md transition-colors ${
+            activeRecordTab === RECORD_TABS.DPR_HISTORY // Updated button key
+              ? 'bg-blue-600 text-white shadow-md'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          }`}
+          onClick={() => setActiveRecordTab(RECORD_TABS.DPR_HISTORY)} // Updated handler
+        >
+          DPR History {/* Updated button label */}
         </button>
       </nav>
 
@@ -130,8 +142,14 @@ const RecordBook = ({ historicalMatchups, loading, error, getDisplayTeamName }) 
               getDisplayTeamName={getDisplayTeamName}
             />
           )}
-          {activeRecordTab === RECORD_TABS.PLAYOFF_RECORDS && ( // Render new component
+          {activeRecordTab === RECORD_TABS.PLAYOFF_RECORDS && (
             <PlayoffRecords
+              historicalMatchups={historicalMatchups}
+              getDisplayTeamName={getDisplayTeamName}
+            />
+          )}
+          {activeRecordTab === RECORD_TABS.DPR_HISTORY && ( // Render updated component
+            <DPRHistory
               historicalMatchups={historicalMatchups}
               getDisplayTeamName={getDisplayTeamName}
             />
