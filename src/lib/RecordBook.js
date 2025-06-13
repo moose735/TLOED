@@ -1,17 +1,17 @@
 // src/lib/RecordBook.js
 import React, { useState, useEffect, useCallback } from 'react';
-import LeagueRecords from './LeagueRecords'; // Import the first sub-component
+import LeagueRecords from './LeagueRecords';
 
 // Define internal tabs for the RecordBook
 const RECORD_TABS = {
   LEAGUE_RECORDS: 'leagueRecords',
   SEASON_RECORDS: 'seasonRecords',
-  MATCHUP_RECORDS: 'matchupRecords', // Placeholder for future
-  VERSUS_RECORDS: 'versusRecords',   // Placeholder for future
-  PLAYOFF_RECORDS: 'playoffRecords', // Placeholder for future
+  MATCHUP_RECORDS: 'matchupRecords',
+  VERSUS_RECORDS: 'versusRecords',
+  PLAYOFF_RECORDS: 'playoffRecords',
 };
 
-const RecordBook = ({ historicalMatchups, getDisplayTeamName }) => {
+const RecordBook = ({ historicalMatchups, getDisplayTeamName }) => { // Removed leagueManagers from props
   const [activeRecordTab, setActiveRecordTab] = useState(RECORD_TABS.LEAGUE_RECORDS);
 
   return (
@@ -79,6 +79,7 @@ const RecordBook = ({ historicalMatchups, getDisplayTeamName }) => {
         <LeagueRecords
           historicalMatchups={historicalMatchups}
           getDisplayTeamName={getDisplayTeamName}
+          // Removed leagueManagers prop
         />
       )}
       {activeRecordTab === RECORD_TABS.SEASON_RECORDS && (
