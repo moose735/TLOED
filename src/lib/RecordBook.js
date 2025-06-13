@@ -4,7 +4,8 @@ import LeagueRecords from './LeagueRecords';
 import SeasonRecords from './SeasonRecords';
 import MatchupRecords from './MatchupRecords';
 import VersusRecords from './VersusRecords';
-import StreaksRecords from './StreaksRecords'; // Import the new component
+import StreaksRecords from './StreaksRecords';
+import PlayoffRecords from './PlayoffRecords'; // Import the new component
 
 // Define internal tabs for the RecordBook
 const RECORD_TABS = {
@@ -12,8 +13,8 @@ const RECORD_TABS = {
   SEASON_RECORDS: 'seasonRecords',
   MATCHUP_RECORDS: 'matchupRecords',
   VERSUS_RECORDS: 'versusRecords',
-  STREAKS_RECORDS: 'streaksRecords', // New tab for Streaks Records
-  PLAYOFF_RECORDS: 'playoffRecords',
+  STREAKS_RECORDS: 'streaksRecords',
+  PLAYOFF_RECORDS: 'playoffRecords', // New tab for Playoff Records
 };
 
 const RecordBook = ({ historicalMatchups, loading, error, getDisplayTeamName }) => {
@@ -71,21 +72,21 @@ const RecordBook = ({ historicalMatchups, loading, error, getDisplayTeamName }) 
         </button>
         <button
           className={`px-4 py-2 rounded-md font-semibold text-md transition-colors ${
-            activeRecordTab === RECORD_TABS.STREAKS_RECORDS // New button
+            activeRecordTab === RECORD_TABS.STREAKS_RECORDS
               ? 'bg-blue-600 text-white shadow-md'
               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
           }`}
-          onClick={() => setActiveRecordTab(RECORD_TABS.STREAKS_RECORDS)} // New handler
+          onClick={() => setActiveRecordTab(RECORD_TABS.STREAKS_RECORDS)}
         >
           Streaks Records
         </button>
         <button
           className={`px-4 py-2 rounded-md font-semibold text-md transition-colors ${
-            activeRecordTab === RECORD_TABS.PLAYOFF_RECORDS
+            activeRecordTab === RECORD_TABS.PLAYOFF_RECORDS // New button
               ? 'bg-blue-600 text-white shadow-md'
               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
           }`}
-          onClick={() => setActiveRecordTab(RECORD_TABS.PLAYOFF_RECORDS)}
+          onClick={() => setActiveRecordTab(RECORD_TABS.PLAYOFF_RECORDS)} // New handler
         >
           Playoff Records
         </button>
@@ -123,14 +124,17 @@ const RecordBook = ({ historicalMatchups, loading, error, getDisplayTeamName }) 
               getDisplayTeamName={getDisplayTeamName}
             />
           )}
-          {activeRecordTab === RECORD_TABS.STREAKS_RECORDS && ( // Render new component
+          {activeRecordTab === RECORD_TABS.STREAKS_RECORDS && (
             <StreaksRecords
               historicalMatchups={historicalMatchups}
               getDisplayTeamName={getDisplayTeamName}
             />
           )}
-          {activeRecordTab === RECORD_TABS.PLAYOFF_RECORDS && (
-            <div className="p-4 text-center text-gray-600">Playoff Records content will go here.</div>
+          {activeRecordTab === RECORD_TABS.PLAYOFF_RECORDS && ( // Render new component
+            <PlayoffRecords
+              historicalMatchups={historicalMatchups}
+              getDisplayTeamName={getDisplayTeamName}
+            />
           )}
         </>
       )}
