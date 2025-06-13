@@ -216,27 +216,23 @@ const VersusRecords = ({ historicalMatchups, getDisplayTeamName }) => {
             </tr>
           </thead>
           <tbody>
-            {recordsToDisplay.map((recordDef) => {
+            {recordsToDisplay.map((recordDef, recordGroupIndex) => { // Added recordGroupIndex here
               const recordData = aggregatedVersusRecords[recordDef.key];
               if (!recordData || recordData.entries.length === 0) {
                 return (
-                  <tr key={recordDef.key}>
+                  <tr key={recordDef.key} className={recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                     <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{recordDef.label}</td>
                     <td colSpan="3" className="py-2 px-3 text-sm text-gray-500 text-center">N/A</td>
                   </tr>
                 );
               }
-              // Map through entries, but conditionally render record label and value
+              // Map through entries. All entries within the same record group share the same background color.
               return recordData.entries.map((entry, entryIndex) => (
                 <tr
                   key={`${recordDef.key}-${entry.team}-${entry.opponent}-${entryIndex}`}
-                  // Apply border-b only if it's the last entry for this record category,
-                  // or if it's the only entry for this record.
-                  // This ensures no border between tied entries.
                   className={`
-                    ${entryIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
-                    ${entryIndex < recordData.entries.length - 1 ? '' : 'border-b border-gray-100'}
-                    last:border-b-0
+                    ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
+                    ${entryIndex === recordData.entries.length - 1 ? 'border-b border-gray-100' : ''}
                   `}
                 >
                   <td className="py-2 px-3 text-sm text-gray-800 font-semibold">
