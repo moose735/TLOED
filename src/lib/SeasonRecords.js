@@ -173,7 +173,7 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     let currentFewestPointsSeason = { value: Infinity, entries: [] }; // New
 
 
-    const updateRecord = (recordObj, newValue, entryDetails, isMin = false, isPercentage = false) => {
+    const updateRecord = (recordObj, newValue, entryDetails, isMin = false) => {
       if (isMin) {
         if (newValue < recordObj.value) {
           recordObj.value = newValue;
@@ -265,15 +265,15 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         // Update league-wide season records
         updateRecord(currentMostWinsSeason, stats.wins, { team, year: parseInt(year), value: stats.wins });
         updateRecord(currentMostLossesSeason, stats.losses, { team, year: parseInt(year), value: stats.losses });
-        updateRecord(currentBestAllPlayWinPctSeason, stats.allPlayWinPercentage, { team, year: parseInt(year), value: stats.allPlayWinPercentage }, false, true); // isPercentage = true
+        updateRecord(currentBestAllPlayWinPctSeason, stats.allPlayWinPercentage, { team, year: parseInt(year), value: stats.allPlayWinPercentage });
         updateRecord(currentMostWeeklyHighScoresSeason, stats.weeklyHighestScoreCount, { team, year: parseInt(year), value: stats.weeklyHighestScoreCount });
-        updateRecord(currentMostWeeklyTop3ScoresSeason, stats.weeklyTop3Count, { team, year: parseInt(year), value: stats.weeklyTop3Count }); // New
-        updateRecord(currentMostBlowoutWinsSeason, stats.blowoutWins, { team, year: parseInt(year), value: stats.blowoutWins }); // New
-        updateRecord(currentMostBlowoutLossesSeason, stats.blowoutLosses, { team, year: parseInt(year), value: stats.blowoutLosses }); // New
-        updateRecord(currentMostSlimWinsSeason, stats.slimWins, { team, year: parseInt(year), value: stats.slimWins }); // New
-        updateRecord(currentMostSlimLossesSeason, stats.slimLosses, { team, year: parseInt(year), value: stats.slimLosses }); // New
-        updateRecord(currentMostPointsSeason, stats.pointsFor, { team, year: parseInt(year), value: stats.pointsFor }); // New
-        updateRecord(currentFewestPointsSeason, stats.pointsFor, { team, year: parseInt(year), value: stats.pointsFor }, true); // New
+        updateRecord(currentMostWeeklyTop3ScoresSeason, stats.weeklyTop3Count, { team, year: parseInt(year), value: stats.weeklyTop3Count });
+        updateRecord(currentMostBlowoutWinsSeason, stats.blowoutWins, { team, year: parseInt(year), value: stats.blowoutWins });
+        updateRecord(currentMostBlowoutLossesSeason, stats.blowoutLosses, { team, year: parseInt(year), value: stats.blowoutLosses });
+        updateRecord(currentMostSlimWinsSeason, stats.slimWins, { team, year: parseInt(year), value: stats.slimWins });
+        updateRecord(currentMostSlimLossesSeason, stats.slimLosses, { team, year: parseInt(year), value: stats.slimLosses });
+        updateRecord(currentMostPointsSeason, stats.pointsFor, { team, year: parseInt(year), value: stats.pointsFor });
+        updateRecord(currentFewestPointsSeason, stats.pointsFor, { team, year: parseInt(year), value: stats.pointsFor }, true);
       });
 
       const avgRawDPRForSeason = teamsWithValidDPR > 0 ? totalRawDPRForSeason / teamsWithValidDPR : 0;
@@ -311,13 +311,13 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     sortRecordEntries(currentMostLossesSeason);
     sortRecordEntries(currentBestAllPlayWinPctSeason);
     sortRecordEntries(currentMostWeeklyHighScoresSeason);
-    sortRecordEntries(currentMostWeeklyTop3ScoresSeason); // New
-    sortRecordEntries(currentMostBlowoutWinsSeason); // New
-    sortRecordEntries(currentMostBlowoutLossesSeason); // New
-    sortRecordEntries(currentMostSlimWinsSeason); // New
-    sortRecordEntries(currentMostSlimLossesSeason); // New
-    sortRecordEntries(currentMostPointsSeason); // New
-    sortRecordEntries(currentFewestPointsSeason); // New
+    sortRecordEntries(currentMostWeeklyTop3ScoresSeason);
+    sortRecordEntries(currentMostBlowoutWinsSeason);
+    sortRecordEntries(currentMostBlowoutLossesSeason);
+    sortRecordEntries(currentMostSlimWinsSeason);
+    sortRecordEntries(currentMostSlimLossesSeason);
+    sortRecordEntries(currentMostPointsSeason);
+    sortRecordEntries(currentFewestPointsSeason);
 
 
     setSeasonRecords(newSeasonRecords);
@@ -327,13 +327,13 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     setMostLossesSeasonRecord(currentMostLossesSeason);
     setBestAllPlayWinPctSeasonRecord(currentBestAllPlayWinPctSeason);
     setMostWeeklyHighScoresSeasonRecord(currentMostWeeklyHighScoresSeason);
-    setMostWeeklyTop3ScoresSeasonRecord(currentMostWeeklyTop3ScoresSeason); // New
-    setMostBlowoutWinsSeasonRecord(currentMostBlowoutWinsSeason); // New
-    setMostBlowoutLossesSeasonRecord(currentMostBlowoutLossesSeason); // New
-    setMostSlimWinsSeasonRecord(currentMostSlimWinsSeason); // New
-    setMostSlimLossesSeasonRecord(currentMostSlimLossesSeason); // New
-    setMostPointsSeasonRecord(currentMostPointsSeason); // New
-    setFewestPointsSeasonRecord(currentFewestPointsSeason); // New
+    setMostWeeklyTop3ScoresSeasonRecord(currentMostWeeklyTop3ScoresSeason);
+    setMostBlowoutWinsSeasonRecord(currentMostBlowoutWinsSeason);
+    setMostBlowoutLossesSeasonRecord(currentMostBlowoutLossesSeason);
+    setMostSlimWinsSeasonRecord(currentMostSlimWinsSeason);
+    setMostSlimLossesSeasonRecord(currentMostSlimLossesSeason);
+    setMostPointsSeasonRecord(currentMostPointsSeason);
+    setFewestPointsSeasonRecord(currentFewestPointsSeason);
 
 
   }, [historicalMatchups, getDisplayTeamName]);
@@ -345,7 +345,8 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
   };
 
   // Sort years for consistent display (descending year)
-  const sortedYears = Object.keys(seasonRecords).sort((a, b) => parseInt(b) - parseInt(a));
+  // Removed as yearly standings section is being removed
+  // const sortedYears = Object.keys(seasonRecords).sort((a, b) => parseInt(b) - parseInt(a));
 
   const formatDPR = (dprValue) => {
     if (typeof dprValue === 'number' && !isNaN(dprValue)) {
@@ -368,19 +369,26 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     return 'N/A';
   };
 
-  const renderSingleRecordEntry = (recordItem, formatFn = val => val) => {
-    if (!recordItem || recordItem.entries.length === 0 || (typeof recordItem.value === 'number' && recordItem.value === -Infinity) || (typeof recordItem.value === 'number' && recordItem.value === Infinity)) {
-        return <td colSpan="2" className="py-2 px-3 text-sm text-gray-500 text-center">N/A</td>;
+  const renderSingleRecordEntry = (recordItem, label, formatFn = val => val) => {
+    if (!recordItem || recordItem.entries.length === 0 || (typeof recordItem.value === 'number' && (recordItem.value === -Infinity || recordItem.value === Infinity))) {
+        return (
+            <tr className="border-b border-gray-100 last:border-b-0 bg-white">
+                <td className="py-2 px-3 text-sm font-semibold text-gray-800">{label}</td>
+                <td colSpan="2" className="py-2 px-3 text-sm text-gray-500 text-center">N/A</td>
+            </tr>
+        );
     }
+    const isFirstEntryEven = recordItem.entries.findIndex((_, idx) => idx === 0) % 2 === 0;
     return (
-        <>
+        <tr className={`border-b border-gray-100 last:border-b-0 ${isFirstEntryEven ? 'bg-white' : 'bg-gray-50'}`}>
+            <td className="py-2 px-3 text-sm font-semibold text-gray-800">{label}</td>
             <td className="py-2 px-3 text-sm text-gray-800">{formatFn(recordItem.value)}</td>
             <td className="py-2 px-3 text-sm text-gray-700">
                 {recordItem.entries.map((entry, idx) => (
                     <div key={idx}>{entry.team} ({entry.year})</div>
                 ))}
             </td>
-        </>
+        </tr>
     );
   };
 
@@ -389,31 +397,9 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">SEASON RECORDS - ( SEASON )</h3>
       <p className="text-sm text-gray-600 mb-6">Team performance records calculated per season.</p>
 
-      {/* Season DPR Highlights */}
-      {(highestDPRSeasonRecord?.entries.length > 0 || lowestDPRSeasonRecord?.entries.length > 0) && (
-        <section className="mb-8 p-4 bg-blue-50 rounded-lg shadow-sm border border-blue-200">
-          <h4 className="text-lg font-bold text-blue-800 mb-3">Season DPR Highlights</h4>
-          <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm text-sm">
-            <tbody>
-              {highestDPRSeasonRecord?.entries.length > 0 && (
-                <tr className="border-b border-gray-100 last:border-b-0 bg-white">
-                  <td className="py-2 px-3 text-sm font-semibold text-gray-800">Highest Adjusted DPR</td>
-                  {renderSingleRecordEntry(highestDPRSeasonRecord, formatDPR)}
-                </tr>
-              )}
-              {lowestDPRSeasonRecord?.entries.length > 0 && (
-                <tr className="border-b border-gray-100 last:border-b-0 bg-gray-50">
-                  <td className="py-2 px-3 text-sm font-semibold text-gray-800">Lowest Adjusted DPR</td>
-                  {renderSingleRecordEntry(lowestDPRSeasonRecord, formatDPR)}
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </section>
-      )}
-
-      {/* Other Season Records */}
-      {(mostWinsSeasonRecord?.entries.length > 0 ||
+      {/* All Season Records, including DPR Highlights */}
+      {(highestDPRSeasonRecord?.entries.length > 0 || lowestDPRSeasonRecord?.entries.length > 0 ||
+        mostWinsSeasonRecord?.entries.length > 0 ||
         mostLossesSeasonRecord?.entries.length > 0 ||
         bestAllPlayWinPctSeasonRecord?.entries.length > 0 ||
         mostWeeklyHighScoresSeasonRecord?.entries.length > 0 ||
@@ -424,129 +410,32 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         mostSlimLossesSeasonRecord?.entries.length > 0 ||
         mostPointsSeasonRecord?.entries.length > 0 ||
         fewestPointsSeasonRecord?.entries.length > 0
-        ) && (
-        <section className="mb-8 p-4 bg-green-50 rounded-lg shadow-sm border border-green-200">
-          <h4 className="text-lg font-bold text-green-800 mb-3">Other Season Records</h4>
+        ) ? (
+        <section className="mb-8 p-4 bg-gray-50 rounded-lg shadow-sm border border-gray-200">
+          <h4 className="text-lg font-bold text-gray-800 mb-3">Season Records Highlights</h4>
           <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm text-sm">
             <tbody>
-              {mostWinsSeasonRecord?.entries.length > 0 && (
-                <tr className="border-b border-gray-100 last:border-b-0 bg-white">
-                  <td className="py-2 px-3 text-sm font-semibold text-gray-800">Most Wins</td>
-                  {renderSingleRecordEntry(mostWinsSeasonRecord)}
-                </tr>
-              )}
-              {mostLossesSeasonRecord?.entries.length > 0 && (
-                <tr className="border-b border-gray-100 last:border-b-0 bg-gray-50">
-                  <td className="py-2 px-3 text-sm font-semibold text-gray-800">Most Losses</td>
-                  {renderSingleRecordEntry(mostLossesSeasonRecord)}
-                </tr>
-              )}
-              {bestAllPlayWinPctSeasonRecord?.entries.length > 0 && (
-                <tr className="border-b border-gray-100 last:border-b-0 bg-white">
-                  <td className="py-2 px-3 text-sm font-semibold text-gray-800">Best All-Play Win %</td>
-                  {renderSingleRecordEntry(bestAllPlayWinPctSeasonRecord, formatPercentage)}
-                </tr>
-              )}
-              {mostWeeklyHighScoresSeasonRecord?.entries.length > 0 && (
-                <tr className="border-b border-gray-100 last:border-b-0 bg-gray-50">
-                  <td className="py-2 px-3 text-sm font-semibold text-gray-800">Most Weekly High Scores</td>
-                  {renderSingleRecordEntry(mostWeeklyHighScoresSeasonRecord)}
-                </tr>
-              )}
-              {mostWeeklyTop3ScoresSeasonRecord?.entries.length > 0 && (
-                <tr className="border-b border-gray-100 last:border-b-0 bg-white">
-                  <td className="py-2 px-3 text-sm font-semibold text-gray-800">Most Weekly Top 3 Scores</td>
-                  {renderSingleRecordEntry(mostWeeklyTop3ScoresSeasonRecord)}
-                </tr>
-              )}
-              {mostBlowoutWinsSeasonRecord?.entries.length > 0 && (
-                <tr className="border-b border-gray-100 last:border-b-0 bg-gray-50">
-                  <td className="py-2 px-3 text-sm font-semibold text-gray-800">Most Blowout Wins</td>
-                  {renderSingleRecordEntry(mostBlowoutWinsSeasonRecord)}
-                </tr>
-              )}
-              {mostBlowoutLossesSeasonRecord?.entries.length > 0 && (
-                <tr className="border-b border-gray-100 last:border-b-0 bg-white">
-                  <td className="py-2 px-3 text-sm font-semibold text-gray-800">Most Blowout Losses</td>
-                  {renderSingleRecordEntry(mostBlowoutLossesSeasonRecord)}
-                </tr>
-              )}
-              {mostSlimWinsSeasonRecord?.entries.length > 0 && (
-                <tr className="border-b border-gray-100 last:border-b-0 bg-gray-50">
-                  <td className="py-2 px-3 text-sm font-semibold text-gray-800">Most Slim Wins</td>
-                  {renderSingleRecordEntry(mostSlimWinsSeasonRecord)}
-                </tr>
-              )}
-              {mostSlimLossesSeasonRecord?.entries.length > 0 && (
-                <tr className="border-b border-gray-100 last:border-b-0 bg-white">
-                  <td className="py-2 px-3 text-sm font-semibold text-gray-800">Most Slim Losses</td>
-                  {renderSingleRecordEntry(mostSlimLossesSeasonRecord)}
-                </tr>
-              )}
-              {mostPointsSeasonRecord?.entries.length > 0 && (
-                <tr className="border-b border-gray-100 last:border-b-0 bg-gray-50">
-                  <td className="py-2 px-3 text-sm font-semibold text-gray-800">Most Points</td>
-                  {renderSingleRecordEntry(mostPointsSeasonRecord, formatPoints)}
-                </tr>
-              )}
-              {fewestPointsSeasonRecord?.entries.length > 0 && (
-                <tr className="border-b border-gray-100 last:border-b-0 bg-white">
-                  <td className="py-2 px-3 text-sm font-semibold text-gray-800">Fewest Points</td>
-                  {renderSingleRecordEntry(fewestPointsSeasonRecord, formatPoints)}
-                </tr>
-              )}
+              {renderSingleRecordEntry(highestDPRSeasonRecord, 'Highest Adjusted DPR', formatDPR)}
+              {renderSingleRecordEntry(lowestDPRSeasonRecord, 'Lowest Adjusted DPR', formatDPR)}
+              {renderSingleRecordEntry(mostWinsSeasonRecord, 'Most Wins')}
+              {renderSingleRecordEntry(mostLossesSeasonRecord, 'Most Losses')}
+              {renderSingleRecordEntry(bestAllPlayWinPctSeasonRecord, 'Best All-Play Win %', formatPercentage)}
+              {renderSingleRecordEntry(mostWeeklyHighScoresSeasonRecord, 'Most Weekly High Scores')}
+              {renderSingleRecordEntry(mostWeeklyTop3ScoresSeasonRecord, 'Most Weekly Top 3 Scores')}
+              {renderSingleRecordEntry(mostBlowoutWinsSeasonRecord, 'Most Blowout Wins')}
+              {renderSingleRecordEntry(mostBlowoutLossesSeasonRecord, 'Most Blowout Losses')}
+              {renderSingleRecordEntry(mostSlimWinsSeasonRecord, 'Most Slim Wins')}
+              {renderSingleRecordEntry(mostSlimLossesSeasonRecord, 'Most Slim Losses')}
+              {renderSingleRecordEntry(mostPointsSeasonRecord, 'Most Points', formatPoints)}
+              {renderSingleRecordEntry(fewestPointsSeasonRecord, 'Fewest Points', formatPoints)}
             </tbody>
           </table>
         </section>
+      ) : (
+        <p className="text-center text-gray-600">No season records available to display.</p>
       )}
 
-
-      {sortedYears.map(year => (
-        <div key={year} className="mb-6">
-          <h4 className="text-lg font-bold text-gray-700 mb-3 bg-gray-50 p-2 rounded-md border-l-4 border-blue-500">{year} Season</h4>
-          <div className="overflow-x-auto">
-            <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
-              <thead className="bg-blue-50">
-                <tr>
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record (W-L-T)</th>
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-b border-gray-200">Win %</th>
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">All-Play Win %</th>
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Points For</th>
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Weekly High Scores</th>
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Weekly Top 3 Scores</th>
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Blowout Wins</th>
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Blowout Losses</th>
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Slim Wins</th>
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Slim Losses</th>
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Adjusted DPR</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Object.keys(seasonRecords[year]).sort().map(team => {
-                  const record = seasonRecords[year][team];
-                  return (
-                    <tr key={team} className="border-b border-gray-100 last:border-b-0">
-                      <td className="py-2 px-3 text-sm text-gray-800">{team}</td>
-                      <td className="py-2 px-3 text-sm text-gray-700">{renderRecord(record)}</td>
-                      <td className="py-2 px-3 text-sm text-gray-700">{formatPercentage(record.winPercentage)}</td>
-                      <td className="py-2 px-3 text-sm text-gray-700">{formatPercentage(record.allPlayWinPercentage)}</td>
-                      <td className="py-2 px-3 text-sm text-gray-700">{record.pointsFor.toFixed(2)}</td>
-                      <td className="py-2 px-3 text-sm text-gray-700">{record.weeklyHighestScoreCount}</td>
-                      <td className="py-2 px-3 text-sm text-gray-700">{record.weeklyTop3Count}</td>
-                      <td className="py-2 px-3 text-sm text-gray-700">{record.blowoutWins}</td>
-                      <td className="py-2 px-3 text-sm text-gray-700">{record.blowoutLosses}</td>
-                      <td className="py-2 px-3 text-sm text-gray-700">{record.slimWins}</td>
-                      <td className="py-2 px-3 text-sm text-gray-700">{record.slimLosses}</td>
-                      <td className="py-2 px-3 text-sm text-gray-700">{formatDPR(record.adjustedDPR)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ))}
+      {/* Removed the section for sortedYears.map (yearly standings) */}
     </div>
   );
 };
