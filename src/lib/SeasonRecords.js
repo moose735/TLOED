@@ -26,8 +26,8 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       const team1Score = parseFloat(match.team1Score);
       const team2Score = parseFloat(match.team2Score);
 
-      // Skip invalid or non-regular season data (only count regular season for these records)
-      if (!team1 || !team2 || isNaN(year) || isNaN(week) || isNaN(team1Score) || isNaN(team2Score) || !match.regSeason) {
+      // Removed !match.regSeason condition to include playoff games
+      if (!team1 || !team2 || isNaN(year) || isNaN(week) || isNaN(team1Score) || isNaN(team2Score)) {
         return;
       }
 
@@ -45,15 +45,14 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
             weeklyScores: [], // To calculate weekly top scores and All-Play Win %
             blowoutWins: 0, blowoutLosses: 0,
             slimWins: 0, slimLosses: 0,
-            highestWeeklyScore: -Infinity, // For Most Points (Single Game) - not requested now but good to track
-            lowestWeeklyScore: Infinity, // For Fewest Points (Single Game) - not requested now but good to track
+            // Removed highestWeeklyScore and lowestWeeklyScore from initialization
             weeklyHighScoresCount: 0,
             weeklyTop3ScoresCount: 0,
           };
         }
       });
 
-      // Update regular season records
+      // Update season records (now includes playoffs)
       if (isTie) {
         newSeasonData[year][team1].ties++;
         newSeasonData[year][team2].ties++;
@@ -65,19 +64,20 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         newSeasonData[year][team1].losses++;
       }
 
-      // Update total points for the season
+      // Update total points for the season (now includes playoffs)
       newSeasonData[year][team1].totalPointsScored += team1Score;
       newSeasonData[year][team1].totalPointsAgainst += team2Score;
       newSeasonData[year][team2].totalPointsScored += team2Score;
       newSeasonData[year][team2].totalPointsAgainst += team1Score;
 
-      // Store weekly scores for later calculations (All-Play, weekly high/top 3)
+      // Store weekly scores for later calculations (All-Play, weekly high/top 3) (now includes playoffs)
       newSeasonData[year][team1].weeklyScores.push({ week, score: team1Score, opponentScore: team2Score });
       newSeasonData[year][team2].weeklyScores.push({ week, score: team2Score, opponentScore: team1Score });
 
-      // Calculate blowout/slim wins/losses on a per-match basis (only for regular season games that aren't ties)
+      // Calculate blowout/slim wins/losses on a per-match basis (now includes playoffs, but still not ties)
       if (!isTie) {
-          const margin1 = team1Score > 0 ? (team1Score - team2Score) / team1Score : (team1Score - team2Score); // Margin as percentage of winner's score, handle zero score
+          // Margin as percentage of winner's score, handle zero score to prevent division by zero
+          const margin1 = team1Score > 0 ? (team1Score - team2Score) / team1Score : (team1Score - team2Score);
           const margin2 = team2Score > 0 ? (team2Score - team1Score) / team2Score : (team2Score - team1Score);
 
           // Blowout win/loss: Win/lose by 40% or more
@@ -100,7 +100,7 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       }
     });
 
-    // Post-processing for weekly high/top 3 scores and All-Play Win %
+    // Post-processing for weekly high/top 3 scores and All-Play Win % (now includes playoffs)
     Object.keys(newSeasonData).forEach(year => {
         const teamsInYear = Object.keys(newSeasonData[year]);
         // Group all scores for the current year by week to find weekly highs
@@ -126,7 +126,7 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
             }
         });
 
-        // Calculate All-Play Win Percentage per team per year
+        // Calculate All-Play Win Percentage per team per year (now includes playoffs)
         teamsInYear.forEach(teamName => {
             let totalAllPlayWins = 0;
             let totalAllPlayGames = 0;
@@ -161,8 +161,7 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         mostSlimLosses: { value: -Infinity, teams: [], years: [] },
         mostPoints: { value: -Infinity, teams: [], years: [] },
         fewestPoints: { value: Infinity, teams: [], years: [] },
-        highestWeeklyScore: { value: -Infinity, teams: [], years: [] }, // Individual highest weekly score
-        lowestWeeklyScore: { value: Infinity, teams: [], years: [] }, // Individual lowest weekly score
+        // Removed highestWeeklyScore and lowestWeeklyScore from aggregated records
     };
 
     Object.keys(newSeasonData).forEach(year => {
@@ -204,9 +203,7 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
             updateRecord(newAggregatedRecords.mostSlimLosses, teamStats.slimLosses);
             updateRecord(newAggregatedRecords.mostPoints, teamStats.totalPointsScored);
             updateRecord(newAggregatedRecords.fewestPoints, teamStats.totalPointsScored, true);
-            updateRecord(newAggregatedRecords.highestWeeklyScore, teamStats.highestWeeklyScore);
-            updateRecord(newAggregatedRecords.lowestWeeklyScore, teamStats.lowestWeeklyScore, true);
-
+            // Removed calls to update highestWeeklyScore and lowestWeeklyScore
         });
     });
 
@@ -229,8 +226,9 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
   // Helper to format values for display
   const formatDisplayValue = (value, metricKey) => {
       if (metricKey === 'bestAllPlayWinPct') {
-          return `${(value * 100).toFixed(3)}%`; // Percentage format
-      } else if (['mostPoints', 'fewestPoints', 'highestWeeklyScore', 'lowestWeeklyScore'].includes(metricKey)) {
+          // Display as .xxx% format
+          return `${value.toFixed(3).replace(/^0\./, '.')}%`;
+      } else if (['mostPoints', 'fewestPoints'].includes(metricKey)) { // Removed highestWeeklyScore, lowestWeeklyScore
           return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); // Points with 2 decimals and commas
       } else {
           return value; // Integer for counts/wins/losses
@@ -250,8 +248,7 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     { key: 'mostSlimLosses', label: 'Most Slim Losses' },
     { key: 'mostPoints', label: 'Most Points' },
     { key: 'fewestPoints', label: 'Fewest Points' },
-    { key: 'highestWeeklyScore', label: 'Highest Single Game Score' },
-    { key: 'lowestWeeklyScore', label: 'Lowest Single Game Score' },
+    // Removed 'highestWeeklyScore' and 'lowestWeeklyScore' from this list
   ];
 
 
