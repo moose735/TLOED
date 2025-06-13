@@ -49,8 +49,11 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       const team2Score = parseFloat(match.team2Score);
 
       if (!team1 || !team2 || isNaN(team1Score) || isNaN(team2Score)) {
+        console.log("DPR DEBUG: Skipping invalid matchup data:", match);
         return; // Skip invalid data
       }
+
+      console.log(`DPR DEBUG: Processing matchup - Year: ${year}, Week: ${week}, Team1: ${team1} (${team1Score}), Team2: ${team2} (${team2Score})`);
 
       const isTie = team1Score === team2Score;
       const team1Won = team1Score > team2Score;
@@ -106,6 +109,9 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       // Store individual team's weekly scores for DPR calculation
       newSeasonRecords[year][team1].weeklyScores.push(team1Score);
       newSeasonRecords[year][team2].weeklyScores.push(team2Score);
+
+      console.log(`DPR DEBUG: Initialized/Updated stats for ${team1} in ${year}: Wins: ${newSeasonRecords[year][team1].wins}, Losses: ${newSeasonRecords[year][team1].losses}, Ties: ${newSeasonRecords[year][team1].ties}, PointsFor: ${newSeasonRecords[year][team1].pointsFor}, TotalGames: ${newSeasonRecords[year][team1].totalGames}, WeeklyScores: [${newSeasonRecords[year][team1].weeklyScores.join(', ')}]`);
+      console.log(`DPR DEBUG: Initialized/Updated stats for ${team2} in ${year}: Wins: ${newSeasonRecords[year][team2].wins}, Losses: ${newSeasonRecords[year][team2].losses}, Ties: ${newSeasonRecords[year][team2].ties}, PointsFor: ${newSeasonRecords[year][team2].pointsFor}, TotalGames: ${newSeasonRecords[year][team2].totalGames}, WeeklyScores: [${newSeasonRecords[year][team2].weeklyScores.join(', ')}]`);
 
 
       // Calculate Blowout/Slim Wins/Losses for both teams
@@ -239,27 +245,39 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         const totalGames = stats.totalGames;
 
         if (totalGames === 0) {
+          console.log(`DPR DEBUG: Skipping team ${team} in ${year} due to 0 total games.`);
           return;
         }
 
         // Determine team's own max and min score for the season
         const teamMaxScoreInSeason = stats.weeklyScores.length > 0 ? Math.max(...stats.weeklyScores) : 0;
         const teamMinScoreInSeason = stats.weeklyScores.length > 0 ? Math.min(...stats.weeklyScores) : 0;
+        console.log(`DPR DEBUG:   Team's weekly scores for ${team} in ${year}: [${stats.weeklyScores.join(', ')}]`);
+        console.log(`DPR DEBUG:   Team Max/Min Score for ${team} in ${year}: Max=${teamMaxScoreInSeason.toFixed(2)}, Min=${teamMinScoreInSeason.toFixed(2)}`);
 
 
         // Calculate actual win percentage
         stats.winPercentage = ((stats.wins + (0.5 * stats.ties)) / totalGames);
+        console.log(`DPR DEBUG:   Win Percentage for ${team} in ${year}: ${(stats.winPercentage * 100).toFixed(1)}% (${stats.wins}-${stats.losses}-${stats.ties})`);
+
 
         // Calculate All-Play Win Percentage
         const totalAllPlayGames = stats.allPlayWins + stats.allPlayLosses + stats.allPlayTies;
         stats.allPlayWinPercentage = totalAllPlayGames > 0 ? ((stats.allPlayWins + (0.5 * stats.allPlayTies)) / totalAllPlayGames) : 0;
 
         // Raw DPR Calculation: ((Points Scored * 6) + ((Points Scored Max + Points Scored Min) * 2) + ((Win% * 200) * 2)) / 10
-        stats.rawDPR = (
-          (stats.pointsFor * 6) +
-          ((teamMaxScoreInSeason + teamMinScoreInSeason) * 2) + // Using team's own max/min scores
-          ((stats.winPercentage * 200) * 2)
-        ) / 10;
+        const pointsScoredComponent = stats.pointsFor * 6;
+        const maxMinComponent = (teamMaxScoreInSeason + teamMinScoreInSeason) * 2;
+        const winPercentageComponent = (stats.winPercentage * 200) * 2;
+        const numerator = pointsScoredComponent + maxMinComponent + winPercentageComponent;
+        stats.rawDPR = numerator / 10;
+
+        console.log(`DPR DEBUG:   Raw DPR Intermediate parts for ${team} in ${year}:`);
+        console.log(`DPR DEBUG:     Points Scored * 6: ${stats.pointsFor.toFixed(2)} * 6 = ${pointsScoredComponent.toFixed(2)}`);
+        console.log(`DPR DEBUG:     (Max + Min) * 2: (${teamMaxScoreInSeason.toFixed(2)} + ${teamMinScoreInSeason.toFixed(2)}) * 2 = ${maxMinComponent.toFixed(2)}`);
+        console.log(`DPR DEBUG:     (Win% * 200) * 2: (${(stats.winPercentage * 100).toFixed(1)}% * 200) * 2 = ${winPercentageComponent.toFixed(2)}`);
+        console.log(`DPR DEBUG:     Numerator: ${numerator.toFixed(2)}`);
+        console.log(`DPR DEBUG:   Raw DPR for ${team} in ${year}: ${stats.rawDPR.toFixed(3)}`);
 
         totalRawDPRForSeason += stats.rawDPR;
         teamsWithValidDPR++;
@@ -279,6 +297,8 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       });
 
       const avgRawDPRForSeason = teamsWithValidDPR > 0 ? totalRawDPRForSeason / teamsWithValidDPR : 0;
+      console.log(`DPR DEBUG: Season ${year} Raw DPR totals: Total=${totalRawDPRForSeason.toFixed(2)}, Valid Teams=${teamsWithValidDPR}, Avg=${avgRawDPRForSeason.toFixed(3)}`);
+
 
       teamsInSeason.forEach(team => {
         const stats = newSeasonRecords[year][team];
@@ -288,12 +308,16 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
           stats.adjustedDPR = 0;
         }
 
+        console.log(`DPR DEBUG:   Adjusted DPR for ${team} in ${year}: ${stats.adjustedDPR.toFixed(3)}`);
+
         // Update highest/lowest adjusted DPR season records
         if (stats.adjustedDPR !== 0) {
           updateRecord(currentHighestDPRSeason, stats.adjustedDPR, { team, year: parseInt(year), dpr: stats.adjustedDPR });
           updateRecord(currentLowestDPRSeason, stats.adjustedDPR, { team, year: parseInt(year), dpr: stats.adjustedDPR }, true);
         }
       });
+      console.log(`DPR DEBUG: Current Highest Adjusted DPR Season Record: Value=${currentHighestDPRSeason.value.toFixed(3)}, Entries=${JSON.stringify(currentHighestDPRSeason.entries)}`);
+      console.log(`DPR DEBUG: Current Lowest Adjusted DPR Season Record: Value=${currentLowestDPRSeason.value.toFixed(3)}, Entries=${JSON.stringify(currentLowestDPRSeason.entries)}`);
     });
 
     // Final sorting for all-time record entries if there are ties
