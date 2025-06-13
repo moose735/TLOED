@@ -7,30 +7,38 @@ const renderRecord = (record) => {
   return `${record.wins || 0}-${record.losses || 0}-${record.ties || 0}`;
 };
 
+// Removed leagueManagers from props
 const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
   const [allTimeRecords, setAllTimeRecords] = useState({});
   const [totalPointsData, setTotalPointsData] = useState({});
-  const [weeklyHighScoresCount, setWeeklyHighScoresCount] = useState({});
+  const [weeklyHighScoresData, setWeeklyHighScoresData] = useState({});
+  const [weeklyTop3ScoresData, setWeeklyTop3ScoresData] = useState({});
   const [seasonRecordsSummary, setSeasonRecordsSummary] = useState({});
+  const [allPlayWinPercentage, setAllPlayWinPercentage] = useState({});
 
   useEffect(() => {
     if (!historicalMatchups || historicalMatchups.length === 0) {
       setAllTimeRecords({});
       setTotalPointsData({});
-      setWeeklyHighScoresCount({});
+      setWeeklyHighScoresData({});
+      setWeeklyTop3ScoresData({});
       setSeasonRecordsSummary({});
+      setAllPlayWinPercentage({});
       return;
     }
 
     const newAllTimeRecords = {};
     const newTotalPointsData = {}; // { teamName: { scored: 0, against: 0 } }
-    const newWeeklyHighScoresCount = {}; // { teamName: count }
+    const newWeeklyHighScoresData = {}; // { teamName: count }
+    const newWeeklyTop3ScoresData = {}; // { teamName: count }
     const tempSeasonRecords = {}; // { year: { team: { wins, losses, ties } } }
+    const allWeeklyScores = {}; // { year_week: [{ team, score }] }
 
     historicalMatchups.forEach(match => {
       const team1 = getDisplayTeamName(String(match.team1 || '').trim());
       const team2 = getDisplayTeamName(String(match.team2 || '').trim());
       const year = match.year;
+      const week = match.week;
       const team1Score = parseFloat(match.team1Score);
       const team2Score = parseFloat(match.team2Score);
 
@@ -51,8 +59,11 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         if (!newTotalPointsData[team]) {
           newTotalPointsData[team] = { scored: 0, against: 0 };
         }
-        if (!newWeeklyHighScoresCount[team]) {
-          newWeeklyHighScoresCount[team] = 0;
+        if (!newWeeklyHighScoresData[team]) {
+          newWeeklyHighScoresData[team] = 0;
+        }
+        if (!newWeeklyTop3ScoresData[team]) {
+            newWeeklyTop3ScoresData[team] = 0;
         }
         if (!tempSeasonRecords[year]) {
           tempSeasonRecords[year] = {};
@@ -80,12 +91,14 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       newTotalPointsData[team2].scored += team2Score;
       newTotalPointsData[team2].against += team1Score;
 
-      // Update Weekly High Scores (most times team had higher score in their matchup)
-      if (team1Won) {
-        newWeeklyHighScoresCount[team1]++;
-      } else if (team2Score > team1Score) {
-        newWeeklyHighScoresCount[team2]++;
+      // Store scores for All-Play and Weekly High/Top 3
+      const weekKey = `${year}_${week}`;
+      if (!allWeeklyScores[weekKey]) {
+          allWeeklyScores[weekKey] = [];
       }
+      allWeeklyScores[weekKey].push({ team: team1, score: team1Score });
+      allWeeklyScores[weekKey].push({ team: team2, score: team2Score });
+
 
       // Update Temporary Season Records for later summary
       if (isTie) {
@@ -100,22 +113,61 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       }
     });
 
+    // Calculate Weekly High Scores and Top 3 Scores
+    Object.values(allWeeklyScores).forEach(weeklyMatchups => {
+        // Sort scores descending
+        const sortedWeeklyScores = [...weeklyMatchups].sort((a, b) => b.score - a.score);
+
+        if (sortedWeeklyScores.length > 0) {
+            // Most Weekly High Scores
+            newWeeklyHighScoresData[sortedWeeklyScores[0].team] = (newWeeklyHighScoresData[sortedWeeklyScores[0].team] || 0) + 1;
+
+            // Most Weekly Top 3 Scores
+            for (let i = 0; i < Math.min(3, sortedWeeklyScores.length); i++) {
+                newWeeklyTop3ScoresData[sortedWeeklyScores[i].team] = (newWeeklyTop3ScoresData[sortedWeeklyScores[i].team] || 0) + 1;
+            }
+        }
+    });
+
+
+    // Calculate All-Play Win Percentage
+    const newAllPlayWinPercentage = {};
+    Object.keys(newAllTimeRecords).forEach(team => {
+        let totalAllPlayWins = 0;
+        let totalAllPlayGames = 0;
+
+        Object.values(allWeeklyScores).forEach(weeklyMatchups => {
+            const teamCurrentWeekScore = weeklyMatchups.find(m => m.team === team)?.score;
+            if (teamCurrentWeekScore !== undefined) {
+                weeklyMatchups.forEach(opponentEntry => {
+                    if (opponentEntry.team !== team) { // Don't compare against self
+                        totalAllPlayGames++;
+                        if (teamCurrentWeekScore > opponentEntry.score) {
+                            totalAllPlayWins++;
+                        } else if (teamCurrentWeekScore === opponentEntry.score) {
+                            totalAllPlayWins += 0.5; // Half win for a tie
+                        }
+                    }
+                });
+            }
+        });
+        newAllPlayWinPercentage[team] = totalAllPlayGames > 0 ? (totalAllPlayWins / totalAllPlayGames) : 0;
+    });
+
+
     // Calculate Season Records Summary
-    const newSeasonRecordsSummary = {}; // { teamName: { winningSeasons: 0, losingSeasons: 0, tiedSeasons: 0 } }
+    const newSeasonRecordsSummary = {};
     Object.keys(tempSeasonRecords).forEach(year => {
         Object.keys(tempSeasonRecords[year]).forEach(team => {
             const record = tempSeasonRecords[year][team];
-            // Ensure team exists in summary
             if (!newSeasonRecordsSummary[team]) newSeasonRecordsSummary[team] = { winningSeasons: 0, losingSeasons: 0, tiedSeasons: 0 };
-
-            // Only count if the team played at least one game in the season (e.g., total games > 0)
             const totalGamesInSeason = record.wins + record.losses + record.ties;
             if (totalGamesInSeason > 0) {
                 if (record.wins > record.losses) {
                     newSeasonRecordsSummary[team].winningSeasons++;
                 } else if (record.losses > record.wins) {
                     newSeasonRecordsSummary[team].losingSeasons++;
-                } else { // Ties
+                } else {
                     newSeasonRecordsSummary[team].tiedSeasons++;
                 }
             }
@@ -125,54 +177,121 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
 
     setAllTimeRecords(newAllTimeRecords);
     setTotalPointsData(newTotalPointsData);
-    setWeeklyHighScoresCount(newWeeklyHighScoresCount);
+    setWeeklyHighScoresData(newWeeklyHighScoresData);
+    setWeeklyTop3ScoresData(newWeeklyTop3ScoresData);
     setSeasonRecordsSummary(newSeasonRecordsSummary);
+    setAllPlayWinPercentage(newAllPlayWinPercentage);
 
-  }, [historicalMatchups, getDisplayTeamName]); // Recalculate if matchups or mapping changes
+  }, [historicalMatchups, getDisplayTeamName]);
 
-
-  // Sort teams for consistent display in all-time records
-  const sortedAllTimeTeams = Object.keys(allTimeRecords).sort();
 
   // Helper to format leaderboard data for display
-  const getLeaderboardData = (dataMap, sortKey, ascending = false) => {
-    return Object.keys(dataMap).map(team => ({
-      team,
-      value: dataMap[team][sortKey] || dataMap[team] // Handle both object values (e.g., .wins) and direct values (e.g., weeklyHighScoresCount)
-    })).sort((a, b) => ascending ? a.value - b.value : b.value - a.value);
+  // Modified to handle multiple members for ties and include avatar (placeholder for now)
+  const getLeaderboardData = (dataMap, sortKey, ascending = false, isPercentage = false) => {
+    const rawData = Object.keys(dataMap).map(team => {
+      let value;
+      let displayValue;
+
+      if (sortKey === null) { // Direct value (e.g., weeklyHighScoresData)
+        value = dataMap[team];
+        displayValue = value;
+      } else if (isPercentage) { // For win %
+        value = dataMap[team];
+        displayValue = `${(value * 100).toFixed(1)}%`;
+      } else { // Nested object value (e.g., allTimeRecords.wins)
+        value = dataMap[team][sortKey];
+        displayValue = value;
+      }
+      return { team, value, displayValue };
+    });
+
+    rawData.sort((a, b) => ascending ? a.value - b.value : b.value - a.value);
+
+    // Group by value to handle ties
+    const groupedData = new Map();
+    rawData.forEach(entry => {
+        const key = entry.value;
+        if (!groupedData.has(key)) {
+            groupedData.set(key, []);
+        }
+        groupedData.get(key).push(entry.team);
+    });
+
+    const result = [];
+    const sortedUniqueValues = Array.from(groupedData.keys()).sort((a, b) => ascending ? a - b : b - a);
+
+    sortedUniqueValues.forEach(value => {
+        const teams = groupedData.get(value);
+        // Sort tied teams alphabetically for consistent display
+        teams.sort();
+
+        const displayValue = isPercentage ? `${(value * 100).toFixed(3)}%` : value; // Ensure 3 decimal places for percentage
+        result.push({
+            value: value,
+            displayValue: displayValue,
+            teams: teams, // Array of team names
+            memberDisplay: (
+                <span className="flex items-center space-x-1">
+                    {teams.map(teamName => (
+                        // Placeholder avatar since leagueManagers are not available
+                        <img
+                            key={teamName}
+                            src={'https://placehold.co/20x20/cccccc/333333?text=M'} // Generic placeholder
+                            alt={`${teamName} avatar`}
+                            className="w-5 h-5 rounded-full object-cover"
+                            title={teamName}
+                        />
+                    ))}
+                     <span className="ml-1">{teams.join(' , ')}</span> {/* Show text names as well */}
+                </span>
+            )
+        });
+    });
+
+    return result;
   };
+
 
   // Prepare data for specific leaderboards
   const mostWinsLeaderboard = getLeaderboardData(allTimeRecords, 'wins');
   const mostLossesLeaderboard = getLeaderboardData(allTimeRecords, 'losses');
-  const bestWinPctLeaderboard = Object.keys(allTimeRecords).map(team => {
-      const record = allTimeRecords[team];
-      const totalGames = record.wins + record.losses + record.ties;
-      const winPercentage = totalGames > 0 ? ((record.wins + (record.ties / 2)) / totalGames) : 0;
-      return { team, value: winPercentage, displayValue: `${(winPercentage * 100).toFixed(1)}%` };
-  }).sort((a, b) => b.value - a.value);
-
-  const mostWeeklyHighScoresLeaderboard = getLeaderboardData(weeklyHighScoresCount, null); // No nested key
+  const bestWinPctLeaderboard = getLeaderboardData(allTimeRecords, 'winPercentage', false, true); // True for percentage
+  const bestAllPlayWinPctLeaderboard = getLeaderboardData(allPlayWinPercentage, null, false, true); // All-Play is direct percentage
+  const mostWeeklyHighScoresLeaderboard = getLeaderboardData(weeklyHighScoresData, null);
+  const mostWeeklyTop3ScoresLeaderboard = getLeaderboardData(weeklyTop3ScoresData, null);
   const mostWinningSeasonsLeaderboard = getLeaderboardData(seasonRecordsSummary, 'winningSeasons');
   const mostLosingSeasonsLeaderboard = getLeaderboardData(seasonRecordsSummary, 'losingSeasons');
   const mostTotalPointsScoredLeaderboard = getLeaderboardData(totalPointsData, 'scored');
   const mostTotalPointsAgainstLeaderboard = getLeaderboardData(totalPointsData, 'against');
 
 
-  // Helper to render a leaderboard section
-  const renderLeaderboardSection = (title, data, valueLabel) => (
-    <section className="mb-6 bg-gray-50 p-4 rounded-lg shadow-sm border border-gray-200">
-      <h4 className="text-lg font-bold text-gray-700 mb-3 border-b pb-2">{title}</h4>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {data.slice(0, 5).map((entry, index) => ( // Show top 5 for brevity
-          <div key={entry.team} className="flex justify-between items-center bg-white p-3 rounded-md border border-gray-100 shadow-xs">
-            <span className="font-medium text-gray-800">{index + 1}. {entry.team}</span>
-            <span className="font-semibold text-blue-600">
-                {entry.displayValue || (typeof entry.value === 'number' ? entry.value.toFixed(2) : entry.value)}
-            </span>
-          </div>
-        ))}
-        {data.length === 0 && <p className="text-gray-500 col-span-full text-center">No data available.</p>}
+  // Helper to render a leaderboard section with the new layout
+  const renderLeaderboardSection = (title, description, data) => (
+    <section className="mb-6 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+      <h4 className="text-xl font-bold text-gray-800 mb-2">{title}</h4>
+      <p className="text-sm text-gray-600 mb-4">{description}</p>
+      <div className="overflow-x-auto">
+        <table className="min-w-full bg-white border border-gray-200">
+          <thead className="bg-gray-100">
+            <tr>
+              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/4">Record</th>
+              <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-3/4">Member</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.slice(0, 5).map((entry, index) => ( // Show top 5 for brevity
+              <tr key={index} className="border-b border-gray-100 last:border-b-0">
+                <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{entry.displayValue}</td>
+                <td className="py-2 px-3 text-sm text-gray-700">{entry.memberDisplay}</td>
+              </tr>
+            ))}
+            {data.length === 0 && (
+                <tr>
+                    <td colSpan="2" className="py-4 text-center text-gray-500">No data available.</td>
+                </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </section>
   );
@@ -180,47 +299,19 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
 
   return (
     <div className="w-full">
-      {/* All-Time Team Records (original table) */}
-      <section className="mb-8">
-        <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">All-Time Team Records</h3>
-        <div className="overflow-x-auto">
-          <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
-            <thead className="bg-blue-50">
-              <tr>
-                <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
-                <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record (W-L-T)</th>
-                <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Win %</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedAllTimeTeams.map(team => {
-                const record = allTimeRecords[team];
-                const totalGames = record.wins + record.losses + record.ties;
-                const winPercentage = totalGames > 0 ? ((record.wins + (record.ties / 2)) / totalGames * 100).toFixed(1) : '0.0';
-                return (
-                  <tr key={team} className="border-b border-gray-100 last:border-b-0">
-                    <td className="py-2 px-3 text-sm text-gray-800">{team}</td>
-                    <td className="py-2 px-3 text-sm text-gray-700">{renderRecord(record)}</td>
-                    <td className="py-2 px-3 text-sm text-gray-700">{winPercentage}%</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">ALL-TIME RECORD HOLDERS - ( LEAGUE )</h3>
+      <p className="text-sm text-gray-600 mb-6">Records members hold across your entire league history.</p>
 
-      {/* New League Leaderboards */}
-      <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">League Leaderboards</h3>
-
-      {renderLeaderboardSection("Most Wins (All-Time)", mostWinsLeaderboard, "Wins")}
-      {renderLeaderboardSection("Most Losses (All-Time)", mostLossesLeaderboard, "Losses")}
-      {renderLeaderboardSection("Best Win % (All-Time)", bestWinPctLeaderboard, "Win %")}
-      {renderLeaderboardSection("Most Matchup Wins (Total Games Won)", mostWeeklyHighScoresLeaderboard, "Wins")}
-      {renderLeaderboardSection("Most Seasons with Winning Record", mostWinningSeasonsLeaderboard, "Seasons")}
-      {renderLeaderboardSection("Most Seasons with Losing Record", mostLosingSeasonsLeaderboard, "Seasons")}
-      {renderLeaderboardSection("Most Total Points Scored (All-Time)", mostTotalPointsScoredLeaderboard, "Points")}
-      {renderLeaderboardSection("Most Total Points Against (All-Time)", mostTotalPointsAgainstLeaderboard, "Points")}
+      {renderLeaderboardSection("Most Wins", "Most total league wins.", mostWinsLeaderboard)}
+      {renderLeaderboardSection("Most Losses", "Most total league losses.", mostLossesLeaderboard)}
+      {renderLeaderboardSection("Best Win Percentage", "Highest win % in league.", bestWinPctLeaderboard)}
+      {renderLeaderboardSection("Best All-Play Win Percentage", "Highest win % playing every team each week in league.", bestAllPlayWinPctLeaderboard)}
+      {renderLeaderboardSection("Most Weekly High Scores", "Most weeks with the highest score in league (regular season).", mostWeeklyHighScoresLeaderboard)}
+      {renderLeaderboardSection("Most Weekly Top 3 Scores", "Most weeks scoring in the top 3 in league (regular season).", mostWeeklyTop3ScoresLeaderboard)}
+      {renderLeaderboardSection("Most Seasons with Winning Record", "Most seasons finishing with a winning record.", mostWinningSeasonsLeaderboard)}
+      {renderLeaderboardSection("Most Seasons with Losing Record", "Most seasons finishing with a losing record.", mostLosingSeasonsLeaderboard)}
+      {renderLeaderboardSection("Most Total Points Scored", "Most total points scored across all seasons.", mostTotalPointsScoredLeaderboard)}
+      {renderLeaderboardSection("Most Total Points Against", "Most total points scored against across all seasons.", mostTotalPointsAgainstLeaderboard)}
 
     </div>
   );
