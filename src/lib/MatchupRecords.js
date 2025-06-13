@@ -175,11 +175,11 @@ const MatchupRecords = ({ historicalMatchups, getDisplayTeamName }) => {
 
                   matchupDisplay = (
                     <div className="flex items-center justify-center w-full">
-                      <span className="text-left flex-1 whitespace-nowrap">
+                      <span className="text-right flex-1 pr-1 whitespace-nowrap">
                         <u>{recordHolder}</u> ({recordScore})
                       </span>
                       <span className="px-2 font-semibold text-gray-600">vs</span>
-                      <span className="text-right flex-1 whitespace-nowrap">
+                      <span className="text-left flex-1 pl-1 whitespace-nowrap">
                         {opponent} ({opponentScore})
                       </span>
                     </div>
@@ -189,17 +189,17 @@ const MatchupRecords = ({ historicalMatchups, getDisplayTeamName }) => {
                   const loserScore = (entry.loser === entry.team1 ? entry.team1Score : entry.team2Score).toFixed(2);
                   matchupDisplay = (
                     <div className="flex items-center justify-center w-full">
-                      <span className="text-left flex-1 whitespace-nowrap"><u>{entry.winner}</u></span>
+                      <span className="text-right flex-1 pr-1 whitespace-nowrap"><u>{entry.winner}</u></span>
                       <span className="px-2 font-semibold text-gray-600">def.</span>
-                      <span className="text-right flex-1 whitespace-nowrap">{entry.loser} ({winnerScore}-{loserScore})</span>
+                      <span className="text-left flex-1 pl-1 whitespace-nowrap">{entry.loser} ({winnerScore}-{loserScore})</span>
                     </div>
                   );
                 } else { // For Highest/Lowest Combined Score
                   matchupDisplay = (
                     <div className="flex items-center justify-center w-full">
-                      <span className="text-left flex-1 whitespace-nowrap">{entry.team1} ({entry.team1Score.toFixed(2)})</span>
+                      <span className="text-right flex-1 pr-1 whitespace-nowrap">{entry.team1} ({entry.team1Score.toFixed(2)})</span>
                       <span className="px-2 font-semibold text-gray-600">vs</span>
-                      <span className="text-right flex-1 whitespace-nowrap">{entry.team2} ({entry.team2Score.toFixed(2)})</span>
+                      <span className="text-left flex-1 pl-1 whitespace-nowrap">{entry.team2} ({entry.team2Score.toFixed(2)})</span>
                     </div>
                   );
                 }
@@ -210,7 +210,7 @@ const MatchupRecords = ({ historicalMatchups, getDisplayTeamName }) => {
                       {index === 0 ? recordDef.label : ''} {/* Only show label for the first entry if multiple */}
                     </td>
                     <td className="py-2 px-3 text-sm text-gray-800">{formatDisplayValue(recordData.value, recordDef.key)}</td>
-                    <td className="py-2 px-3 text-sm text-gray-700">
+                    <td className="py-2 px-3 text-sm text-gray-700 text-center"> {/* Added text-center here for the cell */}
                       {matchupDisplay}
                     </td>
                     <td className="py-2 px-3 text-sm text-gray-700">{entry.year}</td>
