@@ -228,7 +228,17 @@ const VersusRecords = ({ historicalMatchups, getDisplayTeamName }) => {
               }
               // Map through entries, but conditionally render record label and value
               return recordData.entries.map((entry, entryIndex) => (
-                <tr key={`${recordDef.key}-${entry.team}-${entry.opponent}-${entryIndex}`} className="border-b border-gray-100 last:border-b-0">
+                <tr
+                  key={`${recordDef.key}-${entry.team}-${entry.opponent}-${entryIndex}`}
+                  // Apply border-b only if it's the last entry for this record category,
+                  // or if it's the only entry for this record.
+                  // This ensures no border between tied entries.
+                  className={`
+                    ${entryIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
+                    ${entryIndex < recordData.entries.length - 1 ? '' : 'border-b border-gray-100'}
+                    last:border-b-0
+                  `}
+                >
                   <td className="py-2 px-3 text-sm text-gray-800 font-semibold">
                     {entryIndex === 0 ? recordDef.label : ''} {/* Show label only for the first entry of a record */}
                   </td>
