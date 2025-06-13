@@ -14,8 +14,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       return;
     }
 
-    const newAllTimeRecords = {}; // { team: { wins, losses, ties, totalPointsFor, totalGames, careerRawDPR, adjustedDPR } }
-    let allGameScoresOverall = []; // For calculating overall max/min score for career DPR
+    const newAllTimeRecords = {}; // { team: { wins, losses, ties, totalPointsFor, totalGames, careerWeeklyScores: [], careerRawDPR, adjustedDPR } }
 
     historicalMatchups.forEach(match => {
       const team1 = getDisplayTeamName(String(match.team1 || '').trim());
@@ -39,6 +38,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
             ties: 0,
             totalPointsFor: 0,
             totalGames: 0,
+            careerWeeklyScores: [], // To store individual team's career weekly scores
             careerRawDPR: 0,
             adjustedDPR: 0, // All-Time DPR Rank
           };
@@ -62,13 +62,10 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       newAllTimeRecords[team1].totalGames++;
       newAllTimeRecords[team2].totalGames++;
 
-      // Collect all game scores across all seasons for overall max/min
-      allGameScoresOverall.push(team1Score, team2Score);
+      // Collect individual team's scores across all seasons for career max/min
+      newAllTimeRecords[team1].careerWeeklyScores.push(team1Score);
+      newAllTimeRecords[team2].careerWeeklyScores.push(team2Score);
     });
-
-    // Calculate Overall Max/Min Scores for Career DPR
-    const maxScoreOverall = Math.max(...allGameScoresOverall);
-    const minScoreOverall = Math.min(...allGameScoresOverall);
 
     let totalRawDPROverall = 0;
     let teamsWithValidCareerDPR = 0;
@@ -82,13 +79,16 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         return;
       }
 
-      // Explicit parentheses added here
+      // Determine team's own max and min score for their career
+      const teamMaxScoreOverall = stats.careerWeeklyScores.length > 0 ? Math.max(...stats.careerWeeklyScores) : 0;
+      const teamMinScoreOverall = stats.careerWeeklyScores.length > 0 ? Math.min(...stats.careerWeeklyScores) : 0;
+
       const careerWinPercentage = ((stats.wins + (0.5 * stats.ties)) / totalGames);
 
       // Raw DPR Calculation: ((Points Scored * 6) + ((Points Scored Max + Points Scored Min) * 2) + ((Win% * 200) * 2)) / 10
       stats.careerRawDPR = (
         (stats.totalPointsFor * 6) +
-        ((maxScoreOverall + minScoreOverall) * 2) +
+        ((teamMaxScoreOverall + teamMinScoreOverall) * 2) + // Using team's own career max/min scores
         ((careerWinPercentage * 200) * 2)
       ) / 10;
 
@@ -231,7 +231,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
               {sortedAllTimeTeams.map(team => {
                 const record = allTimeRecords[team];
                 const totalGames = record.wins + record.losses + record.ties;
-                const winPercentage = totalGames > 0 ? ((record.wins + (0.5 * record.ties)) / totalGames * 100).toFixed(1) : '0.0'; // Explicit parentheses added here
+                const winPercentage = totalGames > 0 ? ((record.wins + (0.5 * record.ties)) / totalGames * 100).toFixed(1) : '0.0';
                 return (
                   <tr key={team} className="border-b border-gray-100 last:border-b-0">
                     <td className="py-2 px-3 text-sm text-gray-800">{team}</td>
