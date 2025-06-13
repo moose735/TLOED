@@ -300,8 +300,8 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
                       <span className="ml-1">{recordData.teams.join(' , ')}</span>
                     </span>
                   </td>
-                  {/* Conditional display for Season column */}
-                  <td className="py-2 px-3 text-sm text-gray-700">
+                  {/* Conditional display for Season column with horizontal padding */}
+                  <td className="py-2 px-3 text-sm text-gray-700 pl-4 pr-4"> {/* Added pl-4 pr-4 */}
                     {recordData.teams.length > 1 ? '---' : recordData.years.join(' , ')}
                   </td>
                 </tr>
