@@ -1,6 +1,7 @@
 // src/lib/MatchupHistory.js
 import React, { useState, useEffect, useCallback } from 'react';
 import { HISTORICAL_MATCHUPS_API_URL } from '../config';
+import Head2HeadGrid from './Head2HeadGrid'; // Import the new Head2HeadGrid component
 
 // Helper function to get ordinal suffix (1st, 2nd, 3rd, 4th, etc.)
 const getOrdinalSuffix = (n) => {
@@ -15,14 +16,11 @@ const MatchupHistory = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Derived states for processed data
+  // Derived states for processed data (Head-to-Head moved to Head2HeadGrid.js)
   const [allTimeRecords, setAllTimeRecords] = useState({});
   const [seasonRecords, setSeasonRecords] = useState({});
-  const [headToHeadRecords, setHeadToHeadRecords] = useState({});
   const [championshipGames, setChampionshipGames] = useState([]);
 
-  // New state to track the selected rivalry for detailed view
-  const [selectedRivalryKey, setSelectedRivalryKey] = useState(null); // Stores the H2H key (e.g., "TeamA vs TeamB")
 
   // Teams names will be displayed as they are in the fetched data.
   const getDisplayTeamName = useCallback((originalName) => {
@@ -82,19 +80,17 @@ const MatchupHistory = () => {
     fetchMatchups();
   }, [HISTORICAL_MATCHUPS_API_URL]);
 
-  // --- Data Processing (when historicalMatchups changes) ---
+  // --- Data Processing (for sections remaining in MatchupHistory) ---
   useEffect(() => {
     if (historicalMatchups.length === 0) {
       setAllTimeRecords({});
       setSeasonRecords({});
-      setHeadToHeadRecords({});
       setChampionshipGames([]);
       return;
     }
 
     const newAllTimeRecords = {};
     const newSeasonRecords = {}; // { year: { team: { wins, losses, ties } } }
-    const newHeadToHeadRecords = {}; // { team1: { team2: { wins, losses, ties } } }
     const newChampionshipGames = []; // Collect special games
 
     historicalMatchups.forEach(match => {
@@ -152,33 +148,6 @@ const MatchupHistory = () => {
         newSeasonRecords[year][team1].losses++;
       }
 
-      // Update Head-to-Head Records
-      // Ensure consistent ordering for H2H keys (e.g., "TeamA_TeamB" vs "TeamB_TeamA")
-      const sortedTeams = [team1, team2].sort();
-      const h2hKey = `${sortedTeams[0]} vs ${sortedTeams[1]}`;
-
-      if (!newHeadToHeadRecords[h2hKey]) {
-        newHeadToHeadRecords[h2hKey] = {
-          teams: sortedTeams,
-          [sortedTeams[0]]: { wins: 0, losses: 0, ties: 0 },
-          [sortedTeams[1]]: { wins: 0, losses: 0, ties: 0 },
-          allMatches: [] // Store all matches for this rivalry to calculate details later
-        };
-      }
-
-      const h2hRecord = newHeadToHeadRecords[h2hKey];
-      if (isTie) {
-        h2hRecord[team1].ties++;
-        h2hRecord[team2].ties++;
-      } else if (team1Won) {
-        h2hRecord[team1].wins++;
-        h2hRecord[team2].losses++;
-      } else { // team2Won
-        h2hRecord[team2].wins++;
-        h2hRecord[team1].losses++;
-      }
-      h2hRecord.allMatches.push(match); // Add the full match object for detailed view
-
       // Check for final seeding games
       if (typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0) {
           let winner = 'Tie';
@@ -221,7 +190,6 @@ const MatchupHistory = () => {
 
     setAllTimeRecords(newAllTimeRecords);
     setSeasonRecords(newSeasonRecords);
-    setHeadToHeadRecords(newHeadToHeadRecords);
     // Sort championship games by year descending, then by winnerPlace ascending (Championship first)
     setChampionshipGames(newChampionshipGames.sort((a, b) => {
       if (b.year !== a.year) {
@@ -243,39 +211,6 @@ const MatchupHistory = () => {
 
   // Sort years for consistent display in season records
   const sortedYears = Object.keys(seasonRecords).sort((a, b) => parseInt(b) - parseInt(a)); // Descending year
-
-  // Sort head-to-head records by rivalry key
-  const sortedHeadToHeadKeys = Object.keys(headToHeadRecords).sort();
-
-
-  // Component to render the detailed rivalry view (placeholder for now)
-  const renderSelectedRivalryDetails = () => {
-    const rivalry = headToHeadRecords[selectedRivalryKey];
-    if (!rivalry) return null;
-
-    const teamA = rivalry.teams[0];
-    const teamB = rivalry.teams[1];
-
-    return (
-      <div className="p-4 bg-white rounded-lg shadow-inner border border-gray-200">
-        <button
-          onClick={() => setSelectedRivalryKey(null)}
-          className="mb-4 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
-        >
-          &larr; Back to All Rivalries
-        </button>
-        <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">
-          Details: {teamA} vs {teamB}
-        </h3>
-        <p className="text-gray-700 mb-2">
-          Total Record: <strong>{teamA}</strong> ({renderRecord(rivalry[teamA])}) vs <strong>{teamB}</strong> ({renderRecord(rivalry[teamB])})
-        </p>
-        <p className="text-gray-600">
-          More detailed stats and game logs for this rivalry will be displayed here in the future.
-        </p>
-      </div>
-    );
-  };
 
 
   return (
@@ -324,103 +259,70 @@ const MatchupHistory = () => {
             )}
           </section>
 
-          {/* All-Time Records (conditionally rendered) */}
-          {!selectedRivalryKey && (
-            <section className="mb-8">
-              <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">All-Time Team Records</h3>
-              <div className="overflow-x-auto">
-                <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
-                  <thead className="bg-blue-50">
-                    <tr>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record (W-L-T)</th>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Win %</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedAllTimeTeams.map(team => {
-                      const record = allTimeRecords[team];
-                      const totalGames = record.wins + record.losses + record.ties;
-                      const winPercentage = totalGames > 0 ? ((record.wins + (record.ties / 2)) / totalGames * 100).toFixed(1) : '0.0';
-                      return (
-                        <tr key={team} className="border-b border-gray-100 last:border-b-0">
-                          <td className="py-2 px-3 text-sm text-gray-800">{team}</td>
-                          <td className="py-2 px-3 text-sm text-gray-700">{renderRecord(record)}</td>
-                          <td className="py-2 px-3 text-sm text-gray-700">{winPercentage}%</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          )}
-
-
-          {/* Season-by-Season Records (conditionally rendered) */}
-          {!selectedRivalryKey && (
-            <section className="mb-8">
-              <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Season-by-Season Records</h3>
-              {sortedYears.map(year => (
-                <div key={year} className="mb-6">
-                  <h4 className="text-lg font-bold text-gray-700 mb-3 bg-gray-50 p-2 rounded-md border-l-4 border-blue-500">{year} Season</h4>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
-                      <thead className="bg-blue-50">
-                        <tr>
-                          <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
-                          <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record (W-L-T)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {Object.keys(seasonRecords[year]).sort().map(team => (
-                          <tr key={team} className="border-b border-gray-100 last:border-b-0">
-                            <td className="py-2 px-3 text-sm text-gray-800">{team}</td>
-                            <td className="py-2 px-3 text-sm text-gray-700">{renderRecord(seasonRecords[year][team])}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ))}
-            </section>
-          )}
-
-          {/* Head-to-Head Rivalries / Versus History (Conditional Rendering) */}
-          <section>
-            {selectedRivalryKey ? (
-              // Display details for the selected rivalry
-              renderSelectedRivalryDetails()
-            ) : (
-              // Display the grid of all rivalries
-              <>
-                <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Head-to-Head Rivalries</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"> {/* Adjusted for potentially more columns on larger screens */}
-                  {sortedHeadToHeadKeys.map(key => {
-                    const rivalry = headToHeadRecords[key];
-                    const teamA = rivalry.teams[0];
-                    const teamB = rivalry.teams[1];
+          {/* All-Time Records */}
+          <section className="mb-8">
+            <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">All-Time Team Records</h3>
+            <div className="overflow-x-auto">
+              <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
+                <thead className="bg-blue-50">
+                  <tr>
+                    <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
+                    <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record (W-L-T)</th>
+                    <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Win %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedAllTimeTeams.map(team => {
+                    const record = allTimeRecords[team];
+                    const totalGames = record.wins + record.losses + record.ties;
+                    const winPercentage = totalGames > 0 ? ((record.wins + (record.ties / 2)) / totalGames * 100).toFixed(1) : '0.0';
                     return (
-                      <button
-                        key={key}
-                        className="bg-gray-50 p-4 rounded-lg shadow-sm border border-gray-200 hover:bg-blue-100 transition-colors cursor-pointer text-left"
-                        onClick={() => setSelectedRivalryKey(key)}
-                      >
-                        <h4 className="font-bold text-blue-800 text-lg mb-2">{teamA} vs {teamB}</h4>
-                        <p className="text-sm text-gray-700">
-                          <strong>{teamA}:</strong> {renderRecord(rivalry[teamA])}
-                        </p>
-                        <p className="text-sm text-gray-700">
-                          <strong>{teamB}:</strong> {renderRecord(rivalry[teamB])}
-                        </p>
-                        <p className="text-xs text-blue-500 mt-2">Click for more details &rarr;</p>
-                      </button>
+                      <tr key={team} className="border-b border-gray-100 last:border-b-0">
+                        <td className="py-2 px-3 text-sm text-gray-800">{team}</td>
+                        <td className="py-2 px-3 text-sm text-gray-700">{renderRecord(record)}</td>
+                        <td className="py-2 px-3 text-sm text-gray-700">{winPercentage}%</td>
+                      </tr>
                     );
                   })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          {/* Season-by-Season Records */}
+          <section className="mb-8">
+            <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Season-by-Season Records</h3>
+            {sortedYears.map(year => (
+              <div key={year} className="mb-6">
+                <h4 className="text-lg font-bold text-gray-700 mb-3 bg-gray-50 p-2 rounded-md border-l-4 border-blue-500">{year} Season</h4>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
+                    <thead className="bg-blue-50">
+                      <tr>
+                        <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
+                        <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record (W-L-T)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.keys(seasonRecords[year]).sort().map(team => (
+                        <tr key={team} className="border-b border-gray-100 last:border-b-0">
+                          <td className="py-2 px-3 text-sm text-gray-800">{team}</td>
+                          <td className="py-2 px-3 text-sm text-gray-700">{renderRecord(seasonRecords[year][team])}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              </>
-            )}
+              </div>
+            ))}
+          </section>
+
+          {/* Head-to-Head Rivalries / Versus History section handled by Head2HeadGrid */}
+          <section>
+            <Head2HeadGrid
+              historicalMatchups={historicalMatchups}
+              getDisplayTeamName={getDisplayTeamName}
+            />
           </section>
         </>
       )}
