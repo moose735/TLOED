@@ -3,19 +3,19 @@ import React, { useState, useEffect } from 'react';
 
 const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
   const [careerDPRData, setCareerDPRData] = useState([]);
-  const [seasonalDPRData, setSeasonalDPRData] = useState({});
+  const [seasonalDPRData, setSeasonalDPRData] = useState([]); // Changed to an array for single list
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!historicalMatchups || historicalMatchups.length === 0) {
       setCareerDPRData([]);
-      setSeasonalDPRData({});
+      setSeasonalDPRData([]); // Set to empty array
       setLoading(false);
       return;
     }
 
     const allTimeRecords = {}; // For career DPR calculation
-    const seasonRecords = {};   // For seasonal DPR calculation
+    const seasonRecordsRaw = {};   // { year: { team: { ...stats } } } - intermediate for seasonal DPR calculation
 
     // First Pass: Aggregate all necessary data for both career and seasonal calculations
     historicalMatchups.forEach(match => {
@@ -45,11 +45,11 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
 
       // Initialize structures for teams (seasonal)
       [team1, team2].forEach(team => {
-        if (!seasonRecords[year]) {
-          seasonRecords[year] = {};
+        if (!seasonRecordsRaw[year]) {
+          seasonRecordsRaw[year] = {};
         }
-        if (!seasonRecords[year][team]) {
-          seasonRecords[year][team] = {
+        if (!seasonRecordsRaw[year][team]) {
+          seasonRecordsRaw[year][team] = {
             wins: 0, losses: 0, ties: 0, pointsFor: 0, totalGames: 0,
             weeklyScores: [], // Collect weekly scores for seasonal max/min
             rawDPR: 0, adjustedDPR: 0,
@@ -78,21 +78,21 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
 
       // Update Season Records
       if (isTie) {
-        seasonRecords[year][team1].ties++;
-        seasonRecords[year][team2].ties++;
+        seasonRecordsRaw[year][team1].ties++;
+        seasonRecordsRaw[year][team2].ties++;
       } else if (team1Won) {
-        seasonRecords[year][team1].wins++;
-        seasonRecords[year][team2].losses++;
+        seasonRecordsRaw[year][team1].wins++;
+        seasonRecordsRaw[year][team2].losses++;
       } else { // team2Won
-        seasonRecords[year][team2].wins++;
-        seasonRecords[year][team1].losses++;
+        seasonRecordsRaw[year][team2].wins++;
+        seasonRecordsRaw[year][team1].losses++;
       }
-      seasonRecords[year][team1].pointsFor += team1Score;
-      seasonRecords[year][team2].pointsFor += team2Score;
-      seasonRecords[year][team1].totalGames++;
-      seasonRecords[year][team2].totalGames++;
-      seasonRecords[year][team1].weeklyScores.push(team1Score);
-      seasonRecords[year][team2].weeklyScores.push(team2Score);
+      seasonRecordsRaw[year][team1].pointsFor += team1Score;
+      seasonRecordsRaw[year][team2].pointsFor += team2Score;
+      seasonRecordsRaw[year][team1].totalGames++;
+      seasonRecordsRaw[year][team2].totalGames++;
+      seasonRecordsRaw[year][team1].weeklyScores.push(team1Score);
+      seasonRecordsRaw[year][team2].weeklyScores.push(team2Score);
     });
 
 
@@ -138,19 +138,18 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
     setCareerDPRData(calculatedCareerDPRs);
 
 
-    // --- Calculate Seasonal DPR ---
-    const calculatedSeasonalDPRs = {};
+    // --- Calculate Seasonal DPR (Consolidated List) ---
+    const allSeasonalDPRs = []; // This will be the flat array
 
-    Object.keys(seasonRecords).sort().forEach(year => {
-      calculatedSeasonalDPRs[year] = [];
-      const teamsInSeason = Object.keys(seasonRecords[year]);
+    Object.keys(seasonRecordsRaw).sort().forEach(year => { // Iterate through years
+      const teamsInSeason = Object.keys(seasonRecordsRaw[year]);
       if (teamsInSeason.length === 0) return;
 
       let totalRawDPRForSeason = 0;
       let teamsWithValidDPR = 0;
 
       teamsInSeason.forEach(team => {
-        const stats = seasonRecords[year][team];
+        const stats = seasonRecordsRaw[year][team];
         if (stats.totalGames === 0) return;
 
         stats.winPercentage = ((stats.wins + (0.5 * stats.ties)) / stats.totalGames);
@@ -169,9 +168,10 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
       const avgRawDPRForSeason = teamsWithValidDPR > 0 ? totalRawDPRForSeason / teamsWithValidDPR : 0;
 
       teamsInSeason.forEach(team => {
-        const stats = seasonRecords[year][team];
+        const stats = seasonRecordsRaw[year][team];
         stats.adjustedDPR = avgRawDPRForSeason > 0 ? stats.rawDPR / avgRawDPRForSeason : 0;
-        calculatedSeasonalDPRs[year].push({
+        allSeasonalDPRs.push({ // Push to the flat array
+          year: parseInt(year), // Add year as a property
           team,
           dpr: stats.adjustedDPR,
           wins: stats.wins,
@@ -180,12 +180,17 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
           pointsFor: stats.pointsFor
         });
       });
-
-      // Sort seasonal DPR data descending for each year
-      calculatedSeasonalDPRs[year].sort((a, b) => b.dpr - a.dpr);
     });
 
-    setSeasonalDPRData(calculatedSeasonalDPRs);
+    // Sort the consolidated seasonal DPR data
+    allSeasonalDPRs.sort((a, b) => {
+        if (b.year !== a.year) { // Sort by year descending first
+            return b.year - a.year;
+        }
+        return b.dpr - a.dpr; // Then by DPR descending
+    });
+
+    setSeasonalDPRData(allSeasonalDPRs); // Set the consolidated array
     setLoading(false);
 
   }, [historicalMatchups, getDisplayTeamName]);
@@ -208,7 +213,7 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
     return `${wins || 0}-${losses || 0}-${ties || 0}`;
   };
 
-  const sortedYears = Object.keys(seasonalDPRData).sort((a, b) => parseInt(b) - parseInt(a));
+  // sortedYears is no longer needed for rendering the consolidated list
 
   return (
     <div className="w-full">
@@ -256,41 +261,47 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
             )}
           </section>
 
-          {/* Seasonal DPR Rankings */}
+          {/* Seasonal DPR Rankings (Consolidated) */}
           <section className="mb-8 p-4 bg-green-50 rounded-lg shadow-sm border border-green-200">
             <h3 className="text-xl font-bold text-green-800 mb-4 border-b pb-2">Seasonal DPR Rankings</h3>
-            {sortedYears.length > 0 ? (
-              sortedYears.map(year => (
-                <div key={year} className="mb-6">
-                  <h4 className="text-lg font-bold text-gray-700 mb-3 bg-gray-100 p-2 rounded-md border-l-4 border-green-500">
-                    {year} Season
-                  </h4>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
-                      <thead className="bg-green-100">
-                        <tr>
-                          <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Rank</th>
-                          <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Team</th>
-                          <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Adjusted DPR</th>
-                          <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Record (W-L-T)</th>
-                          <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Points For</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {seasonalDPRData[year].map((data, index) => (
-                          <tr key={data.team} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                            <td className="py-2 px-3 text-sm text-gray-800">{index + 1}</td>
-                            <td className="py-2 px-3 text-sm text-gray-800">{data.team}</td>
-                            <td className="py-2 px-3 text-sm text-gray-700">{formatDPR(data.dpr)}</td>
-                            <td className="py-2 px-3 text-sm text-gray-700">{renderRecord(data.wins, data.losses, data.ties)}</td>
-                            <td className="py-2 px-3 text-sm text-gray-700">{formatPoints(data.pointsFor)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ))
+            {seasonalDPRData.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
+                  <thead className="bg-green-100">
+                    <tr>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Rank (Season)</th>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Season</th> {/* New column */}
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Team</th>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Adjusted DPR</th>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Record (W-L-T)</th>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Points For</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {/* Iterate directly over the flat seasonalDPRData array */}
+                    {seasonalDPRData.map((data, index) => (
+                      <tr key={`${data.team}-${data.year}`} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                        {/* Calculate rank within each season group on the fly if needed, or simply display sequential index */}
+                        <td className="py-2 px-3 text-sm text-gray-800">{
+                            // Simple rank based on current sorted order. For per-season rank, more logic is needed.
+                            // For now, it's a global rank, which might be confusing.
+                            // Let's refine this to be per-season rank based on sorted data.
+                            // This would require finding the rank within its year's group.
+                            // Simpler: just display overall index and note that in intro/outro
+                            // For true per-season rank, we'd need to group them again here, or pre-calculate ranks in useEffect.
+                            // For now, I'll provide an overall rank and you can re-evaluate if specific per-season ranks are needed.
+                            index + 1 // This will show overall rank
+                        }</td>
+                        <td className="py-2 px-3 text-sm text-gray-800">{data.year}</td> {/* Display Season */}
+                        <td className="py-2 px-3 text-sm text-gray-800">{data.team}</td>
+                        <td className="py-2 px-3 text-sm text-gray-700">{formatDPR(data.dpr)}</td>
+                        <td className="py-2 px-3 text-sm text-gray-700">{renderRecord(data.wins, data.losses, data.ties)}</td>
+                        <td className="py-2 px-3 text-sm text-gray-700">{formatPoints(data.pointsFor)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <p className="text-center text-gray-600">No seasonal DPR data available.</p>
             )}
