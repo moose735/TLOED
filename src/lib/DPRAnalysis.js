@@ -123,7 +123,14 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
     Object.keys(allTimeRecords).forEach(team => {
       const stats = allTimeRecords[team];
       stats.adjustedDPR = avgRawDPROverall > 0 ? stats.careerRawDPR / avgRawDPROverall : 0;
-      calculatedCareerDPRs.push({ team, dpr: stats.adjustedDPR });
+      calculatedCareerDPRs.push({
+        team,
+        dpr: stats.adjustedDPR,
+        wins: stats.wins,
+        losses: stats.losses,
+        ties: stats.ties,
+        pointsFor: stats.totalPointsFor
+      });
     });
 
     // Sort career DPR data descending
@@ -164,7 +171,14 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
       teamsInSeason.forEach(team => {
         const stats = seasonRecords[year][team];
         stats.adjustedDPR = avgRawDPRForSeason > 0 ? stats.rawDPR / avgRawDPRForSeason : 0;
-        calculatedSeasonalDPRs[year].push({ team, dpr: stats.adjustedDPR });
+        calculatedSeasonalDPRs[year].push({
+          team,
+          dpr: stats.adjustedDPR,
+          wins: stats.wins,
+          losses: stats.losses,
+          ties: stats.ties,
+          pointsFor: stats.pointsFor
+        });
       });
 
       // Sort seasonal DPR data descending for each year
@@ -181,6 +195,17 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
       return dprValue.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
     }
     return 'N/A';
+  };
+
+  const formatPoints = (value) => {
+    if (typeof value === 'number' && !isNaN(value)) {
+        return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    return 'N/A';
+  };
+
+  const renderRecord = (wins, losses, ties) => {
+    return `${wins || 0}-${losses || 0}-${ties || 0}`;
   };
 
   const sortedYears = Object.keys(seasonalDPRData).sort((a, b) => parseInt(b) - parseInt(a));
@@ -209,6 +234,8 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                       <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Rank</th>
                       <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
                       <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Adjusted DPR</th>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record (W-L-T)</th>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Points For</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -217,6 +244,8 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                         <td className="py-2 px-3 text-sm text-gray-800">{index + 1}</td>
                         <td className="py-2 px-3 text-sm text-gray-800">{data.team}</td>
                         <td className="py-2 px-3 text-sm text-gray-700">{formatDPR(data.dpr)}</td>
+                        <td className="py-2 px-3 text-sm text-gray-700">{renderRecord(data.wins, data.losses, data.ties)}</td>
+                        <td className="py-2 px-3 text-sm text-gray-700">{formatPoints(data.pointsFor)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -243,6 +272,8 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                           <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Rank</th>
                           <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Team</th>
                           <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Adjusted DPR</th>
+                          <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Record (W-L-T)</th>
+                          <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Points For</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -251,6 +282,8 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                             <td className="py-2 px-3 text-sm text-gray-800">{index + 1}</td>
                             <td className="py-2 px-3 text-sm text-gray-800">{data.team}</td>
                             <td className="py-2 px-3 text-sm text-gray-700">{formatDPR(data.dpr)}</td>
+                            <td className="py-2 px-3 text-sm text-gray-700">{renderRecord(data.wins, data.losses, data.ties)}</td>
+                            <td className="py-2 px-3 text-sm text-gray-700">{formatPoints(data.pointsFor)}</td>
                           </tr>
                         ))}
                       </tbody>
