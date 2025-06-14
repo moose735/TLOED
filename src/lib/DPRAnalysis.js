@@ -141,7 +141,7 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
     // --- Calculate Seasonal DPR (Consolidated List) ---
     const allSeasonalDPRs = []; // This will be the flat array
 
-    Object.keys(seasonRecordsRaw).sort().forEach(year => { // Iterate through years
+    Object.keys(seasonRecordsRaw).forEach(year => { // Iterate through years (no specific sort here yet, will sort globally later)
       const teamsInSeason = Object.keys(seasonRecordsRaw[year]);
       if (teamsInSeason.length === 0) return;
 
@@ -182,13 +182,8 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
       });
     });
 
-    // Sort the consolidated seasonal DPR data
-    allSeasonalDPRs.sort((a, b) => {
-        if (b.year !== a.year) { // Sort by year descending first
-            return b.year - a.year;
-        }
-        return b.dpr - a.dpr; // Then by DPR descending
-    });
+    // Sort the consolidated seasonal DPR data ONLY by DPR descending
+    allSeasonalDPRs.sort((a, b) => b.dpr - a.dpr);
 
     setSeasonalDPRData(allSeasonalDPRs); // Set the consolidated array
     setLoading(false);
@@ -212,8 +207,6 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
   const renderRecord = (wins, losses, ties) => {
     return `${wins || 0}-${losses || 0}-${ties || 0}`;
   };
-
-  // sortedYears is no longer needed for rendering the consolidated list
 
   return (
     <div className="w-full">
@@ -269,8 +262,8 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                 <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
                   <thead className="bg-green-100">
                     <tr>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Rank (Season)</th>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Season</th> {/* New column */}
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Rank (Overall)</th> {/* Adjusted label */}
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Season</th>
                       <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Team</th>
                       <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Adjusted DPR</th>
                       <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Record (W-L-T)</th>
@@ -281,18 +274,8 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                     {/* Iterate directly over the flat seasonalDPRData array */}
                     {seasonalDPRData.map((data, index) => (
                       <tr key={`${data.team}-${data.year}`} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                        {/* Calculate rank within each season group on the fly if needed, or simply display sequential index */}
-                        <td className="py-2 px-3 text-sm text-gray-800">{
-                            // Simple rank based on current sorted order. For per-season rank, more logic is needed.
-                            // For now, it's a global rank, which might be confusing.
-                            // Let's refine this to be per-season rank based on sorted data.
-                            // This would require finding the rank within its year's group.
-                            // Simpler: just display overall index and note that in intro/outro
-                            // For true per-season rank, we'd need to group them again here, or pre-calculate ranks in useEffect.
-                            // For now, I'll provide an overall rank and you can re-evaluate if specific per-season ranks are needed.
-                            index + 1 // This will show overall rank
-                        }</td>
-                        <td className="py-2 px-3 text-sm text-gray-800">{data.year}</td> {/* Display Season */}
+                        <td className="py-2 px-3 text-sm text-gray-800">{index + 1}</td> {/* Overall rank */}
+                        <td className="py-2 px-3 text-sm text-gray-800">{data.year}</td>
                         <td className="py-2 px-3 text-sm text-gray-800">{data.team}</td>
                         <td className="py-2 px-3 text-sm text-gray-700">{formatDPR(data.dpr)}</td>
                         <td className="py-2 px-3 text-sm text-gray-700">{renderRecord(data.wins, data.losses, data.ties)}</td>
