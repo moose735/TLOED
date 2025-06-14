@@ -3,12 +3,14 @@ import React, { useState, useEffect, useCallback } from 'react';
 import PowerRankings from './lib/PowerRankings';
 import MatchupHistory from './lib/MatchupHistory';
 import RecordBook from './lib/RecordBook';
+import DPRAnalysis from './lib/DPRAnalysis'; // Import the new DPRAnalysis component
 import { HISTORICAL_MATCHUPS_API_URL } from './config'; // Import the API URL
 
 const TABS = {
   POWER_RANKINGS: 'powerRankings',
   LEAGUE_HISTORY: 'leagueHistory',
   RECORD_BOOK: 'recordBook',
+  DPR_ANALYSIS: 'dprAnalysis', // New tab for DPR Analysis
 };
 
 const App = () => {
@@ -100,6 +102,16 @@ const App = () => {
         >
           Record Book
         </button>
+        <button
+          className={`px-6 py-2 rounded-md font-semibold text-lg transition-colors ${
+            activeTab === TABS.DPR_ANALYSIS // New tab button
+              ? 'bg-blue-600 text-white shadow-md'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          }`}
+          onClick={() => setActiveTab(TABS.DPR_ANALYSIS)} // Set active tab
+        >
+          DPR Analysis
+        </button>
       </nav>
 
       <main className="w-full max-w-4xl">
@@ -117,6 +129,12 @@ const App = () => {
             historicalMatchups={historicalMatchups}
             loading={loadingHistoricalData}
             error={historicalDataError}
+            getDisplayTeamName={getMappedTeamName}
+          />
+        )}
+        {activeTab === TABS.DPR_ANALYSIS && ( // Render DPRAnalysis component
+          <DPRAnalysis
+            historicalMatchups={historicalMatchups}
             getDisplayTeamName={getMappedTeamName}
           />
         )}
