@@ -136,19 +136,19 @@ const LuckRatingAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
             return;
         }
 
-        const totalLuckScoreSum = teamWeeklyCalculations.weeklyLuckScores.reduce((sum, score) => sum + score, 0);
-        const totalProjectedWinsSum = teamWeeklyCalculations.weeklyProjectedWins.reduce((sum, wins) => sum + wins, 0);
+        const totalLuckScoreSum = teamWeeklyCalculations.weeklyLuckScores.reduce((sum, score) => sum + score, 0); // Sum of (X/11 + Y/22) per week
+        const totalProjectedWinsSum = teamWeeklyCalculations.weeklyProjectedWins.reduce((sum, wins) => sum + wins, 0); // Sum of (X/11) per week
 
-        // Final Luck Rating Calculation: Actual Wins - Projected Wins
-        const finalLuckRating = teamSeasonWins - totalProjectedWinsSum;
+        // Final Luck Rating Calculation: (Sum of all weekly luck scores) - Actual Wins
+        const finalLuckRating = totalLuckScoreSum - teamSeasonWins;
 
         allSeasonalLuckData.push({
           year: parseInt(year),
           team,
           luckRating: finalLuckRating,
           actualWins: teamSeasonWins,
-          projectedWins: totalProjectedWinsSum,
-          luckScoreSum: totalLuckScoreSum, // For debugging/transparency, this is the sum of (X/11) + (Y/22)
+          projectedWins: totalProjectedWinsSum, // This is still the sum of (X/11), can be renamed if confusing
+          fullProjectedWins: totalLuckScoreSum, // This is the 'Projected Wins' for the final Luck Rating formula
         });
       });
     });
@@ -183,7 +183,7 @@ const LuckRatingAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
       </h2>
       <p className="text-sm text-gray-600 mb-6 text-center">
         A seasonal rating indicating how "lucky" a team was, calculated only for **regular season games**.
-        Formula: (Actual Regular Season Wins - Projected Regular Season Wins). Projected Wins are based on weekly matchups: ((Scores less than Team Score) / 11) summed weekly.
+        Formula: (Sum of all weekly luck scores) - (Actual Regular Season Wins). Weekly luck scores are calculated as: ((Scores less than Team Score) / 11) + ((Scores exactly 1 less than Team Score) / 22).
         Higher values indicate more favorable weekly outcomes.
       </p>
 
@@ -202,8 +202,8 @@ const LuckRatingAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                     <th className="py-2 px-3 text-left text-xs font-semibold text-yellow-700 uppercase tracking-wider border-b border-gray-200">Team</th>
                     <th className="py-2 px-3 text-left text-xs font-semibold text-yellow-700 uppercase tracking-wider border-b border-gray-200">Luck Rating</th>
                     <th className="py-2 px-3 text-left text-xs font-semibold text-yellow-700 uppercase tracking-wider border-b border-gray-200">Actual Wins</th>
-                    <th className="py-2 px-3 text-left text-xs font-semibold text-yellow-700 uppercase tracking-wider border-b border-gray-200">Projected Wins</th>
-                    {/* <th className="py-2 px-3 text-left text-xs font-semibold text-yellow-700 uppercase tracking-wider border-b border-gray-200">Luck Score Sum (Debug)</th> */}
+                    <th className="py-2 px-3 text-left text-xs font-semibold text-yellow-700 uppercase tracking-wider border-b border-gray-200">Projected Wins (X/11)</th>
+                    <th className="py-2 px-3 text-left text-xs font-semibold text-yellow-700 uppercase tracking-wider border-b border-gray-200">Full Projected Wins (X/11 + Y/22)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -215,7 +215,7 @@ const LuckRatingAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                       <td className="py-2 px-3 text-sm text-gray-700">{formatLuckRating(data.luckRating)}</td>
                       <td className="py-2 px-3 text-sm text-gray-700">{data.actualWins}</td>
                       <td className="py-2 px-3 text-sm text-gray-700">{formatLuckRating(data.projectedWins)}</td>
-                      {/* <td className="py-2 px-3 text-sm text-gray-700">{formatLuckRating(data.luckScoreSum)}</td> */}
+                      <td className="py-2 px-3 text-sm text-gray-700">{formatLuckRating(data.fullProjectedWins)}</td>
                     </tr>
                   ))}
                 </tbody>
