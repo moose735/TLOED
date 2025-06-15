@@ -3,7 +3,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   HISTORICAL_MATCHUPS_API_URL,
   GOOGLE_SHEET_CHAMPIONS_API_URL, // Will use mock data if not provided
-  // NICKNAME_TO_SLEEPER_USER and SLEEPER_LEAGUE_ID are no longer needed here
 } from './config';
 
 // Import existing components from your provided App.js
@@ -305,17 +304,8 @@ const App = () => {
 
       <header className="w-full max-w-4xl bg-gradient-to-r from-blue-600 to-blue-800 text-white p-6 rounded-xl shadow-lg mb-8 text-center">
         <h1 className="text-4xl font-extrabold mb-2">Fantasy League Dashboard</h1>
-        {sleeperLeagueData && ( // Still keeping sleeperLeagueData if it were to be re-added for league name display
-          <p className="text-xl">
-            {sleeperLeagueData.name} ({sleeperLeagueData.season} Season)
-          </p>
-        )}
-        {!sleeperLeagueData && (
-          <p className="text-xl">Your central hub for league insights!</p>
-        )}
+        <p className="text-xl">Your central hub for league insights!</p>
       </header>
-
-      {/* Team Ticker - Removed as per user instruction. */}
 
       {/* Navigation Tabs with Dropdown */}
       <nav className="navbar mb-0">
