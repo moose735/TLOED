@@ -74,8 +74,9 @@ const LuckRatingAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
 
       Object.keys(weeklyGameScoresByYearAndWeek[year]).forEach(week => {
         const allScoresInCurrentWeek = weeklyGameScoresByYearAndWeek[year][week];
-        const uniqueTeamsInWeek = [...new Set(allScoresInCurrentWeek.map(entry => entry.team))];
-        const numTeamsInWeek = uniqueTeamsInWeek.length; // Actual number of teams that played in this week
+        // The Excel formula implies a fixed 11 opponents, so we'll use 11/22 explicitly.
+        // const uniqueTeamsInWeek = [...new Set(allScoresInCurrentWeek.map(entry => entry.team))];
+        // const numTeamsInWeek = uniqueTeamsInWeek.length; // Actual number of teams that played in this week
 
         // Calculate luck for each team in this specific week
         allScoresInCurrentWeek.forEach(currentTeamEntry => {
@@ -104,11 +105,9 @@ const LuckRatingAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
             }
           });
 
-          // Denominator for a 12-team league would be 11 (opponents).
-          // For robustness, let's use numTeamsInWeek - 1, or fall back to 11 if numTeamsInWeek is low (e.g., bye week)
-          const actualOpponentsInWeek = numTeamsInWeek - 1;
-          const denominatorX = actualOpponentsInWeek > 0 ? actualOpponentsInWeek : 11; // Use 11 as a robust fallback for typical league size
-          const denominatorY = denominatorX * 2; // For the /22 part of the formula
+          // Fixed denominators as per Excel formula: /11 and /22
+          const denominatorX = 11; // Always 11 as per the formula assuming 12-team league
+          const denominatorY = 22; // Always 22 as per the formula
 
           const weeklyProjectedWin = outscoredCount / denominatorX; // This is the (X/11) part
           const weeklyLuckScorePart2 = oneLessCount / denominatorY; // This is the (Y/22) part
