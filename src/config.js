@@ -2,7 +2,7 @@
 
 // Google Apps Script URL for Power Rankings
 // NOTE: This URL is used by PowerRankings.js directly.
-export const GOOGLE_SHEET_POWER_RANKINGS_API_URL = 'YOUR_GOOGLE_SHEET_POWER_RANKINGS_API_URL';
+export const GOOGLE_SHEET_POWER_RANKINGS_API_URL = 'https://script.google.com/macros/s/AKfycbxU2TLDiOxoym2VETq3qrfwUCjE9O0c_gbwHhfAgnrk2faxcBt30EW0jJIq6WXwtYhPdw/exec';
 
 // Google Apps Script URL for All Historical Matchups (used by MatchupHistory, RecordBook, DPRAnalysis, LuckRatingAnalysis, TeamDetailPage)
 export const HISTORICAL_MATCHUPS_API_URL = 'https://script.google.com/macros/s/AKfycbxpo21zzZgNamYShESfqe-SX09miJz2LK7SpdlYrtHXQplneB3bF2xu2byy0HhjM8e-/exec';
