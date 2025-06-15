@@ -1,6 +1,14 @@
 // src/lib/TeamDetailPage.js
 import React, { useState, useEffect } from 'react';
 
+// Helper function to get ordinal suffix (1st, 2nd, 3rd, 4th, etc.)
+const getOrdinalSuffix = (n) => {
+  if (typeof n !== 'number' || isNaN(n)) return '';
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return (s[v - 20] || s[v] || s[0]);
+};
+
 const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, historicalChampions }) => {
   const [teamOverallStats, setTeamOverallStats] = useState(null);
   const [teamSeasonHistory, setTeamSeasonHistory] = useState([]);
@@ -28,12 +36,32 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
       allPlayWinsTotal: 0,
       allPlayLossesTotal: 0,
       allPlayTiesTotal: 0,
+      // For overall rank calculations
+      allTeamsOverallStats: {},
     };
 
     const seasonHistoryMap = {}; // { year: { wins, losses, ties, pointsFor, pointsAgainst, luckRating, dpr, finish, weeklyScores: [] } }
-    const weeklyGameScoresByYearAndWeek = {}; // For calculating weekly luck scores and all-play
+    const weeklyGameScoresByYearAndWeek = {}; // { year: { week: [{ team: 'TeamA', score: 100 }, ...] } }
 
-    // First Pass: Aggregate all base data (actual W-L-T, points, weekly scores, and playoff flags)
+    // Initialize allTeamsOverallStats for all teams found in matchups for ranking purposes
+    const allUniqueTeams = new Set();
+    historicalMatchups.forEach(match => {
+        allUniqueTeams.add(getMappedTeamName(String(match.team1 || '').trim()));
+        allUniqueTeams.add(getMappedTeamName(String(match.team2 || '').trim()));
+    });
+    Array.from(allUniqueTeams).forEach(team => {
+        if (team) { // Ensure team name is not empty
+            overallStats.allTeamsOverallStats[team] = {
+                totalWins: 0,
+                totalLosses: 0,
+                totalTies: 0,
+                totalPointsFor: 0,
+                highestScore: 0,
+                playoffAppearances: new Set(), // Use a Set to count unique years
+            };
+        }
+    });
+
     historicalMatchups.forEach(match => {
       const displayTeam1 = getMappedTeamName(String(match.team1 || '').trim());
       const displayTeam2 = getMappedTeamName(String(match.team2 || '').trim());
@@ -46,13 +74,31 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
           return; // Skip invalid records
       }
 
-      // Ensure both teams are valid and either is the selected team
-      if (displayTeam1 !== teamName && displayTeam2 !== teamName) {
-        return; // Only process matches involving the selected team
-      }
-
       const isTie = team1Score === team2Score;
       const team1Won = team1Score > team2Score;
+
+      // Update overall stats for all teams for ranking purposes
+      [displayTeam1, displayTeam2].forEach(currentTeam => {
+        if (overallStats.allTeamsOverallStats[currentTeam]) {
+            if (currentTeam === displayTeam1) {
+                overallStats.allTeamsOverallStats[currentTeam].totalPointsFor += team1Score;
+                overallStats.allTeamsOverallStats[currentTeam].highestScore = Math.max(overallStats.allTeamsOverallStats[currentTeam].highestScore, team1Score);
+            } else {
+                overallStats.allTeamsOverallStats[currentTeam].totalPointsFor += team2Score;
+                overallStats.allTeamsOverallStats[currentTeam].highestScore = Math.max(overallStats.allTeamsOverallStats[currentTeam].highestScore, team2Score);
+            }
+
+            if (match.playoffs === true) {
+                overallStats.allTeamsOverallStats[currentTeam].playoffAppearances.add(year);
+            }
+        }
+      });
+
+
+      // Process specific data for the selected team
+      if (displayTeam1 !== teamName && displayTeam2 !== teamName) {
+        return; // Only process matches involving the selected team for its specific history
+      }
 
       // Initialize season history for current year if not present
       if (!seasonHistoryMap[year]) {
@@ -60,7 +106,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
           wins: 0, losses: 0, ties: 0,
           pointsFor: 0, pointsAgainst: 0,
           luckRating: 0, dpr: 0, // These will be calculated later
-          finish: 'N/A', // Determined from champions or other data
+          finish: 'N/A', // Determined from finalSeedingGame
           weeklyScores: [], // For DPR calculation
           allPlayWins: 0, allPlayLosses: 0, allPlayTies: 0, // For all-play win %
         };
@@ -113,7 +159,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
       overallStats.totalPointsFor += selectedTeamScore;
       overallStats.totalGamesPlayed++;
 
-      // Update highest score
+      // Update highest score for the selected team
       if (selectedTeamScore > overallStats.highestScore.value) {
         overallStats.highestScore = {
           value: selectedTeamScore,
@@ -130,6 +176,46 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
       // Track playoff appearances (only if match.playoffs is true, distinct years)
       if (match.playoffs === true) {
         overallStats.playoffAppearances.add(year);
+      }
+
+      // Determine final season finish using `finalSeedingGame`
+      if (typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0) {
+        let winningTeam = team1Won ? displayTeam1 : (isTie ? 'Tie' : displayTeam2);
+        let losingTeam = team1Won ? displayTeam2 : (isTie ? 'Tie' : displayTeam1);
+
+        // If the selected team was in this final seeding game
+        if (displayTeam1 === teamName || displayTeam2 === teamName) {
+            const finalPlace = match.finalSeedingGame;
+            const isSelectedTeamWinner = (winningTeam === teamName);
+
+            if (finalPlace === 1) {
+                if (isSelectedTeamWinner) {
+                    seasonHistoryMap[year].finish = '1st (Champion)';
+                } else if (losingTeam === teamName) {
+                    seasonHistoryMap[year].finish = '2nd (Runner-Up)';
+                }
+            } else if (finalPlace === 3) {
+                if (isSelectedTeamWinner) {
+                    seasonHistoryMap[year].finish = '3rd Place';
+                } else if (losingTeam === teamName) {
+                    seasonHistoryMap[year].finish = '4th Place';
+                }
+            } else if (finalPlace === 5) {
+                if (isSelectedTeamWinner) {
+                    seasonHistoryMap[year].finish = '5th Place';
+                } else if (losingTeam === teamName) {
+                    seasonHistoryMap[year].finish = '6th Place';
+                }
+            }
+            // Can extend for other final seeding games (7th, 9th, etc.)
+            else if (typeof finalPlace === 'number' && finalPlace > 0 && finalPlace % 2 !== 0) {
+                if (isSelectedTeamWinner) {
+                    seasonHistoryMap[year].finish = `${finalPlace}${getOrdinalSuffix(finalPlace)} Place`;
+                } else if (losingTeam === teamName) {
+                    seasonHistoryMap[year].finish = `${finalPlace + 1}${getOrdinalSuffix(finalPlace + 1)} Place`;
+                }
+            }
+        }
       }
     });
 
@@ -275,21 +361,16 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
     });
 
 
-    // --- Determine Season Finish (from Historical Champions data) ---
+    // --- Determine Overall Championships (from Historical Champions data) ---
+    // This part should count championships based on the historicalChampions prop,
+    // which ideally lists definitive champions.
     historicalChampions.forEach(championEntry => {
-      const year = championEntry.year;
-      const champ = getMappedTeamName(championEntry.champion);
-      const runnerUp = getMappedTeamName(championEntry.runnerUp);
-
-      if (seasonHistoryMap[year]) {
+        const champ = getMappedTeamName(championEntry.champion);
         if (champ === teamName) {
-          seasonHistoryMap[year].finish = '1st (Champion)';
-          overallStats.championships++;
-        } else if (runnerUp === teamName) {
-          seasonHistoryMap[year].finish = '2nd (Runner-Up)';
+            overallStats.championships++;
         }
-      }
     });
+
 
     // Calculate overall Win %
     if (overallStats.totalGamesPlayed > 0) {
@@ -306,79 +387,54 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
     overallStats.overallAllPlayWinPct = totalOverallAllPlayGames > 0 ? ((overallStats.allPlayWinsTotal + (0.5 * overallStats.allPlayTiesTotal)) / totalOverallAllPlayGames) : 0;
 
 
-    // --- Calculate Ranks among all teams (from historicalMatchups directly) ---
-    const allTeamsOverallStats = {}; // { teamName: { totalWins, totalPointsFor, playoffAppearancesCount, highestScore } }
-
-    // Populate allTeamsOverallStats by iterating through all historical matchups
+    // --- Calculate Ranks among all teams ---
+    // Recalculate full overall records for all teams to get rankings
     historicalMatchups.forEach(match => {
         const team1 = getMappedTeamName(String(match.team1 || '').trim());
         const team2 = getMappedTeamName(String(match.team2 || '').trim());
         const team1Score = parseFloat(match.team1Score);
         const team2Score = parseFloat(match.team2Score);
-        const year = parseInt(match.year);
 
         if (isNaN(team1Score) || isNaN(team2Score) || !team1 || !team2) return;
 
-        [team1, team2].forEach(currentTeam => {
-            if (!allTeamsOverallStats[currentTeam]) {
-                allTeamsOverallStats[currentTeam] = {
-                    totalWins: 0,
-                    totalLosses: 0,
-                    totalTies: 0,
-                    totalPointsFor: 0,
-                    highestScore: 0,
-                    playoffAppearancesCount: 0, // Will be set using Set later
-                    dpr: 0, // Placeholder
-                };
-            }
-        });
-
-        // Update overall records and points for each team
         const isTie = team1Score === team2Score;
         const team1Won = team1Score > team2Score;
 
-        if (isTie) {
-            allTeamsOverallStats[team1].totalTies++;
-            allTeamsOverallStats[team2].totalTies++;
-        } else if (team1Won) {
-            allTeamsOverallStats[team1].totalWins++;
-            allTeamsOverallStats[team2].totalLosses++;
-        } else {
-            allTeamsOverallStats[team2].totalWins++;
-            allTeamsOverallStats[team1].totalLosses++;
+        if (overallStats.allTeamsOverallStats[team1]) {
+            if (isTie) overallStats.allTeamsOverallStats[team1].totalTies++;
+            else if (team1Won) overallStats.allTeamsOverallStats[team1].totalWins++;
+            else overallStats.allTeamsOverallStats[team1].totalLosses++;
         }
-
-        allTeamsOverallStats[team1].totalPointsFor += team1Score;
-        allTeamsOverallStats[team2].totalPointsFor += team2Score;
-
-        allTeamsOverallStats[team1].highestScore = Math.max(allTeamsOverallStats[team1].highestScore, team1Score);
-        allTeamsOverallStats[team2].highestScore = Math.max(allTeamsOverallStats[team2].highestScore, team2Score);
-
-        if (match.playoffs === true) {
-            // Use a temporary Set within allTeamsOverallStats to count unique appearances per team
-            if (!allTeamsOverallStats[team1]._playoffYears) allTeamsOverallStats[team1]._playoffYears = new Set();
-            if (!allTeamsOverallStats[team2]._playoffYears) allTeamsOverallStats[team2]._playoffYears = new Set();
-            allTeamsOverallStats[team1]._playoffYears.add(year);
-            allTeamsOverallStats[team2]._playoffYears.add(year);
+        if (overallStats.allTeamsOverallStats[team2]) {
+            if (isTie) overallStats.allTeamsOverallStats[team2].totalTies++;
+            else if (!team1Won) overallStats.allTeamsOverallStats[team2].totalWins++;
+            else overallStats.allTeamsOverallStats[team2].totalLosses++;
         }
     });
-
-    // Finalize playoff appearances count for all teams
-    Object.keys(allTeamsOverallStats).forEach(team => {
-        if (allTeamsOverallStats[team]._playoffYears) {
-            allTeamsOverallStats[team].playoffAppearancesCount = allTeamsOverallStats[team]._playoffYears.size;
-        }
-    });
-
 
     // Function to calculate rank for a given metric
     const calculateRank = (metricKey, isHigherBetter = true) => {
-        const teamsWithMetric = Object.entries(allTeamsOverallStats).map(([tName, stats]) => ({
+        const teamsWithMetric = Object.entries(overallStats.allTeamsOverallStats).map(([tName, stats]) => ({
             team: tName,
             value: stats[metricKey]
         })).filter(item => typeof item.value === 'number' && !isNaN(item.value));
 
         if (teamsWithMetric.length === 0) return 'N/A';
+
+        // Include "championships" from overallStats for ranking.
+        // Special handling for metrics that are not directly in allTeamsOverallStats.
+        if (metricKey === 'championships') {
+            const champsRankData = Object.keys(overallStats.allTeamsOverallStats).map(tName => ({
+                team: tName,
+                value: historicalChampions.filter(c => getMappedTeamName(c.champion) === tName).length // Count championships based on the prop
+            })).filter(item => item.value !== undefined);
+            if (champsRankData.length > 0) {
+                 champsRankData.sort((a, b) => b.value - a.value);
+                 const rank = champsRankData.findIndex(item => item.team === teamName) + 1;
+                 return rank > 0 ? `${rank} of ${champsRankData.length}` : 'N/A';
+            }
+        }
+
 
         teamsWithMetric.sort((a, b) => isHigherBetter ? b.value - a.value : a.value - b.value);
 
@@ -390,8 +446,8 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
     overallStats.rankTotalPointsFor = calculateRank('totalPointsFor');
     overallStats.rankHighestScore = calculateRank('highestScore');
     overallStats.rankPlayoffAppearances = calculateRank('playoffAppearancesCount');
-    overallStats.rankDPR = 'N/A'; // DPR ranking is complex and requires league-wide adjusted DPR, leaving N/A for now
-
+    overallStats.rankChampionships = calculateRank('championships'); // Calculate rank for championships
+    overallStats.rankDPR = 'N/A'; // Placeholder until full league-wide DPR available for ranking
 
     // Sort season history by year descending
     const sortedSeasonHistory = Object.keys(seasonHistoryMap)
@@ -402,7 +458,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
     setTeamSeasonHistory(sortedSeasonHistory);
     setLoadingStats(false);
 
-  }, [teamName, historicalMatchups, getMappedTeamName, historicalChampions]);
+  }, [teamName, historicalMatchups, getMappedTeamName, historicalChampions]); // Added historicalChampions to dependencies
 
 
   const formatScore = (value) => {
@@ -498,6 +554,10 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
           <div className="bg-white p-3 rounded-md shadow-sm border border-gray-200">
             <p className="font-semibold text-gray-700">Rank (Highest Score):</p>
             <p className="text-blue-600 font-bold">{teamOverallStats.rankHighestScore}</p>
+          </div>
+          <div className="bg-white p-3 rounded-md shadow-sm border border-gray-200">
+            <p className="font-semibold text-gray-700">Rank (Championships):</p>
+            <p className="text-blue-600 font-bold">{teamOverallStats.rankChampionships}</p>
           </div>
         </div>
       </section>
