@@ -192,7 +192,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
       // Determine final season finish using `finalSeedingGame`
       if (typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0) {
         let winningTeam = team1Won ? displayTeam1 : (isTie ? 'Tie' : displayTeam2);
-        let losingTeam = team1Won ? displayTeam2 : (isTie ? 'Tie' : team1); // Corrected losingTeam for ties
+        let losingTeam = team1Won ? displayTeam2 : (isTie ? 'Tie' : displayTeam1); // Corrected this line to use displayTeam1
 
         // If the selected team was in this final seeding game
         if (displayTeam1 === teamName || displayTeam2 === teamName) {
