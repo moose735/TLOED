@@ -3,14 +3,16 @@ import React, { useState, useEffect, useCallback } from 'react';
 import PowerRankings from './lib/PowerRankings';
 import MatchupHistory from './lib/MatchupHistory';
 import RecordBook from './lib/RecordBook';
-import DPRAnalysis from './lib/DPRAnalysis'; // Import the new DPRAnalysis component
+import DPRAnalysis from './lib/DPRAnalysis';
+import LuckRatingAnalysis from './lib/LuckRatingAnalysis'; // Import the new LuckRatingAnalysis component
 import { HISTORICAL_MATCHUPS_API_URL } from './config'; // Import the API URL
 
 const TABS = {
   POWER_RANKINGS: 'powerRankings',
   LEAGUE_HISTORY: 'leagueHistory',
   RECORD_BOOK: 'recordBook',
-  DPR_ANALYSIS: 'dprAnalysis', // New tab for DPR Analysis
+  DPR_ANALYSIS: 'dprAnalysis',
+  LUCK_RATING: 'luckRating', // New tab for Luck Rating Analysis
 };
 
 const App = () => {
@@ -104,13 +106,23 @@ const App = () => {
         </button>
         <button
           className={`px-6 py-2 rounded-md font-semibold text-lg transition-colors ${
-            activeTab === TABS.DPR_ANALYSIS // New tab button
+            activeTab === TABS.DPR_ANALYSIS
               ? 'bg-blue-600 text-white shadow-md'
               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
           }`}
-          onClick={() => setActiveTab(TABS.DPR_ANALYSIS)} // Set active tab
+          onClick={() => setActiveTab(TABS.DPR_ANALYSIS)}
         >
           DPR Analysis
+        </button>
+        <button
+          className={`px-6 py-2 rounded-md font-semibold text-lg transition-colors ${
+            activeTab === TABS.LUCK_RATING // New tab button
+              ? 'bg-blue-600 text-white shadow-md'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          }`}
+          onClick={() => setActiveTab(TABS.LUCK_RATING)} // Set active tab
+        >
+          Luck Rating
         </button>
       </nav>
 
@@ -132,8 +144,14 @@ const App = () => {
             getDisplayTeamName={getMappedTeamName}
           />
         )}
-        {activeTab === TABS.DPR_ANALYSIS && ( // Render DPRAnalysis component
+        {activeTab === TABS.DPR_ANALYSIS && (
           <DPRAnalysis
+            historicalMatchups={historicalMatchups}
+            getDisplayTeamName={getMappedTeamName}
+          />
+        )}
+        {activeTab === TABS.LUCK_RATING && ( // Render LuckRatingAnalysis component
+          <LuckRatingAnalysis
             historicalMatchups={historicalMatchups}
             getDisplayTeamName={getMappedTeamName}
           />
