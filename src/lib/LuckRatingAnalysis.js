@@ -12,10 +12,13 @@ const LuckRatingAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
       return;
     }
 
-    const seasonRecordsRaw = {};
-    const weeklyGameScoresByYear = {};
+    // Stores weekly game scores for all teams: { year: { week: [{ team: 'TeamA', score: 100 }, { team: 'TeamB', score: 90 }, ...] } }
+    const weeklyGameScoresByYearAndWeek = {};
 
-    // First Pass: Aggregate basic data and weekly scores for luck calculation
+    // Stores basic seasonal team stats (wins) for the final luck rating adjustment: { year: { team: { wins: 0, losses: 0, ties: 0 } } }
+    const seasonalTeamOverallRecords = {};
+
+    // First Pass: Populate initial data structures
     historicalMatchups.forEach(match => {
       const team1 = getDisplayTeamName(String(match.team1 || '').trim());
       const team2 = getDisplayTeamName(String(match.team2 || '').trim());
@@ -28,90 +31,122 @@ const LuckRatingAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
         return; // Skip invalid data
       }
 
-      // Initialize structures for teams (seasonal)
+      const isTie = team1Score === team2Score;
+      const team1Won = team1Score > team2Score;
+
+      // Populate weeklyGameScoresByYearAndWeek
+      if (!weeklyGameScoresByYearAndWeek[year]) {
+        weeklyGameScoresByYearAndWeek[year] = {};
+      }
+      if (!weeklyGameScoresByYearAndWeek[year][week]) {
+        weeklyGameScoresByYearAndWeek[year][week] = [];
+      }
+      weeklyGameScoresByYearAndWeek[year][week].push({ team: team1, score: team1Score }, { team: team2, score: team2Score });
+
+      // Populate seasonalTeamOverallRecords
       [team1, team2].forEach(team => {
-        if (!seasonRecordsRaw[year]) {
-          seasonRecordsRaw[year] = {};
+        if (!seasonalTeamOverallRecords[year]) {
+          seasonalTeamOverallRecords[year] = {};
         }
-        if (!seasonRecordsRaw[year][team]) {
-          seasonRecordsRaw[year][team] = {
-            pointsFor: 0,
-            weeklyScores: [], // To collect all scores by a team in a season
-            totalLuckScore: 0, // Accumulator for luck score
-          };
+        if (!seasonalTeamOverallRecords[year][team]) {
+          seasonalTeamOverallRecords[year][team] = { wins: 0, losses: 0, ties: 0 };
         }
       });
 
-      // Populate weekly game scores by year and week for luck rating calculation
-      if (!weeklyGameScoresByYear[year]) {
-        weeklyGameScoresByYear[year] = {};
+      if (isTie) {
+        seasonalTeamOverallRecords[year][team1].ties++;
+        seasonalTeamOverallRecords[year][team2].ties++;
+      } else if (team1Won) {
+        seasonalTeamOverallRecords[year][team1].wins++;
+        seasonalTeamOverallRecords[year][team2].losses++;
+      } else { // team2Won
+        seasonalTeamOverallRecords[year][team2].wins++;
+        seasonalTeamOverallRecords[year][team1].losses++;
       }
-      if (!weeklyGameScoresByYear[year][week]) {
-        weeklyGameScoresByYear[year][week] = [];
-      }
-      weeklyGameScoresByYear[year][week].push({ team: team1, score: team1Score }, { team: team2, score: team2Score });
-
-      // Accumulate points for the season
-      seasonRecordsRaw[year][team1].pointsFor += team1Score;
-      seasonRecordsRaw[year][team2].pointsFor += team2Score;
-      seasonRecordsRaw[year][team1].weeklyScores.push(team1Score);
-      seasonRecordsRaw[year][team2].weeklyScores.push(team2Score);
     });
 
-    const allSeasonalLuckData = [];
+    // Stores calculated weekly luck/projected wins for each team: { year: { team: { weeklyLuckScores: [], weeklyProjectedWins: [] } } }
+    const calculatedWeeklyStats = {};
 
-    Object.keys(seasonRecordsRaw).forEach(year => {
-      const teamsInSeason = Object.keys(seasonRecordsRaw[year]);
-      if (teamsInSeason.length === 0) return;
+    // Second Pass: Calculate weekly luck scores and projected wins
+    Object.keys(weeklyGameScoresByYearAndWeek).forEach(year => {
+      if (!calculatedWeeklyStats[year]) calculatedWeeklyStats[year] = {};
 
-      teamsInSeason.forEach(team => {
-        const stats = seasonRecordsRaw[year][team];
+      Object.keys(weeklyGameScoresByYearAndWeek[year]).forEach(week => {
+        const allScoresInCurrentWeek = weeklyGameScoresByYearAndWeek[year][week];
+        const uniqueTeamsInWeek = [...new Set(allScoresInCurrentWeek.map(entry => entry.team))];
+        const numTeamsInWeek = uniqueTeamsInWeek.length; // Actual number of teams that played in this week
 
-        // Calculate Luck Score for each week and accumulate for the season
-        if (weeklyGameScoresByYear[year]) {
-          Object.keys(weeklyGameScoresByYear[year]).forEach(week => {
-            const allScoresInCurrentWeek = weeklyGameScoresByYear[year][week];
-            // Find the team's score for this specific week from allScoresInCurrentWeek
-            // This is crucial as weeklyScores in stats is a running list, not week-specific
-            const currentTeamEntry = allScoresInCurrentWeek.find(entry => entry.team === team);
+        // Calculate luck for each team in this specific week
+        allScoresInCurrentWeek.forEach(currentTeamEntry => {
+          const currentTeam = currentTeamEntry.team;
+          const currentTeamScore = currentTeamEntry.score;
 
-            if (currentTeamEntry) {
-              const currentTeamScore = currentTeamEntry.score;
-              let outscoredCount = 0;
-              let oneLessCount = 0;
-              let actualOpponentsCount = 0; // Count actual opponents in the week
+          if (!calculatedWeeklyStats[year][currentTeam]) {
+            calculatedWeeklyStats[year][currentTeam] = {
+              weeklyLuckScores: [],
+              weeklyProjectedWins: []
+            };
+          }
 
-              allScoresInCurrentWeek.forEach(otherTeamEntry => {
-                if (otherTeamEntry.team !== team) { // Only compare with other teams
-                  actualOpponentsCount++;
-                  if (currentTeamScore > otherTeamEntry.score) {
-                    outscoredCount++;
-                  }
-                  if (currentTeamScore - 1 === otherTeamEntry.score) { // Exactly 1 less than current team's score
-                    oneLessCount++;
-                  }
-                }
-              });
+          let outscoredCount = 0; // X from your formula
+          let oneLessCount = 0;   // Y from your formula
 
-              // Assuming a standard league size where max other teams is 11 for 12-team,
-              // but use actualOpponentsCount for robustness if league size varies by week/year.
-              const maxOpponentsDenominator = actualOpponentsCount > 0 ? actualOpponentsCount : 11; // Fallback if no other teams found (unlikely)
-
-              const weeklyValue1 = outscoredCount / maxOpponentsDenominator;
-              const weeklyValue2 = oneLessCount / (maxOpponentsDenominator * 2); // (Max opponents * 2) for the second part of the sum
-
-              const weeklyLuckScore = weeklyValue1 + weeklyValue2;
-              stats.totalLuckScore += weeklyLuckScore;
+          // Iterate over all OTHER scores in the same week
+          allScoresInCurrentWeek.forEach(otherTeamEntry => {
+            if (otherTeamEntry.team !== currentTeam) {
+              if (currentTeamScore > otherTeamEntry.score) {
+                outscoredCount++;
+              }
+              if (currentTeamScore - 1 === otherTeamEntry.score) {
+                oneLessCount++;
+              }
             }
           });
+
+          // Denominator for a 12-team league would be 11 (opponents).
+          // For robustness, let's use numTeamsInWeek - 1, or fall back to 11 if numTeamsInWeek is low (e.g., bye week)
+          const actualOpponentsInWeek = numTeamsInWeek - 1;
+          const denominatorX = actualOpponentsInWeek > 0 ? actualOpponentsInWeek : 11; // Use 11 as a robust fallback for typical league size
+          const denominatorY = denominatorX * 2; // For the /22 part of the formula
+
+          const weeklyProjectedWin = outscoredCount / denominatorX; // This is the (X/11) part
+          const weeklyLuckScorePart2 = oneLessCount / denominatorY; // This is the (Y/22) part
+
+          const combinedWeeklyLuckScore = weeklyProjectedWin + weeklyLuckScorePart2;
+
+          calculatedWeeklyStats[year][currentTeam].weeklyLuckScores.push(combinedWeeklyLuckScore);
+          calculatedWeeklyStats[year][currentTeam].weeklyProjectedWins.push(weeklyProjectedWin);
+        });
+      });
+    });
+
+    // Third Pass: Aggregate seasonal luck ratings
+    const allSeasonalLuckData = [];
+
+    Object.keys(seasonalTeamOverallRecords).sort().forEach(year => {
+      Object.keys(seasonalTeamOverallRecords[year]).forEach(team => {
+        const teamSeasonWins = seasonalTeamOverallRecords[year][team].wins;
+        const teamWeeklyCalculations = calculatedWeeklyStats[year][team];
+
+        if (!teamWeeklyCalculations) {
+            // No data for this team in this season (e.g., didn't play or invalid matchups)
+            return;
         }
-        
+
+        const totalLuckScoreSum = teamWeeklyCalculations.weeklyLuckScores.reduce((sum, score) => sum + score, 0);
+        const totalProjectedWinsSum = teamWeeklyCalculations.weeklyProjectedWins.reduce((sum, wins) => sum + wins, 0);
+
+        // Final Luck Rating Calculation
+        const finalLuckRating = totalLuckScoreSum + (teamSeasonWins - totalProjectedWinsSum);
+
         allSeasonalLuckData.push({
           year: parseInt(year),
           team,
-          luckRating: stats.totalLuckScore,
-          pointsFor: stats.pointsFor, // Include points for context
-          // You might want to add wins/losses/ties here too if relevant for context
+          luckRating: finalLuckRating,
+          actualWins: teamSeasonWins,
+          projectedWins: totalProjectedWinsSum,
+          luckScoreSum: totalLuckScoreSum, // For debugging/transparency
         });
       });
     });
@@ -126,7 +161,8 @@ const LuckRatingAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
 
   const formatLuckRating = (value) => {
     if (typeof value === 'number' && !isNaN(value)) {
-      return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      // Use 3 decimal places for precision based on the formula
+      return value.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
     }
     return 'N/A';
   };
@@ -144,7 +180,8 @@ const LuckRatingAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
         Luck Rating Analysis (Seasonal)
       </h2>
       <p className="text-sm text-gray-600 mb-6 text-center">
-        A seasonal rating indicating how "lucky" a team was based on their weekly scores relative to other teams.
+        A seasonal rating indicating how "lucky" a team was.
+        Calculated based on weekly matchups: $\frac{\text{Scores < Team Score}}{11} + \frac{\text{Scores = Team Score - 1}}{22}$ summed weekly, then adjusted by $\text{(Actual Wins - Projected Wins)}$.
         Higher values indicate more favorable weekly outcomes.
       </p>
 
@@ -162,7 +199,9 @@ const LuckRatingAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                     <th className="py-2 px-3 text-left text-xs font-semibold text-yellow-700 uppercase tracking-wider border-b border-gray-200">Season</th>
                     <th className="py-2 px-3 text-left text-xs font-semibold text-yellow-700 uppercase tracking-wider border-b border-gray-200">Team</th>
                     <th className="py-2 px-3 text-left text-xs font-semibold text-yellow-700 uppercase tracking-wider border-b border-gray-200">Luck Rating</th>
-                    <th className="py-2 px-3 text-left text-xs font-semibold text-yellow-700 uppercase tracking-wider border-b border-gray-200">Points For</th>
+                    <th className="py-2 px-3 text-left text-xs font-semibold text-yellow-700 uppercase tracking-wider border-b border-gray-200">Actual Wins</th>
+                    <th className="py-2 px-3 text-left text-xs font-semibold text-yellow-700 uppercase tracking-wider border-b border-gray-200">Projected Wins</th>
+                    {/* <th className="py-2 px-3 text-left text-xs font-semibold text-yellow-700 uppercase tracking-wider border-b border-gray-200">Luck Score Sum (Debug)</th> */}
                   </tr>
                 </thead>
                 <tbody>
@@ -172,7 +211,9 @@ const LuckRatingAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                       <td className="py-2 px-3 text-sm text-gray-800">{data.year}</td>
                       <td className="py-2 px-3 text-sm text-gray-800">{data.team}</td>
                       <td className="py-2 px-3 text-sm text-gray-700">{formatLuckRating(data.luckRating)}</td>
-                      <td className="py-2 px-3 text-sm text-gray-700">{formatPoints(data.pointsFor)}</td>
+                      <td className="py-2 px-3 text-sm text-gray-700">{data.actualWins}</td>
+                      <td className="py-2 px-3 text-sm text-gray-700">{formatLuckRating(data.projectedWins)}</td>
+                      {/* <td className="py-2 px-3 text-sm text-gray-700">{formatLuckRating(data.luckScoreSum)}</td> */}
                     </tr>
                   ))}
                 </tbody>
