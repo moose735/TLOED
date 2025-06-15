@@ -141,15 +141,15 @@ const LuckRatingAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
         // 'Projected Wins' as defined by the user: sum of all weekly luck scores (X/11 + Y/22)
         const projectedWinsForFormula = teamWeeklyCalculations.weeklyLuckScores.reduce((sum, score) => sum + score, 0);
 
-        // Final Luck Rating Calculation: Projected Wins - Actual Wins
-        const finalLuckRating = projectedWinsForFormula - teamSeasonWins;
+        // Final Luck Rating Calculation: Actual Wins - Projected Wins (as per latest instruction)
+        const finalLuckRating = teamSeasonWins - projectedWinsForFormula;
 
         allSeasonalLuckData.push({
           year: parseInt(year),
           team,
           luckRating: finalLuckRating,
           actualWins: teamSeasonWins,
-          projectedWins: projectedWinsForFormula, // This is the 'Projected Wins' for the final Luck Rating formula
+          projectedWins: projectedWinsForFormula, // This is the 'Projected Wins' for the table display
         });
       });
     });
@@ -184,7 +184,7 @@ const LuckRatingAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
       </h2>
       <p className="text-sm text-gray-600 mb-6 text-center">
         A seasonal rating indicating how "lucky" a team was, calculated only for **regular season games**.
-        Formula: (Projected Wins - Actual Regular Season Wins). Projected Wins are the sum of weekly values, where each weekly value is calculated as: ((Scores less than Team Score) / 11) + ((Scores exactly 1 less than Team Score) / 22).
+        Formula: (Actual Regular Season Wins - Projected Wins). Projected Wins are the sum of weekly values, where each weekly value is calculated as: ((Scores less than Team Score) / 11) + ((Scores exactly 1 less than Team Score) / 22).
         Higher values indicate more favorable weekly outcomes.
       </p>
 
