@@ -181,7 +181,7 @@ const LuckRatingAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
       </h2>
       <p className="text-sm text-gray-600 mb-6 text-center">
         A seasonal rating indicating how "lucky" a team was.
-        Calculated based on weekly matchups: $\frac{\text{Scores < Team Score}}{11} + \frac{\text{Scores = Team Score - 1}}{22}$ summed weekly, then adjusted by $\text{(Actual Wins - Projected Wins)}$.
+        Calculated based on weekly matchups: $\\frac{\\text{Scores &lt; Team Score}}{11} + \\frac{\\text{Scores = Team Score - 1}}{22}$ summed weekly, then adjusted by $\\text{(Actual Wins - Projected Wins)}$.
         Higher values indicate more favorable weekly outcomes.
       </p>
 
