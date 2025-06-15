@@ -16,10 +16,15 @@ const LuckRatingAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
     const weeklyGameScoresByYearAndWeek = {};
 
     // Stores basic seasonal team stats (wins) for the final luck rating adjustment: { year: { team: { wins: 0, losses: 0, ties: 0 } } }
-    const seasonalTeamOverallRecords = {};
+    const seasonalTeamOverallRecords = {}; // This will now ONLY count regular season wins for the luck calculation adjustment
 
-    // First Pass: Populate initial data structures
+    // First Pass: Populate initial data structures, focusing ONLY on regular season games for Luck Rating
     historicalMatchups.forEach(match => {
+      // ONLY process regular season games for Luck Rating
+      if (!match.regSeason) {
+        return; // Skip non-regular season games
+      }
+
       const team1 = getDisplayTeamName(String(match.team1 || '').trim());
       const team2 = getDisplayTeamName(String(match.team2 || '').trim());
       const year = match.year;
@@ -34,7 +39,7 @@ const LuckRatingAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
       const isTie = team1Score === team2Score;
       const team1Won = team1Score > team2Score;
 
-      // Populate weeklyGameScoresByYearAndWeek
+      // Populate weeklyGameScoresByYearAndWeek (only with regular season games)
       if (!weeklyGameScoresByYearAndWeek[year]) {
         weeklyGameScoresByYearAndWeek[year] = {};
       }
@@ -43,7 +48,7 @@ const LuckRatingAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
       }
       weeklyGameScoresByYearAndWeek[year][week].push({ team: team1, score: team1Score }, { team: team2, score: team2Score });
 
-      // Populate seasonalTeamOverallRecords
+      // Populate seasonalTeamOverallRecords (only with regular season wins for luck adjustment)
       [team1, team2].forEach(team => {
         if (!seasonalTeamOverallRecords[year]) {
           seasonalTeamOverallRecords[year] = {};
@@ -75,8 +80,6 @@ const LuckRatingAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
       Object.keys(weeklyGameScoresByYearAndWeek[year]).forEach(week => {
         const allScoresInCurrentWeek = weeklyGameScoresByYearAndWeek[year][week];
         // The Excel formula implies a fixed 11 opponents, so we'll use 11/22 explicitly.
-        // const uniqueTeamsInWeek = [...new Set(allScoresInCurrentWeek.map(entry => entry.team))];
-        // const numTeamsInWeek = uniqueTeamsInWeek.length; // Actual number of teams that played in this week
 
         // Calculate luck for each team in this specific week
         allScoresInCurrentWeek.forEach(currentTeamEntry => {
@@ -125,11 +128,11 @@ const LuckRatingAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
 
     Object.keys(seasonalTeamOverallRecords).sort().forEach(year => {
       Object.keys(seasonalTeamOverallRecords[year]).forEach(team => {
-        const teamSeasonWins = seasonalTeamOverallRecords[year][team].wins;
+        const teamSeasonWins = seasonalTeamOverallRecords[year][team].wins; // These are now *only* regular season wins
         const teamWeeklyCalculations = calculatedWeeklyStats[year][team];
 
         if (!teamWeeklyCalculations) {
-            // No data for this team in this season (e.g., didn't play or invalid matchups)
+            // No regular season data for this team in this season (e.g., didn't play or invalid matchups)
             return;
         }
 
@@ -179,8 +182,8 @@ const LuckRatingAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
         Luck Rating Analysis (Seasonal)
       </h2>
       <p className="text-sm text-gray-600 mb-6 text-center">
-        A seasonal rating indicating how "lucky" a team was.
-        Calculated as (Actual Wins - Projected Wins). Projected Wins are based on weekly matchups: ((Scores less than Team Score) / 11) summed weekly.
+        A seasonal rating indicating how "lucky" a team was, calculated only for **regular season games**.
+        Formula: (Actual Regular Season Wins - Projected Regular Season Wins). Projected Wins are based on weekly matchups: ((Scores less than Team Score) / 11) summed weekly.
         Higher values indicate more favorable weekly outcomes.
       </p>
 
