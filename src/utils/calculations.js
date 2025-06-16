@@ -8,7 +8,7 @@
  * @param {number} leagueMinScore - League-wide lowest single-game score in the season.
  * @returns {number} The raw DPR value.
  */
-const calculateRawDPR = (pointsFor, teamWinPercentage, leagueMaxScore, leagueMinScore) => {
+export const calculateRawDPR = (pointsFor, teamWinPercentage, leagueMaxScore, leagueMinScore) => {
     // Formula: ((Points Scored * 6) + ((League Max Score + League Min Score) * 2) + ((Win% * 200) * 2)) / 10
     const pointsScoredComponent = pointsFor * 6;
     const maxMinComponent = (leagueMaxScore + leagueMinScore) * 2;
