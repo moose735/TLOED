@@ -1,201 +1,46 @@
 // src/lib/DPRAnalysis.js
 import React, { useState, useEffect } from 'react';
+import { calculateAllLeagueMetrics } from '../utils/calculations'; // Import the new utility
 
 const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
   const [careerDPRData, setCareerDPRData] = useState([]);
-  const [seasonalDPRData, setSeasonalDPRData] = useState([]); // Changed to an array for single list
+  const [seasonalDPRData, setSeasonalDPRData] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!historicalMatchups || historicalMatchups.length === 0) {
       setCareerDPRData([]);
-      setSeasonalDPRData([]); // Set to empty array
+      setSeasonalDPRData([]);
       setLoading(false);
       return;
     }
 
-    const allTimeRecords = {}; // For career DPR calculation
-    const seasonRecordsRaw = {};   // { year: { team: { ...stats } } } - intermediate for seasonal DPR calculation
-    const allLeagueScoresByYear = {}; // { year: [score1, score2, ...] } - to get league-wide min/max for seasonal DPR
+    setLoading(true);
 
-    // First Pass: Aggregate all necessary data for both career and seasonal calculations
-    historicalMatchups.forEach(match => {
-      const team1 = getDisplayTeamName(String(match.team1 || '').trim());
-      const team2 = getDisplayTeamName(String(match.team2 || '').trim());
-      const year = match.year;
-      const team1Score = parseFloat(match.team1Score);
-      const team2Score = parseFloat(match.team2Score);
+    // Use the centralized calculation logic
+    const { seasonalMetrics, careerDPRData: calculatedCareerDPRs } = calculateAllLeagueMetrics(historicalMatchups, getDisplayTeamName);
 
-      if (!team1 || !team2 || isNaN(team1Score) || isNaN(team2Score)) {
-        return; // Skip invalid data
-      }
-
-      const isTie = team1Score === team2Score;
-      const team1Won = team1Score > team2Score;
-
-      // Initialize structures for teams (career)
-      [team1, team2].forEach(team => {
-        if (!allTimeRecords[team]) {
-          allTimeRecords[team] = {
-            wins: 0, losses: 0, ties: 0, totalPointsFor: 0, totalGames: 0,
-            careerWeeklyScores: [], // Collect all weekly scores for career max/min
-            careerRawDPR: 0, adjustedDPR: 0,
-          };
-        }
-      });
-
-      // Initialize structures for teams (seasonal) and collect all league scores for the year
-      if (!seasonRecordsRaw[year]) {
-        seasonRecordsRaw[year] = {};
-        allLeagueScoresByYear[year] = []; // Initialize for league-wide scores
-      }
-      [team1, team2].forEach(team => {
-        if (!seasonRecordsRaw[year][team]) {
-          seasonRecordsRaw[year][team] = {
-            wins: 0, losses: 0, ties: 0, pointsFor: 0, totalGames: 0,
-            weeklyScores: [], // Collect weekly scores for seasonal max/min
-            rawDPR: 0, adjustedDPR: 0,
-            winPercentage: 0,
-          };
-        }
-      });
-
-      // Update All-Time Records
-      if (isTie) {
-        allTimeRecords[team1].ties++;
-        allTimeRecords[team2].ties++;
-      } else if (team1Won) {
-        allTimeRecords[team1].wins++;
-        allTimeRecords[team2].losses++;
-      } else { // team2Won
-        allTimeRecords[team2].wins++;
-        allTimeRecords[team1].losses++;
-      }
-      allTimeRecords[team1].totalPointsFor += team1Score;
-      allTimeRecords[team2].totalPointsFor += team2Score;
-      allTimeRecords[team1].totalGames++;
-      allTimeRecords[team2].totalGames++;
-      allTimeRecords[team1].careerWeeklyScores.push(team1Score);
-      allTimeRecords[team2].careerWeeklyScores.push(team2Score);
-
-      // Update Season Records
-      if (isTie) {
-        seasonRecordsRaw[year][team1].ties++;
-        seasonRecordsRaw[year][team2].ties++;
-      } else if (team1Won) {
-        seasonRecordsRaw[year][team1].wins++;
-        seasonRecordsRaw[year][team2].losses++;
-      } else { // team2Won
-        seasonRecordsRaw[year][team2].wins++;
-        seasonRecordsRaw[year][team1].losses++;
-      }
-      seasonRecordsRaw[year][team1].pointsFor += team1Score;
-      seasonRecordsRaw[year][team2].pointsFor += team2Score;
-      seasonRecordsRaw[year][team1].totalGames++;
-      seasonRecordsRaw[year][team2].totalGames++;
-      seasonRecordsRaw[year][team1].weeklyScores.push(team1Score);
-      seasonRecordsRaw[year][team2].weeklyScores.push(team2Score);
-
-      // Collect all scores for the year for league-wide min/max
-      allLeagueScoresByYear[year].push(team1Score, team2Score);
-    });
-
-
-    // --- Calculate All-Time Career DPR ---
-    let totalRawDPROverall = 0;
-    let teamsWithValidCareerDPR = 0;
-    const calculatedCareerDPRs = [];
-
-    Object.keys(allTimeRecords).forEach(team => {
-      const stats = allTimeRecords[team];
-      if (stats.totalGames === 0) return;
-
-      const careerWinPercentage = ((stats.wins + (0.5 * stats.ties)) / stats.totalGames);
-      const teamMaxScoreOverall = stats.careerWeeklyScores.length > 0 ? Math.max(...stats.careerWeeklyScores) : 0;
-      const teamMinScoreOverall = stats.careerWeeklyScores.length > 0 ? Math.min(...stats.careerWeeklyScores) : 0;
-
-      // DPR Calculation uses the team's own career max/min scores
-      stats.careerRawDPR = (
-        (stats.totalPointsFor * 6) +
-        ((teamMaxScoreOverall + teamMinScoreOverall) * 2) +
-        ((careerWinPercentage * 200) * 2)
-      ) / 10;
-      totalRawDPROverall += stats.careerRawDPR;
-      teamsWithValidCareerDPR++;
-    });
-
-    const avgRawDPROverall = teamsWithValidCareerDPR > 0 ? totalRawDPROverall / teamsWithValidCareerDPR : 0;
-
-    Object.keys(allTimeRecords).forEach(team => {
-      const stats = allTimeRecords[team];
-      stats.adjustedDPR = avgRawDPROverall > 0 ? stats.careerRawDPR / avgRawDPROverall : 0;
-      calculatedCareerDPRs.push({
-        team,
-        dpr: stats.adjustedDPR,
-        wins: stats.wins,
-        losses: stats.losses,
-        ties: stats.ties,
-        pointsFor: stats.totalPointsFor
-      });
-    });
-
-    // Sort career DPR data descending
-    calculatedCareerDPRs.sort((a, b) => b.dpr - a.dpr);
-    setCareerDPRData(calculatedCareerDPRs);
-
-
-    // --- Calculate Seasonal DPR (Consolidated List) ---
-    const allSeasonalDPRs = []; // This will be the flat array
-
-    Object.keys(seasonRecordsRaw).forEach(year => { // Iterate through years (no specific sort here yet, will sort globally later)
-      const teamsInSeason = Object.keys(seasonRecordsRaw[year]);
-      if (teamsInSeason.length === 0) return;
-
-      // Get league-wide min/max scores for DPR calculation for this year
-      const leagueScoresForYear = allLeagueScoresByYear[year] || [];
-      const leagueMaxScoreInSeason = leagueScoresForYear.length > 0 ? Math.max(...leagueScoresForYear) : 0;
-      const leagueMinScoreInSeason = leagueScoresForYear.length > 0 ? Math.min(...leagueScoresForYear) : 0;
-
-      let totalRawDPRForSeason = 0;
-      let teamsWithValidDPR = 0;
-
-      teamsInSeason.forEach(team => {
-        const stats = seasonRecordsRaw[year][team];
-        if (stats.totalGames === 0) return;
-
-        stats.winPercentage = ((stats.wins + (0.5 * stats.ties)) / stats.totalGames);
-        
-        // Corrected: Use league-wide max/min scores for raw DPR calculation for consistency
-        stats.rawDPR = (
-          (stats.pointsFor * 6) +
-          ((leagueMaxScoreInSeason + leagueMinScoreInSeason) * 2) + 
-          ((stats.winPercentage * 200) * 2)
-        ) / 10;
-        totalRawDPRForSeason += stats.rawDPR;
-        teamsWithValidDPR++;
-      });
-
-      const avgRawDPRForSeason = teamsWithValidDPR > 0 ? totalRawDPRForSeason / teamsWithValidDPR : 0;
-
-      teamsInSeason.forEach(team => {
-        const stats = seasonRecordsRaw[year][team];
-        stats.adjustedDPR = avgRawDPRForSeason > 0 ? stats.rawDPR / avgRawDPRForSeason : 0;
-        allSeasonalDPRs.push({ // Push to the flat array
-          year: parseInt(year), // Add year as a property
-          team,
-          dpr: stats.adjustedDPR,
-          wins: stats.wins,
-          losses: stats.losses,
-          ties: stats.ties,
-          pointsFor: stats.pointsFor
+    // Flatten seasonalMetrics into an array for display in the table
+    const allSeasonalDPRs = [];
+    Object.keys(seasonalMetrics).forEach(year => {
+      Object.keys(seasonalMetrics[year]).forEach(team => {
+        allSeasonalDPRs.push({
+          year: parseInt(year),
+          team: team,
+          dpr: seasonalMetrics[year][team].adjustedDPR,
+          wins: seasonalMetrics[year][team].wins,
+          losses: seasonalMetrics[year][team].losses,
+          ties: seasonalMetrics[year][team].ties,
+          pointsFor: seasonalMetrics[year][team].pointsFor
         });
       });
     });
 
-    // Sort the consolidated seasonal DPR data ONLY by DPR descending
+    // Sort the consolidated seasonal DPR data by DPR descending
     allSeasonalDPRs.sort((a, b) => b.dpr - a.dpr);
 
-    setSeasonalDPRData(allSeasonalDPRs); // Set the consolidated array
+    setCareerDPRData(calculatedCareerDPRs);
+    setSeasonalDPRData(allSeasonalDPRs);
     setLoading(false);
 
   }, [historicalMatchups, getDisplayTeamName]);
@@ -272,7 +117,7 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                 <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
                   <thead className="bg-green-100">
                     <tr>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Rank (Overall)</th> {/* Adjusted label */}
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Rank (Overall)</th>
                       <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Season</th>
                       <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Team</th>
                       <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Adjusted DPR</th>
@@ -281,10 +126,9 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                     </tr>
                   </thead>
                   <tbody>
-                    {/* Iterate directly over the flat seasonalDPRData array */}
                     {seasonalDPRData.map((data, index) => (
                       <tr key={`${data.team}-${data.year}`} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                        <td className="py-2 px-3 text-sm text-gray-800">{index + 1}</td> {/* Overall rank */}
+                        <td className="py-2 px-3 text-sm text-gray-800">{index + 1}</td>
                         <td className="py-2 px-3 text-sm text-gray-800">{data.year}</td>
                         <td className="py-2 px-3 text-sm text-gray-800">{data.team}</td>
                         <td className="py-2 px-3 text-sm text-gray-700">{formatDPR(data.dpr)}</td>
