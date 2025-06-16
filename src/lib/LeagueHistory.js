@@ -1,7 +1,7 @@
 // src/lib/LeagueHistory.js
 import React, { useState, useEffect } from 'react';
 import { calculateAllLeagueMetrics } from '../utils/calculations'; // For career DPR
-import { GOOGLE_SHEET_CHAMPIONS_API_URL } from '../config'; // To get champions for awards
+// Removed direct import of GOOGLE_SHEET_CHAMPIONS_API_URL as historicalChampions is passed as prop
 
 // Helper function to get ordinal suffix (1st, 2nd, 3rd, 4th, etc.)
 const getOrdinalSuffix = (n) => {
@@ -35,6 +35,19 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
       setChampionshipGames([]);
       return;
     }
+
+    // Identify completed seasons (those with a championship game: finalSeedingGame = 1)
+    const completedSeasons = new Set();
+    historicalMatchups.forEach(match => {
+        // Check for both number 1 and string '1' for finalSeedingGame
+        if (match.finalSeedingGame === 1 || match.finalSeedingGame === '1') {
+            const year = parseInt(match.year);
+            if (!isNaN(year)) {
+                completedSeasons.add(year);
+            }
+        }
+    });
+
 
     const { seasonalMetrics, careerDPRData } = calculateAllLeagueMetrics(historicalMatchups, getDisplayTeamName);
 
@@ -72,10 +85,14 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
             }
           };
         }
-        teamOverallStats[team].seasonsPlayed.add(year); // Track seasons played
+        // Only count season if it's a completed season. This makes 'Seasons' stat accurate for 'completed seasons'
+        if (completedSeasons.has(year)) {
+            teamOverallStats[team].seasonsPlayed.add(year); // Track seasons played
+        }
       });
 
       // Aggregate overall wins, losses, ties, and points (ONLY if not a PointsOnlyBye game)
+      // And ONLY if the season is considered completed for record purposes
       if (!(match.pointsOnlyBye === true || match.pointsOnlyBye === 'true')) {
         const isTie = team1Score === team2Score;
         const team1Won = team1Score > team2Score;
@@ -96,17 +113,15 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
       teamOverallStats[team1].totalPointsFor += team1Score;
       teamOverallStats[team2].totalPointsFor += team2Score;
 
-      // Populate yearlyPointsLeaders for awards calculation
-      if (!yearlyPointsLeaders[year]) {
-        yearlyPointsLeaders[year] = [];
-      }
-      // Add scores to a temporary structure for this year, avoiding duplicates for the same team in a week
-      // This ensures each team's score for a week is counted only once, and we sum weekly scores to get seasonal total.
-      // seasonalMetrics already has `pointsFor`, so we will use that for yearly points awards.
     });
 
     // Populate yearlyPointsLeaders using seasonalMetrics (which has totalPointsFor per team per year)
     Object.keys(seasonalMetrics).forEach(year => {
+        // Only consider completed seasons for points awards
+        if (!completedSeasons.has(parseInt(year))) {
+            return;
+        }
+
         const teamsInSeason = Object.keys(seasonalMetrics[year]);
         const yearPointsData = teamsInSeason.map(team => ({
             team,
@@ -121,71 +136,74 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
     const yearlyFinalStandings = {}; // {year: [{ team: "Winner", place: 1 }, { team: "RunnerUp", place: 2 }, ...]}
 
     historicalMatchups.forEach(match => {
-      if (typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0) {
-          const team1 = getDisplayTeamName(String(match.team1 || '').trim());
-          const team2 = getDisplayTeamName(String(match.team2 || '').trim());
-          const year = parseInt(match.year);
-          const team1Score = parseFloat(match.team1Score);
-          const team2Score = parseFloat(match.team2Score);
+      // Only process final seeding games that are part of a completed season
+      const year = parseInt(match.year);
+      if (!(typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0 && completedSeasons.has(year))) {
+          return; // Skip if not a final seeding game or season not completed
+      }
 
-          if (!team1 || team1 === '' || !team2 || team2 === '' || isNaN(team1Score) || isNaN(team2Score)) {
-              return;
+      const team1 = getDisplayTeamName(String(match.team1 || '').trim());
+      const team2 = getDisplayTeamName(String(match.team2 || '').trim());
+      const team1Score = parseFloat(match.team1Score);
+      const team2Score = parseFloat(match.team2Score);
+
+      if (!team1 || team1 === '' || !team2 || team2 === '' || isNaN(team1Score) || isNaN(team2Score)) {
+          return;
+      }
+
+      const isTie = team1Score === team2Score;
+      const team1Won = team1Score > team2Score;
+      const team2Won = team2Score > team1Score;
+
+      let winner = 'Tie';
+      let loser = 'Tie';
+      let winnerScore = team1Score;
+      let loserScore = team2Score;
+
+      if (team1Won) {
+          winner = team1;
+          loser = team2;
+          winnerScore = team1Score;
+          loserScore = team2Score;
+      } else if (team2Won) {
+          winner = team2;
+          loser = team1;
+          winnerScore = team2Score;
+          loserScore = team1Score;
+      }
+
+      const winningPlace = match.finalSeedingGame;
+      const losingPlace = match.finalSeedingGame + 1;
+
+      newChampionshipGames.push({
+          year: year,
+          week: match.week,
+          team1: team1,
+          team2: team2,
+          team1Score: team1Score,
+          team2Score: team2Score,
+          purpose: getFinalSeedingGamePurpose(match.finalSeedingGame),
+          winner: winner,
+          loser: loser,
+          winnerScore: winnerScore,
+          loserScore: loserScore,
+          winnerPlace: winningPlace,
+          loserPlace: losingPlace
+      });
+
+      // Update yearly final standings for award calculation
+      if (!yearlyFinalStandings[year]) {
+        yearlyFinalStandings[year] = [];
+      }
+      // Only add unique place/team entries. For simplicity, we assume winner/loser are unique for each finalSeedingGame.
+      if (winner !== 'Tie') {
+          yearlyFinalStandings[year].push({ team: winner, place: winningPlace });
+          if (loser) { // The loser of the 1st place game gets 2nd place
+              yearlyFinalStandings[year].push({ team: loser, place: losingPlace });
           }
-
-          const isTie = team1Score === team2Score;
-          const team1Won = team1Score > team2Score;
-          const team2Won = team2Score > team1Score;
-
-          let winner = 'Tie';
-          let loser = 'Tie';
-          let winnerScore = team1Score;
-          let loserScore = team2Score;
-
-          if (team1Won) {
-              winner = team1;
-              loser = team2;
-              winnerScore = team1Score;
-              loserScore = team2Score;
-          } else if (team2Won) {
-              winner = team2;
-              loser = team1;
-              winnerScore = team2Score;
-              loserScore = team1Score;
-          }
-
-          const winningPlace = match.finalSeedingGame;
-          const losingPlace = match.finalSeedingGame + 1;
-
-          newChampionshipGames.push({
-              year: year,
-              week: match.week,
-              team1: team1,
-              team2: team2,
-              team1Score: team1Score,
-              team2Score: team2Score,
-              purpose: getFinalSeedingGamePurpose(match.finalSeedingGame),
-              winner: winner,
-              loser: loser,
-              winnerScore: winnerScore,
-              loserScore: loserScore,
-              winnerPlace: winningPlace,
-              loserPlace: losingPlace
-          });
-
-          // Update yearly final standings for award calculation
-          if (!yearlyFinalStandings[year]) {
-            yearlyFinalStandings[year] = [];
-          }
-          // Only add unique place/team entries. For simplicity, we assume winner/loser are unique for each finalSeedingGame.
-          if (winner !== 'Tie') {
-              yearlyFinalStandings[year].push({ team: winner, place: winningPlace });
-              if (loser) { // The loser of the 1st place game gets 2nd place
-                  yearlyFinalStandings[year].push({ team: loser, place: losingPlace });
-              }
-          } else { // Tie in championship/seeding game implies both get the same place.
-              yearlyFinalStandings[year].push({ team: team1, place: winningPlace });
-              yearlyFinalStandings[year].push({ team: team2, place: winningPlace });
-          }
+      } else { // Tie in championship/seeding game implies both get the same place.
+          yearlyFinalStandings[year].push({ team: team1, place: winningPlace });
+          yearlyFinalStandings[year].push({ team: team2, place: winningPlace });
       }
     });
 
@@ -200,18 +218,33 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
     // Award Calculation Pass
     Object.keys(teamOverallStats).forEach(teamName => {
       // Overall Finish Awards (Trophies)
+      // Use historicalChampions prop data for championships and runner-ups
+      historicalChampions.forEach(champEntry => {
+        const champYear = parseInt(champEntry.year);
+        // Ensure the champion entry corresponds to a completed season
+        if (!isNaN(champYear) && completedSeasons.has(champYear)) {
+          const mappedChampion = getDisplayTeamName(String(champEntry.champion || '').trim());
+          const mappedRunnerUp = getDisplayTeamName(String(champEntry.runnerUp || '').trim());
+
+          if (mappedChampion === teamName) {
+            teamOverallStats[teamName].awards.championships++;
+          }
+          if (mappedRunnerUp === teamName) {
+            teamOverallStats[teamName].awards.runnerUps++;
+          }
+        }
+      });
+
+
+      // Third Place Finishes (from yearlyFinalStandings)
       Object.keys(yearlyFinalStandings).forEach(year => {
-        // Ensure that teamName is a valid team name from the historicalMatchups
-        const validTeamsInYear = Object.keys(seasonalMetrics[year] || {}).filter(t => t !== '');
-        if (!validTeamsInYear.includes(teamName)) return; // Skip if team not valid in this year
+        // Ensure this year is a completed season
+        if (!completedSeasons.has(parseInt(year))) return;
 
         const teamFinishesInYear = yearlyFinalStandings[year].filter(entry => entry.team === teamName);
         teamFinishesInYear.forEach(teamFinish => {
-            if (teamFinish.place === 1) {
-              teamOverallStats[teamName].awards.championships++;
-            } else if (teamFinish.place === 2) { // 2nd place
-              teamOverallStats[teamName].awards.runnerUps++;
-            } else if (teamFinish.place === 3) { // 3rd place
+            // Already handled championship and runner-up via historicalChampions
+            if (teamFinish.place === 3) { // 3rd place
               teamOverallStats[teamName].awards.thirdPlace++;
             }
         });
@@ -219,6 +252,9 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
 
       // Total Points Awards (Medals)
       Object.keys(yearlyPointsLeaders).forEach(year => {
+          // Ensure this year is a completed season
+          if (!completedSeasons.has(parseInt(year))) return;
+
           const yearLeaders = yearlyPointsLeaders[year];
           // Filter out empty team names before processing leaders
           const filteredYearLeaders = yearLeaders.filter(entry => entry.team !== '');
@@ -238,11 +274,13 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
                   teamOverallStats[teamName].awards.firstPoints++;
               }
               // Only count as second place if not already counted as first, and score matches second
-              if (currentTeamYearlyScore === secondPlaceScore && currentTeamYearlyScore !== firstPlaceScore) {
+              // And ensure there is actually a second place entry
+              if (secondPlaceScore !== undefined && currentTeamYearlyScore === secondPlaceScore && currentTeamYearlyScore !== firstPlaceScore) {
                   teamOverallStats[teamName].awards.secondPoints++;
               }
               // Only count as third place if not already counted as first or second, and score matches third
-              if (currentTeamYearlyScore === thirdPlaceScore && currentTeamYearlyScore !== firstPlaceScore && currentTeamYearlyScore !== secondPlaceScore) {
+              // And ensure there is actually a third place entry
+              if (thirdPlaceScore !== undefined && currentTeamYearlyScore === thirdPlaceScore && currentTeamYearlyScore !== firstPlaceScore && currentTeamYearlyScore !== secondPlaceScore) {
                   teamOverallStats[teamName].awards.thirdPoints++;
               }
           }
@@ -253,6 +291,9 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
     // Final compilation for display
     const compiledStandings = Object.keys(teamOverallStats).map(teamName => {
       const stats = teamOverallStats[teamName];
+      // Only include teams that have actually participated in completed seasons
+      if (stats.seasonsPlayed.size === 0) return null;
+
       const careerDPR = careerDPRData.find(dpr => dpr.team === teamName)?.dpr || 0;
       const totalGames = stats.totalWins + stats.totalLosses + stats.totalTies;
       const winPercentage = totalGames > 0 ? ((stats.totalWins + (0.5 * stats.totalTies)) / totalGames) : 0;
@@ -262,11 +303,11 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
         seasons: stats.seasonsPlayed.size,
         record: `${stats.totalWins}-${stats.totalLosses}-${stats.totalTies}`,
         winPercentage: winPercentage,
-        totalDPR: careerDPR,
+        totalDPR: careerDPR, // This DPR needs to be for games that count towards record, not including byes
         awards: stats.awards,
         // Add more career stats if needed for sorting or display later
       };
-    }).sort((a, b) => b.totalDPR - a.totalDPR); // Sort by total DPR descending
+    }).filter(Boolean).sort((a, b) => b.totalDPR - a.totalDPR); // Filter out nulls and sort by total DPR descending
 
     setAllTimeStandings(compiledStandings);
 
