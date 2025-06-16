@@ -268,7 +268,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
 
       const careerDPR = careerDPRData.find(dpr => dpr.team === teamName)?.dpr || 0;
       const totalGames = stats.totalWins + stats.totalLosses + stats.totalTies;
-      const winPercentage = totalGames > 0 ? ((stats.wins + (0.5 * stats.ties)) / totalGames) : 0;
+      const winPercentage = totalGames > 0 ? ((stats.totalWins + (0.5 * stats.totalTies)) / totalGames) : 0; // CORRECTED: Use totalWins/totalTies
 
       return {
         team: teamName,
@@ -288,9 +288,9 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
   // Formatters
   const formatPercentage = (value) => {
     if (typeof value === 'number' && !isNaN(value)) {
-      return `${(value * 100).toFixed(1)}%`;
+      return `${(value * 100).toFixed(3)}%`; // Changed to toFixed(3)
     }
-    return '0.0%';
+    return '0.000%'; // Updated default for consistency
   };
 
   const formatDPR = (dprValue) => {
