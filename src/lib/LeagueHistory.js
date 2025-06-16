@@ -30,6 +30,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
   const [allTimeStandings, setAllTimeStandings] = useState([]);
   const [seasonalDPRChartData, setSeasonalDPRChartData] = useState([]); // Renamed for more general use
   const [uniqueTeamsForChart, setUniqueTeamsForChart] = useState([]);
+  const [seasonAwardsSummary, setSeasonAwardsSummary] = useState({}); // New state for season-by-season awards
 
   // A color palette for the teams in the chart
   const teamColors = [
@@ -40,9 +41,9 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
   useEffect(() => {
     if (loading || error || !historicalMatchups || historicalMatchups.length === 0) {
       setAllTimeStandings([]);
-      // setChampionshipGames([]); // Removed state
       setSeasonalDPRChartData([]);
       setUniqueTeamsForChart([]);
+      setSeasonAwardsSummary({}); // Reset new state
       return;
     }
 
@@ -139,9 +140,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
         yearlyPointsLeaders[year] = yearPointsData;
     });
 
-    // Process championship games and final seeding for overall finish awards (Trophies)
-    // No longer populating newChampionshipGames array as the section is removed.
-    // However, the awards logic below still needs to run to populate teamOverallStats.awards
+    // Process championship games and final seeding for overall finish awards (Trophies) for All-Time Awards table
     historicalMatchups.forEach(match => {
       const year = parseInt(match.year);
       // Only process final seeding games that are part of a completed season
@@ -199,10 +198,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
       // No trophies for any other placing game (handled by the specific `if` conditions above)
     });
 
-    // Removed setChampionshipGames call here
-
-
-    // Medal Calculation Pass (based on yearlyPointsLeaders)
+    // Medal Calculation Pass (based on yearlyPointsLeaders) for All-Time Awards table
     Object.keys(teamOverallStats).forEach(teamName => {
       Object.keys(yearlyPointsLeaders).forEach(year => {
           // Ensure this year is a completed season
@@ -240,7 +236,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
     });
 
 
-    // Final compilation for display
+    // Final compilation for All-Time Standings display
     const compiledStandings = Object.keys(teamOverallStats).map(teamName => {
       const stats = teamOverallStats[teamName];
       // Only include teams that have actually participated in completed seasons
@@ -312,7 +308,78 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
     setSeasonalDPRChartData(chartData);
 
 
-  }, [historicalMatchups, loading, error, getDisplayTeamName]); // Removed historicalChampions from dependencies
+    // --- New: Process Season-by-Season Champions & Awards ---
+    const newSeasonAwardsSummary = {};
+
+    completedSeasons.forEach(year => {
+        newSeasonAwardsSummary[year] = {
+            champion: 'N/A',
+            secondPlace: 'N/A',
+            thirdPlace: 'N/A',
+            pointsChamp: 'N/A',
+            pointsSecond: 'N/A',
+            pointsThird: 'N/A',
+        };
+
+        // Find final seeding games for this year
+        const yearFinalGames = historicalMatchups.filter(match =>
+            parseInt(match.year) === year &&
+            (typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0)
+        );
+
+        yearFinalGames.forEach(game => {
+            const team1 = getDisplayTeamName(String(game.team1 || '').trim());
+            const team2 = getDisplayTeamName(String(game.team2 || '').trim());
+            const team1Score = parseFloat(game.team1Score);
+            const team2Score = parseFloat(game.team2Score);
+
+            const isTie = team1Score === team2Score;
+            const team1Won = team1Score > team2Score;
+            const team2Won = team2Score > team1Score;
+
+            let winner = '';
+            let loser = '';
+            if (!isTie) {
+                winner = team1Won ? team1 : team2;
+                loser = team1Won ? team2 : team1;
+            }
+
+            if (game.finalSeedingGame === 1) { // Championship Game
+                if (isTie) {
+                    newSeasonAwardsSummary[year].champion = `${team1} & ${team2} (Tie)`;
+                    newSeasonAwardsSummary[year].secondPlace = 'N/A'; // No distinct 2nd place if tied for 1st
+                } else {
+                    newSeasonAwardsSummary[year].champion = winner;
+                    newSeasonAwardsSummary[year].secondPlace = loser;
+                }
+            } else if (game.finalSeedingGame === 3) { // 3rd Place Game
+                newSeasonAwardsSummary[year].thirdPlace = winner;
+            }
+        });
+
+        // Assign Points Champions for the year
+        const leaders = yearlyPointsLeaders[year];
+        if (leaders && leaders.length > 0) {
+            newSeasonAwardsSummary[year].pointsChamp = leaders[0].team;
+            if (leaders.length > 1 && leaders[1].points < leaders[0].points) { // Ensure strictly lower for 2nd
+                newSeasonAwardsSummary[year].pointsSecond = leaders[1].team;
+            }
+            if (leaders.length > 2 && leaders[2].points < leaders[1].points) { // Ensure strictly lower for 3rd
+                newSeasonAwardsSummary[year].pointsThird = leaders[2].team;
+            }
+        }
+    });
+
+    // Sort years in descending order for display in the table
+    const sortedYearsForAwards = Object.keys(newSeasonAwardsSummary).sort((a, b) => parseInt(b) - parseInt(a));
+    const finalSeasonAwardsSummary = {};
+    sortedYearsForAwards.forEach(year => {
+        finalSeasonAwardsSummary[year] = newSeasonAwardsSummary[year];
+    });
+
+    setSeasonAwardsSummary(finalSeasonAwardsSummary);
+
+  }, [historicalMatchups, loading, error, getDisplayTeamName]); // Dependencies
 
   // Formatters
   const formatPercentage = (value) => {
@@ -468,7 +535,57 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
             )}
           </section>
 
-          {/* Championship and Final Seeding Games section removed as per request */}
+          {/* New: Season-by-Season Champions & Awards */}
+          <section className="mb-8 p-4 bg-gray-50 rounded-lg shadow-sm border border-gray-200">
+            <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Season-by-Season Champions & Awards</h3>
+            {Object.keys(seasonAwardsSummary).length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
+                  <thead className="bg-blue-50">
+                    <tr>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Year</th>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">
+                        <i className="fas fa-trophy text-yellow-500 mr-1"></i> Champion
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">
+                        <i className="fas fa-trophy text-gray-400 mr-1"></i> 2nd Place
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">
+                        <i className="fas fa-trophy text-amber-800 mr-1"></i> 3rd Place
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">
+                        <i className="fas fa-medal text-yellow-500 mr-1"></i> Points Champ
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">
+                        <i className="fas fa-medal text-gray-400 mr-1"></i> Points 2nd
+                      </th>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">
+                        <i className="fas fa-medal text-amber-800 mr-1"></i> Points 3rd
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.keys(seasonAwardsSummary).map((year, index) => {
+                      const awards = seasonAwardsSummary[year];
+                      return (
+                        <tr key={year} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                          <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{year}</td>
+                          <td className="py-2 px-3 text-sm text-gray-700">{awards.champion}</td>
+                          <td className="py-2 px-3 text-sm text-gray-700">{awards.secondPlace}</td>
+                          <td className="py-2 px-3 text-sm text-gray-700">{awards.thirdPlace}</td>
+                          <td className="py-2 px-3 text-sm text-gray-700">{awards.pointsChamp}</td>
+                          <td className="py-2 px-3 text-sm text-gray-700">{awards.pointsSecond}</td>
+                          <td className="py-2 px-3 text-sm text-gray-700">{awards.pointsThird}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-center text-gray-600">No season-by-season award data available.</p>
+            )}
+          </section>
         </>
       )}
     </div>
