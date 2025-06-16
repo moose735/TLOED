@@ -31,6 +31,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
   const [seasonalDPRChartData, setSeasonalDPRChartData] = useState([]);
   const [uniqueTeamsForChart, setUniqueTeamsForChart] = useState([]);
   const [seasonAwardsSummary, setSeasonAwardsSummary] = useState({});
+  const [sortedYearsForAwards, setSortedYearsForAwards] = useState([]); // New state for sorted years
 
   // A color palette for the teams in the chart
   const teamColors = [
@@ -44,6 +45,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
       setSeasonalDPRChartData([]);
       setUniqueTeamsForChart([]);
       setSeasonAwardsSummary({});
+      setSortedYearsForAwards([]); // Reset new state
       return;
     }
 
@@ -348,7 +350,9 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                     newSeasonAwardsSummary[year].secondPlace = loser;
                 }
             } else if (game.finalSeedingGame === 3) { // 3rd Place Game
-                newSeasonAwardsSummary[year].thirdPlace = winner;
+                if (teamOverallStats[winner]) { // Ensure winner is defined
+                  newSeasonAwardsSummary[year].thirdPlace = winner;
+                }
             }
         });
 
@@ -367,15 +371,11 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
     });
 
     // Sort years in descending order (most recent first) for display in the table
-    const sortedYearsForAwards = Object.keys(newSeasonAwardsSummary).sort((a, b) => parseInt(b) - parseInt(a));
-    console.log("Sorted years for awards (most recent first):", sortedYearsForAwards); // Debugging line
+    const sortedYearsArray = Object.keys(newSeasonAwardsSummary).sort((a, b) => parseInt(b) - parseInt(a));
+    console.log("Sorted years for awards (most recent first):", sortedYearsArray); // Debugging line
 
-    const finalSeasonAwardsSummary = {};
-    sortedYearsForAwards.forEach(year => {
-        finalSeasonAwardsSummary[year] = newSeasonAwardsSummary[year];
-    });
-
-    setSeasonAwardsSummary(finalSeasonAwardsSummary);
+    setSeasonAwardsSummary(newSeasonAwardsSummary); // Set the summary object
+    setSortedYearsForAwards(sortedYearsArray); // Set the sorted array of years
 
   }, [historicalMatchups, loading, error, getDisplayTeamName]); // Dependencies
 
@@ -561,7 +561,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                     </tr>
                   </thead>
                   <tbody>
-                    {Object.keys(seasonAwardsSummary).map((year, index) => {
+                    {sortedYearsForAwards.map((year, index) => { // Use sortedYearsForAwards directly
                       const awards = seasonAwardsSummary[year];
                       return (
                         <tr key={year} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
