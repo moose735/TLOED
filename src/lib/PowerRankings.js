@@ -322,7 +322,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                   <XAxis dataKey="week" label={{ value: "Week", position: "insideBottom", offset: 0 }} />
                   <YAxis
                     label={{ value: "Rank", angle: -90, position: "insideLeft" }}
-                    domain={[maxTeamsInChart, 1]} // Invert domain for rank: lower numbers (better rank) on top
+                    domain={[1, maxTeamsInChart]} // Flipped domain: 1 at top, maxTeamsInChart at bottom
                     ticks={Array.from({ length: maxTeamsInChart }, (_, i) => i + 1)} // Show ticks for each rank
                     allowDecimals={false} // Ranks are integers
                   />
