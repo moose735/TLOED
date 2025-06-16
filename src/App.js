@@ -2,22 +2,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   HISTORICAL_MATCHUPS_API_URL,
+  GOOGLE_SHEET_POWER_RANKINGS_API_URL,
   GOOGLE_SHEET_CHAMPIONS_API_URL, // Will use mock data if not provided
-  // NICKNAME_TO_SLEEPER_USER and SLEEPER_LEAGUE_ID are no longer needed here
 } from './config';
 
-// Import existing components
+// Import existing components from your provided App.js
 import PowerRankings from './lib/PowerRankings';
-// MatchupHistory will be removed/renamed, its content split
+import LeagueHistory from './lib/LeagueHistory'; // Renamed from MatchupHistory to reflect broader content
 import RecordBook from './lib/RecordBook';
 import DPRAnalysis from './lib/DPRAnalysis';
 import LuckRatingAnalysis from './lib/LuckRatingAnalysis';
-import TeamDetailPage from './lib/TeamDetailPage';
-
-// NEW IMPORTS
-import LeagueHistory from './lib/LeagueHistory'; // New component for all-time league history
-import Head2HeadGrid from './lib/Head2HeadGrid'; // Head2HeadGrid is now a direct tab content
-
+import TeamDetailPage from './lib/TeamDetailPage'; // Import the new TeamDetailPage component
 
 // Define the available tabs and their categories for the dropdown
 const NAV_CATEGORIES = {
@@ -25,16 +20,10 @@ const NAV_CATEGORIES = {
   LEAGUE_DATA: {
     label: 'League Data',
     subTabs: [
-      { label: 'League History', tab: 'leagueHistory' }, // NEW: Dedicated League History tab
+      { label: 'League History', tab: 'leagueHistory' },
       { label: 'Record Book', tab: 'recordBook' },
       { label: 'DPR Analysis', tab: 'dprAnalysis' },
       { label: 'Luck Rating', tab: 'luckRating' },
-    ]
-  },
-  RIVALRIES: { // NEW: Category for Head-to-Head Rivalries
-    label: 'Rivalries',
-    subTabs: [
-      { label: 'Head-to-Head Grid', tab: 'headToHeadGrid' }, // Direct link to Head2HeadGrid
     ]
   },
   TEAMS: { // New category for individual team pages
@@ -46,367 +35,326 @@ const NAV_CATEGORIES = {
 // Flattened list of all possible tabs for conditional rendering
 const TABS = {
   POWER_RANKINGS: 'powerRankings',
-  LEAGUE_HISTORY: 'leagueHistory', // New tab for League History
+  LEAGUE_HISTORY: 'leagueHistory',
   RECORD_BOOK: 'recordBook',
   DPR_ANALYSIS: 'dprAnalysis',
   LUCK_RATING: 'luckRating',
-  HEAD_TO_HEAD_GRID: 'headToHeadGrid', // New tab for Head2HeadGrid
-  TEAM_DETAIL: 'teamDetail' // New tab for individual team pages
+  TEAM_DETAIL: 'teamDetail', // New tab for individual team details
 };
 
-// Main App component
 const App = () => {
-  // --- State Variables ---
   const [activeTab, setActiveTab] = useState(TABS.POWER_RANKINGS);
-  const [activeDropdown, setActiveDropdown] = useState(null); // To manage dropdown visibility
-  const [selectedTeam, setSelectedTeam] = useState(null); // Holds the name of the currently selected team for TeamDetailPage
-
-  // Data for historical matchups (used by multiple components)
   const [historicalMatchups, setHistoricalMatchups] = useState([]);
+  const [historicalChampions, setHistoricalChampions] = useState([]); // State for champions
   const [loadingHistoricalData, setLoadingHistoricalData] = useState(true);
   const [historicalDataError, setHistoricalDataError] = useState(null);
+  const [selectedTeam, setSelectedTeam] = useState(null); // State to hold the selected team name
 
-  // Unique team names derived from historical matchups for the 'Teams' dropdown
-  const [uniqueTeamNames, setUniqueTeamNames] = useState([]);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // State for mobile menu
+  const [openSubMenu, setOpenSubMenu] = useState(null); // State for mobile sub-menus
 
-  // Historical Champions data (mocked if API not provided)
-  const [historicalChampions, setHistoricalChampions] = useState([]);
-  const [loadingChampions, setLoadingChampions] = useState(true);
-  const [errorChampions, setErrorChampions] = useState(null);
+  // Function to toggle sub-menus in mobile view
+  const toggleSubMenu = (menuName) => {
+    setOpenSubMenu(openSubMenu === menuName ? null : menuName);
+  };
 
 
-  // --- Helper Functions ---
-  const getMappedTeamName = useCallback((originalName) => {
-    return originalName; // Assuming external data already has desired display names
+  // Function to get mapped team names (case-insensitive, trim)
+  const getMappedTeamName = useCallback((teamName) => {
+    if (!teamName) return '';
+    // A simple mapping for common variations or just return trimmed name
+    const trimmedName = teamName.trim();
+    // Example: if (trimmedName.toLowerCase() === 'team a') return 'Team Alpha';
+    return trimmedName;
   }, []);
 
-
-  // --- Centralized Data Fetching ---
-
-  // Fetch Historical Matchups
+  // Fetch historical matchup data and championship data
   useEffect(() => {
-    const fetchMatchups = async () => {
-      if (HISTORICAL_MATCHUPS_API_URL === 'YOUR_NEW_HISTORICAL_MATCHUPS_APPS_SCRIPT_URL' || !HISTORICAL_MATCHUPS_API_URL) {
-        setLoadingHistoricalData(false);
-        setHistoricalDataError("Please update HISTORICAL_MATCHUPS_API_URL in config.js with your actual Apps Script URL for historical matchups.");
-        return;
-      }
-
+    const fetchHistoricalData = async () => {
       setLoadingHistoricalData(true);
       setHistoricalDataError(null);
 
+      // Fetch Historical Matchups
       try {
+        if (HISTORICAL_MATCHUPS_API_URL === 'YOUR_GOOGLE_SHEET_HISTORICAL_MATCHUPS_API_URL') {
+          throw new Error("HISTORICAL_MATCHUPS_API_URL not configured. Please update config.js.");
+        }
         const response = await fetch(HISTORICAL_MATCHUPS_API_URL, { mode: 'cors' });
         if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}. Response: ${await response.text()}.`);
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
-        if (data.error) {
-          throw new Error(data.error);
-        }
-        const fetchedMatchups = Array.isArray(data.data) ? data.data : [];
-        setHistoricalMatchups(fetchedMatchups);
+        setHistoricalMatchups(data);
 
-        // Derive unique team names from fetched matchups
-        const teams = new Set();
-        fetchedMatchups.forEach(match => {
-          if (match.team1) teams.add(String(match.team1).trim());
-          if (match.team2) teams.add(String(match.team2).trim());
-        });
-        setUniqueTeamNames(Array.from(teams).filter(name => name !== '').sort()); // Sort alphabetically and filter out empty names
-      } catch (err) {
-        console.error("Error fetching historical matchups:", err);
-        setHistoricalDataError(
-          `Failed to fetch historical matchups: ${err.message}. ` +
-          `Ensure your Apps Script URL (${HISTORICAL_MATCHUPS_API_URL}) is correct and publicly accessible.`
-        );
+        // Dynamically populate TEAMS subTabs
+        const uniqueTeams = Array.from(new Set(
+          data.flatMap(match => [
+            getMappedTeamName(match.team1),
+            getMappedTeamName(match.team2)
+          ]).filter(name => name !== null && name !== '')
+        )).sort();
+
+        // Update NAV_CATEGORIES.TEAMS in place (or create a new object and set it if state management dictates)
+        NAV_CATEGORIES.TEAMS.subTabs = uniqueTeams.map(team => ({
+          label: team,
+          tab: TABS.TEAM_DETAIL, // All team links go to the team detail tab
+          teamName: team,       // Pass the team name for rendering
+        }));
+
+      } catch (error) {
+        console.error("Error fetching historical matchup data:", error);
+        setHistoricalDataError(`Failed to load historical data: ${error.message}`);
       } finally {
         setLoadingHistoricalData(false);
       }
-    };
 
-    fetchMatchups();
-  }, [HISTORICAL_MATCHUPS_API_URL]);
-
-  // Fetch Historical Champions data (mocked if GOOGLE_SHEET_CHAMPIONS_API_URL is not provided)
-  useEffect(() => {
-    const fetchHistoricalChampions = async () => {
-      if (GOOGLE_SHEET_CHAMPIONS_API_URL && GOOGLE_SHEET_CHAMPIONS_API_URL !== 'YOUR_GOOGLE_SHEET_CHAMPIONS_API_URL_OPTIONAL') {
-        setLoadingChampions(true);
-        setErrorChampions(null);
-        try {
+      // Fetch Historical Champions (optional, will use mock if URL is placeholder)
+      try {
+        if (GOOGLE_SHEET_CHAMPIONS_API_URL === 'YOUR_GOOGLE_SHEET_CHAMPIONS_API_URL' || !GOOGLE_SHEET_CHAMPIONS_API_URL) {
+          console.warn("GOOGLE_SHEET_CHAMPIONS_API_URL not configured. Using mock championship data.");
+          setHistoricalChampions([
+            { year: 2023, champion: "Mock Champion 2023" },
+            { year: 2022, champion: "Mock Champion 2022" },
+          ]);
+        } else {
           const response = await fetch(GOOGLE_SHEET_CHAMPIONS_API_URL, { mode: 'cors' });
           if (!response.ok) {
-            throw new Error(`Champions API HTTP error! status: ${response.status}. Response: ${await response.text()}.`);
+            throw new Error(`HTTP error! status: ${response.status}`);
           }
           const data = await response.json();
-          if (data.error) {
-            throw new Error(data.error);
-          }
-          setHistoricalChampions(Array.isArray(data.data) ? data.data : []);
-        } catch (error) {
-          console.error("Error fetching historical champions data:", error);
-          setErrorChampions(
-            `Error: ${error.message}. ` +
-            `Please ensure your Champions Apps Script URL (${GOOGLE_SHEET_CHAMPIONS_API_URL}) is correct and publicly accessible.`
-          );
-          setHistoricalChampions([]); // Set to empty array on error
-        } finally {
-          setLoadingChampions(false);
+          setHistoricalChampions(data);
         }
-      } else {
-        // Mock data if API URL is not set
-        setLoadingChampions(false);
-        setErrorChampions(null);
+      } catch (error) {
+        console.warn("Error fetching historical champions data, using mock data:", error);
+        // Continue with mock data or empty array if fetching fails
         setHistoricalChampions([
-          { year: 2023, champion: "Irwin", runnerUp: "Blumbergs", mvp: "Irwin" },
-          { year: 2022, champion: "Boilard", runnerUp: "Irwin", mvp: "Boilard" },
-          { year: 2021, champion: "Randall", runnerUp: "Meer", mvp: "Randall" },
-          { year: 2020, champion: "Tomczak", runnerUp: "Boilard", mvp: "Tomczak" },
-          { year: 2019, champion: "Neufeglise", runnerUp: "Blumbergs", mvp: "Neufeglise" },
+          { year: 2023, champion: "Mock Champion 2023" },
+          { year: 2022, champion: "Mock Champion 2022" },
         ]);
       }
     };
 
-    fetchHistoricalChampions();
-  }, [GOOGLE_SHEET_CHAMPIONS_API_URL]);
+    fetchHistoricalData();
+  }, [getMappedTeamName]); // Re-run if getMappedTeamName changes (though it's useCallback, so it won't often)
 
-
-  // Dynamically populate Teams dropdown in NAV_CATEGORIES using uniqueTeamNames
-  const updatedNavCategories = { ...NAV_CATEGORIES };
-  updatedNavCategories.TEAMS.subTabs = uniqueTeamNames.map(teamName => ({
-    label: teamName,
-    tab: TABS.TEAM_DETAIL,
-    teamName: teamName
-  }));
-
+  // Handle tab change, including setting selectedTeam for TEAM_DETAIL tab
+  const handleTabChange = (tab, teamName = null) => {
+    setActiveTab(tab);
+    setSelectedTeam(teamName);
+    setIsMobileMenuOpen(false); // Close mobile menu on tab selection
+  };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col items-center p-4">
-      {/* Tailwind CSS CDN for styling */}
-      <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
-      {/* Font Awesome for icons */}
-      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"></link>
+    <div className="min-h-screen bg-gray-100 font-sans antialiased text-gray-900">
+      <header className="bg-white shadow-md py-4 px-6 flex justify-between items-center relative z-10">
+        <div className="flex items-center">
+          <h1 className="text-2xl font-bold text-blue-800">League Stats</h1>
+        </div>
 
-      {/* Custom CSS for dropdown navigation, adjusted for conciseness */}
-      <style>{`
-        /* Global Styles & Utilities */
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f0f2f5; /* Light background */
-        }
-        .max-w-4xl {
-            max-width: 900px;
-        }
-
-        /* Navigation Styles */
-        .navbar {
-            display: flex;
-            justify-content: center;
-            width: 100%;
-            max-width: 4xl;
-            background: #0070c0; /* Darker blue for navbar */
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-            padding: 0 10px;
-            z-index: 1000;
-            position: relative;
-        }
-
-        .nav-item {
-            position: relative;
-            cursor: pointer;
-            padding: 15px 20px;
-            color: white;
-            font-weight: 600;
-            transition: background-color 0.3s ease;
-            white-space: nowrap;
-        }
-
-        .nav-item:hover {
-            background-color: #005f9f;
-        }
-
-        .nav-item.active-category {
-            background-color: #005f9f;
-        }
-
-        .dropdown-content {
-            display: none;
-            position: absolute;
-            background-color: #f9f9f9;
-            min-width: 160px;
-            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
-            z-index: 1001;
-            left: 0;
-            top: 100%;
-            border-radius: 0 0 8px 8px;
-            overflow: hidden;
-            border-top: 2px solid #0070c0;
-        }
-
-        .nav-item:hover .dropdown-content, .dropdown-content.active {
-            display: block;
-        }
-
-        .dropdown-item {
-            color: #333;
-            padding: 12px 16px;
-            text-decoration: none;
-            display: block;
-            text-align: left;
-            font-weight: normal;
-        }
-
-        .dropdown-item:hover {
-            background-color: #e0e0e0;
-            color: #0070c0;
-        }
-        .dropdown-item.active-tab {
-            background-color: #0070c0;
-            color: white;
-        }
-
-        .content-container {
-            background: white;
-            padding: 25px;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            width: 100%;
-            max-w-4xl;
-            min-height: 400px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            margin-top: 20px;
-        }
-
-        @media (max-width: 600px) {
-          .navbar {
-            padding: 0;
-            flex-wrap: wrap;
-            border-radius: 8px;
-          }
-          .nav-item {
-            padding: 10px 12px;
-            font-size: 0.9em;
-          }
-          .dropdown-content {
-            width: 100%;
-            left: 0;
-            border-radius: 0 0 8px 8px;
-            position: static;
-            box-shadow: none;
-            border-top: none;
-          }
-          .nav-item:hover .dropdown-content, .dropdown-content.active {
-            display: block;
-          }
-          .dropdown-item {
-            padding: 10px 12px;
-          }
-          .content-container {
-            padding: 15px;
-          }
-        }
-      `}</style>
-
-      <header className="w-full max-w-4xl bg-gradient-to-r from-blue-600 to-blue-800 text-white p-6 rounded-xl shadow-lg mb-8 text-center">
-        <h1 className="text-4xl font-extrabold mb-2">Fantasy League Dashboard</h1>
-        <p className="text-xl">Your central hub for league insights!</p>
-      </header>
-
-      {/* Navigation Tabs with Dropdown */}
-      <nav className="navbar mb-0">
-        {Object.entries(updatedNavCategories).map(([categoryKey, category]) => (
-          <div
-            key={categoryKey}
-            // Add active-category class if it's the current dropdown open, OR if a sub-tab within it is active
-            className={`nav-item ${activeDropdown === categoryKey || (category.subTabs && category.subTabs.some(sub => sub.tab === activeTab && (sub.teamName ? selectedTeam === sub.teamName : true))) ? 'active-category' : ''}`}
-            onMouseEnter={() => category.subTabs && setActiveDropdown(categoryKey)}
-            onMouseLeave={() => setActiveDropdown(null)}
-            onClick={() => {
-              if (!category.subTabs) { // Direct tab click (e.g., Power Rankings)
-                setActiveTab(category.tab);
-                setSelectedTeam(null); // Clear selected team
-                setActiveDropdown(null);
-              }
-            }}
+        {/* Desktop Navigation */}
+        <nav className="hidden md:flex items-center space-x-6">
+          <button
+            onClick={() => handleTabChange(TABS.POWER_RANKINGS)}
+            className={`px-3 py-2 rounded-md text-sm font-medium ${activeTab === TABS.POWER_RANKINGS ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
           >
-            {category.label}
-            {category.subTabs && (
-              <div className={`dropdown-content ${activeDropdown === categoryKey ? 'active' : ''}`}>
-                {category.subTabs.map((subTab) => (
-                  <a
-                    key={subTab.label}
-                    href="#"
-                    className={`dropdown-item ${activeTab === subTab.tab && (subTab.teamName ? selectedTeam === subTab.teamName : true) ? 'active-tab' : ''}`}
-                    onClick={(e) => {
-                      e.preventDefault(); // Prevent default link behavior
-                      setActiveTab(subTab.tab);
-                      setSelectedTeam(subTab.teamName || null); // Set selected team if applicable
-                      setActiveDropdown(null); // Close dropdown
-                    }}
+            {NAV_CATEGORIES.HOME.label}
+          </button>
+
+          {/* Dropdown for League Data */}
+          <div className="relative group">
+            <button className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none flex items-center">
+              {NAV_CATEGORIES.LEAGUE_DATA.label}
+              <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </button>
+            <div className="absolute left-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-20">
+              {NAV_CATEGORIES.LEAGUE_DATA.subTabs.map((item) => (
+                <button
+                  key={item.tab}
+                  onClick={() => handleTabChange(item.tab)}
+                  className={`block w-full text-left px-4 py-2 text-sm ${activeTab === item.tab ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Dropdown for Teams (dynamic) */}
+          {NAV_CATEGORIES.TEAMS.subTabs.length > 0 && (
+            <div className="relative group">
+              <button className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none flex items-center">
+                {NAV_CATEGORIES.TEAMS.label}
+                <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+              </button>
+              <div className="absolute left-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 max-h-60 overflow-y-auto z-20">
+                {NAV_CATEGORIES.TEAMS.subTabs.map((item) => (
+                  <button
+                    key={item.label} // Use label as key for team buttons
+                    onClick={() => handleTabChange(item.tab, item.teamName)}
+                    className={`block w-full text-left px-4 py-2 text-sm ${selectedTeam === item.teamName && activeTab === TABS.TEAM_DETAIL ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
                   >
-                    {subTab.label}
-                  </a>
+                    {item.label}
+                  </button>
                 ))}
               </div>
-            )}
+            </div>
+          )}
+        </nav>
+
+        {/* Mobile Hamburger Icon */}
+        <div className="md:hidden flex items-center">
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="text-gray-800 focus:outline-none p-2 rounded-md hover:bg-gray-100"
+            aria-label="Toggle mobile menu"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7"></path>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      {/* Mobile Menu Overlay */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 bg-white z-50 overflow-y-auto p-4 md:hidden">
+          {/* Close Button */}
+          <div className="flex justify-end mb-4">
+            <button
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="text-gray-800 focus:outline-none p-2 rounded-md hover:bg-gray-100"
+              aria-label="Close mobile menu"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </button>
           </div>
-        ))}
-      </nav>
+          {/* Mobile Navigation Links */}
+          <nav className="flex flex-col space-y-4">
+            <button
+              onClick={() => handleTabChange(TABS.POWER_RANKINGS)}
+              className={`block w-full text-left py-3 px-4 text-lg font-semibold rounded-md ${activeTab === TABS.POWER_RANKINGS ? 'bg-blue-100 text-blue-700' : 'text-gray-800 hover:bg-gray-100'}`}
+            >
+              {NAV_CATEGORIES.HOME.label}
+            </button>
 
-      <main className="w-full max-w-4xl">
-        {activeTab === TABS.POWER_RANKINGS && <PowerRankings />}
-        {activeTab === TABS.LEAGUE_HISTORY && ( // Render new LeagueHistory component
-          <LeagueHistory
-            historicalMatchups={historicalMatchups}
-            loading={loadingHistoricalData}
-            error={historicalDataError}
-            getDisplayTeamName={getMappedTeamName} // Use getMappedTeamName as getDisplayTeamName
-            historicalChampions={historicalChampions}
-          />
-        )}
-        {activeTab === TABS.RECORD_BOOK && (
-          <RecordBook
-            historicalMatchups={historicalMatchups}
-            loading={loadingHistoricalData}
-            error={historicalDataError}
-            getDisplayTeamName={getMappedTeamName}
-          />
-        )}
-        {activeTab === TABS.DPR_ANALYSIS && (
-          <DPRAnalysis
-            historicalMatchups={historicalMatchups}
-            getDisplayTeamName={getMappedTeamName}
-          />
-        )}
-        {activeTab === TABS.LUCK_RATING && (
-          <LuckRatingAnalysis
-            historicalMatchups={historicalMatchups}
-            getDisplayTeamName={getMappedTeamName}
-          />
-        )}
-        {activeTab === TABS.HEAD_TO_HEAD_GRID && ( // Render Head2HeadGrid directly
-          <Head2HeadGrid
-            historicalMatchups={historicalMatchups}
-            getDisplayTeamName={getMappedTeamName}
-          />
-        )}
+            {/* Accordion for League Data */}
+            <div className="border-b border-gray-200 pb-2">
+              <button
+                className="flex justify-between items-center w-full py-3 px-4 text-lg font-semibold text-gray-800 hover:bg-gray-100 rounded-md"
+                onClick={() => toggleSubMenu('LEAGUE_DATA')}
+              >
+                {NAV_CATEGORIES.LEAGUE_DATA.label}
+                <svg className={`w-5 h-5 transition-transform ${openSubMenu === 'LEAGUE_DATA' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+              </button>
+              {openSubMenu === 'LEAGUE_DATA' && (
+                <ul className="pl-6 mt-2 space-y-2">
+                  {NAV_CATEGORIES.LEAGUE_DATA.subTabs.map((subTab) => (
+                    <li key={subTab.tab}>
+                      <button
+                        onClick={() => handleTabChange(subTab.tab)}
+                        className={`block w-full text-left py-2 px-3 rounded-md text-base ${activeTab === subTab.tab ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
+                      >
+                        {subTab.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
 
-        {/* Render TeamDetailPage when selected */}
-        {activeTab === TABS.TEAM_DETAIL && selectedTeam && (
-          <TeamDetailPage
-            teamName={selectedTeam}
-            historicalMatchups={historicalMatchups}
-            getMappedTeamName={getMappedTeamName}
-            historicalChampions={historicalChampions}
-          />
+            {/* Accordion for Teams (dynamic) */}
+            {NAV_CATEGORIES.TEAMS.subTabs.length > 0 && (
+              <div className="border-b border-gray-200 pb-2">
+                <button
+                  className="flex justify-between items-center w-full py-3 px-4 text-lg font-semibold text-gray-800 hover:bg-gray-100 rounded-md"
+                  onClick={() => toggleSubMenu('TEAMS')}
+                >
+                  {NAV_CATEGORIES.TEAMS.label}
+                  <svg className={`w-5 h-5 transition-transform ${openSubMenu === 'TEAMS' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+                  </svg>
+                </button>
+                {openSubMenu === 'TEAMS' && (
+                  <ul className="pl-6 mt-2 space-y-2">
+                    {NAV_CATEGORIES.TEAMS.subTabs.map((subTab) => (
+                      <li key={subTab.label}>
+                        <button
+                          onClick={() => handleTabChange(subTab.tab, subTab.teamName)}
+                          className={`block w-full text-left py-2 px-3 rounded-md text-base ${selectedTeam === subTab.teamName && activeTab === TABS.TEAM_DETAIL ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
+                        >
+                          {subTab.label}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </nav>
+        </div>
+      )}
+
+
+      <main className="container mx-auto p-4 md:p-6 lg:p-8 mt-4">
+        {loadingHistoricalData ? (
+          <p className="text-center text-blue-600 text-lg">Loading league data...</p>
+        ) : historicalDataError ? (
+          <p className="text-center text-red-600 text-lg">{historicalDataError}</p>
+        ) : (
+          <>
+            {activeTab === TABS.POWER_RANKINGS && <PowerRankings />}
+            {activeTab === TABS.LEAGUE_HISTORY && (
+              <LeagueHistory
+                historicalMatchups={historicalMatchups}
+                loading={loadingHistoricalData}
+                error={historicalDataError}
+                getDisplayTeamName={getMappedTeamName}
+                historicalChampions={historicalChampions}
+              />
+            )}
+            {activeTab === TABS.RECORD_BOOK && (
+              <RecordBook
+                historicalMatchups={historicalMatchups}
+                loading={loadingHistoricalData}
+                error={historicalDataError}
+                getDisplayTeamName={getMappedTeamName}
+              />
+            )}
+            {activeTab === TABS.DPR_ANALYSIS && (
+              <DPRAnalysis
+                historicalMatchups={historicalMatchups}
+                getDisplayTeamName={getMappedTeamName}
+              />
+            )}
+            {activeTab === TABS.LUCK_RATING && (
+              <LuckRatingAnalysis
+                historicalMatchups={historicalMatchups}
+                getDisplayTeamName={getMappedTeamName}
+              />
+            )}
+
+            {/* Render TeamDetailPage when selected */}
+            {activeTab === TABS.TEAM_DETAIL && selectedTeam && (
+              <TeamDetailPage
+                teamName={selectedTeam}
+                historicalMatchups={historicalMatchups}
+                getMappedTeamName={getMappedTeamName}
+                historicalChampions={historicalChampions}
+              />
+            )}
+          </>
         )}
       </main>
 
-      <footer className="mt-8 text-center text-gray-600 text-sm pb-8">
+      <footer className="mt-8 text-center text-gray-600 text-sm pb-8 px-4">
         <p>This site displays league data powered by Google Apps Script.</p>
         <p className="mt-2">
           For Apps Script deployment instructions, visit:{" "}
