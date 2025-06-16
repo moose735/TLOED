@@ -255,6 +255,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
         weeklyDPRsChartData.some(weekData => weekData[team] !== 0) // Check for non-zero rank
       );
       setChartTeams(activeChartTeams);
+      // Ensure maxTeamsInChart reflects the actual number of participating teams for the Y-axis domain
       setMaxTeamsInChart(activeChartTeams.length > 0 ? activeChartTeams.length : 1);
 
 
@@ -322,7 +323,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                   <XAxis dataKey="week" label={{ value: "Week", position: "insideBottom", offset: 0 }} />
                   <YAxis
                     label={{ value: "Rank", angle: -90, position: "insideLeft" }}
-                    domain={[1, maxTeamsInChart]} // Flipped domain: 1 at top, maxTeamsInChart at bottom
+                    domain={[maxTeamsInChart, 1]} // Flipped domain: maxTeamsInChart at bottom, 1 at top
                     ticks={Array.from({ length: maxTeamsInChart }, (_, i) => i + 1)} // Show ticks for each rank
                     allowDecimals={false} // Ranks are integers
                   />
