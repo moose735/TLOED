@@ -52,8 +52,9 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
     // Initialize allTeamsOverallStats for all teams found in matchups for ranking purposes
     const allUniqueTeamsInLeague = new Set(); // To collect all unique teams across all years
     historicalMatchups.forEach(match => {
-        allUniqueTeamsInLeague.add(getMappedTeamName(String(match.team1 || '').trim()));
-        allUniqueTeamsInLeague.add(getMappedTeamName(String(match.team2 || '').trim()));
+        // Use optional chaining for robustness when accessing match properties
+        allUniqueTeamsInLeague.add(getMappedTeamName(String(match?.team1 || '').trim()));
+        allUniqueTeamsInLeague.add(getMappedTeamName(String(match?.team2 || '').trim()));
     });
     Array.from(allUniqueTeamsInLeague).forEach(team => {
         if (team) { // Ensure team name is not empty
@@ -70,14 +71,16 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
     });
 
     historicalMatchups.forEach(match => {
-      const displayTeam1 = getMappedTeamName(String(match.team1 || '').trim());
-      const displayTeam2 = getMappedTeamName(String(match.team2 || '').trim());
-      const year = parseInt(match.year);
-      const week = parseInt(match.week);
-      const team1Score = parseFloat(match.team1Score);
-      const team2Score = parseFloat(match.team2Score);
+      // Use optional chaining for robustness when accessing match properties
+      const displayTeam1 = getMappedTeamName(String(match?.team1 || '').trim());
+      const displayTeam2 = getMappedTeamName(String(match?.team2 || '').trim());
+      const year = parseInt(match?.year || '0');
+      const week = parseInt(match?.week || '0');
+      const team1Score = parseFloat(match?.team1Score || '0');
+      const team2Score = parseFloat(match?.team2Score || '0');
 
       if (isNaN(year) || isNaN(week) || isNaN(team1Score) || isNaN(team2Score) || (!displayTeam1 && !displayTeam2)) {
+          console.warn('Skipping invalid match data (TeamDetailPage main loop):', match);
           return; // Skip invalid records
       }
 
@@ -133,11 +136,11 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
                 overallStats.allTeamsOverallStats[currentTeam].highestScore = Math.max(overallStats.allTeamsOverallStats[currentTeam].highestScore, team2Score);
             }
 
-            if (match.playoffs === true) {
+            if (match?.playoffs === true) { // Use optional chaining
                 overallStats.allTeamsOverallStats[currentTeam].playoffAppearances.add(year);
             }
             // Count championships for all teams for ranking here based on finalSeedingGame
-            if (typeof match.finalSeedingGame === 'number' && match.finalSeedingGame === 1) {
+            if (typeof match?.finalSeedingGame === 'number' && match.finalSeedingGame === 1) { // Use optional chaining
                 const winningTeam = team1Won ? displayTeam1 : (isTie ? null : displayTeam2);
                 if (winningTeam === currentTeam) {
                     overallStats.allTeamsOverallStats[currentTeam].championships++;
@@ -219,14 +222,14 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
       }
 
       // Track playoff appearances (only if match.playoffs is true, distinct years)
-      if (match.playoffs === true) {
+      if (match?.playoffs === true) { // Use optional chaining
         overallStats.playoffAppearances.add(year);
       }
 
       // Determine final season finish using `finalSeedingGame`
-      if (typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0) {
+      if (typeof match?.finalSeedingGame === 'number' && match.finalSeedingGame > 0) { // Use optional chaining
         let winningTeam = team1Won ? displayTeam1 : (isTie ? 'Tie' : displayTeam2);
-        let losingTeam = team1Won ? displayTeam2 : (isTie ? 'Tie' : team1); // Corrected: loser is the other team, even if a tie
+        let losingTeam = team1Won ? displayTeam2 : (isTie ? 'Tie' : displayTeam1); // Corrected: loser is the other team, even if a tie
 
         if (displayTeam1 === teamName || displayTeam2 === teamName) {
             const finalPlace = match.finalSeedingGame;
@@ -334,29 +337,51 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
           if (!uniqueTeamsWithScores.has(teamName)) return;
 
           // For Luck Score, we need to consider regular season games only
-          // The data fetching already filters `historicalMatchups` in `App.js` to get `regSeason` data only if configured.
-          // Assuming `historicalMatchups` fed here already includes `regSeason` flag and only regular season matchups are passed.
-          // Or, alternatively, the luck rating component should specifically filter:
-          const relevantMatchupsForWeek = historicalMatchups.filter(m => 
-            parseInt(m.year) === parseInt(year) && 
-            parseInt(m.week) === parseInt(week) && 
-            m.regSeason === true // Explicitly filter for regular season matches here
-          );
-          if (relevantMatchupsForWeek.length === 0) return;
-
-          const currentTeamScoreEntry = relevantMatchupsForWeek.find(match => 
-            getMappedTeamName(String(match.team1 || '').trim()) === teamName || 
-            getMappedTeamName(String(match.team2 || '').trim()) === teamName
+          // Explicitly filter for regular season matches here within the relevantMatchupsForWeek array
+          const relevantMatchupsForWeek = historicalMatchups.filter(m =>
+            parseInt(m?.year || '0') === parseInt(year) && // Use optional chaining
+            parseInt(m?.week || '0') === parseInt(week) && // Use optional chaining
+            (m?.regSeason === true || m?.regSeason === 'true') // Check for boolean true or string "true"
           );
 
-          if (!currentTeamScoreEntry) return; // No regular season match for this team this week
-
-          const actualTeamScoreInMatch = (getMappedTeamName(String(currentTeamScoreEntry.team1 || '').trim()) === teamName) ? parseFloat(currentTeamScoreEntry.team1Score) : parseFloat(currentTeamScoreEntry.team2Score);
-
-          if (actualTeamScoreInMatch === undefined || isNaN(actualTeamScoreInMatch)) {
-              return; // Skip if the selected team didn't play or has invalid score in this week
+          if (relevantMatchupsForWeek.length === 0) {
+            console.log(`TeamDetailPage: No relevant regular season matchups found for ${year}, Week ${week}. Skipping luck calculation.`);
+            return;
           }
-          const currentTeamScoreForWeek = actualTeamScoreInMatch; // This is the score to compare against others
+
+          const currentTeamScoreEntry = relevantMatchupsForWeek.find(match => {
+            const matchTeam1 = getMappedTeamName(String(match?.team1 || '').trim()); // Use optional chaining
+            const matchTeam2 = getMappedTeamName(String(match?.team2 || '').trim()); // Use optional chaining
+            return matchTeam1 === teamName || matchTeam2 === teamName;
+          });
+
+          if (!currentTeamScoreEntry) {
+            console.warn(`TeamDetailPage: No specific entry for ${teamName} found in relevantMatchupsForWeek for ${year}, week ${week}. Skipping luck calculation for this week.`);
+            return;
+          }
+
+          // Debugging logs for the problematic section
+          console.log(`TeamDetailPage: Processing luck for ${teamName} in ${year} Week ${week}. currentTeamScoreEntry:`, currentTeamScoreEntry);
+          console.log(`TeamDetailPage: Team1 from entry:`, currentTeamScoreEntry?.team1);
+          console.log(`TeamDetailPage: Team2 from entry:`, currentTeamScoreEntry?.team2);
+
+          let currentTeamScoreForWeek;
+          const mappedTeam1FromEntry = getMappedTeamName(String(currentTeamScoreEntry?.team1 || '').trim()); // Use optional chaining
+          const mappedTeam2FromEntry = getMappedTeamName(String(currentTeamScoreEntry?.team2 || '').trim()); // Use optional chaining
+
+          if (mappedTeam1FromEntry === teamName) {
+            currentTeamScoreForWeek = parseFloat(currentTeamScoreEntry?.team1Score || '0'); // Use optional chaining
+          } else if (mappedTeam2FromEntry === teamName) {
+            currentTeamScoreForWeek = parseFloat(currentTeamScoreEntry?.team2Score || '0'); // Use optional chaining
+          } else {
+            console.warn(`TeamDetailPage: Selected team ${teamName} not found as team1 or team2 in currentTeamScoreEntry after filtering. This should not happen. Entry:`, currentTeamScoreEntry);
+            return;
+          }
+
+          if (isNaN(currentTeamScoreForWeek)) {
+              console.warn(`TeamDetailPage: Invalid score for ${teamName} in ${year}, week ${week}. Score: ${currentTeamScoreForWeek}. Skipping luck calculation for this week.`);
+              return;
+          }
 
 
           let outscoredCount = 0;
@@ -392,15 +417,16 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
       // Get actual regular season wins for the specific team for this year
       // Ensure this also only considers regSeason matches.
       historicalMatchups.forEach(match => {
-        if (!match.regSeason || parseInt(match.year) !== year) return;
+        // Use optional chaining for robustness when accessing match properties
+        if (!(match?.regSeason === true || match?.regSeason === 'true') || parseInt(match?.year || '0') !== year) return;
 
-        const displayTeam1 = getMappedTeamName(String(match.team1 || '').trim());
-        const displayTeam2 = getMappedTeamName(String(match.team2 || '').trim());
+        const displayTeam1 = getMappedTeamName(String(match?.team1 || '').trim());
+        const displayTeam2 = getMappedTeamName(String(match?.team2 || '').trim());
 
         if (displayTeam1 !== teamName && displayTeam2 !== teamName) return; // Not involving the selected team
 
-        const team1Score = parseFloat(match.team1Score);
-        const team2Score = parseFloat(match.team2Score);
+        const team1Score = parseFloat(match?.team1Score || '0');
+        const team2Score = parseFloat(match?.team2Score || '0');
         const isTie = team1Score === team2Score;
         const team1Won = team1Score > team2Score;
 
@@ -426,9 +452,9 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
           const allScoresInWeek = weeklyGameScoresByYearAndWeek[year][week];
           const currentTeamScoreInWeek = allScoresInWeek.find(entry => entry.team === teamName)?.score;
 
-          if (currentTeamScoreInWeek !== undefined) {
+          if (currentTeamScoreInWeek !== undefined && !isNaN(currentTeamScoreInWeek)) {
             allScoresInWeek.forEach(otherTeamEntry => {
-              if (otherTeamEntry.team !== teamName) {
+              if (otherTeamEntry.team !== teamName && otherTeamEntry.score !== undefined && !isNaN(otherTeamEntry.score)) {
                 if (currentTeamScoreInWeek > otherTeamEntry.score) {
                   allPlayWinsSeason++;
                 } else if (currentTeamScoreInWeek === otherTeamEntry.score) {
@@ -538,7 +564,10 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
   };
 
   const formatDPR = (value) => {
-    return value.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+    if (typeof value === 'number' && !isNaN(value)) {
+        return value.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+    }
+    return 'N/A';
   };
 
   if (loadingStats) {
