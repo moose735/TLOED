@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   HISTORICAL_MATCHUPS_API_URL,
   GOOGLE_SHEET_POWER_RANKINGS_API_URL,
+  // GOOGLE_SHEET_CHAMPIONS_API_URL removed as per request
 } from './config';
 
 // Import existing components from your provided App.js
@@ -133,67 +134,26 @@ const App = () => {
         setLoadingHistoricalData(false); // Ensure loading is false on error
         return; // Stop execution if fetching fails
       } finally {
-        // Ensure loading is false after both data fetches (even if one fails, to stop spinner)
+        // Ensure loading is false after data fetch (even if it fails, to stop spinner)
         setLoadingHistoricalData(false);
       }
 
-      // Fetch Historical Champions (optional, will use mock if URL is placeholder)
-      try {
-        if (GOOGLE_SHEET_CHAMPIONS_API_URL === 'YOUR_GOOGLE_SHEET_CHAMPIONS_API_URL' || !GOOGLE_SHEET_CHAMPIONS_API_URL) {
-          console.warn("GOOGLE_SHEET_CHAMPIONS_API_URL not configured. Using mock championship data.");
-          setHistoricalChampions([
-            { year: 2023, champion: "Mock Champion 2023" },
-            { year: 2022, champion: "Mock Champion 2022" },
-          ]);
-        } else {
-          const response = await fetch(GOOGLE_SHEET_CHAMPIONS_API_URL, { mode: 'cors' });
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status} - Could not load historical champions data.`);
-          }
-          const textResponse = await response.text(); // Get raw text to inspect
-          try {
-            const data = JSON.parse(textResponse);
-            // Crucial: Ensure the parsed data is an array for champions
-            if (Array.isArray(data)) {
-                setHistoricalChampions(data);
-            } else {
-                console.error("API response for historical champions is not an array. Raw response:", textResponse, data);
-                // IMPROVED ERROR MESSAGE FOR USER
-                setHistoricalDataError(prevError => prevError ? prevError + "\n\n" + `Failed to load historical champions data: The API response was not in the expected array format. Check GOOGLE_SHEET_CHAMPIONS_API_URL.` : `Failed to load historical champions data: The API response was not in the expected array format. Check GOOGLE_SHEET_CHAMPIONS_API_URL.`);
-                setHistoricalChampions([ // Still use mock data even if error is set
-                  { year: 2023, champion: "Mock Champion 2023" },
-                  { year: 2022, champion: "Mock Champion 2022" },
-                ]);
-            }
-          } catch (jsonError) {
-            console.warn("Error parsing historical champions data JSON (likely non-JSON response), using mock data. Raw response:", textResponse, jsonError);
-            setHistoricalChampions([
-              { year: 2023, champion: "Mock Champion 2023" },
-              { year: 2022, champion: "Mock Champion 2022" },
-            ]);
-            setHistoricalDataError(prevError => prevError ? prevError + "\n\n" + `Failed to parse historical champions data as JSON. Check GOOGLE_SHEET_CHAMPIONS_API_URL.` : `Failed to parse historical champions data as JSON. Check GOOGLE_SHEET_CHAMPIONS_API_URL.`);
-          }
-        }
-      } catch (error) {
-        console.warn("Error fetching historical champions data (network or configuration issue), using mock data:", error);
-        // Continue with mock data or empty array if fetching fails
-        setHistoricalChampions([
-          { year: 2023, champion: "Mock Champion 2023" },
-          { year: 2022, champion: "Mock Champion 2022" },
-        ]);
-        setHistoricalDataError(prevError => prevError ? prevError + "\n\n" + `Failed to fetch historical champions data. Check GOOGLE_SHEET_CHAMPIONS_API_URL.` : `Failed to fetch historical champions data. Check GOOGLE_SHEET_CHAMPIONS_API_URL.`);
-      }
+      // Always use mock data for historical champions as per request
+      // Removed the entire try-catch block for fetching GOOGLE_SHEET_CHAMPIONS_API_URL
+      setHistoricalChampions([
+        { year: 2023, champion: "Mock Champion 2023" },
+        { year: 2022, champion: "Mock Champion 2022" },
+      ]);
     };
 
     fetchHistoricalData();
-  }, [getMappedTeamName]); // Dependency array simplified as per original structure
+  }, [getMappedTeamName]);
 
   // Handle tab change, including setting selectedTeam for TEAM_DETAIL tab
   const handleTabChange = (tab, teamName = null) => {
     setActiveTab(tab);
     setSelectedTeam(teamName);
     setIsMobileMenuOpen(false); // Close mobile menu on tab selection
-    // Removed setIsContentVisible(false) here, as it's handled by useEffect when loading starts
   };
 
   return (
@@ -371,8 +331,8 @@ const App = () => {
             {historicalDataError} <br />
             <br />
             **Please check the following:**<br />
-            1. **Google Apps Script URLs (`config.js`):** Ensure `HISTORICAL_MATCHUPS_API_URL` and `GOOGLE_SHEET_CHAMPIONS_API_URL` are correct and point to your deployed Google Apps Script Web Apps.
-            2. **Google Apps Script Deployment:** For each script, verify its deployment settings: "Execute as: Me" and "Who has access: Anyone".
+            1. **Google Apps Script URLs (`config.js`):** Ensure `HISTORICAL_MATCHUPS_API_URL` is correct and points to your deployed Google Apps Script Web App.
+            2. **Google Apps Script Deployment:** For your script, verify its deployment settings: "Execute as: Me" and "Who has access: Anyone".
             3. **Vercel Deployment / Local Server:** Ensure your `index.js` file (and other JavaScript files) are being served with the correct MIME type (`application/javascript`). This usually requires proper build configuration (e.g., using a `build` script that generates optimized JavaScript bundles, which Vercel handles automatically for standard React projects). If developing locally, ensure your development server is configured correctly.
           </p>
         ) : (
@@ -426,7 +386,7 @@ const App = () => {
         )}
       </main>
 
-      <footer className="mt-8 text-center text-gray-600 text-sm pb-8 px-4">
+      <footer className="mt-8 text-center text-gray-600 text-sm pb-8 px-4}>
         <p>This site displays league data powered by Google Apps Script.</p>
         <p className="mt-2">
           For Apps Script deployment instructions, visit:{" "}
