@@ -327,6 +327,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                     ticks={Array.from({ length: maxTeamsInChart }, (_, i) => i + 1)} // Show ticks for each rank
                     allowDecimals={false} // Ranks are integers
                     reversed={true} // Explicitly reverse the axis to put 1 at top
+                    interval={0} // Force all labels to show
                   />
                   <Tooltip content={<CustomDPRRankTooltip />} /> {/* Using custom tooltip */}
                   <Legend />
