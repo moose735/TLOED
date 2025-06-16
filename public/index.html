@@ -12,6 +12,24 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Font Awesome for icons (Trophies, Medals) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" xintegrity="sha512-1ycn6IcaQQ40NZMf5UfsJt6d1bEa471MvC9C+uK4S4h+Xp3A9j8H1G2u4u8gG8g2Q06lF4vW9z+fV6a+5/g==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+        /* Global CSS for smoother transitions and accessibility */
+        html {
+            /* Enables smooth scrolling when navigating to anchor links */
+            scroll-behavior: smooth;
+        }
+        body {
+            /* Ensures consistent font rendering across browsers */
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        /* Improve focus states for accessibility */
+        *:focus {
+            outline: 2px solid theme('colors.blue.500'); /* Use Tailwind's default blue for outline */
+            outline-offset: 2px;
+            border-radius: theme('borderRadius.md'); /* Apply rounded corners to focus outline */
+        }
+    </style>
 </head>
 <body class="font-inter bg-gray-100 antialiased">
     <noscript>You need to enable JavaScript to run this app.</noscript>
