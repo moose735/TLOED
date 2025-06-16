@@ -1,8 +1,9 @@
 // src/lib/SeasonRecords.js
 import React, { useState, useEffect } from 'react';
+import { calculateAllLeagueMetrics } from '../utils/calculations'; // Import the new utility
 
 const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
-  const [seasonRecords, setSeasonRecords] = useState({});
+  const [seasonRecords, setSeasonRecords] = useState({}); // This will hold raw aggregated seasonal stats
   const [highestDPRSeasonRecord, setHighestDPRSeasonRecord] = useState(null);
   const [lowestDPRSeasonRecord, setLowestDPRSeasonRecord] = useState(null);
   const [mostWinsSeasonRecord, setMostWinsSeasonRecord] = useState(null);
@@ -37,138 +38,18 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       return;
     }
 
-    const newSeasonRecords = {}; // { year: { team: { wins, losses, ties, pointsFor, totalGames, weeklyScores: [], rawDPR, adjustedDPR, allPlayWins, allPlayLosses, allPlayTies, weeklyHighestScoreCount, weeklyTop3Count, blowoutWins, blowoutLosses, slimWins, slimLosses, winPercentage, allPlayWinPercentage } } }
-    const weeklyGameScoresByYear = {}; // { year: { week: [{ team: 'TeamA', score: 100 }, ...] } }
+    // Use the centralized calculation logic to get all metrics
+    const { seasonalMetrics, weeklyGameScoresByYearAndWeek } = calculateAllLeagueMetrics(historicalMatchups, getDisplayTeamName);
 
-    historicalMatchups.forEach(match => {
-      const team1 = getDisplayTeamName(String(match.team1 || '').trim());
-      const team2 = getDisplayTeamName(String(match.team2 || '').trim());
-      const year = match.year;
-      const week = match.week;
-      const team1Score = parseFloat(match.team1Score);
-      const team2Score = parseFloat(match.team2Score);
+    // This map will still aggregate additional season-specific records not directly from `seasonalMetrics`
+    const newSeasonRecordsAggregated = {}; // { year: { team: { ...stats } } }
 
-      if (!team1 || !team2 || isNaN(team1Score) || isNaN(team2Score)) {
-        console.log("DPR DEBUG: Skipping invalid matchup data:", match);
-        return; // Skip invalid data
-      }
-
-      console.log(`DPR DEBUG: Processing matchup - Year: ${year}, Week: ${week}, Team1: ${team1} (${team1Score}), Team2: ${team2} (${team2Score})`);
-
-      const isTie = team1Score === team2Score;
-      const team1Won = team1Score > team2Score;
-
-      // Initialize structures for year and teams
-      [team1, team2].forEach(team => {
-        if (!newSeasonRecords[year]) {
-          newSeasonRecords[year] = {};
-          weeklyGameScoresByYear[year] = {};
-        }
-        if (!newSeasonRecords[year][team]) {
-          newSeasonRecords[year][team] = {
-            wins: 0,
-            losses: 0,
-            ties: 0,
-            pointsFor: 0,
-            totalGames: 0,
-            weeklyScores: [], // To store individual team's weekly scores
-            allPlayWins: 0,
-            allPlayLosses: 0,
-            allPlayTies: 0,
-            weeklyHighestScoreCount: 0,
-            weeklyTop3Count: 0,
-            blowoutWins: 0,
-            blowoutLosses: 0,
-            slimWins: 0,
-            slimLosses: 0,
-            rawDPR: 0,
-            adjustedDPR: 0,
-            winPercentage: 0,
-            allPlayWinPercentage: 0,
-          };
-        }
-      });
-
-      // Update Season Records (actual W-L-T, points, totalGames)
-      if (isTie) {
-        newSeasonRecords[year][team1].ties++;
-        newSeasonRecords[year][team2].ties++;
-      } else if (team1Won) {
-        newSeasonRecords[year][team1].wins++;
-        newSeasonRecords[year][team2].losses++;
-      } else { // team2Won
-        newSeasonRecords[year][team2].wins++;
-        newSeasonRecords[year][team1].losses++;
-      }
-
-      newSeasonRecords[year][team1].pointsFor += team1Score;
-      newSeasonRecords[year][team2].pointsFor += team2Score;
-      newSeasonRecords[year][team1].totalGames++;
-      newSeasonRecords[year][team2].totalGames++;
-
-      // Store individual team's weekly scores for DPR calculation
-      newSeasonRecords[year][team1].weeklyScores.push(team1Score);
-      newSeasonRecords[year][team2].weeklyScores.push(team2Score);
-
-      console.log(`DPR DEBUG: Initialized/Updated stats for ${team1} in ${year}: Wins: ${newSeasonRecords[year][team1].wins}, Losses: ${newSeasonRecords[year][team1].losses}, Ties: ${newSeasonRecords[year][team1].ties}, PointsFor: ${newSeasonRecords[year][team1].pointsFor}, TotalGames: ${newSeasonRecords[year][team1].totalGames}, WeeklyScores: [${newSeasonRecords[year][team1].weeklyScores.join(', ')}]`);
-      console.log(`DPR DEBUG: Initialized/Updated stats for ${team2} in ${year}: Wins: ${newSeasonRecords[year][team2].wins}, Losses: ${newSeasonRecords[year][team2].losses}, Ties: ${newSeasonRecords[year][team2].ties}, PointsFor: ${newSeasonRecords[year][team2].pointsFor}, TotalGames: ${newSeasonRecords[year][team2].totalGames}, WeeklyScores: [${newSeasonRecords[year][team2].weeklyScores.join(', ')}]`);
-
-
-      // Calculate Blowout/Slim Wins/Losses for both teams
-      // Team 1 perspective
-      if (team1Won) { // Team 1 won
-        const margin = team1Score - team2Score;
-        const opponentScoreForPercentage = team2Score === 0 ? 1 : team2Score; // Avoid division by zero
-        if (margin / opponentScoreForPercentage > 0.40) {
-          newSeasonRecords[year][team1].blowoutWins++;
-        }
-        if (margin / opponentScoreForPercentage < 0.025) {
-          newSeasonRecords[year][team1].slimWins++;
-        }
-      } else if (team2Score > team1Score) { // Team 1 lost (Team 2 won)
-        const margin = team2Score - team1Score;
-        const teamScoreForPercentage = team1Score === 0 ? 1 : team1Score; // Avoid division by zero
-        if (margin / teamScoreForPercentage > 0.40) {
-          newSeasonRecords[year][team1].blowoutLosses++;
-        }
-        if (margin / teamScoreForPercentage < 0.025) {
-          newSeasonRecords[year][team1].slimLosses++;
-        }
-      }
-
-      // Team 2 perspective
-      if (team2Score > team1Score) { // Team 2 won
-        const margin = team2Score - team1Score;
-        const opponentScoreForPercentage = team1Score === 0 ? 1 : team1Score; // Avoid division by zero
-        if (margin / opponentScoreForPercentage > 0.40) {
-          newSeasonRecords[year][team2].blowoutWins++;
-        }
-        if (margin / opponentScoreForPercentage < 0.025) {
-          newSeasonRecords[year][team2].slimWins++;
-        }
-      } else if (team1Won) { // Team 2 lost (Team 1 won)
-        const margin = team1Score - team2Score;
-        const teamScoreForPercentage = team2Score === 0 ? 1 : team2Score; // Avoid division by zero
-        if (margin / teamScoreForPercentage > 0.40) {
-          newSeasonRecords[year][team2].blowoutLosses++;
-        }
-        if (margin / teamScoreForPercentage < 0.025) {
-          newSeasonRecords[year][team2].slimLosses++;
-        }
-      }
-
-      // Collect all scores for this specific week (for All-Play and Top 3 calculation)
-      if (!weeklyGameScoresByYear[year][week]) {
-        weeklyGameScoresByYear[year][week] = [];
-      }
-      weeklyGameScoresByYear[year][week].push({ team: team1, score: team1Score }, { team: team2, score: team2Score });
-    });
-
+    // --- Helper for finding top/bottom records ---
     let currentHighestDPRSeason = { value: -Infinity, entries: [] };
     let currentLowestDPRSeason = { value: Infinity, entries: [] };
     let currentMostWinsSeason = { value: 0, entries: [] };
     let currentMostLossesSeason = { value: 0, entries: [] };
-    let currentBestAllPlayWinPctSeason = { value: -Infinity, entries: [] };
+    let currentBestAllPlayWinPctSeason = { value: 0, entries: [] }; // Initialized to 0 for percentage
     let currentMostWeeklyHighScoresSeason = { value: 0, entries: [] };
     let currentMostWeeklyTop3ScoresSeason = { value: 0, entries: [] };
     let currentMostBlowoutWinsSeason = { value: 0, entries: [] };
@@ -197,95 +78,118 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       }
     };
 
-    Object.keys(newSeasonRecords).sort().forEach(year => {
-      const teamsInSeason = Object.keys(newSeasonRecords[year]);
-      if (teamsInSeason.length === 0) return;
 
-      // Calculate all-play and weekly high/top3 scores for this year
-      const weeksInYear = weeklyGameScoresByYear[year];
-      Object.keys(weeksInYear).forEach(week => {
-        const allScoresInWeek = weeksInYear[week];
-        // Sort all scores to find the highest and top 3 for this week
-        const sortedScoresInWeek = [...allScoresInWeek].sort((a, b) => b.score - a.score);
-        const highestScoreInWeek = sortedScoresInWeek.length > 0 ? sortedScoresInWeek[0].score : -Infinity;
-        const top3Scores = sortedScoresInWeek.slice(0, Math.min(3, sortedScoresInWeek.length)).map(entry => entry.score);
+    // First pass to aggregate basic seasonal stats and find records
+    historicalMatchups.forEach(match => {
+      const team1 = getDisplayTeamName(String(match.team1 || '').trim());
+      const team2 = getDisplayTeamName(String(match.team2 || '').trim());
+      const year = parseInt(match.year);
+      const week = parseInt(match.week);
+      const team1Score = parseFloat(match.team1Score);
+      const team2Score = parseFloat(match.team2Score);
 
-        allScoresInWeek.forEach(({ team, score }) => {
-          if (!newSeasonRecords[year][team]) return; // Should not happen if initialized
+      if (!team1 || !team2 || isNaN(year) || isNaN(week) || isNaN(team1Score) || isNaN(team2Score)) {
+        return; // Skip invalid data
+      }
 
-          // Update weekly highest score count
-          if (score === highestScoreInWeek) {
-            newSeasonRecords[year][team].weeklyHighestScoreCount++;
-          }
-          // Update weekly top 3 score count
-          if (top3Scores.includes(score)) {
-            newSeasonRecords[year][team].weeklyTop3Count++;
-          }
+      const isTie = team1Score === team2Score;
+      const team1Won = team1Score > team2Score;
 
-          // Calculate all-play for this week (comparing current team's score to all other scores in the week)
-          allScoresInWeek.forEach(({ team: otherTeam, score: otherScore }) => {
-            if (team !== otherTeam) { // Don't compare against self
-              if (score > otherScore) {
-                newSeasonRecords[year][team].allPlayWins++;
-              } else if (score === otherScore) {
-                newSeasonRecords[year][team].allPlayTies++;
-              } else {
-                newSeasonRecords[year][team].allPlayLosses++;
-              }
-            }
-          });
-        });
+      // Initialize team season record
+      [team1, team2].forEach(team => {
+        if (!newSeasonRecordsAggregated[year]) newSeasonRecordsAggregated[year] = {};
+        if (!newSeasonRecordsAggregated[year][team]) {
+          newSeasonRecordsAggregated[year][team] = {
+            wins: 0, losses: 0, ties: 0, pointsFor: 0, totalGames: 0,
+            blowoutWins: 0, blowoutLosses: 0, slimWins: 0, slimLosses: 0,
+            weeklyHighestScoreCount: 0, weeklyTop3Count: 0, // Will be updated later in second pass
+          };
+        }
       });
 
-      let totalRawDPRForSeason = 0;
-      let teamsWithValidDPR = 0;
+      // Update basic win/loss/tie and points stats
+      if (isTie) {
+        newSeasonRecordsAggregated[year][team1].ties++;
+        newSeasonRecordsAggregated[year][team2].ties++;
+      } else if (team1Won) {
+        newSeasonRecordsAggregated[year][team1].wins++;
+        newSeasonRecordsAggregated[year][team2].losses++;
+      } else { // team2Won
+        newSeasonRecordsAggregated[year][team2].wins++;
+        newSeasonRecordsAggregated[year][team1].losses++;
+      }
+      newSeasonRecordsAggregated[year][team1].pointsFor += team1Score;
+      newSeasonRecordsAggregated[year][team2].pointsFor += team2Score;
+      newSeasonRecordsAggregated[year][team1].totalGames++;
+      newSeasonRecordsAggregated[year][team2].totalGames++;
+
+      // Calculate Blowout/Slim Wins/Losses for both teams
+      // Team 1 perspective
+      if (team1Won) { // Team 1 won
+        const margin = team1Score - team2Score;
+        const opponentScoreForPercentage = team2Score === 0 ? 1 : team2Score; // Avoid division by zero
+        if (margin / opponentScoreForPercentage > 0.40) newSeasonRecordsAggregated[year][team1].blowoutWins++;
+        if (margin / opponentScoreForPercentage < 0.025) newSeasonRecordsAggregated[year][team1].slimWins++;
+      } else if (team2Score > team1Score) { // Team 1 lost (Team 2 won)
+        const margin = team2Score - team1Score;
+        const teamScoreForPercentage = team1Score === 0 ? 1 : team1Score; // Avoid division by zero
+        if (margin / teamScoreForPercentage > 0.40) newSeasonRecordsAggregated[year][team1].blowoutLosses++;
+        if (margin / teamScoreForPercentage < 0.025) newSeasonRecordsAggregated[year][team1].slimLosses++;
+      }
+
+      // Team 2 perspective
+      if (team2Score > team1Score) { // Team 2 won
+        const margin = team2Score - team1Score;
+        const opponentScoreForPercentage = team1Score === 0 ? 1 : team1Score; // Avoid division by zero
+        if (margin / opponentScoreForPercentage > 0.40) newSeasonRecordsAggregated[year][team2].blowoutWins++;
+        if (margin / opponentScoreForPercentage < 0.025) newSeasonRecordsAggregated[year][team2].slimWins++;
+      } else if (team1Won) { // Team 2 lost (Team 1 won)
+        const margin = team1Score - team2Score;
+        const teamScoreForPercentage = team2Score === 0 ? 1 : team2Score; // Avoid division by zero
+        if (margin / teamScoreForPercentage > 0.40) newSeasonRecordsAggregated[year][team2].blowoutLosses++;
+        if (margin / teamScoreForPercentage < 0.025) newSeasonRecordsAggregated[year][team2].slimLosses++;
+      }
+    });
+
+    // Second pass: Populate records based on the aggregated data and centralized metrics
+    Object.keys(newSeasonRecordsAggregated).sort().forEach(year => {
+      const teamsInSeason = Object.keys(newSeasonRecordsAggregated[year]);
+
+      // Calculate weekly high/top3 scores for this year
+      const weeksInYear = weeklyGameScoresByYearAndWeek[year];
+      if (weeksInYear) { // Ensure weekly data exists for the year
+          Object.keys(weeksInYear).forEach(week => {
+            const allScoresInWeek = weeksInYear[week];
+            const sortedScoresInWeek = [...allScoresInWeek].sort((a, b) => b.score - a.score); // Descending
+            const highestScoreInWeek = sortedScoresInWeek.length > 0 ? sortedScoresInWeek[0].score : -Infinity;
+            const top3Scores = sortedScoresInWeek.slice(0, Math.min(3, sortedScoresInWeek.length)).map(entry => entry.score);
+
+            allScoresInWeek.forEach(({ team, score }) => {
+              if (newSeasonRecordsAggregated[year][team]) { // Ensure team is initialized
+                if (score === highestScoreInWeek) {
+                  newSeasonRecordsAggregated[year][team].weeklyHighestScoreCount++;
+                }
+                if (top3Scores.includes(score)) {
+                  newSeasonRecordsAggregated[year][team].weeklyTop3Count++;
+                }
+              }
+            });
+          });
+      }
+
 
       teamsInSeason.forEach(team => {
-        const stats = newSeasonRecords[year][team];
-        const totalGames = stats.totalGames;
+        const stats = newSeasonRecordsAggregated[year][team]; // Stats aggregated from first pass
+        const centralizedStats = seasonalMetrics[year]?.[team]; // Metrics from centralized calculations
 
-        if (totalGames === 0) {
-          console.log(`DPR DEBUG: Skipping team ${team} in ${year} due to 0 total games.`);
-          return;
-        }
+        if (!centralizedStats) return; // Skip if no centralized metrics for this team/year
 
-        // Determine team's own max and min score for the season
-        const teamMaxScoreInSeason = stats.weeklyScores.length > 0 ? Math.max(...stats.weeklyScores) : 0;
-        const teamMinScoreInSeason = stats.weeklyScores.length > 0 ? Math.min(...stats.weeklyScores) : 0;
-        console.log(`DPR DEBUG:   Team's weekly scores for ${team} in ${year}: [${stats.weeklyScores.join(', ')}]`);
-        console.log(`DPR DEBUG:   Team Max/Min Score for ${team} in ${year}: Max=${teamMaxScoreInSeason.toFixed(2)}, Min=${teamMinScoreInSeason.toFixed(2)}`);
-
-
-        // Calculate actual win percentage
-        stats.winPercentage = ((stats.wins + (0.5 * stats.ties)) / totalGames);
-        console.log(`DPR DEBUG:   Win Percentage for ${team} in ${year}: ${(stats.winPercentage * 100).toFixed(1)}% (${stats.wins}-${stats.losses}-${stats.ties})`);
-
-
-        // Calculate All-Play Win Percentage
-        const totalAllPlayGames = stats.allPlayWins + stats.allPlayLosses + stats.allPlayTies;
-        stats.allPlayWinPercentage = totalAllPlayGames > 0 ? ((stats.allPlayWins + (0.5 * stats.allPlayTies)) / totalAllPlayGames) : 0;
-
-        // Raw DPR Calculation: ((Points Scored * 6) + ((Points Scored Max + Points Scored Min) * 2) + ((Win% * 200) * 2)) / 10
-        const pointsScoredComponent = stats.pointsFor * 6;
-        const maxMinComponent = (teamMaxScoreInSeason + teamMinScoreInSeason) * 2;
-        const winPercentageComponent = (stats.winPercentage * 200) * 2;
-        const numerator = pointsScoredComponent + maxMinComponent + winPercentageComponent;
-        stats.rawDPR = numerator / 10;
-
-        console.log(`DPR DEBUG:   Raw DPR Intermediate parts for ${team} in ${year}:`);
-        console.log(`DPR DEBUG:     Points Scored * 6: ${stats.pointsFor.toFixed(2)} * 6 = ${pointsScoredComponent.toFixed(2)}`);
-        console.log(`DPR DEBUG:     (Max + Min) * 2: (${teamMaxScoreInSeason.toFixed(2)} + ${teamMinScoreInSeason.toFixed(2)}) * 2 = ${maxMinComponent.toFixed(2)}`);
-        console.log(`DPR DEBUG:     (Win% * 200) * 2: (${(stats.winPercentage * 100).toFixed(1)}% * 200) * 2 = ${winPercentageComponent.toFixed(2)}`);
-        console.log(`DPR DEBUG:     Numerator: ${numerator.toFixed(2)}`);
-        console.log(`DPR DEBUG:   Raw DPR for ${team} in ${year}: ${stats.rawDPR.toFixed(3)}`);
-
-        totalRawDPRForSeason += stats.rawDPR;
-        teamsWithValidDPR++;
-
-        // Update league-wide season records
+        // Update records using centralized values where applicable
+        updateRecord(currentHighestDPRSeason, centralizedStats.adjustedDPR, { team, year: parseInt(year), dpr: centralizedStats.adjustedDPR });
+        updateRecord(currentLowestDPRSeason, centralizedStats.adjustedDPR, { team, year: parseInt(year), dpr: centralizedStats.adjustedDPR }, true);
         updateRecord(currentMostWinsSeason, stats.wins, { team, year: parseInt(year), value: stats.wins });
         updateRecord(currentMostLossesSeason, stats.losses, { team, year: parseInt(year), value: stats.losses });
-        updateRecord(currentBestAllPlayWinPctSeason, stats.allPlayWinPercentage, { team, year: parseInt(year), value: stats.allPlayWinPercentage });
+        updateRecord(currentBestAllPlayWinPctSeason, centralizedStats.allPlayWinPercentage, { team, year: parseInt(year), value: centralizedStats.allPlayWinPercentage });
         updateRecord(currentMostWeeklyHighScoresSeason, stats.weeklyHighestScoreCount, { team, year: parseInt(year), value: stats.weeklyHighestScoreCount });
         updateRecord(currentMostWeeklyTop3ScoresSeason, stats.weeklyTop3Count, { team, year: parseInt(year), value: stats.weeklyTop3Count });
         updateRecord(currentMostBlowoutWinsSeason, stats.blowoutWins, { team, year: parseInt(year), value: stats.blowoutWins });
@@ -295,29 +199,6 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         updateRecord(currentMostPointsSeason, stats.pointsFor, { team, year: parseInt(year), value: stats.pointsFor });
         updateRecord(currentFewestPointsSeason, stats.pointsFor, { team, year: parseInt(year), value: stats.pointsFor }, true);
       });
-
-      const avgRawDPRForSeason = teamsWithValidDPR > 0 ? totalRawDPRForSeason / teamsWithValidDPR : 0;
-      console.log(`DPR DEBUG: Season ${year} Raw DPR totals: Total=${totalRawDPRForSeason.toFixed(2)}, Valid Teams=${teamsWithValidDPR}, Avg=${avgRawDPRForSeason.toFixed(3)}`);
-
-
-      teamsInSeason.forEach(team => {
-        const stats = newSeasonRecords[year][team];
-        if (avgRawDPRForSeason > 0) {
-          stats.adjustedDPR = stats.rawDPR / avgRawDPRForSeason;
-        } else {
-          stats.adjustedDPR = 0;
-        }
-
-        console.log(`DPR DEBUG:   Adjusted DPR for ${team} in ${year}: ${stats.adjustedDPR.toFixed(3)}`);
-
-        // Update highest/lowest adjusted DPR season records
-        if (stats.adjustedDPR !== 0) {
-          updateRecord(currentHighestDPRSeason, stats.adjustedDPR, { team, year: parseInt(year), dpr: stats.adjustedDPR });
-          updateRecord(currentLowestDPRSeason, stats.adjustedDPR, { team, year: parseInt(year), dpr: stats.adjustedDPR }, true);
-        }
-      });
-      console.log(`DPR DEBUG: Current Highest Adjusted DPR Season Record: Value=${currentHighestDPRSeason.value.toFixed(3)}, Entries=${JSON.stringify(currentHighestDPRSeason.entries)}`);
-      console.log(`DPR DEBUG: Current Lowest Adjusted DPR Season Record: Value=${currentLowestDPRSeason.value.toFixed(3)}, Entries=${JSON.stringify(currentLowestDPRSeason.entries)}`);
     });
 
     // Final sorting for all-time record entries if there are ties
@@ -346,7 +227,7 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     sortRecordEntries(currentFewestPointsSeason);
 
 
-    setSeasonRecords(newSeasonRecords);
+    setSeasonRecords(newSeasonRecordsAggregated); // Keep this for other potential uses
     setHighestDPRSeasonRecord(currentHighestDPRSeason);
     setLowestDPRSeasonRecord(currentLowestDPRSeason);
     setMostWinsSeasonRecord(currentMostWinsSeason);
@@ -400,9 +281,9 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
             </tr>
         );
     }
-    const isFirstEntryEven = recordItem.entries.findIndex((_, idx) => idx === 0) % 2 === 0;
+    // No specific background logic for these internal rows, let parent handle it or keep default.
     return (
-        <tr className={`border-b border-gray-100 last:border-b-0 ${isFirstEntryEven ? 'bg-white' : 'bg-gray-50'}`}>
+        <tr className={`border-b border-gray-100 last:border-b-0`}>
             <td className="py-2 px-3 text-sm font-semibold text-gray-800">{label}</td>
             <td className="py-2 px-3 text-sm text-gray-800">{formatFn(recordItem.value)}</td>
             <td className="py-2 px-3 text-sm text-gray-700">
@@ -437,27 +318,52 @@ const SeasonRecords = ({ historicalMatchups, getDisplayTeamName }) => {
           <h4 className="text-lg font-bold text-gray-800 mb-3">Season Records Highlights</h4>
           <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm text-sm">
             <tbody>
-              {renderSingleRecordEntry(highestDPRSeasonRecord, 'Highest Adjusted DPR', formatDPR)}
-              {renderSingleRecordEntry(lowestDPRSeasonRecord, 'Lowest Adjusted DPR', formatDPR)}
-              {renderSingleRecordEntry(mostWinsSeasonRecord, 'Most Wins')}
-              {renderSingleRecordEntry(mostLossesSeasonRecord, 'Most Losses')}
-              {renderSingleRecordEntry(bestAllPlayWinPctSeasonRecord, 'Best All-Play Win %', formatPercentage)}
-              {renderSingleRecordEntry(mostWeeklyHighScoresSeasonRecord, 'Most Weekly High Scores')}
-              {renderSingleRecordEntry(mostWeeklyTop3ScoresSeasonRecord, 'Most Weekly Top 3 Scores')}
-              {renderSingleRecordEntry(mostBlowoutWinsSeasonRecord, 'Most Blowout Wins')}
-              {renderSingleRecordEntry(mostBlowoutLossesSeasonRecord, 'Most Blowout Losses')}
-              {renderSingleRecordEntry(mostSlimWinsSeasonRecord, 'Most Slim Wins')}
-              {renderSingleRecordEntry(mostSlimLossesSeasonRecord, 'Most Slim Losses')}
-              {renderSingleRecordEntry(mostPointsSeasonRecord, 'Most Points', formatPoints)}
-              {renderSingleRecordEntry(fewestPointsSeasonRecord, 'Fewest Points', formatPoints)}
+              {/* Using a fixed background for rows in this table for simplicity and consistent appearance */}
+              <tr className="border-b border-gray-100 last:border-b-0 bg-white">
+                {renderSingleRecordEntry(highestDPRSeasonRecord, 'Highest Adjusted DPR', formatDPR)}
+              </tr>
+              <tr className="border-b border-gray-100 last:border-b-0 bg-gray-50">
+                {renderSingleRecordEntry(lowestDPRSeasonRecord, 'Lowest Adjusted DPR', formatDPR)}
+              </tr>
+              <tr className="border-b border-gray-100 last:border-b-0 bg-white">
+                {renderSingleRecordEntry(mostWinsSeasonRecord, 'Most Wins')}
+              </tr>
+              <tr className="border-b border-gray-100 last:border-b-0 bg-gray-50">
+                {renderSingleRecordEntry(mostLossesSeasonRecord, 'Most Losses')}
+              </tr>
+              <tr className="border-b border-gray-100 last:border-b-0 bg-white">
+                {renderSingleRecordEntry(bestAllPlayWinPctSeasonRecord, 'Best All-Play Win %', formatPercentage)}
+              </tr>
+              <tr className="border-b border-gray-100 last:border-b-0 bg-gray-50">
+                {renderSingleRecordEntry(mostWeeklyHighScoresSeasonRecord, 'Most Weekly High Scores')}
+              </tr>
+              <tr className="border-b border-gray-100 last:border-b-0 bg-white">
+                {renderSingleRecordEntry(mostWeeklyTop3ScoresSeasonRecord, 'Most Weekly Top 3 Scores')}
+              </tr>
+              <tr className="border-b border-gray-100 last:border-b-0 bg-gray-50">
+                {renderSingleRecordEntry(mostBlowoutWinsSeasonRecord, 'Most Blowout Wins')}
+              </tr>
+              <tr className="border-b border-gray-100 last:border-b-0 bg-white">
+                {renderSingleRecordEntry(mostBlowoutLossesSeasonRecord, 'Most Blowout Losses')}
+              </tr>
+              <tr className="border-b border-gray-100 last:border-b-0 bg-gray-50">
+                {renderSingleRecordEntry(mostSlimWinsSeasonRecord, 'Most Slim Wins')}
+              </tr>
+              <tr className="border-b border-gray-100 last:border-b-0 bg-white">
+                {renderSingleRecordEntry(mostSlimLossesSeasonRecord, 'Most Slim Losses')}
+              </tr>
+              <tr className="border-b border-gray-100 last:border-b-0 bg-gray-50">
+                {renderSingleRecordEntry(mostPointsSeasonRecord, 'Most Points', formatPoints)}
+              </tr>
+              <tr className="border-b border-gray-100 last:border-b-0 bg-white">
+                {renderSingleRecordEntry(fewestPointsSeasonRecord, 'Fewest Points', formatPoints)}
+              </tr>
             </tbody>
           </table>
         </section>
       ) : (
         <p className="text-center text-gray-600">No season records available to display.</p>
       )}
-
-      {/* Removed the section for sortedYears.map (yearly standings) */}
     </div>
   );
 };
