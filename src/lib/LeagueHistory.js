@@ -1,7 +1,8 @@
 // src/lib/LeagueHistory.js
 import React, { useState, useEffect } from 'react';
 import { calculateAllLeagueMetrics } from '../utils/calculations'; // For career DPR
-// historicalChampions is passed as prop but will not be used for trophy calculation based on user's latest rules
+// Recharts for charting
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 // Helper function to get ordinal suffix (1st, 2nd, 3rd, 4th, etc.)
 const getOrdinalSuffix = (n) => {
@@ -28,11 +29,21 @@ const getFinalSeedingGamePurpose = (value) => {
 const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName, historicalChampions }) => {
   const [allTimeStandings, setAllTimeStandings] = useState([]);
   const [championshipGames, setChampionshipGames] = useState([]);
+  const [seasonalDPRChartData, setSeasonalDPRChartData] = useState([]);
+  const [uniqueTeamsForChart, setUniqueTeamsForChart] = useState([]);
+
+  // A color palette for the teams in the chart
+  const teamColors = [
+    '#8884d8', '#82ca9d', '#ffc658', '#f5222d', '#fa8c16', '#a0d911', '#52c41a', '#1890ff',
+    '#2f54eb', '#722ed1', '#eb2f96', '#faad14', '#13c2c2', '#eb2f96', '#fadb14', '#52c41a'
+  ];
 
   useEffect(() => {
     if (loading || error || !historicalMatchups || historicalMatchups.length === 0) {
       setAllTimeStandings([]);
       setChampionshipGames([]);
+      setSeasonalDPRChartData([]);
+      setUniqueTeamsForChart([]);
       return;
     }
 
@@ -48,6 +59,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
         }
     });
 
+    // calculateAllLeagueMetrics now returns seasonalMetrics with adjustedDPR
     const { seasonalMetrics, careerDPRData } = calculateAllLeagueMetrics(historicalMatchups, getDisplayTeamName);
 
     const teamOverallStats = {}; // { teamName: { totalWins, totalLosses, totalTies, totalPointsFor, seasonsPlayed: Set<year>, awards: { champ: N, second: N, third: N, pts1st: N, pts2nd: N, pts3rd: N } } }
@@ -267,7 +279,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
       if (stats.seasonsPlayed.size === 0) return null;
 
       const careerDPR = careerDPRData.find(dpr => dpr.team === teamName)?.dpr || 0;
-      const totalGames = stats.totalWins + stats.totalLosses + stats.totalTies;
+      const totalGames = stats.totalWins + stats.totalLosses + stats.ties; // Use totalTies as originally defined
       const winPercentage = totalGames > 0 ? ((stats.totalWins + (0.5 * stats.totalTies)) / totalGames) : 0;
 
       // Determine the season display string
@@ -297,14 +309,34 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
 
     setAllTimeStandings(compiledStandings);
 
+    // Prepare data for the seasonal DPR chart
+    const chartDataMap = {}; // { year: { team1: dpr1, team2: dpr2, ... } }
+    const allYearsInChart = new Set();
+    const allTeamsInChart = new Set();
+
+    Object.keys(seasonalMetrics).forEach(year => {
+        allYearsInChart.add(parseInt(year));
+        chartDataMap[year] = { year: parseInt(year) };
+        Object.keys(seasonalMetrics[year]).forEach(team => {
+            allTeamsInChart.add(team);
+            chartDataMap[year][team] = seasonalMetrics[year][team].adjustedDPR;
+        });
+    });
+
+    const sortedChartYears = Array.from(allYearsInChart).sort((a, b) => a - b);
+    const finalChartData = sortedChartYears.map(year => chartDataMap[year]);
+
+    setUniqueTeamsForChart(Array.from(allTeamsInChart).sort()); // Store sorted unique teams
+    setSeasonalDPRChartData(finalChartData);
+
   }, [historicalMatchups, loading, error, getDisplayTeamName, historicalChampions]); // Dependencies
 
   // Formatters
   const formatPercentage = (value) => {
     if (typeof value === 'number' && !isNaN(value)) {
-      return `${value.toFixed(3)}%`; // Removed multiplication by 100
+      return `${value.toFixed(3)}%`;
     }
-    return '0.000%'; // Updated default for consistency
+    return '0.000%';
   };
 
   const formatDPR = (dprValue) => {
@@ -337,7 +369,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
                     <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Seasons</th>
                     <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record</th>
                     <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Win %</th>
-                    <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Total DPR</th>
+                    {/* Removed Total DPR column */}
                     <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Awards</th>
                   </tr>
                 </thead>
@@ -348,7 +380,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
                       <td className="py-2 px-3 text-sm text-gray-700 text-center">{team.seasons}</td>
                       <td className="py-2 px-3 text-sm text-gray-700 text-center">{team.record}</td>
                       <td className="py-2 px-3 text-sm text-gray-700 text-center">{formatPercentage(team.winPercentage)}</td>
-                      <td className="py-2 px-3 text-sm text-gray-700 text-center">{formatDPR(team.totalDPR)}</td>
+                      {/* Removed Total DPR data cell */}
                       <td className="py-2 px-3 text-sm text-gray-700 text-center">
                         <div className="flex flex-wrap justify-center items-center gap-2">
                           {team.awards.championships > 0 && (
@@ -396,7 +428,39 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
             </div>
           </section>
 
-          {/* Championship and Final Seeding Games - Moved here from MatchupHistory */}
+          {/* Seasonal DPR Progression Line Graph */}
+          <section className="mb-8 p-4 bg-gray-50 rounded-lg shadow-sm border border-gray-200">
+            <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Seasonal DPR Progression</h3>
+            {seasonalDPRChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={400}>
+                <LineChart
+                  data={seasonalDPRChartData}
+                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="year" label={{ value: "Season Year", position: "insideBottom", offset: 0 }} />
+                  <YAxis label={{ value: "Adjusted DPR", angle: -90, position: "insideLeft" }} />
+                  <Tooltip formatter={(value) => formatDPR(value)} />
+                  <Legend />
+                  {uniqueTeamsForChart.map((team, index) => (
+                    <Line
+                      key={team}
+                      type="monotone"
+                      dataKey={team}
+                      stroke={teamColors[index % teamColors.length]}
+                      activeDot={{ r: 8 }}
+                      dot={{ r: 4 }}
+                      strokeWidth={2}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-center text-gray-600">No seasonal DPR data available for charting.</p>
+            )}
+          </section>
+
+          {/* Championship and Final Seeding Games */}
           <section className="mb-8">
             <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Championship & Seeding Games History</h3>
             {championshipGames.length > 0 ? (
