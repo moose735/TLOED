@@ -226,7 +226,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
       // Determine final season finish using `finalSeedingGame`
       if (typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0) {
         let winningTeam = team1Won ? displayTeam1 : (isTie ? 'Tie' : displayTeam2);
-        let losingTeam = team1Won ? displayTeam2 : (isTie ? 'Tie' : displayTeam1);
+        let losingTeam = team1Won ? displayTeam2 : (isTie ? 'Tie' : team1); // Corrected: loser is the other team, even if a tie
 
         if (displayTeam1 === teamName || displayTeam2 === teamName) {
             const finalPlace = match.finalSeedingGame;
@@ -266,7 +266,6 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
     // Second Pass (after all data has been aggregated): Calculate DPR, Luck Rating, and All-Play for each season
     Object.keys(seasonHistoryMap).sort().forEach(year => {
       const seasonStats = seasonHistoryMap[year];
-      const teamWeeklyScores = seasonStats.weeklyScores;
       const totalGamesInSeason = seasonStats.wins + seasonStats.losses + seasonStats.ties;
 
       if (totalGamesInSeason === 0) return; // Skip if no games for the team in this season
@@ -296,11 +295,11 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
         const tStats = seasonalTeamStats[year][t];
         const tTotalGames = tStats.totalGames;
         // Ensure league-wide min/max are used here as well for calculating individual team's raw DPR for the average
-        const tSeasonWinPercentage = (tStats.wins + 0.5 * tStats.ties) / tTotalGames;
+        const tSeasonWinPercentage = (tTotalGames > 0) ? ((tStats.wins + 0.5 * tStats.ties) / tTotalGames) : 0;
         if (tTotalGames > 0 && !isNaN(tSeasonWinPercentage)) { // Add check for valid win percentage
           const tRawDPR = (
             (tStats.totalPointsFor * 6) +
-            ((leagueMaxScoreInSeason + leagueMinScoreInSeason) * 2) +
+            ((leagueMaxScoreInSeason + leagueMinScoreInSeason) * 2) + // Correct: use league-wide max/min
             ((tSeasonWinPercentage * 200) * 2)
           ) / 10;
           if (!isNaN(tRawDPR)) { // Only add if raw DPR is a valid number
@@ -334,15 +333,30 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
           // If the selected team isn't even in this week's data, skip.
           if (!uniqueTeamsWithScores.has(teamName)) return;
 
-          const numberOfOpponentsInWeek = uniqueTeamsWithScores.size - 1; // Number of other teams in the week for actual competition
+          // For Luck Score, we need to consider regular season games only
+          // The data fetching already filters `historicalMatchups` in `App.js` to get `regSeason` data only if configured.
+          // Assuming `historicalMatchups` fed here already includes `regSeason` flag and only regular season matchups are passed.
+          // Or, alternatively, the luck rating component should specifically filter:
+          const relevantMatchupsForWeek = historicalMatchups.filter(m => 
+            parseInt(m.year) === parseInt(year) && 
+            parseInt(m.week) === parseInt(week) && 
+            m.regSeason === true // Explicitly filter for regular season matches here
+          );
+          if (relevantMatchupsForWeek.length === 0) return;
 
+          const currentTeamScoreEntry = relevantMatchupsForWeek.find(match => 
+            getMappedTeamName(String(match.team1 || '').trim()) === teamName || 
+            getMappedTeamName(String(match.team2 || '').trim()) === teamName
+          );
 
-          const currentTeamScoreEntry = allScoresInCurrentWeek.find(entry => entry.team === teamName);
+          if (!currentTeamScoreEntry) return; // No regular season match for this team this week
 
-          if (!currentTeamScoreEntry || currentTeamScoreEntry.score === undefined || isNaN(currentTeamScoreEntry.score)) {
+          const actualTeamScoreInMatch = (getMappedTeamName(String(currentTeamScoreEntry.team1 || '').trim()) === teamName) ? parseFloat(currentTeamScoreEntry.team1Score) : parseFloat(currentTeamScoreEntry.team2Score);
+
+          if (actualTeamScoreInMatch === undefined || isNaN(actualTeamScoreInMatch)) {
               return; // Skip if the selected team didn't play or has invalid score in this week
           }
-          const currentTeamScoreForWeek = currentTeamScoreEntry.score;
+          const currentTeamScoreForWeek = actualTeamScoreInMatch; // This is the score to compare against others
 
 
           let outscoredCount = 0;
@@ -360,11 +374,10 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
             }
           });
 
-          // Denominators are the number of *potential opponents* in that week
-          // For Luck Score, we compare against every other team that scored.
-          const denominatorX = numberOfOpponentsInWeek; // Number of other teams in the league that week
-          const denominatorY = numberOfOpponentsInWeek;
-
+          // Fixed denominators as per Excel formula in LuckRatingAnalysis: /11 and /22
+          // This ensures consistency with the dedicated Luck Rating Analysis page.
+          const denominatorX = 11; // Always 11 as per the formula assuming 12-team league
+          const denominatorY = 22; // Always 22 as per the formula
 
           const weeklyProjectedWinComponentX = denominatorX > 0 ? (outscoredCount / denominatorX) : 0;
           const weeklyLuckScorePartY = denominatorY > 0 ? (oneLessCount / denominatorY) : 0;
@@ -377,6 +390,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
 
       let actualRegularSeasonWins = 0;
       // Get actual regular season wins for the specific team for this year
+      // Ensure this also only considers regSeason matches.
       historicalMatchups.forEach(match => {
         if (!match.regSeason || parseInt(match.year) !== year) return;
 
