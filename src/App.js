@@ -8,11 +8,12 @@ import {
 
 // Import existing components from your provided App.js
 import PowerRankings from './lib/PowerRankings';
-import LeagueHistory from './lib/LeagueHistory'; // Renamed from MatchupHistory to reflect broader content
+import LeagueHistory from './lib/MatchupHistory'; // Corrected back to MatchupHistory
 import RecordBook from './lib/RecordBook';
 import DPRAnalysis from './lib/DPRAnalysis';
 import LuckRatingAnalysis from './lib/LuckRatingAnalysis';
 import TeamDetailPage from './lib/TeamDetailPage'; // Import the new TeamDetailPage component
+
 
 // Define the available tabs and their categories for the dropdown
 const NAV_CATEGORIES = {
@@ -63,7 +64,7 @@ const App = () => {
   const getMappedTeamName = useCallback((teamName) => {
     if (!teamName) return '';
     // A simple mapping for common variations or just return trimmed name
-    const trimmedName = teamName.trim();
+    const trimmedName = String(teamName).trim(); // Ensure it's a string before trimming
     // Example: if (trimmedName.toLowerCase() === 'team a') return 'Team Alpha';
     return trimmedName;
   }, []);
@@ -75,6 +76,7 @@ const App = () => {
       setHistoricalDataError(null);
 
       // Fetch Historical Matchups
+      let fetchedMatchupData = [];
       try {
         if (HISTORICAL_MATCHUPS_API_URL === 'YOUR_GOOGLE_SHEET_HISTORICAL_MATCHUPS_API_URL') {
           throw new Error("HISTORICAL_MATCHUPS_API_URL not configured. Please update config.js.");
@@ -83,16 +85,26 @@ const App = () => {
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        const data = await response.json();
-        setHistoricalMatchups(data);
+        // Attempt to parse JSON, gracefully handle non-JSON responses
+        try {
+          fetchedMatchupData = await response.json();
+          setHistoricalMatchups(fetchedMatchupData);
+        } catch (jsonError) {
+          console.error("Error parsing historical matchup data JSON:", jsonError);
+          throw new Error("Received non-JSON response for historical matchup data.");
+        }
 
         // Dynamically populate TEAMS subTabs
-        const uniqueTeams = Array.from(new Set(
-          data.flatMap(match => [
-            getMappedTeamName(match.team1),
-            getMappedTeamName(match.team2)
-          ]).filter(name => name !== null && name !== '')
-        )).sort();
+        // Replace flatMap with a compatible alternative
+        const uniqueTeamsSet = new Set();
+        fetchedMatchupData.forEach(match => {
+          const team1 = getMappedTeamName(match.team1);
+          const team2 = getMappedTeamName(match.team2);
+          if (team1) uniqueTeamsSet.add(team1);
+          if (team2) uniqueTeamsSet.add(team2);
+        });
+
+        const uniqueTeams = Array.from(uniqueTeamsSet).sort();
 
         // Update NAV_CATEGORIES.TEAMS in place (or create a new object and set it if state management dictates)
         NAV_CATEGORIES.TEAMS.subTabs = uniqueTeams.map(team => ({
@@ -121,8 +133,17 @@ const App = () => {
           if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
           }
-          const data = await response.json();
-          setHistoricalChampions(data);
+          // Attempt to parse JSON, gracefully handle non-JSON responses
+          try {
+            const data = await response.json();
+            setHistoricalChampions(data);
+          } catch (jsonError) {
+            console.warn("Error parsing historical champions data JSON, using mock data:", jsonError);
+            setHistoricalChampions([
+              { year: 2023, champion: "Mock Champion 2023" },
+              { year: 2022, champion: "Mock Champion 2022" },
+            ]);
+          }
         }
       } catch (error) {
         console.warn("Error fetching historical champions data, using mock data:", error);
@@ -316,8 +337,8 @@ const App = () => {
                 historicalMatchups={historicalMatchups}
                 loading={loadingHistoricalData}
                 error={historicalDataError}
-                getDisplayTeamName={getMappedTeamName}
                 historicalChampions={historicalChampions}
+                getDisplayTeamName={getMappedTeamName}
               />
             )}
             {activeTab === TABS.RECORD_BOOK && (
