@@ -1,5 +1,5 @@
 // src/lib/LeagueHistory.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { calculateAllLeagueMetrics } from '../utils/calculations'; // For career DPR
 // Recharts for charting
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -11,13 +11,13 @@ const rsrsPoints = [30, 25, 20, 18, 15, 13, 11, 9, 7, 5, 3, 0];
 const ffsPoints = [100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 0, 0];
 
 /**
- * Calculates FLTR score for a team
- * @param {Array} seasons - List of season objects like { points, maxPointsInSeason, finalFinish, regSeasonRank }
+ * Calculates a RAW FLTR score for a team based on its seasonal performances and overall win percentage.
+ * This function does NOT normalize the score to 1000; it returns a raw, unscaled score.
+ * @param {Array} seasons - List of season objects for the team, each like { points, maxPointsInSeason, finalFinish, regSeasonRank }
  * @param {number} winPct - Overall career win percentage as a decimal
- * @param {number} maxRawScore - Highest raw score among all teams across all seasons (for scaling)
- * @returns {number} - Final FLTR score out of 1000
+ * @returns {number} - Raw FLTR score (unscaled)
  */
-function calculateFLTR(seasons, winPct, maxRawScore) {
+function calculateRawFLTR(seasons, winPct) {
   let rawScore = 0;
 
   if (!seasons || seasons.length === 0) return 0;
@@ -29,16 +29,14 @@ function calculateFLTR(seasons, winPct, maxRawScore) {
     const finalFinish = parseInt(season.finalFinish || ffsPoints.length); // Default to last rank if undefined
     const regSeasonRank = parseInt(season.regSeasonRank || rsrsPoints.length); // Default to last rank if undefined
 
-    // PPS - Points Performance Score
+    // PPS - Points Performance Score (Scaled to 100)
     const pps = (points / maxPointsInSeason) * 100;
 
     // FFS - Final Finish Score (rank is 1-based, array is 0-indexed)
-    // Clamp rank to array bounds to prevent errors if rank is too high or low
     const ffsIndex = Math.max(0, Math.min(finalFinish - 1, ffsPoints.length - 1));
     const ffs = ffsPoints[ffsIndex] || 0;
 
     // RSRS - Regular Season Rank Score (rank is 1-based, array is 0-indexed)
-    // Clamp rank to array bounds
     const rsrsIndex = Math.max(0, Math.min(regSeasonRank - 1, rsrsPoints.length - 1));
     const rsrs = rsrsPoints[rsrsIndex] || 0;
 
@@ -51,17 +49,13 @@ function calculateFLTR(seasons, winPct, maxRawScore) {
     rawScore += seasonScore;
   });
 
-  // WPS - Win Percentage Score
-  const wpsScore = winPct * 100 * 0.15 * seasons.length; // Multiplied by seasons.length to give more weight to longer-standing teams
+  // WPS - Win Percentage Score (Scaled by number of seasons played to give more weight to longer-standing teams)
+  const wpsScore = winPct * 100 * 0.15 * seasons.length;
 
   // Add win percentage contribution
   rawScore += wpsScore;
 
-  // Normalize to 1000-point scale
-  // Avoid division by zero if maxRawScore is 0 (e.g., if no valid data)
-  const fltr = maxRawScore > 0 ? (rawScore / maxRawScore) * 1000 : 0;
-
-  return Math.round(fltr);
+  return rawScore;
 }
 
 
@@ -93,7 +87,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
   const [uniqueTeamsForChart, setUniqueTeamsForChart] = useState([]);
   const [seasonAwardsSummary, setSeasonAwardsSummary] = useState({});
   const [sortedYearsForAwards, setSortedYearsForAwards] = useState([]);
-  const [fltrStandings, setFltrStandings] = useState([]); // New state for FLTR standings
+  const [fltrStandings, setFltrStandings] = useState([]); // State for FLTR standings
 
   // A color palette for the teams in the chart
   const teamColors = [
@@ -153,6 +147,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
             totalLosses: 0,
             totalTies: 0,
             totalPointsFor: 0,
+            totalGames: 0, // Added for win percentage calculation
             seasonsPlayed: new Set(),
             awards: {
               championships: 0,
@@ -172,10 +167,9 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
         if (!teamOverallStats[team].seasonalDataForFLTR[year]) {
             teamOverallStats[team].seasonalDataForFLTR[year] = {
                 points: 0, // This will be total points for the season
-                maxPointsInSeason: 0, // Max points by any team in this season
-                finalFinish: null,    // Final rank (1-12)
-                regSeasonRank: null,  // Regular season rank (1-12)
-                regSeasonWins: 0, regSeasonLosses: 0, regSeasonTies: 0,
+                maxPointsInSeason: 0, // Max points by any team in this season (will be set in second pass)
+                finalFinish: null,    // Final rank (1-12) (will be set in second pass)
+                regSeasonRank: null,  // Regular season rank (1-12) (will be set in second pass)
             };
         }
       });
@@ -188,28 +182,25 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
         if (isTie) {
           teamOverallStats[team1].totalTies++;
           teamOverallStats[team2].totalTies++;
-          teamOverallStats[team1].seasonalDataForFLTR[year].regSeasonTies++;
-          teamOverallStats[team2].seasonalDataForFLTR[year].regSeasonTies++;
         } else if (team1Won) {
           teamOverallStats[team1].totalWins++;
           teamOverallStats[team2].totalLosses++;
-          teamOverallStats[team1].seasonalDataForFLTR[year].regSeasonWins++;
-          teamOverallStats[team2].seasonalDataForFLTR[year].regSeasonLosses++;
         } else { // team2Won
           teamOverallStats[team2].totalWins++;
           teamOverallStats[team1].totalLosses++;
-          teamOverallStats[team2].seasonalDataForFLTR[year].regSeasonWins++;
-          teamOverallStats[team1].seasonalDataForFLTR[year].regSeasonLosses++;
         }
+        teamOverallStats[team1].totalGames++;
+        teamOverallStats[team2].totalGames++;
       }
 
-      // Points For is accumulated regardless of PointsOnlyBye
+      // Points For is accumulated regardless of PointsOnlyBye for FLTR calculation (PPS component)
       teamOverallStats[team1].totalPointsFor += team1Score;
       teamOverallStats[team2].totalPointsFor += team2Score;
       teamOverallStats[team1].seasonalDataForFLTR[year].points += team1Score;
       teamOverallStats[team2].seasonalDataForFLTR[year].points += team2Score;
 
-      // Store final placement from finalSeedingGame
+
+      // Store final placement from finalSeedingGame for second pass
       if (!finalPlacementByTeamByYear[year]) finalPlacementByTeamByYear[year] = {};
 
       if (typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0) {
@@ -223,7 +214,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
               finalPlacementByTeamByYear[year][team2] = match.finalSeedingGame;
           } else {
               finalPlacementByTeamByYear[year][winner] = match.finalSeedingGame;
-              finalPlacementByTeamByYear[year][loser] = match.finalSeedingGame + 1;
+              finalPlacementByTeamByYear[year][loser] = match.finalSeedingGame + 1; // Loser gets next rank
           }
       }
     });
@@ -338,6 +329,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
 
 
     // --- Post-processing for FLTR data (regSeasonRank, finalFinish, maxPointsInSeason) ---
+    // This pass also populates maxPointsInSeason, finalFinish, and regSeasonRank for each team's seasonal data.
     Object.keys(teamOverallStats).forEach(teamName => {
         const teamData = teamOverallStats[teamName];
         Object.keys(teamData.seasonalDataForFLTR).forEach(year => {
@@ -352,7 +344,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
             }
             seasonStats.maxPointsInSeason = maxPointsInSeason > 0 ? maxPointsInSeason : 1; // Avoid division by zero
 
-            // Calculate regSeasonRank for this year
+            // Calculate regSeasonRank for this year (based on seasonalMetrics - regular season record/points)
             const teamsInCurrentSeason = Object.keys(seasonalMetrics[year] || {});
             const sortedRegSeasonTeams = teamsInCurrentSeason.map(t => ({
                 team: t,
@@ -361,48 +353,47 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                 ties: seasonalMetrics[year][t].ties,
                 pointsFor: seasonalMetrics[year][t].pointsFor,
             })).sort((a, b) => {
+                // Primary sort by wins, then ties, then points for
                 if (a.wins !== b.wins) return b.wins - a.wins;
                 if (a.ties !== b.ties) return b.ties - a.ties;
                 return b.pointsFor - a.pointsFor;
             });
 
             seasonStats.regSeasonRank = sortedRegSeasonTeams.findIndex(entry => entry.team === teamName) + 1;
-            if (seasonStats.regSeasonRank === 0) seasonStats.regSeasonRank = 12; // Default to last rank if not found
+            if (seasonStats.regSeasonRank === 0) seasonStats.regSeasonRank = 12; // Default to last rank if not found (e.g. if team had no games)
+
 
             // Assign finalFinish: prefer explicit final seeding game result, else fallback to regSeasonRank
-            // Clamp finalFinish to the maximum number of FFS points entries
-            let determinedFinalFinish = finalPlacementByTeamByYear[year]?.[teamName] || seasonStats.regSeasonRank;
-            seasonStats.finalFinish = Math.min(determinedFinalFinish, ffsPoints.length);
+            let determinedFinalFinish = finalPlacementByTeamByYear[year]?.[teamName];
+            if (determinedFinalFinish === undefined || determinedFinalFinish === false) { // No explicit final game, use reg season rank
+                determinedFinalFinish = seasonStats.regSeasonRank;
+            }
+            seasonStats.finalFinish = Math.min(determinedFinalFinish, ffsPoints.length); // Clamp to FFS point array max index
         });
     });
 
 
-    // --- Calculate FLTR Scores ---
-    const rawFltrScores = {};
+    // --- Calculate RAW FLTR Scores for all teams ---
+    const rawFltrScoresForAllTeams = [];
     Object.keys(teamOverallStats).forEach(teamName => {
         const stats = teamOverallStats[teamName];
         const careerWinPercentage = stats.totalGames > 0 ? ((stats.totalWins + (0.5 * stats.totalTies)) / stats.totalGames) : 0;
         const seasonsForFltr = Object.values(stats.seasonalDataForFLTR).filter(s => s.regSeasonRank !== null); // Only use seasons where rank could be determined
 
         if (seasonsForFltr.length > 0) {
-            // Temporarily calculate raw score for each team to find the max
-            const tempRawScore = calculateFLTR(seasonsForFltr, careerWinPercentage, 10000); // Pass a dummy maxRawScore for now
-            rawFltrScores[teamName] = tempRawScore;
+            const rawScore = calculateRawFLTR(seasonsForFltr, careerWinPercentage);
+            rawFltrScoresForAllTeams.push({ team: teamName, rawScore: rawScore });
         }
     });
 
-    const maxRawFltrScore = Object.values(rawFltrScores).reduce((max, score) => Math.max(max, score), 0);
+    // Find the maximum RAW FLTR score among all teams
+    const actualMaxRawFLTRScore = rawFltrScoresForAllTeams.reduce((max, team) => Math.max(max, team.rawScore), 0);
+
+    // --- Normalize RAW FLTR Scores to a 1000-point scale ---
     const calculatedFltrStandings = [];
-
-    Object.keys(teamOverallStats).forEach(teamName => {
-        const stats = teamOverallStats[teamName];
-        const careerWinPercentage = stats.totalGames > 0 ? ((stats.totalWins + (0.5 * stats.totalTies)) / stats.totalGames) : 0;
-        const seasonsForFltr = Object.values(stats.seasonalDataForFLTR).filter(s => s.regSeasonRank !== null);
-
-        if (seasonsForFltr.length > 0) {
-            const fltrScore = calculateFLTR(seasonsForFltr, careerWinPercentage, maxRawFltrScore);
-            calculatedFltrStandings.push({ team: teamName, fltrScore: fltrScore });
-        }
+    rawFltrScoresForAllTeams.forEach(teamEntry => {
+        const fltrScore = actualMaxRawFLTRScore > 0 ? (teamEntry.rawScore / actualMaxRawFLTRScore) * 1000 : 0;
+        calculatedFltrStandings.push({ team: teamEntry.team, fltrScore: Math.round(fltrScore) }); // Round to nearest whole number
     });
 
     // Sort FLTR standings by score descending
@@ -418,7 +409,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
 
       const careerDPR = careerDPRData.find(dpr => dpr.team === teamName)?.dpr || 0;
       const totalGames = stats.totalWins + stats.totalLosses + stats.totalTies;
-      const winPercentage = totalGames > 0 ? ((stats.totalWins + (0.5 * stats.totalTies)) / totalGames) : 0;
+      const winPercentage = totalGames > 0 ? ((stats.wins + (0.5 * stats.ties)) / totalGames) : 0; // Use stats.wins/ties here
 
       // Determine the season display string
       const sortedYearsArray = Array.from(stats.seasonsPlayed).sort((a, b) => a - b);
@@ -547,7 +538,6 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
 
     // Sort years in descending order (most recent first) for display in the table
     const sortedYearsArray = Object.keys(newSeasonAwardsSummary).sort((a, b) => parseInt(b) - parseInt(a));
-    console.log("Sorted years for awards (most recent first):", sortedYearsArray); // Debugging line
 
     setSeasonAwardsSummary(newSeasonAwardsSummary); // Set the summary object
     setSortedYearsForAwards(sortedYearsArray); // Set the sorted array of years
@@ -765,7 +755,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
             )}
           </section>
 
-          {/* New: League Rating (FLTR) Section */}
+          {/* League Rating (FLTR) Section */}
           <section className="mb-8 p-4 bg-purple-50 rounded-lg shadow-sm border border-purple-200">
             <h3 className="text-xl font-bold text-purple-800 mb-4 border-b pb-2">League Rating (FLTR) - Long Term Success</h3>
             {fltrStandings.length > 0 ? (
@@ -793,7 +783,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
               <p className="text-center text-gray-600">No League Rating (FLTR) data available.</p>
             )}
             <p className="mt-4 text-sm text-gray-500">
-              FLTR (Fantasy League Total Rating) is a custom metric designed to score long-term success by weighting seasonal performance (points, final finish, regular season rank) and career win percentage.
+              FLTR (Fantasy League Total Rating) is a custom metric designed to score long-term success by weighting seasonal performance (points, final finish, regular season rank) and career win percentage. The highest scoring team receives a score of 1000.
             </p>
           </section>
 
