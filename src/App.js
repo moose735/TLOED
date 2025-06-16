@@ -3,17 +3,20 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   HISTORICAL_MATCHUPS_API_URL,
   GOOGLE_SHEET_CHAMPIONS_API_URL, // Will use mock data if not provided
+  // NICKNAME_TO_SLEEPER_USER and SLEEPER_LEAGUE_ID are no longer needed here
 } from './config';
 
-// Import existing components from your provided App.js
+// Import existing components
 import PowerRankings from './lib/PowerRankings';
-import MatchupHistory from './lib/MatchupHistory';
+// MatchupHistory will be removed/renamed, its content split
 import RecordBook from './lib/RecordBook';
 import DPRAnalysis from './lib/DPRAnalysis';
 import LuckRatingAnalysis from './lib/LuckRatingAnalysis';
-
-// Import the new TeamDetailPage component
 import TeamDetailPage from './lib/TeamDetailPage';
+
+// NEW IMPORTS
+import LeagueHistory from './lib/LeagueHistory'; // New component for all-time league history
+import Head2HeadGrid from './lib/Head2HeadGrid'; // Head2HeadGrid is now a direct tab content
 
 
 // Define the available tabs and their categories for the dropdown
@@ -22,10 +25,16 @@ const NAV_CATEGORIES = {
   LEAGUE_DATA: {
     label: 'League Data',
     subTabs: [
-      { label: 'League History', tab: 'leagueHistory' },
+      { label: 'League History', tab: 'leagueHistory' }, // NEW: Dedicated League History tab
       { label: 'Record Book', tab: 'recordBook' },
       { label: 'DPR Analysis', tab: 'dprAnalysis' },
       { label: 'Luck Rating', tab: 'luckRating' },
+    ]
+  },
+  RIVALRIES: { // NEW: Category for Head-to-Head Rivalries
+    label: 'Rivalries',
+    subTabs: [
+      { label: 'Head-to-Head Grid', tab: 'headToHeadGrid' }, // Direct link to Head2HeadGrid
     ]
   },
   TEAMS: { // New category for individual team pages
@@ -37,10 +46,11 @@ const NAV_CATEGORIES = {
 // Flattened list of all possible tabs for conditional rendering
 const TABS = {
   POWER_RANKINGS: 'powerRankings',
-  LEAGUE_HISTORY: 'leagueHistory',
+  LEAGUE_HISTORY: 'leagueHistory', // New tab for League History
   RECORD_BOOK: 'recordBook',
   DPR_ANALYSIS: 'dprAnalysis',
   LUCK_RATING: 'luckRating',
+  HEAD_TO_HEAD_GRID: 'headToHeadGrid', // New tab for Head2HeadGrid
   TEAM_DETAIL: 'teamDetail' // New tab for individual team pages
 };
 
@@ -66,11 +76,8 @@ const App = () => {
 
 
   // --- Helper Functions ---
-  // getMappedTeamName now simply returns the original name, as we assume historicalMatchups
-  // already contains the desired display names. If custom mapping is needed,
-  // it would be implemented here using NICKNAME_TO_SLEEPER_USER from config.
   const getMappedTeamName = useCallback((originalName) => {
-    return originalName;
+    return originalName; // Assuming external data already has desired display names
   }, []);
 
 
@@ -106,7 +113,7 @@ const App = () => {
           if (match.team1) teams.add(String(match.team1).trim());
           if (match.team2) teams.add(String(match.team2).trim());
         });
-        setUniqueTeamNames(Array.from(teams).sort()); // Sort alphabetically
+        setUniqueTeamNames(Array.from(teams).filter(name => name !== '').sort()); // Sort alphabetically and filter out empty names
       } catch (err) {
         console.error("Error fetching historical matchups:", err);
         setHistoricalDataError(
@@ -178,6 +185,8 @@ const App = () => {
     <div className="min-h-screen bg-gray-100 flex flex-col items-center p-4">
       {/* Tailwind CSS CDN for styling */}
       <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
+      {/* Font Awesome for icons */}
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"></link>
 
       {/* Custom CSS for dropdown navigation, adjusted for conciseness */}
       <style>{`
@@ -350,12 +359,13 @@ const App = () => {
 
       <main className="w-full max-w-4xl">
         {activeTab === TABS.POWER_RANKINGS && <PowerRankings />}
-        {activeTab === TABS.LEAGUE_HISTORY && (
-          <MatchupHistory
+        {activeTab === TABS.LEAGUE_HISTORY && ( // Render new LeagueHistory component
+          <LeagueHistory
             historicalMatchups={historicalMatchups}
             loading={loadingHistoricalData}
             error={historicalDataError}
-            getMappedTeamName={getMappedTeamName}
+            getDisplayTeamName={getMappedTeamName} // Use getMappedTeamName as getDisplayTeamName
+            historicalChampions={historicalChampions}
           />
         )}
         {activeTab === TABS.RECORD_BOOK && (
@@ -374,6 +384,12 @@ const App = () => {
         )}
         {activeTab === TABS.LUCK_RATING && (
           <LuckRatingAnalysis
+            historicalMatchups={historicalMatchups}
+            getDisplayTeamName={getMappedTeamName}
+          />
+        )}
+        {activeTab === TABS.HEAD_TO_HEAD_GRID && ( // Render Head2HeadGrid directly
+          <Head2HeadGrid
             historicalMatchups={historicalMatchups}
             getDisplayTeamName={getMappedTeamName}
           />
