@@ -360,6 +360,27 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
     return 'N/A';
   };
 
+  // Custom Tooltip component for Recharts
+  const CustomTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      // Sort the payload by value (DPR) in descending order
+      const sortedPayload = [...payload].sort((a, b) => b.value - a.value);
+
+      return (
+        <div className="bg-white p-3 border border-gray-300 rounded-md shadow-lg text-sm">
+          <p className="font-bold text-gray-800 mb-1">{`Year: ${label}`}</p>
+          {sortedPayload.map((entry, index) => (
+            <p key={`item-${index}`} style={{ color: entry.color }}>
+              {`${entry.name}: ${formatDPR(entry.value)}`}
+            </p>
+          ))}
+        </div>
+      );
+    }
+    return null;
+  };
+
+
   return (
     <div className="w-full max-w-4xl bg-white p-8 rounded-lg shadow-md mt-8">
       <h2 className="text-2xl font-bold text-blue-700 mb-4 text-center">League History & Awards</h2>
@@ -432,7 +453,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
                               <i className="fas fa-medal text-amber-800 text-lg"></i> {/* Deeper amber for bronze */}
                               <span className="text-xs font-medium">{team.awards.thirdPoints}x</span>
                             </span>
-                          )}
+                          F)}
                         </div>
                       </td>
                     </tr>
@@ -458,7 +479,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
                     domain={[0.900, 1.100]} // Set fixed domain for Y-axis
                     tickFormatter={formatDPR} // Apply the formatter here
                   />
-                  <Tooltip formatter={(value) => formatDPR(value)} />
+                  <Tooltip content={<CustomTooltip />} /> {/* Use custom tooltip component */}
                   <Legend />
                   {uniqueTeamsForChart.map((team, index) => (
                     <Line
