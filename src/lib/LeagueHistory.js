@@ -26,11 +26,11 @@ const getFinalSeedingGamePurpose = (value) => {
   return 'Final Seeding Game';
 };
 
-const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName }) => { // Removed historicalChampions prop
+const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName }) => {
   const [allTimeStandings, setAllTimeStandings] = useState([]);
-  const [seasonalDPRChartData, setSeasonalDPRChartData] = useState([]); // Renamed for more general use
+  const [seasonalDPRChartData, setSeasonalDPRChartData] = useState([]);
   const [uniqueTeamsForChart, setUniqueTeamsForChart] = useState([]);
-  const [seasonAwardsSummary, setSeasonAwardsSummary] = useState({}); // New state for season-by-season awards
+  const [seasonAwardsSummary, setSeasonAwardsSummary] = useState({});
 
   // A color palette for the teams in the chart
   const teamColors = [
@@ -43,7 +43,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
       setAllTimeStandings([]);
       setSeasonalDPRChartData([]);
       setUniqueTeamsForChart([]);
-      setSeasonAwardsSummary({}); // Reset new state
+      setSeasonAwardsSummary({});
       return;
     }
 
@@ -61,8 +61,8 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
 
     const { seasonalMetrics, careerDPRData } = calculateAllLeagueMetrics(historicalMatchups, getDisplayTeamName);
 
-    const teamOverallStats = {}; // { teamName: { totalWins, totalLosses, totalTies, totalPointsFor, seasonsPlayed: Set<year>, awards: { champ: N, second: N, third: N, pts1st: N, pts2nd: N, pts3rd: N } } }
-    const yearlyPointsLeaders = {}; // { year: [{ team, points, rank }] }
+    const teamOverallStats = {};
+    const yearlyPointsLeaders = {};
 
     // First pass: Aggregate basic stats and identify yearly points leaders
     historicalMatchups.forEach(match => {
@@ -87,8 +87,8 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
             seasonsPlayed: new Set(),
             awards: {
               championships: 0,
-              runnerUps: 0, // 2nd place overall finish
-              thirdPlace: 0, // 3rd place overall finish
+              runnerUps: 0,
+              thirdPlace: 0,
               firstPoints: 0,
               secondPoints: 0,
               thirdPoints: 0,
@@ -97,7 +97,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
         }
         // Only count season if it's a completed season. This makes 'Seasons' stat accurate for 'completed seasons'
         if (completedSeasons.has(year)) {
-            teamOverallStats[team].seasonsPlayed.add(year); // Track seasons played
+            teamOverallStats[team].seasonsPlayed.add(year);
         }
       });
 
@@ -134,7 +134,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
         const teamsInSeason = Object.keys(seasonalMetrics[year]);
         const yearPointsData = teamsInSeason.map(team => ({
             team,
-            points: seasonalMetrics[year][team].pointsFor // Use seasonal total points
+            points: seasonalMetrics[year][team].pointsFor
         })).sort((a, b) => b.points - a.points); // Sort descending by points
 
         yearlyPointsLeaders[year] = yearPointsData;
@@ -145,7 +145,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
       const year = parseInt(match.year);
       // Only process final seeding games that are part of a completed season
       if (!(typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0 && completedSeasons.has(year))) {
-          return; // Skip if not a final seeding game or season not completed
+          return;
       }
 
       const team1 = getDisplayTeamName(String(match.team1 || '').trim());
@@ -159,7 +159,6 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
 
       const isTie = team1Score === team2Score;
       const team1Won = team1Score > team2Score;
-      const team2Won = team2Score > team1Score;
 
       let winner = 'Tie';
       let loser = 'Tie';
@@ -167,7 +166,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
       if (team1Won) {
           winner = team1;
           loser = team2;
-      } else if (team2Won) {
+      } else if (team2Score > team1Score) {
           winner = team2;
           loser = team1;
       }
@@ -176,14 +175,14 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
       if (winner !== 'Tie') { // Only assign if there's a clear winner
           if (match.finalSeedingGame === 1) { // 1st Place Game
               if (teamOverallStats[winner]) {
-                  teamOverallStats[winner].awards.championships++; // Gold Trophy
+                  teamOverallStats[winner].awards.championships++;
               }
               if (loser && teamOverallStats[loser]) { // Loser of 1st place game gets 2nd (Silver Trophy)
                   teamOverallStats[loser].awards.runnerUps++;
               }
           } else if (match.finalSeedingGame === 3) { // 3rd Place Game
               if (teamOverallStats[winner]) {
-                  teamOverallStats[winner].awards.thirdPlace++; // Bronze Trophy
+                  teamOverallStats[winner].awards.thirdPlace++;
               }
           }
       } else if (match.finalSeedingGame === 1) { // Special case: Tie in Championship Game
@@ -195,7 +194,6 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
             teamOverallStats[team2].awards.championships++;
           }
       }
-      // No trophies for any other placing game (handled by the specific `if` conditions above)
     });
 
     // Medal Calculation Pass (based on yearlyPointsLeaders) for All-Time Awards table
@@ -210,7 +208,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
 
           // Find the current team's points for this year
           const teamPointsEntry = filteredYearLeaders.find(entry => entry.team === teamName);
-          if (!teamPointsEntry) return; // Skip if team not found in leaders for this year
+          if (!teamPointsEntry) return;
 
           const currentTeamYearlyScore = teamPointsEntry.points;
 
@@ -244,7 +242,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
 
       const careerDPR = careerDPRData.find(dpr => dpr.team === teamName)?.dpr || 0;
       const totalGames = stats.totalWins + stats.totalLosses + stats.totalTies;
-      const winPercentage = totalGames > 0 ? ((stats.wins + (0.5 * stats.ties)) / totalGames) : 0;
+      const winPercentage = totalGames > 0 ? ((stats.totalWins + (0.5 * stats.totalTies)) / totalGames) : 0; // Corrected to use totalTies
 
       // Determine the season display string
       const sortedYearsArray = Array.from(stats.seasonsPlayed).sort((a, b) => a - b);
@@ -262,12 +260,11 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
 
       return {
         team: teamName,
-        seasons: seasonsDisplay, // Use the formatted string here
+        seasons: seasonsDisplay,
         record: `${stats.totalWins}-${stats.totalLosses}-${stats.totalTies}`,
         winPercentage: winPercentage,
-        totalDPR: careerDPR, // This DPR needs to be for games that count towards record, not including byes
+        totalDPR: careerDPR,
         awards: stats.awards,
-        // Add more career stats if needed for sorting or display later
       };
     }).filter(Boolean).sort((a, b) => b.totalDPR - a.totalDPR); // Filter out nulls and sort by total DPR descending
 
@@ -282,15 +279,15 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
         .filter(name => name !== null && name !== '')
     )).sort();
 
-    setUniqueTeamsForChart(uniqueTeams); // Set unique teams once
+    setUniqueTeamsForChart(uniqueTeams);
 
     // To store the cumulative DPR for each team as we progress through years
-    const cumulativeTeamDPRs = {}; // { teamName: latestDPR }
+    const cumulativeTeamDPRs = {};
 
     allYears.forEach(currentYear => {
         const matchesUpToCurrentYear = historicalMatchups.filter(match => parseInt(match.year) <= currentYear);
 
-        // Recalculate metrics for games up to currentYear to get cumulative career DPR
+        // Recalculate metrics for games up to currentYear to get cumulative career DPR.
         // This is a computationally intensive step, but ensures correct cumulative DPR.
         const { careerDPRData: cumulativeCareerDPRData } = calculateAllLeagueMetrics(matchesUpToCurrentYear, getDisplayTeamName);
 
@@ -298,10 +295,9 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
         uniqueTeams.forEach(team => {
             const teamDPR = cumulativeCareerDPRData.find(dpr => dpr.team === team)?.dpr;
             if (teamDPR !== undefined) {
-                cumulativeTeamDPRs[team] = teamDPR; // Update the latest cumulative DPR for the team
+                cumulativeTeamDPRs[team] = teamDPR;
             }
-            // Use the latest cumulative DPR. If a team didn't play yet, their DPR will be 0 or undefined.
-            yearDataPoint[team] = cumulativeTeamDPRs[team] || 0; // Default to 0 if not played yet
+            yearDataPoint[team] = cumulativeTeamDPRs[team] || 0;
         });
         chartData.push(yearDataPoint);
     });
@@ -335,7 +331,6 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
 
             const isTie = team1Score === team2Score;
             const team1Won = team1Score > team2Score;
-            const team2Won = team2Score > team1Score;
 
             let winner = '';
             let loser = '';
@@ -347,7 +342,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
             if (game.finalSeedingGame === 1) { // Championship Game
                 if (isTie) {
                     newSeasonAwardsSummary[year].champion = `${team1} & ${team2} (Tie)`;
-                    newSeasonAwardsSummary[year].secondPlace = 'N/A'; // No distinct 2nd place if tied for 1st
+                    newSeasonAwardsSummary[year].secondPlace = 'N/A';
                 } else {
                     newSeasonAwardsSummary[year].champion = winner;
                     newSeasonAwardsSummary[year].secondPlace = loser;
@@ -361,16 +356,17 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
         const leaders = yearlyPointsLeaders[year];
         if (leaders && leaders.length > 0) {
             newSeasonAwardsSummary[year].pointsChamp = leaders[0].team;
-            if (leaders.length > 1 && leaders[1].points < leaders[0].points) { // Ensure strictly lower for 2nd
+            // Ensure strictly lower for 2nd and 3rd place to avoid ties getting higher ranks
+            if (leaders.length > 1 && leaders[1].points < leaders[0].points) {
                 newSeasonAwardsSummary[year].pointsSecond = leaders[1].team;
             }
-            if (leaders.length > 2 && leaders[2].points < leaders[1].points) { // Ensure strictly lower for 3rd
+            if (leaders.length > 2 && leaders[2].points < leaders[1].points) {
                 newSeasonAwardsSummary[year].pointsThird = leaders[2].team;
             }
         }
     });
 
-    // Sort years in descending order for display in the table
+    // Sort years in descending order (most recent first) for display in the table
     const sortedYearsForAwards = Object.keys(newSeasonAwardsSummary).sort((a, b) => parseInt(b) - parseInt(a));
     const finalSeasonAwardsSummary = {};
     sortedYearsForAwards.forEach(year => {
@@ -384,9 +380,9 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
   // Formatters
   const formatPercentage = (value) => {
     if (typeof value === 'number' && !isNaN(value)) {
-      return `${value.toFixed(3)}%`;
+      return `${(value * 100).toFixed(1)}%`; // Format as percentage with 1 decimal
     }
-    return '0.000%';
+    return '0.0%';
   };
 
   const formatDPR = (dprValue) => {
@@ -440,7 +436,6 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                     <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Seasons</th>
                     <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record</th>
                     <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Win %</th>
-                    {/* Removed Total DPR column */}
                     <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Awards</th>
                   </tr>
                 </thead>
@@ -451,7 +446,6 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                       <td className="py-2 px-3 text-sm text-gray-700 text-center">{team.seasons}</td>
                       <td className="py-2 px-3 text-sm text-gray-700 text-center">{team.record}</td>
                       <td className="py-2 px-3 text-sm text-gray-700 text-center">{formatPercentage(team.winPercentage)}</td>
-                      {/* Removed Total DPR data cell */}
                       <td className="py-2 px-3 text-sm text-gray-700 text-center">
                         <div className="flex flex-wrap justify-center items-center gap-2">
                           {team.awards.championships > 0 && (
@@ -468,7 +462,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                           )}
                           {team.awards.thirdPlace > 0 && (
                             <span title="Third Place Finishes (3rd Place)" className="flex items-center space-x-1">
-                              <i className="fas fa-trophy text-amber-800 text-lg"></i> {/* Deeper amber for bronze */}
+                              <i className="fas fa-trophy text-amber-800 text-lg"></i>
                               <span className="text-xs font-medium">{team.awards.thirdPlace}x</span>
                             </span>
                           )}
@@ -486,7 +480,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                           )}
                           {team.awards.thirdPoints > 0 && (
                             <span title="3rd Place in Total Points" className="flex items-center space-x-1">
-                              <i className="fas fa-medal text-amber-800 text-lg"></i> {/* Deeper amber for bronze */}
+                              <i className="fas fa-medal text-amber-800 text-lg"></i>
                               <span className="text-xs font-medium">{team.awards.thirdPoints}x</span>
                             </span>
                           )}
@@ -512,10 +506,10 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                   <XAxis dataKey="year" label={{ value: "Season Year", position: "insideBottom", offset: 0 }} />
                   <YAxis
                     label={{ value: "Cumulative Adjusted DPR", angle: -90, position: "insideLeft" }}
-                    domain={[0.900, 1.100]} // Set fixed domain for Y-axis
-                    tickFormatter={formatDPR} // Apply the formatter here
+                    domain={[0.900, 1.100]}
+                    tickFormatter={formatDPR}
                   />
-                  <Tooltip content={<CustomTooltip />} /> {/* Use custom tooltip component */}
+                  <Tooltip content={<CustomTooltip />} />
                   <Legend />
                   {uniqueTeamsForChart.map((team, index) => (
                     <Line
@@ -544,22 +538,22 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                   <thead className="bg-blue-50">
                     <tr>
                       <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Year</th>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">
                         <i className="fas fa-trophy text-yellow-500 mr-1"></i> Champion
                       </th>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">
                         <i className="fas fa-trophy text-gray-400 mr-1"></i> 2nd Place
                       </th>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">
                         <i className="fas fa-trophy text-amber-800 mr-1"></i> 3rd Place
                       </th>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">
                         <i className="fas fa-medal text-yellow-500 mr-1"></i> Points Champ
                       </th>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">
                         <i className="fas fa-medal text-gray-400 mr-1"></i> Points 2nd
                       </th>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">
                         <i className="fas fa-medal text-amber-800 mr-1"></i> Points 3rd
                       </th>
                     </tr>
@@ -570,12 +564,12 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                       return (
                         <tr key={year} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                           <td className="py-2 px-3 text-sm text-gray-800 font-semibold text-center">{year}</td>
-                          <td className="py-2 px-3 text-sm text-gray-700">{awards.champion}</td>
-                          <td className="py-2 px-3 text-sm text-gray-700">{awards.secondPlace}</td>
-                          <td className="py-2 px-3 text-sm text-gray-700">{awards.thirdPlace}</td>
-                          <td className="py-2 px-3 text-sm text-gray-700">{awards.pointsChamp}</td>
-                          <td className="py-2 px-3 text-sm text-gray-700">{awards.pointsSecond}</td>
-                          <td className="py-2 px-3 text-sm text-gray-700">{awards.pointsThird}</td>
+                          <td className="py-2 px-3 text-sm text-gray-700 text-center">{awards.champion}</td>
+                          <td className="py-2 px-3 text-sm text-gray-700 text-center">{awards.secondPlace}</td>
+                          <td className="py-2 px-3 text-sm text-gray-700 text-center">{awards.thirdPlace}</td>
+                          <td className="py-2 px-3 text-sm text-gray-700 text-center">{awards.pointsChamp}</td>
+                          <td className="py-2 px-3 text-sm text-gray-700 text-center">{awards.pointsSecond}</td>
+                          <td className="py-2 px-3 text-sm text-gray-700 text-center">{awards.pointsThird}</td>
                         </tr>
                       );
                     })}
