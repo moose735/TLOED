@@ -56,7 +56,6 @@ const App = () => {
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // State for mobile menu
   const [openSubMenu, setOpenSubMenu] = useState(null); // State for mobile sub-menus
-  const [isContentVisible, setIsContentVisible] = useState(false); // State for content fade transition
 
 
   // Function to toggle sub-menus in mobile view
@@ -69,7 +68,6 @@ const App = () => {
   const getMappedTeamName = useCallback((teamName) => {
     if (typeof teamName !== 'string' || !teamName) return ''; // Ensure it's a string and not empty
     const trimmedName = teamName.trim();
-    // Example: if (trimmedName.toLowerCase() === 'team a') return 'Team Alpha';
     return trimmedName;
   }, []);
 
@@ -77,8 +75,7 @@ const App = () => {
   useEffect(() => {
     const fetchHistoricalData = async () => {
       setLoadingHistoricalData(true);
-      setIsContentVisible(false); // Hide content immediately on new load or tab change
-      setHistoricalDataError(null);
+      setHistoricalDataError(null); // Clear previous errors
 
       // Fetch Historical Matchups
       let fetchedMatchupData = [];
@@ -104,10 +101,8 @@ const App = () => {
           }
         } catch (jsonError) {
           console.error("Error parsing historical matchup data JSON. Raw response:", textResponse, jsonError);
-          // IMPROVED ERROR MESSAGE FOR USER: Guiding to check API response format
-          setHistoricalDataError(`Failed to load historical matchup data: The API response was not valid JSON. Please ensure your Google Apps Script for HISTORICAL_MATCHUPS_API_URL is correctly deployed as a Web App and returns JSON (e.g., using ContentService.MimeType.JSON). Raw response: ${textResponse.substring(0, 200)}...`);
+          setHistoricalDataError(`Failed to load historical matchup data: The API response was not valid JSON. Please ensure your Google Apps Script for HISTORICAL_MATCHUPS_API_URL is correctly deployed as a Web App and returns JSON (e.g., using ContentService.MimeType.JSON). Raw response snippet: ${textResponse.substring(0, 200)}...`);
           setLoadingHistoricalData(false); // Ensure loading is false on error
-          setIsContentVisible(false); // Keep content hidden on error
           return; // Stop execution if parsing fails to avoid further issues
         }
 
@@ -127,7 +122,6 @@ const App = () => {
         
         const uniqueTeams = Array.from(uniqueTeamsSet).sort();
 
-        // Update NAV_CATEGORIES.TEAMS in place (or create a new object and set it if state management dictates)
         NAV_CATEGORIES.TEAMS.subTabs = uniqueTeams.map(team => ({
           label: team,
           tab: TABS.TEAM_DETAIL, // All team links go to the team detail tab
@@ -136,16 +130,12 @@ const App = () => {
 
       } catch (error) {
         console.error("Error fetching historical matchup data:", error);
-        // IMPROVED ERROR MESSAGE FOR USER: Guiding to check API deployment
         setHistoricalDataError(`Failed to load historical data: ${error.message}. Please check your HISTORICAL_MATCHUPS_API_URL in config.js and ensure your Google Apps Script is deployed correctly as a Web App (Execute as: Me, Who has access: Anyone).`);
         setLoadingHistoricalData(false); // Ensure loading is false on error
-        setIsContentVisible(false); // Keep content hidden on error
         return; // Stop execution if fetching fails
       } finally {
-        // Only set content visible if no error occurred in this block
-        if (!historicalDataError) { // Check historicalDataError state
-             setTimeout(() => setIsContentVisible(true), 100);
-        }
+        // Ensure loading is false after both data fetches (even if one fails, to stop spinner)
+        setLoadingHistoricalData(false);
       }
 
       // Fetch Historical Champions (optional, will use mock if URL is placeholder)
@@ -170,8 +160,11 @@ const App = () => {
             } else {
                 console.error("API response for historical champions is not an array. Raw response:", textResponse, data);
                 // IMPROVED ERROR MESSAGE FOR USER
-                setHistoricalDataError(`Failed to load historical champions data: The API response was not in the expected array format. Please check your GOOGLE_SHEET_CHAMPIONS_API_URL and its output.`);
-                // Do not return here as we still want to show mock data
+                setHistoricalDataError(prevError => prevError ? prevError + "\n\n" + `Failed to load historical champions data: The API response was not in the expected array format. Check GOOGLE_SHEET_CHAMPIONS_API_URL.` : `Failed to load historical champions data: The API response was not in the expected array format. Check GOOGLE_SHEET_CHAMPIONS_API_URL.`);
+                setHistoricalChampions([ // Still use mock data even if error is set
+                  { year: 2023, champion: "Mock Champion 2023" },
+                  { year: 2022, champion: "Mock Champion 2022" },
+                ]);
             }
           } catch (jsonError) {
             console.warn("Error parsing historical champions data JSON (likely non-JSON response), using mock data. Raw response:", textResponse, jsonError);
@@ -179,26 +172,29 @@ const App = () => {
               { year: 2023, champion: "Mock Champion 2023" },
               { year: 2022, champion: "Mock Champion 2022" },
             ]);
+            setHistoricalDataError(prevError => prevError ? prevError + "\n\n" + `Failed to parse historical champions data as JSON. Check GOOGLE_SHEET_CHAMPIONS_API_URL.` : `Failed to parse historical champions data as JSON. Check GOOGLE_SHEET_CHAMPIONS_API_URL.`);
           }
         }
       } catch (error) {
         console.warn("Error fetching historical champions data (network or configuration issue), using mock data:", error);
+        // Continue with mock data or empty array if fetching fails
         setHistoricalChampions([
           { year: 2023, champion: "Mock Champion 2023" },
           { year: 2022, champion: "Mock Champion 2022" },
         ]);
+        setHistoricalDataError(prevError => prevError ? prevError + "\n\n" + `Failed to fetch historical champions data. Check GOOGLE_SHEET_CHAMPIONS_API_URL.` : `Failed to fetch historical champions data. Check GOOGLE_SHEET_CHAMPIONS_API_URL.`);
       }
     };
 
     fetchHistoricalData();
-  }, [getMappedTeamName, historicalDataError]); // Added historicalDataError to dependency array
+  }, [getMappedTeamName]); // Dependency array simplified as per original structure
 
   // Handle tab change, including setting selectedTeam for TEAM_DETAIL tab
   const handleTabChange = (tab, teamName = null) => {
     setActiveTab(tab);
     setSelectedTeam(teamName);
     setIsMobileMenuOpen(false); // Close mobile menu on tab selection
-    setIsContentVisible(false); // Hide content immediately to prepare for new content fade-in
+    // Removed setIsContentVisible(false) here, as it's handled by useEffect when loading starts
   };
 
   return (
@@ -374,14 +370,14 @@ const App = () => {
         ) : historicalDataError ? (
           <p className="text-center text-red-600 text-lg">
             {historicalDataError} <br />
-            Please ensure your Google Apps Script URLs in `config.js` are correctly configured and deployed as Web Apps (Execute as: Me, Who has access: Anyone) and are returning valid JSON.
-            Also, check your Vercel deployment settings to ensure `index.js` and other module scripts are being served with the correct MIME type (e.g., `application/javascript`).
+            <br />
+            **Please check the following:**<br />
+            1. **Google Apps Script URLs (`config.js`):** Ensure `HISTORICAL_MATCHUPS_API_URL` and `GOOGLE_SHEET_CHAMPIONS_API_URL` are correct and point to your deployed Google Apps Script Web Apps.
+            2. **Google Apps Script Deployment:** For each script, verify its deployment settings: "Execute as: Me" and "Who has access: Anyone".
+            3. **Vercel Deployment / Local Server:** Ensure your `index.js` file (and other JavaScript files) are being served with the correct MIME type (`application/javascript`). This usually requires proper build configuration (e.g., using a `build` script that generates optimized JavaScript bundles, which Vercel handles automatically for standard React projects). If developing locally, ensure your development server is configured correctly.
           </p>
         ) : (
-          <div
-            key={activeTab} // Key to force re-render and trigger transition on tab change
-            className={`transition-opacity duration-300 ease-in-out ${isContentVisible ? 'opacity-100' : 'opacity-0'}`}
-          >
+          <div> {/* Removed key and transition here, as content visibility will be based on loading state */}
             {activeTab === TABS.POWER_RANKINGS && <PowerRankings />}
             {activeTab === TABS.LEAGUE_HISTORY && (
               <LeagueHistory
