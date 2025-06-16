@@ -268,11 +268,25 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
 
       const careerDPR = careerDPRData.find(dpr => dpr.team === teamName)?.dpr || 0;
       const totalGames = stats.totalWins + stats.totalLosses + stats.totalTies;
-      const winPercentage = totalGames > 0 ? ((stats.totalWins + (0.5 * stats.totalTies)) / totalGames) : 0; // CORRECTED: Use totalWins/totalTies
+      const winPercentage = totalGames > 0 ? ((stats.totalWins + (0.5 * stats.totalTies)) / totalGames) : 0;
+
+      // Determine the season display string
+      const sortedYearsArray = Array.from(stats.seasonsPlayed).sort((a, b) => a - b);
+      const minYear = sortedYearsArray.length > 0 ? sortedYearsArray[0] : '';
+      const maxYear = sortedYearsArray.length > 0 ? sortedYearsArray[sortedYearsArray.length - 1] : '';
+      const seasonsCount = stats.seasonsPlayed.size;
+
+      let seasonsDisplay = '';
+      if (seasonsCount > 0) {
+          seasonsDisplay = `${minYear}-${maxYear} (${seasonsCount})`;
+          if (minYear === maxYear) { // Handle single season case: "2023 (1)"
+              seasonsDisplay = `${minYear} (${seasonsCount})`;
+          }
+      }
 
       return {
         team: teamName,
-        seasons: stats.seasonsPlayed.size,
+        seasons: seasonsDisplay, // Use the formatted string here
         record: `${stats.totalWins}-${stats.totalLosses}-${stats.totalTies}`,
         winPercentage: winPercentage,
         totalDPR: careerDPR, // This DPR needs to be for games that count towards record, not including byes
@@ -288,7 +302,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
   // Formatters
   const formatPercentage = (value) => {
     if (typeof value === 'number' && !isNaN(value)) {
-      return `${(value * 100).toFixed(3)}%`; // Changed to toFixed(3)
+      return `${value.toFixed(3)}%`; // Removed multiplication by 100
     }
     return '0.000%'; // Updated default for consistency
   };
