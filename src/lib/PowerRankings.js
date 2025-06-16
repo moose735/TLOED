@@ -51,7 +51,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
   const [powerRankings, setPowerRankings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [weeklyChartData, setWeeklyChartData] = useState([]); // State for chart data (cumulative points)
+  const [weeklyChartData, setWeeklyChartData] = useState([]); // State for chart data (weekly DPR)
   const [chartTeams, setChartTeams] = useState([]); // State for teams represented in the chart
 
 
@@ -82,7 +82,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
         return;
       }
 
-      // Calculate all league metrics for the table display
+      // Calculate all league metrics for the table display (seasonal DPR, etc.)
       const { seasonalMetrics } = calculateAllLeagueMetrics(historicalMatchups, getDisplayTeamName);
 
       // Check if data for the newest year exists for the table
@@ -111,39 +111,83 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
       setPowerRankings(calculatedRankings.map((team, index) => ({ rank: index + 1, ...team })));
 
 
-      // --- Chart Data Preparation (Cumulative Points For by Week) ---
+      // --- Chart Data Preparation (DPR by Week) ---
       const newestYearMatchups = historicalMatchups.filter(match => parseInt(match.year) === newestYear);
-      const uniqueTeamsInNewestYear = Array.from(new Set(newestYearMatchups.flatMap(match => [getDisplayTeamName(match.team1), getDisplayTeamName(match.team2)]))).sort();
-
+      const uniqueTeamsInNewestYear = Array.from(new Set(newestYearMatchups.flatMap(match => [getDisplayTeamName(match.team1), getDisplayTeamName(match.team2)])))
+                                          .filter(teamName => teamName); // Filter out empty team names
       const maxWeek = newestYearMatchups.reduce((max, match) => Math.max(max, parseInt(match.week)), 0);
-      const cumulativePoints = {};
-      uniqueTeamsInNewestYear.forEach(team => { cumulativePoints[team] = 0; }); // Initialize all teams to 0 points
 
-      const chartData = [];
+      const weeklyDPRCalculations = [];
+
       for (let week = 1; week <= maxWeek; week++) {
-        const weekEntry = { week: week };
-        const matchesInWeek = newestYearMatchups.filter(match => parseInt(match.week) === week);
+        const weeklyEntry = { week: week };
+        const matchesUpToWeek = newestYearMatchups.filter(match => parseInt(match.week) <= week);
 
-        matchesInWeek.forEach(match => {
+        // Aggregate stats for each team up to the current week
+        const teamStatsUpToWeek = {}; // { teamName: { pf: 0, pa: 0, games: 0 } }
+        let totalLeaguePointsFor = 0;
+        let totalLeaguePointsAgainst = 0;
+        let totalLeagueGames = 0;
+
+        uniqueTeamsInNewestYear.forEach(team => {
+          teamStatsUpToWeek[team] = { pf: 0, pa: 0, games: 0 };
+        });
+
+        matchesUpToWeek.forEach(match => {
           const team1 = getDisplayTeamName(match.team1);
           const team2 = getDisplayTeamName(match.team2);
           const team1Score = parseFloat(match.team1Score);
           const team2Score = parseFloat(match.team2Score);
 
-          // Only add score if valid number
-          if (!isNaN(team1Score)) cumulativePoints[team1] = (cumulativePoints[team1] || 0) + team1Score;
-          if (!isNaN(team2Score)) cumulativePoints[team2] = (cumulativePoints[team2] || 0) + team2Score;
+          if (!isNaN(team1Score) && !isNaN(team2Score)) {
+            // Team 1 stats
+            teamStatsUpToWeek[team1].pf += team1Score;
+            teamStatsUpToWeek[team1].pa += team2Score;
+            teamStatsUpToWeek[team1].games += 1;
+
+            // Team 2 stats
+            teamStatsUpToWeek[team2].pf += team2Score;
+            teamStatsUpToWeek[team2].pa += team1Score;
+            teamStatsUpToWeek[team2].games += 1;
+
+            // League totals for this game
+            totalLeaguePointsFor += team1Score + team2Score;
+            totalLeaguePointsAgainst += team1Score + team2Score; // Points against for the league is the same as points for
+            totalLeagueGames += 2; // Each match involves two teams/games
+          }
         });
 
-        // Add current cumulative points for all teams to this week's entry
+        // Calculate league average PF and PA for this week
+        const leagueAvgPF = totalLeagueGames > 0 ? totalLeaguePointsFor / totalLeagueGames : 0;
+        const leagueAvgPA = totalLeagueGames > 0 ? totalLeaguePointsAgainst / totalLeagueGames : 0;
+
+        // Calculate DPR for each team for this week
         uniqueTeamsInNewestYear.forEach(team => {
-          weekEntry[team] = parseFloat(cumulativePoints[team].toFixed(2)); // Store as a number with 2 decimals
+          const teamAvgPF = teamStatsUpToWeek[team].games > 0 ? teamStatsUpToWeek[team].pf / teamStatsUpToWeek[team].games : 0;
+          const teamAvgPA = teamStatsUpToWeek[team].games > 0 ? teamStatsUpToWeek[team].pa / teamStatsUpToWeek[team].games : 0;
+
+          let dpr = 0;
+          // Avoid division by zero
+          const ratioPF = leagueAvgPF > 0 ? (teamAvgPF / leagueAvgPF) : 0;
+          const ratioPA = leagueAvgPA > 0 ? (teamAvgPA / leagueAvgPA) : 0;
+
+          dpr = ratioPF - ratioPA;
+
+          weeklyEntry[team] = parseFloat(dpr.toFixed(3)); // Store DPR to three decimal places
         });
-        chartData.push(weekEntry);
+
+        weeklyDPRCalculations.push(weeklyEntry);
       }
 
-      setWeeklyChartData(chartData);
-      setChartTeams(uniqueTeamsInNewestYear); // Set teams for lines in the chart
+      // Filter chart teams to only include those that actually have non-zero DPRs by the end of the season
+      const finalChartTeams = uniqueTeamsInNewestYear.filter(team => {
+        // Check if the team has any non-zero DPR value across all weeks
+        return weeklyDPRCalculations.some(weekData => weekData[team] !== 0);
+      });
+
+
+      setWeeklyChartData(weeklyDPRCalculations);
+      setChartTeams(finalChartTeams); // Set teams for lines in the chart, filtered
       setLoading(false);
 
     } catch (err) {
@@ -193,11 +237,11 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
             </table>
           </div>
 
-          {/* Line Graph for Cumulative Points For by Week */}
+          {/* Line Graph for Weekly DPR */}
           {weeklyChartData.length > 0 && (
             <section className="mt-8"> {/* Added mt-8 for spacing from the table */}
               <h3 className="text-xl font-bold text-blue-700 mb-4 text-center">
-                Cumulative Points For by Week - {powerRankings[0].year} Season
+                DPR by Week - {powerRankings[0].year} Season
               </h3>
               <ResponsiveContainer width="100%" height={400}>
                 <LineChart
@@ -206,8 +250,8 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
                   <XAxis dataKey="week" label={{ value: "Week", position: "insideBottom", offset: 0 }} />
-                  <YAxis label={{ value: "Cumulative Points", angle: -90, position: "insideLeft" }} />
-                  <Tooltip formatter={(value) => `${value.toFixed(2)} pts`} />
+                  <YAxis label={{ value: "DPR", angle: -90, position: "insideLeft" }} domain={['auto', 'auto']} /> {/* Auto domain for DPR */}
+                  <Tooltip formatter={(value) => `${value.toFixed(3)} DPR`} /> {/* Format tooltip for DPR */}
                   <Legend />
                   {chartTeams.map((team, index) => (
                     <Line
@@ -222,8 +266,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                 </LineChart>
               </ResponsiveContainer>
               <p className="mt-4 text-sm text-gray-500 text-center">
-                This graph shows each team's cumulative points scored throughout the newest season.
-                A true "DPR by Week" graph would require specific weekly DPR calculations from `calculations.js`.
+                This graph shows each team's Dominance Power Ranking (DPR) calculated cumulatively up to each week of the newest season.
               </p>
             </section>
           )}
