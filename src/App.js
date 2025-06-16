@@ -56,6 +56,8 @@ const App = () => {
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // State for mobile menu
   const [openSubMenu, setOpenSubMenu] = useState(null); // State for mobile sub-menus
+  const [isContentVisible, setIsContentVisible] = useState(false); // State for content fade transition
+
 
   // Function to toggle sub-menus in mobile view
   const toggleSubMenu = (menuName) => {
@@ -75,6 +77,7 @@ const App = () => {
   useEffect(() => {
     const fetchHistoricalData = async () => {
       setLoadingHistoricalData(true);
+      setIsContentVisible(false); // Hide content immediately on new load or tab change
       setHistoricalDataError(null);
 
       // Fetch Historical Matchups
@@ -117,14 +120,14 @@ const App = () => {
         } else {
           console.warn("fetchedMatchupData is not an array after processing, cannot populate team list.");
         }
-       
+        
         const uniqueTeams = Array.from(uniqueTeamsSet).sort();
 
         // Update NAV_CATEGORIES.TEAMS in place (or create a new object and set it if state management dictates)
         NAV_CATEGORIES.TEAMS.subTabs = uniqueTeams.map(team => ({
           label: team,
           tab: TABS.TEAM_DETAIL, // All team links go to the team detail tab
-          teamName: team,       // Pass the team name for rendering
+          teamName: team,        // Pass the team name for rendering
         }));
 
       } catch (error) {
@@ -132,6 +135,9 @@ const App = () => {
         setHistoricalDataError(`Failed to load historical data: ${error.message}. Please check your HISTORICAL_MATCHUPS_API_URL and its output format.`);
       } finally {
         setLoadingHistoricalData(false);
+        // Add a small delay before showing content to allow for the loading spinner to be seen
+        // and for the transition to be noticeable once data is ready.
+        setTimeout(() => setIsContentVisible(true), 100); // 100ms delay for fade-in
       }
 
       // Fetch Historical Champions (optional, will use mock if URL is placeholder)
@@ -184,27 +190,29 @@ const App = () => {
     setActiveTab(tab);
     setSelectedTeam(teamName);
     setIsMobileMenuOpen(false); // Close mobile menu on tab selection
+    setIsContentVisible(false); // Hide content immediately to prepare for new content fade-in
   };
 
   return (
     <div className="min-h-screen bg-gray-100 font-sans antialiased text-gray-900">
       <header className="bg-white shadow-md py-4 px-6 flex justify-between items-center relative z-10">
         <div className="flex items-center">
-          <h1 className="text-2xl font-bold text-blue-800">League Stats</h1>
+          {/* Adjusted font size for responsiveness */}
+          <h1 className="text-xl md:text-2xl font-bold text-blue-800">League Stats</h1>
         </div>
 
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center space-x-6">
           <button
             onClick={() => handleTabChange(TABS.POWER_RANKINGS)}
-            className={`px-3 py-2 rounded-md text-sm font-medium ${activeTab === TABS.POWER_RANKINGS ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
+            className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${activeTab === TABS.POWER_RANKINGS ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
           >
             {NAV_CATEGORIES.HOME.label}
           </button>
 
           {/* Dropdown for League Data */}
           <div className="relative group">
-            <button className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none flex items-center">
+            <button className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none flex items-center transition-colors duration-200">
               {NAV_CATEGORIES.LEAGUE_DATA.label}
               <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
@@ -215,7 +223,7 @@ const App = () => {
                 <button
                   key={item.tab}
                   onClick={() => handleTabChange(item.tab)}
-                  className={`block w-full text-left px-4 py-2 text-sm ${activeTab === item.tab ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
+                  className={`block w-full text-left px-4 py-2 text-sm transition-colors duration-200 ${activeTab === item.tab ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
                 >
                   {item.label}
                 </button>
@@ -226,7 +234,7 @@ const App = () => {
           {/* Dropdown for Teams (dynamic) */}
           {NAV_CATEGORIES.TEAMS.subTabs.length > 0 && (
             <div className="relative group">
-              <button className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none flex items-center">
+              <button className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none flex items-center transition-colors duration-200">
                 {NAV_CATEGORIES.TEAMS.label}
                 <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
@@ -237,7 +245,7 @@ const App = () => {
                   <button
                     key={item.label} // Use label as key for team buttons
                     onClick={() => handleTabChange(item.tab, item.teamName)}
-                    className={`block w-full text-left px-4 py-2 text-sm ${selectedTeam === item.teamName && activeTab === TABS.TEAM_DETAIL ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
+                    className={`block w-full text-left px-4 py-2 text-sm transition-colors duration-200 ${selectedTeam === item.teamName && activeTab === TABS.TEAM_DETAIL ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
                   >
                     {item.label}
                   </button>
@@ -251,7 +259,7 @@ const App = () => {
         <div className="md:hidden flex items-center">
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="text-gray-800 focus:outline-none p-2 rounded-md hover:bg-gray-100"
+            className="text-gray-800 focus:outline-none p-2 rounded-md hover:bg-gray-100 transition-colors duration-200"
             aria-label="Toggle mobile menu"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -263,12 +271,12 @@ const App = () => {
 
       {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
-        <div className="fixed inset-0 bg-white z-50 overflow-y-auto p-4 md:hidden">
+        <div className="fixed inset-0 bg-white z-50 overflow-y-auto p-4 md:hidden transform transition-transform duration-300 ease-out translate-x-0" style={{'--tw-translate-x': isMobileMenuOpen ? '0' : '100%'}}>
           {/* Close Button */}
           <div className="flex justify-end mb-4">
             <button
               onClick={() => setIsMobileMenuOpen(false)}
-              className="text-gray-800 focus:outline-none p-2 rounded-md hover:bg-gray-100"
+              className="text-gray-800 focus:outline-none p-2 rounded-md hover:bg-gray-100 transition-colors duration-200"
               aria-label="Close mobile menu"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -280,7 +288,7 @@ const App = () => {
           <nav className="flex flex-col space-y-4">
             <button
               onClick={() => handleTabChange(TABS.POWER_RANKINGS)}
-              className={`block w-full text-left py-3 px-4 text-lg font-semibold rounded-md ${activeTab === TABS.POWER_RANKINGS ? 'bg-blue-100 text-blue-700' : 'text-gray-800 hover:bg-gray-100'}`}
+              className={`block w-full text-left py-3 px-4 text-lg font-semibold rounded-md transition-colors duration-200 ${activeTab === TABS.POWER_RANKINGS ? 'bg-blue-100 text-blue-700' : 'text-gray-800 hover:bg-gray-100'}`}
             >
               {NAV_CATEGORIES.HOME.label}
             </button>
@@ -288,21 +296,21 @@ const App = () => {
             {/* Accordion for League Data */}
             <div className="border-b border-gray-200 pb-2">
               <button
-                className="flex justify-between items-center w-full py-3 px-4 text-lg font-semibold text-gray-800 hover:bg-gray-100 rounded-md"
+                className="flex justify-between items-center w-full py-3 px-4 text-lg font-semibold text-gray-800 hover:bg-gray-100 rounded-md transition-colors duration-200"
                 onClick={() => toggleSubMenu('LEAGUE_DATA')}
               >
                 {NAV_CATEGORIES.LEAGUE_DATA.label}
-                <svg className={`w-5 h-5 transition-transform ${openSubMenu === 'LEAGUE_DATA' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <svg className={`w-5 h-5 transition-transform duration-200 ${openSubMenu === 'LEAGUE_DATA' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
                 </svg>
               </button>
               {openSubMenu === 'LEAGUE_DATA' && (
-                <ul className="pl-6 mt-2 space-y-2">
+                <ul className="pl-6 mt-2 space-y-2 transition-all duration-300 ease-in-out origin-top">
                   {NAV_CATEGORIES.LEAGUE_DATA.subTabs.map((subTab) => (
                     <li key={subTab.tab}>
                       <button
                         onClick={() => handleTabChange(subTab.tab)}
-                        className={`block w-full text-left py-2 px-3 rounded-md text-base ${activeTab === subTab.tab ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
+                        className={`block w-full text-left py-2 px-3 rounded-md text-base transition-colors duration-200 ${activeTab === subTab.tab ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
                       >
                         {subTab.label}
                       </button>
@@ -316,21 +324,21 @@ const App = () => {
             {NAV_CATEGORIES.TEAMS.subTabs.length > 0 && (
               <div className="border-b border-gray-200 pb-2">
                 <button
-                  className="flex justify-between items-center w-full py-3 px-4 text-lg font-semibold text-gray-800 hover:bg-gray-100 rounded-md"
+                  className="flex justify-between items-center w-full py-3 px-4 text-lg font-semibold text-gray-800 hover:bg-gray-100 rounded-md transition-colors duration-200"
                   onClick={() => toggleSubMenu('TEAMS')}
                 >
                   {NAV_CATEGORIES.TEAMS.label}
-                  <svg className={`w-5 h-5 transition-transform ${openSubMenu === 'TEAMS' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <svg className={`w-5 h-5 transition-transform duration-200 ${openSubMenu === 'TEAMS' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
                   </svg>
                 </button>
                 {openSubMenu === 'TEAMS' && (
-                  <ul className="pl-6 mt-2 space-y-2">
+                  <ul className="pl-6 mt-2 space-y-2 transition-all duration-300 ease-in-out origin-top">
                     {NAV_CATEGORIES.TEAMS.subTabs.map((subTab) => (
                       <li key={subTab.label}>
                         <button
                           onClick={() => handleTabChange(subTab.tab, subTab.teamName)}
-                          className={`block w-full text-left py-2 px-3 rounded-md text-base ${selectedTeam === subTab.teamName && activeTab === TABS.TEAM_DETAIL ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
+                          className={`block w-full text-left py-2 px-3 rounded-md text-base transition-colors duration-200 ${selectedTeam === subTab.teamName && activeTab === TABS.TEAM_DETAIL ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
                         >
                           {subTab.label}
                         </button>
@@ -347,11 +355,21 @@ const App = () => {
 
       <main className="container mx-auto p-4 md:p-6 lg:p-8 mt-4">
         {loadingHistoricalData ? (
-          <p className="text-center text-blue-600 text-lg">Loading league data...</p>
+          // Enhanced Loading Spinner
+          <div className="flex flex-col items-center justify-center min-h-[200px] text-blue-600">
+            <svg className="animate-spin h-10 w-10 text-blue-500 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p className="text-lg font-medium">Loading league data...</p>
+          </div>
         ) : historicalDataError ? (
           <p className="text-center text-red-600 text-lg">{historicalDataError}</p>
         ) : (
-          <>
+          <div
+            key={activeTab} // Key to force re-render and trigger transition on tab change
+            className={`transition-opacity duration-300 ease-in-out ${isContentVisible ? 'opacity-100' : 'opacity-0'}`}
+          >
             {activeTab === TABS.POWER_RANKINGS && <PowerRankings />}
             {activeTab === TABS.LEAGUE_HISTORY && (
               <LeagueHistory
@@ -397,7 +415,7 @@ const App = () => {
                 historicalChampions={historicalChampions}
               />
             )}
-          </>
+          </div>
         )}
       </main>
 
