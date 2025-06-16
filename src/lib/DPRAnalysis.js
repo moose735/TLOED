@@ -16,6 +16,7 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
 
     const allTimeRecords = {}; // For career DPR calculation
     const seasonRecordsRaw = {};   // { year: { team: { ...stats } } } - intermediate for seasonal DPR calculation
+    const allLeagueScoresByYear = {}; // { year: [score1, score2, ...] } - to get league-wide min/max for seasonal DPR
 
     // First Pass: Aggregate all necessary data for both career and seasonal calculations
     historicalMatchups.forEach(match => {
@@ -43,11 +44,12 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
         }
       });
 
-      // Initialize structures for teams (seasonal)
+      // Initialize structures for teams (seasonal) and collect all league scores for the year
+      if (!seasonRecordsRaw[year]) {
+        seasonRecordsRaw[year] = {};
+        allLeagueScoresByYear[year] = []; // Initialize for league-wide scores
+      }
       [team1, team2].forEach(team => {
-        if (!seasonRecordsRaw[year]) {
-          seasonRecordsRaw[year] = {};
-        }
         if (!seasonRecordsRaw[year][team]) {
           seasonRecordsRaw[year][team] = {
             wins: 0, losses: 0, ties: 0, pointsFor: 0, totalGames: 0,
@@ -93,6 +95,9 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
       seasonRecordsRaw[year][team2].totalGames++;
       seasonRecordsRaw[year][team1].weeklyScores.push(team1Score);
       seasonRecordsRaw[year][team2].weeklyScores.push(team2Score);
+
+      // Collect all scores for the year for league-wide min/max
+      allLeagueScoresByYear[year].push(team1Score, team2Score);
     });
 
 
@@ -109,6 +114,7 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
       const teamMaxScoreOverall = stats.careerWeeklyScores.length > 0 ? Math.max(...stats.careerWeeklyScores) : 0;
       const teamMinScoreOverall = stats.careerWeeklyScores.length > 0 ? Math.min(...stats.careerWeeklyScores) : 0;
 
+      // DPR Calculation uses the team's own career max/min scores
       stats.careerRawDPR = (
         (stats.totalPointsFor * 6) +
         ((teamMaxScoreOverall + teamMinScoreOverall) * 2) +
@@ -145,6 +151,11 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
       const teamsInSeason = Object.keys(seasonRecordsRaw[year]);
       if (teamsInSeason.length === 0) return;
 
+      // Get league-wide min/max scores for DPR calculation for this year
+      const leagueScoresForYear = allLeagueScoresByYear[year] || [];
+      const leagueMaxScoreInSeason = leagueScoresForYear.length > 0 ? Math.max(...leagueScoresForYear) : 0;
+      const leagueMinScoreInSeason = leagueScoresForYear.length > 0 ? Math.min(...leagueScoresForYear) : 0;
+
       let totalRawDPRForSeason = 0;
       let teamsWithValidDPR = 0;
 
@@ -153,12 +164,11 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
         if (stats.totalGames === 0) return;
 
         stats.winPercentage = ((stats.wins + (0.5 * stats.ties)) / stats.totalGames);
-        const teamMaxScoreInSeason = stats.weeklyScores.length > 0 ? Math.max(...stats.weeklyScores) : 0;
-        const teamMinScoreInSeason = stats.weeklyScores.length > 0 ? Math.min(...stats.weeklyScores) : 0;
-
+        
+        // Corrected: Use league-wide max/min scores for raw DPR calculation for consistency
         stats.rawDPR = (
           (stats.pointsFor * 6) +
-          ((teamMaxScoreInSeason + teamMinScoreInSeason) * 2) +
+          ((leagueMaxScoreInSeason + leagueMinScoreInSeason) * 2) + 
           ((stats.winPercentage * 200) * 2)
         ) / 10;
         totalRawDPRForSeason += stats.rawDPR;
