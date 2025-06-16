@@ -1,7 +1,7 @@
 // PowerRankings.js
 import React, { useState, useEffect } from 'react';
 // Import the utility for calculating league metrics (DPR) and its helper calculateRawDPR
-import { calculateAllLeagueMetrics, calculateRawDPR } from '../utils/calculations'; // Now importing calculateRawDPR
+import { calculateAllLeagueMetrics, calculateRawDPR } from '../utils/calculations';
 // Recharts for charting
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -46,6 +46,28 @@ const CHART_COLORS = [
   '#ef9a9a'  // Light Red
 ];
 
+// Custom Tooltip Component for sorting by DPR
+const CustomDPRRankTooltip = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    // Each entry in payload now has a 'dprValue' property for sorting
+    const sortedPayload = [...payload].sort((a, b) => b.payload.dprValues[a.name] - b.payload.dprValues[b.name]);
+
+    return (
+      <div className="bg-white p-3 border border-gray-300 rounded-md shadow-lg text-sm">
+        <p className="font-bold text-gray-800 mb-2">Week: {label}</p>
+        {sortedPayload.map((entry, index) => (
+          // Display Rank and the actual DPR value for context
+          <p key={`item-${index}`} style={{ color: entry.color }}>
+            {entry.name}: Rank {entry.value} ({entry.payload.dprValues[entry.name].toFixed(3)} DPR)
+          </p>
+        ))}
+      </div>
+    );
+  }
+
+  return null;
+};
+
 
 const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
   const [powerRankings, setPowerRankings] = useState([]);
@@ -53,6 +75,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
   const [error, setError] = useState(null);
   const [weeklyChartData, setWeeklyChartData] = useState([]); // State for chart data (weekly DPR)
   const [chartTeams, setChartTeams] = useState([]); // State for teams represented in the chart
+  const [maxTeamsInChart, setMaxTeamsInChart] = useState(1); // To set Y-axis domain dynamically
 
 
   useEffect(() => {
@@ -84,7 +107,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
 
       // Calculate all league metrics for the table display (seasonal DPR, etc.)
       // This uses the calculateAllLeagueMetrics from utils/calculations.js
-      const { seasonalMetrics, weeklyGameScoresByYearAndWeek } = calculateAllLeagueMetrics(historicalMatchups, getDisplayTeamName);
+      const { seasonalMetrics } = calculateAllLeagueMetrics(historicalMatchups, getDisplayTeamName);
 
       // Check if data for the newest year exists for the table
       if (!seasonalMetrics[newestYear]) {
@@ -112,7 +135,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
       setPowerRankings(calculatedRankings.map((team, index) => ({ rank: index + 1, ...team })));
 
 
-      // --- Chart Data Preparation (Weekly Cumulative Adjusted DPR using calculations.js formula) ---
+      // --- Chart Data Preparation (Weekly Cumulative Adjusted DPR and Rank) ---
       const newestYearMatchups = historicalMatchups.filter(match => parseInt(match.year) === newestYear);
       const uniqueTeamsInNewestYear = Array.from(new Set(
         newestYearMatchups.flatMap(match => [getDisplayTeamName(match.team1), getDisplayTeamName(match.team2)])
@@ -131,7 +154,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
       let cumulativeLeagueScores = []; // All individual scores in the league up to current week
 
       for (let week = 1; week <= maxWeek; week++) {
-        const weeklyEntry = { week: week };
+        const weeklyEntry = { week: week, dprValues: {} }; // Add dprValues for tooltip sorting
         const matchesInCurrentWeek = newestYearMatchups.filter(match => parseInt(match.week) === week);
 
         // Accumulate stats based on matches in the current week
@@ -179,7 +202,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
 
         let totalRawDPRForWeek = 0;
         let teamsCountForWeeklyDPR = 0;
-        const tempRawDPRs = {}; // Store raw DPRs to calculate average for the current week's snapshot
+        const currentWeekTeamDPRs = []; // To store { team, dpr } for ranking this week
 
         uniqueTeamsInNewestYear.forEach(team => {
           const teamStats = cumulativeTeamStats[team];
@@ -193,37 +216,47 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
               leagueMaxScore_Cumulative,
               leagueMinScore_Cumulative
             );
-            tempRawDPRs[team] = rawDPR;
-
+            
             if (!isNaN(rawDPR)) {
               totalRawDPRForWeek += rawDPR;
               teamsCountForWeeklyDPR++;
             }
+            currentWeekTeamDPRs.push({ team, dpr: rawDPR }); // Store raw DPR for ranking
           } else {
-            tempRawDPRs[team] = 0; // Team hasn't played or no valid scores yet for this week
+            currentWeekTeamDPRs.push({ team, dpr: 0 }); // Team hasn't played or no valid scores yet
           }
         });
 
         const avgRawDPRForWeek = teamsCountForWeeklyDPR > 0 ? totalRawDPRForWeek / teamsCountForWeeklyDPR : 0;
 
-        // Calculate adjusted DPR for each team for this week
-        uniqueTeamsInNewestYear.forEach(team => {
-          let adjustedDPR = 0;
-          if (avgRawDPRForWeek > 0) {
-            adjustedDPR = tempRawDPRs[team] / avgRawDPRForWeek;
-          }
-          weeklyEntry[team] = parseFloat(adjustedDPR.toFixed(3));
+        // Calculate adjusted DPR and assign ranks for this week
+        const rankedTeamsForWeek = currentWeekTeamDPRs
+          .map(teamDPR => {
+            let adjustedDPR = 0;
+            if (avgRawDPRForWeek > 0) {
+              adjustedDPR = teamDPR.dpr / avgRawDPRForWeek;
+            }
+            return { team: teamDPR.team, dpr: adjustedDPR };
+          })
+          .sort((a, b) => b.dpr - a.dpr); // Sort by adjusted DPR descending for ranking
+
+        rankedTeamsForWeek.forEach((rankedTeam, index) => {
+          weeklyEntry[rankedTeam.team] = index + 1; // Store rank (1-based)
+          weeklyEntry.dprValues[rankedTeam.team] = rankedTeam.dpr; // Store actual DPR for tooltip
         });
+        
         weeklyDPRsChartData.push(weeklyEntry);
       }
 
       setWeeklyChartData(weeklyDPRsChartData);
       
-      // Chart teams should include only teams that have recorded a non-zero DPR at any point in the season
+      // Chart teams should include only teams that have recorded a non-zero DPR (and thus a rank) at any point in the season
       const activeChartTeams = uniqueTeamsInNewestYear.filter(team =>
-        weeklyDPRsChartData.some(weekData => weekData[team] !== 0)
+        weeklyDPRsChartData.some(weekData => weekData[team] !== 0) // Check for non-zero rank
       );
       setChartTeams(activeChartTeams);
+      setMaxTeamsInChart(activeChartTeams.length > 0 ? activeChartTeams.length : 1);
+
 
       setLoading(false);
 
@@ -274,11 +307,11 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
             </table>
           </div>
 
-          {/* Line DPR for Weekly DPR */}
+          {/* Line Graph for Weekly DPR Rank */}
           {weeklyChartData.length > 0 && (
             <section className="mt-8">
               <h3 className="text-xl font-bold text-blue-700 mb-4 text-center">
-                DPR by Week - {powerRankings[0].year} Season
+                DPR Rank by Week - {powerRankings[0].year} Season
               </h3>
               <ResponsiveContainer width="100%" height={400}>
                 <LineChart
@@ -287,8 +320,13 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
                   <XAxis dataKey="week" label={{ value: "Week", position: "insideBottom", offset: 0 }} />
-                  <YAxis label={{ value: "DPR", angle: -90, position: "insideLeft" }} domain={['auto', 'auto']} />
-                  <Tooltip formatter={(value) => `${value.toFixed(3)} DPR`} />
+                  <YAxis
+                    label={{ value: "Rank", angle: -90, position: "insideLeft" }}
+                    domain={[maxTeamsInChart, 1]} // Invert domain for rank: lower numbers (better rank) on top
+                    ticks={Array.from({ length: maxTeamsInChart }, (_, i) => i + 1)} // Show ticks for each rank
+                    allowDecimals={false} // Ranks are integers
+                  />
+                  <Tooltip content={<CustomDPRRankTooltip />} /> {/* Using custom tooltip */}
                   <Legend />
                   {chartTeams.map((team, index) => (
                     <Line
@@ -303,7 +341,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                 </LineChart>
               </ResponsiveContainer>
               <p className="mt-4 text-sm text-gray-500 text-center">
-                This graph shows each team's Dominance Power Ranking (DPR), calculated based on all games played up to each specific week of the newest season, using the formula from `calculations.js`.
+                This graph shows each team's rank based on their Dominance Power Ranking (DPR), calculated cumulatively based on all games played up to each specific week of the newest season. Rank 1 indicates the highest DPR.
               </p>
             </section>
           )}
