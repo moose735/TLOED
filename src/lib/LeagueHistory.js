@@ -26,9 +26,8 @@ const getFinalSeedingGamePurpose = (value) => {
   return 'Final Seeding Game';
 };
 
-const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName, historicalChampions }) => {
+const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName }) => { // Removed historicalChampions prop
   const [allTimeStandings, setAllTimeStandings] = useState([]);
-  const [championshipGames, setChampionshipGames] = useState([]);
   const [seasonalDPRChartData, setSeasonalDPRChartData] = useState([]); // Renamed for more general use
   const [uniqueTeamsForChart, setUniqueTeamsForChart] = useState([]);
 
@@ -41,7 +40,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
   useEffect(() => {
     if (loading || error || !historicalMatchups || historicalMatchups.length === 0) {
       setAllTimeStandings([]);
-      setChampionshipGames([]);
+      // setChampionshipGames([]); // Removed state
       setSeasonalDPRChartData([]);
       setUniqueTeamsForChart([]);
       return;
@@ -141,8 +140,8 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
     });
 
     // Process championship games and final seeding for overall finish awards (Trophies)
-    const newChampionshipGames = [];
-
+    // No longer populating newChampionshipGames array as the section is removed.
+    // However, the awards logic below still needs to run to populate teamOverallStats.awards
     historicalMatchups.forEach(match => {
       const year = parseInt(match.year);
       // Only process final seeding games that are part of a completed season
@@ -165,39 +164,14 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
 
       let winner = 'Tie';
       let loser = 'Tie';
-      let winnerScore = team1Score;
-      let loserScore = team2Score;
 
       if (team1Won) {
           winner = team1;
           loser = team2;
-          winnerScore = team1Score;
-          loserScore = team2Score;
       } else if (team2Won) {
           winner = team2;
           loser = team1;
-          winnerScore = team2Score;
-          loserScore = team1Score;
       }
-
-      const winningPlace = match.finalSeedingGame;
-      const losingPlace = match.finalSeedingGame + 1; // This is only accurate for 1st place game loser (2nd place)
-
-      newChampionshipGames.push({
-          year: year,
-          week: match.week,
-          team1: team1,
-          team2: team2,
-          team1Score: team1Score,
-          team2Score: team2Score,
-          purpose: getFinalSeedingGamePurpose(match.finalSeedingGame),
-          winner: winner,
-          loser: loser,
-          winnerScore: winnerScore,
-          loserScore: loserScore,
-          winnerPlace: winningPlace,
-          loserPlace: losingPlace
-      });
 
       // Directly assign trophies based on finalSeedingGame value
       if (winner !== 'Tie') { // Only assign if there's a clear winner
@@ -225,13 +199,8 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
       // No trophies for any other placing game (handled by the specific `if` conditions above)
     });
 
-    // Sort championship games (most recent year first, then by winner place)
-    setChampionshipGames(newChampionshipGames.sort((a, b) => {
-      if (b.year !== a.year) {
-        return b.year - a.year;
-      }
-      return a.winnerPlace - b.winnerPlace;
-    }));
+    // Removed setChampionshipGames call here
+
 
     // Medal Calculation Pass (based on yearlyPointsLeaders)
     Object.keys(teamOverallStats).forEach(teamName => {
@@ -279,7 +248,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
 
       const careerDPR = careerDPRData.find(dpr => dpr.team === teamName)?.dpr || 0;
       const totalGames = stats.totalWins + stats.totalLosses + stats.totalTies;
-      const winPercentage = totalGames > 0 ? ((stats.totalWins + (0.5 * stats.totalTies)) / totalGames) : 0;
+      const winPercentage = totalGames > 0 ? ((stats.totalWins + (0.5 * stats.ties)) / totalGames) : 0;
 
       // Determine the season display string
       const sortedYearsArray = Array.from(stats.seasonsPlayed).sort((a, b) => a - b);
@@ -343,7 +312,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
     setSeasonalDPRChartData(chartData);
 
 
-  }, [historicalMatchups, loading, error, getDisplayTeamName, historicalChampions]); // Dependencies
+  }, [historicalMatchups, loading, error, getDisplayTeamName]); // Removed historicalChampions from dependencies
 
   // Formatters
   const formatPercentage = (value) => {
@@ -453,7 +422,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
                               <i className="fas fa-medal text-amber-800 text-lg"></i> {/* Deeper amber for bronze */}
                               <span className="text-xs font-medium">{team.awards.thirdPoints}x</span>
                             </span>
-                          F)}
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -499,39 +468,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
             )}
           </section>
 
-          {/* Championship and Final Seeding Games */}
-          <section className="mb-8">
-            <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Championship & Seeding Games History</h3>
-            {championshipGames.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {championshipGames.map((game, index) => (
-                        <div key={index} className="bg-blue-50 p-4 rounded-lg shadow-sm border border-blue-200">
-                            <h4 className="font-bold text-blue-800 text-lg mb-2">{game.year} {game.purpose}</h4>
-                            <p className="text-sm text-gray-700">Week {game.week}</p>
-                            <p className="text-sm text-gray-700">
-                                <strong>{game.team1}</strong> ({game.team1Score}) vs <strong>{game.team2}</strong> ({game.team2Score})
-                            </p>
-                            {game.winner !== 'Tie' ? (
-                                <>
-                                    <p className="text-sm text-blue-700 font-semibold mt-1">
-                                        Winner: {game.winner} ({game.winnerScore}) - Finished {game.winnerPlace}{getOrdinalSuffix(game.winnerPlace)} Place
-                                    </p>
-                                    <p className="text-sm text-red-700 font-semibold">
-                                        Loser: {game.loser} ({game.loserScore}) - Finished {game.loserPlace}{getOrdinalSuffix(game.loserPlace)} Place
-                                    </p>
-                                </>
-                            ) : (
-                                <p className="text-sm text-gray-700 font-semibold mt-1">
-                                    Game was a Tie - Both teams finished {game.winnerPlace}{getOrdinalSuffix(game.winnerPlace)} Place
-                                </p>
-                            )}
-                        </div>
-                    ))}
-                </div>
-            ) : (
-                <p className="text-gray-600">No championship or final seeding game data found.</p>
-            )}
-          </section>
+          {/* Championship and Final Seeding Games section removed as per request */}
         </>
       )}
     </div>
