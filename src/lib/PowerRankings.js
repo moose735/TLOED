@@ -326,6 +326,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                     domain={[maxTeamsInChart, 1]} // Flipped domain: maxTeamsInChart at bottom, 1 at top
                     ticks={Array.from({ length: maxTeamsInChart }, (_, i) => i + 1)} // Show ticks for each rank
                     allowDecimals={false} // Ranks are integers
+                    reversed={true} // Explicitly reverse the axis
                   />
                   <Tooltip content={<CustomDPRRankTooltip />} /> {/* Using custom tooltip */}
                   <Legend />
