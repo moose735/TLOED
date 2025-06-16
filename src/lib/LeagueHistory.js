@@ -244,7 +244,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
 
       const careerDPR = careerDPRData.find(dpr => dpr.team === teamName)?.dpr || 0;
       const totalGames = stats.totalWins + stats.totalLosses + stats.totalTies;
-      const winPercentage = totalGames > 0 ? ((stats.totalWins + (0.5 * stats.ties)) / totalGames) : 0;
+      const winPercentage = totalGames > 0 ? ((stats.wins + (0.5 * stats.ties)) / totalGames) : 0;
 
       // Determine the season display string
       const sortedYearsArray = Array.from(stats.seasonsPlayed).sort((a, b) => a - b);
@@ -543,7 +543,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                 <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
                   <thead className="bg-blue-50">
                     <tr>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Year</th>
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Year</th>
                       <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">
                         <i className="fas fa-trophy text-yellow-500 mr-1"></i> Champion
                       </th>
@@ -569,7 +569,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                       const awards = seasonAwardsSummary[year];
                       return (
                         <tr key={year} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                          <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{year}</td>
+                          <td className="py-2 px-3 text-sm text-gray-800 font-semibold text-center">{year}</td>
                           <td className="py-2 px-3 text-sm text-gray-700">{awards.champion}</td>
                           <td className="py-2 px-3 text-sm text-gray-700">{awards.secondPlace}</td>
                           <td className="py-2 px-3 text-sm text-gray-700">{awards.thirdPlace}</td>
