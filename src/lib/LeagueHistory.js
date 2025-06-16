@@ -201,10 +201,10 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
           // If it's a 3rd place game, the winner gets 3rd.
           yearlyFinalStandings[year].push({ team: winner, place: winningPlace });
           // Only add a loser if it's a 1st or 3rd place game where there's a defined loser
-          if (finalSeedingGame === 1 && loser) { // Loser of the 1st place game gets 2nd
+          if (match.finalSeedingGame === 1 && loser) { // Loser of the 1st place game gets 2nd
             yearlyFinalStandings[year].push({ team: loser, place: 2 });
           }
-      } else if (finalSeedingGame === 1) { // Tie in Championship Game (both 1st)
+      } else if (match.finalSeedingGame === 1) { // Tie in Championship Game (both 1st)
           yearlyFinalStandings[year].push({ team: team1, place: winningPlace });
           yearlyFinalStandings[year].push({ team: team2, place: winningPlace });
       }
