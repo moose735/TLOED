@@ -62,9 +62,8 @@ const App = () => {
 
   // Function to get mapped team names (case-insensitive, trim)
   const getMappedTeamName = useCallback((teamName) => {
-    if (!teamName) return '';
-    // A simple mapping for common variations or just return trimmed name
-    const trimmedName = String(teamName).trim(); // Ensure it's a string before trimming
+    if (typeof teamName !== 'string' || !teamName) return ''; // Ensure it's a string and not empty
+    const trimmedName = teamName.trim();
     // Example: if (trimmedName.toLowerCase() === 'team a') return 'Team Alpha';
     return trimmedName;
   }, []);
@@ -79,31 +78,43 @@ const App = () => {
       let fetchedMatchupData = [];
       try {
         if (HISTORICAL_MATCHUPS_API_URL === 'YOUR_GOOGLE_SHEET_HISTORICAL_MATCHUPS_API_URL') {
-          throw new Error("HISTORICAL_MATCHUPS_API_URL not configured. Please update config.js.");
+          throw new Error("HISTORICAL_MATCHUPS_API_URL not configured in config.js. Please update it.");
         }
         const response = await fetch(HISTORICAL_MATCHUPS_API_URL, { mode: 'cors' });
         if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+          throw new Error(`HTTP error! status: ${response.status} - Could not load historical matchup data.`);
         }
-        // Attempt to parse JSON, gracefully handle non-JSON responses
+        
+        const textResponse = await response.text(); // Get raw text to inspect
         try {
-          fetchedMatchupData = await response.json();
-          setHistoricalMatchups(fetchedMatchupData);
+          const parsedData = JSON.parse(textResponse);
+          // Crucial: Ensure the parsed data is an array
+          if (Array.isArray(parsedData)) {
+            fetchedMatchupData = parsedData;
+            setHistoricalMatchups(fetchedMatchupData);
+          } else {
+            console.error("API response for historical matchups is not an array:", parsedData);
+            throw new Error("Historical matchup data is not in the expected array format.");
+          }
         } catch (jsonError) {
-          console.error("Error parsing historical matchup data JSON:", jsonError);
-          throw new Error("Received non-JSON response for historical matchup data.");
+          console.error("Error parsing historical matchup data JSON. Raw response:", textResponse, jsonError);
+          throw new Error("Failed to parse historical matchup data as JSON. Check API response.");
         }
 
         // Dynamically populate TEAMS subTabs
-        // Replace flatMap with a compatible alternative
         const uniqueTeamsSet = new Set();
-        fetchedMatchupData.forEach(match => {
-          const team1 = getMappedTeamName(match.team1);
-          const team2 = getMappedTeamName(match.team2);
-          if (team1) uniqueTeamsSet.add(team1);
-          if (team2) uniqueTeamsSet.add(team2);
-        });
-
+        // Check if fetchedMatchupData is actually an array before iterating
+        if (Array.isArray(fetchedMatchupData)) {
+          fetchedMatchupData.forEach(match => {
+            const team1 = getMappedTeamName(match.team1);
+            const team2 = getMappedTeamName(match.team2);
+            if (team1) uniqueTeamsSet.add(team1);
+            if (team2) uniqueTeamsSet.add(team2);
+          });
+        } else {
+          console.warn("fetchedMatchupData is not an array, cannot populate team list.");
+        }
+       
         const uniqueTeams = Array.from(uniqueTeamsSet).sort();
 
         // Update NAV_CATEGORIES.TEAMS in place (or create a new object and set it if state management dictates)
@@ -131,14 +142,20 @@ const App = () => {
         } else {
           const response = await fetch(GOOGLE_SHEET_CHAMPIONS_API_URL, { mode: 'cors' });
           if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            throw new Error(`HTTP error! status: ${response.status} - Could not load historical champions data.`);
           }
-          // Attempt to parse JSON, gracefully handle non-JSON responses
+          const textResponse = await response.text(); // Get raw text to inspect
           try {
-            const data = await response.json();
-            setHistoricalChampions(data);
+            const data = JSON.parse(textResponse);
+            // Crucial: Ensure the parsed data is an array
+            if (Array.isArray(data)) {
+                setHistoricalChampions(data);
+            } else {
+                console.error("API response for historical champions is not an array:", data);
+                throw new Error("Historical champions data is not in the expected array format.");
+            }
           } catch (jsonError) {
-            console.warn("Error parsing historical champions data JSON, using mock data:", jsonError);
+            console.warn("Error parsing historical champions data JSON. Raw response:", textResponse, jsonError);
             setHistoricalChampions([
               { year: 2023, champion: "Mock Champion 2023" },
               { year: 2022, champion: "Mock Champion 2022" },
