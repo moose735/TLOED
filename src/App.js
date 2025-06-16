@@ -157,8 +157,8 @@ const App = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 font-sans antialiased text-gray-900">
-      <header className="bg-white shadow-md py-4 px-6 flex justify-between items-center relative z-10">
+    <div className="min-h-screen bg-gray-100 font-sans antialiased text-gray-900 flex flex-col items-center"> {/* Added flex and items-center */}
+      <header className="bg-white shadow-md py-4 px-6 flex justify-between items-center relative z-10 w-full"> {/* Added w-full */}
         <div className="flex items-center">
           {/* Adjusted font size for responsiveness */}
           <h1 className="text-xl md:text-2xl font-bold text-blue-800">League Stats</h1>
@@ -208,7 +208,7 @@ const App = () => {
                   <button
                     key={item.label} // Use label as key for team buttons
                     onClick={() => handleTabChange(item.tab, item.teamName)}
-                    className={`block w-full text-left px-4 py-2 text-sm transition-colors duration-200 ${selectedTeam === item.teamName && activeTab === TABS.TEAM_DETAIL ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
+                    className={`block w-full text-left px-4 py-2 text-sm transition-colors duration-200 ${selectedTeam === item.teamName && activeTab === TABS.TEAM_DETAIL ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
                   >
                     {item.label}
                   </button>
@@ -316,7 +316,7 @@ const App = () => {
       )}
 
 
-      <main className="container mx-auto p-4 md:p-6 lg:p-8 mt-4">
+      <main className="flex-grow w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8 mt-4"> {/* Adjusted for centering and max-width */}
         {loadingHistoricalData ? (
           // Enhanced Loading Spinner
           <div className="flex flex-col items-center justify-center min-h-[200px] text-blue-600">
@@ -336,7 +336,7 @@ const App = () => {
             3. **Vercel Deployment / Local Server:** Ensure your `index.js` file (and other JavaScript files) are being served with the correct MIME type (`application/javascript`). This usually requires proper build configuration (e.g., using a `build` script that generates optimized JavaScript bundles, which Vercel handles automatically for standard React projects). If developing locally, ensure your development server is configured correctly.
           </p>
         ) : (
-          <div> {/* Removed key and transition here, as content visibility will be based on loading state */}
+          <div className="w-full"> {/* Ensure content area takes full width */}
             {activeTab === TABS.POWER_RANKINGS && <PowerRankings />}
             {activeTab === TABS.LEAGUE_HISTORY && (
               <LeagueHistory
