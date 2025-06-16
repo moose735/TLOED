@@ -104,7 +104,11 @@ const App = () => {
           }
         } catch (jsonError) {
           console.error("Error parsing historical matchup data JSON. Raw response:", textResponse, jsonError);
-          throw new Error("Failed to parse historical matchup data as JSON. Check API response and format.");
+          // IMPROVED ERROR MESSAGE FOR USER: Guiding to check API response format
+          setHistoricalDataError(`Failed to load historical matchup data: The API response was not valid JSON. Please ensure your Google Apps Script for HISTORICAL_MATCHUPS_API_URL is correctly deployed as a Web App and returns JSON (e.g., using ContentService.MimeType.JSON). Raw response: ${textResponse.substring(0, 200)}...`);
+          setLoadingHistoricalData(false); // Ensure loading is false on error
+          setIsContentVisible(false); // Keep content hidden on error
+          return; // Stop execution if parsing fails to avoid further issues
         }
 
         // Dynamically populate TEAMS subTabs
@@ -132,12 +136,16 @@ const App = () => {
 
       } catch (error) {
         console.error("Error fetching historical matchup data:", error);
-        setHistoricalDataError(`Failed to load historical data: ${error.message}. Please check your HISTORICAL_MATCHUPS_API_URL and its output format.`);
+        // IMPROVED ERROR MESSAGE FOR USER: Guiding to check API deployment
+        setHistoricalDataError(`Failed to load historical data: ${error.message}. Please check your HISTORICAL_MATCHUPS_API_URL in config.js and ensure your Google Apps Script is deployed correctly as a Web App (Execute as: Me, Who has access: Anyone).`);
+        setLoadingHistoricalData(false); // Ensure loading is false on error
+        setIsContentVisible(false); // Keep content hidden on error
+        return; // Stop execution if fetching fails
       } finally {
-        setLoadingHistoricalData(false);
-        // Add a small delay before showing content to allow for the loading spinner to be seen
-        // and for the transition to be noticeable once data is ready.
-        setTimeout(() => setIsContentVisible(true), 100); // 100ms delay for fade-in
+        // Only set content visible if no error occurred in this block
+        if (!historicalDataError) { // Check historicalDataError state
+             setTimeout(() => setIsContentVisible(true), 100);
+        }
       }
 
       // Fetch Historical Champions (optional, will use mock if URL is placeholder)
@@ -161,10 +169,11 @@ const App = () => {
                 setHistoricalChampions(data);
             } else {
                 console.error("API response for historical champions is not an array. Raw response:", textResponse, data);
-                throw new Error("Historical champions data is not in the expected array format.");
+                // IMPROVED ERROR MESSAGE FOR USER
+                setHistoricalDataError(`Failed to load historical champions data: The API response was not in the expected array format. Please check your GOOGLE_SHEET_CHAMPIONS_API_URL and its output.`);
+                // Do not return here as we still want to show mock data
             }
           } catch (jsonError) {
-            // If parsing fails (e.g., due to HTML), use mock data and log the issue.
             console.warn("Error parsing historical champions data JSON (likely non-JSON response), using mock data. Raw response:", textResponse, jsonError);
             setHistoricalChampions([
               { year: 2023, champion: "Mock Champion 2023" },
@@ -174,7 +183,6 @@ const App = () => {
         }
       } catch (error) {
         console.warn("Error fetching historical champions data (network or configuration issue), using mock data:", error);
-        // Continue with mock data or empty array if fetching fails
         setHistoricalChampions([
           { year: 2023, champion: "Mock Champion 2023" },
           { year: 2022, champion: "Mock Champion 2022" },
@@ -183,7 +191,7 @@ const App = () => {
     };
 
     fetchHistoricalData();
-  }, [getMappedTeamName]); // Re-run if getMappedTeamName changes (though it's useCallback, so it won't often)
+  }, [getMappedTeamName, historicalDataError]); // Added historicalDataError to dependency array
 
   // Handle tab change, including setting selectedTeam for TEAM_DETAIL tab
   const handleTabChange = (tab, teamName = null) => {
@@ -271,7 +279,7 @@ const App = () => {
 
       {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
-        <div className="fixed inset-0 bg-white z-50 overflow-y-auto p-4 md:hidden transform transition-transform duration-300 ease-out translate-x-0" style={{'--tw-translate-x': isMobileMenuOpen ? '0' : '100%'}}>
+        <div className={`fixed inset-0 bg-white z-50 overflow-y-auto p-4 md:hidden transform transition-transform duration-300 ease-out ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
           {/* Close Button */}
           <div className="flex justify-end mb-4">
             <button
@@ -364,7 +372,11 @@ const App = () => {
             <p className="text-lg font-medium">Loading league data...</p>
           </div>
         ) : historicalDataError ? (
-          <p className="text-center text-red-600 text-lg">{historicalDataError}</p>
+          <p className="text-center text-red-600 text-lg">
+            {historicalDataError} <br />
+            Please ensure your Google Apps Script URLs in `config.js` are correctly configured and deployed as Web Apps (Execute as: Me, Who has access: Anyone) and are returning valid JSON.
+            Also, check your Vercel deployment settings to ensure `index.js` and other module scripts are being served with the correct MIME type (e.g., `application/javascript`).
+          </p>
         ) : (
           <div
             key={activeTab} // Key to force re-render and trigger transition on tab change
