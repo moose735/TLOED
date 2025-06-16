@@ -456,6 +456,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
                   <YAxis
                     label={{ value: "Cumulative Adjusted DPR", angle: -90, position: "insideLeft" }}
                     domain={[0.900, 1.100]} // Set fixed domain for Y-axis
+                    tickFormatter={formatDPR} // Apply the formatter here
                   />
                   <Tooltip formatter={(value) => formatDPR(value)} />
                   <Legend />
