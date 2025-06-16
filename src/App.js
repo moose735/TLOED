@@ -2,8 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   HISTORICAL_MATCHUPS_API_URL,
-  GOOGLE_SHEET_POWER_RANKINGS_API_URL,
-  // GOOGLE_SHEET_CHAMPIONS_API_URL removed as per request
+  GOOGLE_SHEET_POWER_RANKINGS_API_URL, // Still imported, but PowerRankings.js no longer uses it directly
 } from './config';
 
 // Import existing components from your provided App.js
@@ -139,7 +138,6 @@ const App = () => {
       }
 
       // Always use mock data for historical champions as per request
-      // Removed the entire try-catch block for fetching GOOGLE_SHEET_CHAMPIONS_API_URL
       setHistoricalChampions([
         { year: 2023, champion: "Mock Champion 2023" },
         { year: 2022, champion: "Mock Champion 2022" },
@@ -157,10 +155,9 @@ const App = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 font-sans antialiased text-gray-900 flex flex-col items-center"> {/* Added flex and items-center */}
-      <header className="bg-white shadow-md py-4 px-6 flex justify-between items-center relative z-10 w-full"> {/* Added w-full */}
+    <div className="min-h-screen bg-gray-100 font-sans antialiased text-gray-900 flex flex-col items-center">
+      <header className="bg-white shadow-md py-4 px-6 flex justify-between items-center relative z-10 w-full">
         <div className="flex items-center">
-          {/* Adjusted font size for responsiveness */}
           <h1 className="text-xl md:text-2xl font-bold text-blue-800">League Stats</h1>
         </div>
 
@@ -177,7 +174,7 @@ const App = () => {
           <div className="relative group">
             <button className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none flex items-center transition-colors duration-200">
               {NAV_CATEGORIES.LEAGUE_DATA.label}
-              <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
               </svg>
             </button>
@@ -199,7 +196,7 @@ const App = () => {
             <div className="relative group">
               <button className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none flex items-center transition-colors duration-200">
                 {NAV_CATEGORIES.TEAMS.label}
-                <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
                 </svg>
               </button>
@@ -225,7 +222,7 @@ const App = () => {
             className="text-gray-800 focus:outline-none p-2 rounded-md hover:bg-gray-100 transition-colors duration-200"
             aria-label="Toggle mobile menu"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7"></path>
             </svg>
           </button>
@@ -242,7 +239,7 @@ const App = () => {
               className="text-gray-800 focus:outline-none p-2 rounded-md hover:bg-gray-100 transition-colors duration-200"
               aria-label="Close mobile menu"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
               </svg>
             </button>
@@ -263,7 +260,7 @@ const App = () => {
                 onClick={() => toggleSubMenu('LEAGUE_DATA')}
               >
                 {NAV_CATEGORIES.LEAGUE_DATA.label}
-                <svg className={`w-5 h-5 transition-transform duration-200 ${openSubMenu === 'LEAGUE_DATA' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <svg className={`w-5 h-5 transition-transform duration-200 ${openSubMenu === 'LEAGUE_DATA' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
                 </svg>
               </button>
@@ -291,7 +288,7 @@ const App = () => {
                   onClick={() => toggleSubMenu('TEAMS')}
                 >
                   {NAV_CATEGORIES.TEAMS.label}
-                  <svg className={`w-5 h-5 transition-transform duration-200 ${openSubMenu === 'TEAMS' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <svg className={`w-5 h-5 transition-transform duration-200 ${openSubMenu === 'TEAMS' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
                   </svg>
                 </button>
@@ -320,7 +317,7 @@ const App = () => {
         {loadingHistoricalData ? (
           // Enhanced Loading Spinner
           <div className="flex flex-col items-center justify-center min-h-[200px] text-blue-600">
-            <svg className="animate-spin h-10 w-10 text-blue-500 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <svg className="animate-spin h-10 w-10 text-blue-500 mb-3" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
@@ -337,7 +334,12 @@ const App = () => {
           </p>
         ) : (
           <div className="w-full"> {/* Ensure content area takes full width */}
-            {activeTab === TABS.POWER_RANKINGS && <PowerRankings />}
+            {activeTab === TABS.POWER_RANKINGS && (
+              <PowerRankings
+                historicalMatchups={historicalMatchups}
+                getDisplayTeamName={getMappedTeamName}
+              />
+            )}
             {activeTab === TABS.LEAGUE_HISTORY && (
               <LeagueHistory
                 historicalMatchups={historicalMatchups}
@@ -390,7 +392,7 @@ const App = () => {
         <p>This site displays league data powered by Google Apps Script.</p>
         <p className="mt-2">
           For Apps Script deployment instructions, visit:{" "}
-          <a href="https://developers.google.com/apps-script/guides/web" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+          <a href="[https://developers.google.com/apps-script/guides/web](https://developers.google.com/apps-script/guides/web)" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
             Google Apps Script Web Apps Guide
           </a>
         </p>
