@@ -111,7 +111,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
       setPowerRankings(calculatedRankings.map((team, index) => ({ rank: index + 1, ...team })));
 
 
-      // --- Chart Data Preparation (Weekly Non-Cumulative Adjusted DPR) ---
+      // --- Chart Data Preparation (Weekly Cumulative Adjusted DPR) ---
       const newestYearMatchups = historicalMatchups.filter(match => parseInt(match.year) === newestYear);
       const uniqueTeamsInNewestYear = Array.from(new Set(
         newestYearMatchups.flatMap(match => [getDisplayTeamName(match.team1), getDisplayTeamName(match.team2)])
@@ -121,19 +121,21 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
 
       const weeklyDPRsChartData = [];
 
+      // Initialize cumulative stats for each team and for the league outside the loop
+      const cumulativeTeamStats = {}; // { teamName: { totalPF: 0, totalPA: 0, gamesPlayed: 0 } }
+      uniqueTeamsInNewestYear.forEach(team => {
+        cumulativeTeamStats[team] = { totalPF: 0, totalPA: 0, gamesPlayed: 0 };
+      });
+      let cumulativeLeagueTotalPF = 0;
+      let cumulativeLeagueTotalPA = 0;
+      let cumulativeLeagueTotalGamesPlayed = 0;
+
+
       for (let week = 1; week <= maxWeek; week++) {
         const weeklyEntry = { week: week };
         const matchesInCurrentWeek = newestYearMatchups.filter(match => parseInt(match.week) === week);
 
-        const teamWeeklyStats = {}; // { teamName: { totalPF: 0, totalPA: 0, gamesPlayed: 0 } }
-        let leagueTotalPF_Weekly = 0;
-        let leagueTotalPA_Weekly = 0; // Same as PF for league total
-        let leagueTotalGamesPlayed_Weekly = 0;
-
-        uniqueTeamsInNewestYear.forEach(team => {
-          teamWeeklyStats[team] = { totalPF: 0, totalPA: 0, gamesPlayed: 0 };
-        });
-
+        // Accumulate stats based on matches in the current week
         matchesInCurrentWeek.forEach(match => {
           const team1 = getDisplayTeamName(match.team1);
           const team2 = getDisplayTeamName(match.team2);
@@ -141,49 +143,50 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
           const team2Score = parseFloat(match.team2Score);
 
           if (!isNaN(team1Score) && !isNaN(team2Score)) {
-            // Update team 1 weekly stats
-            if (teamWeeklyStats[team1]) {
-              teamWeeklyStats[team1].totalPF += team1Score;
-              teamWeeklyStats[team1].totalPA += team2Score;
-              teamWeeklyStats[team1].gamesPlayed += 1;
+            // Update team 1 cumulative stats
+            if (cumulativeTeamStats[team1]) {
+              cumulativeTeamStats[team1].totalPF += team1Score;
+              cumulativeTeamStats[team1].totalPA += team2Score;
+              cumulativeTeamStats[team1].gamesPlayed += 1;
             }
-            // Update team 2 weekly stats
-            if (teamWeeklyStats[team2]) {
-              teamWeeklyStats[team2].totalPF += team2Score;
-              teamWeeklyStats[team2].totalPA += team1Score;
-              teamWeeklyStats[team2].gamesPlayed += 1;
+            // Update team 2 cumulative stats
+            if (cumulativeTeamStats[team2]) {
+              cumulativeTeamStats[team2].totalPF += team2Score;
+              cumulativeTeamStats[team2].totalPA += team1Score;
+              cumulativeTeamStats[team2].gamesPlayed += 1;
             }
 
-            // Update league weekly totals
-            leagueTotalPF_Weekly += team1Score + team2Score;
-            leagueTotalPA_Weekly += team1Score + team2Score;
-            leagueTotalGamesPlayed_Weekly += 2; // Each match involves two teams/games
+            // Update cumulative league totals
+            cumulativeLeagueTotalPF += team1Score + team2Score;
+            cumulativeLeagueTotalPA += team1Score + team2Score;
+            cumulativeLeagueTotalGamesPlayed += 2; // Each match involves two teams/games
           }
         });
 
-        const leagueAvgPF_Weekly = leagueTotalGamesPlayed_Weekly > 0 ? leagueTotalPF_Weekly / leagueTotalGamesPlayed_Weekly : 0;
-        const leagueAvgPA_Weekly = leagueTotalGamesPlayed_Weekly > 0 ? leagueTotalPA_Weekly / leagueTotalGamesPlayed_Weekly : 0;
+        // Calculate League Averages based on CUMULATIVE stats up to this week
+        const leagueAvgPF_Cumulative = cumulativeLeagueTotalGamesPlayed > 0 ? cumulativeLeagueTotalPF / cumulativeLeagueTotalGamesPlayed : 0;
+        const leagueAvgPA_Cumulative = cumulativeLeagueTotalGamesPlayed > 0 ? cumulativeLeagueTotalPA / cumulativeLeagueTotalGamesPlayed : 0;
 
+        // Calculate DPR for each team based on CUMULATIVE stats up to this week
         uniqueTeamsInNewestYear.forEach(team => {
-          const teamStats = teamWeeklyStats[team];
+          const teamStats = cumulativeTeamStats[team];
           if (teamStats && teamStats.gamesPlayed > 0) {
-            const teamAvgPF_Weekly = teamStats.totalPF / teamStats.gamesPlayed;
-            const teamAvgPA_Weekly = teamStats.totalPA / teamStats.gamesPlayed;
+            const teamAvgPF_Cumulative = teamStats.totalPF / teamStats.gamesPlayed;
+            const teamAvgPA_Cumulative = teamStats.totalPA / teamStats.gamesPlayed;
 
             let dpr = 0;
-            // The DPR formula from DPRAnalysis.js, applied to weekly averages
-            if (leagueAvgPF_Weekly > 0 && leagueAvgPA_Weekly > 0) {
-              dpr = (teamAvgPF_Weekly / leagueAvgPF_Weekly) - (teamAvgPA_Weekly / leagueAvgPA_Weekly);
-            } else if (leagueAvgPF_Weekly > 0) {
-              dpr = (teamAvgPF_Weekly / leagueAvgPF_Weekly);
-            } else if (leagueAvgPA_Weekly > 0) {
-              dpr = -(teamAvgPA_Weekly / leagueAvgPA_Weekly);
+            // The DPR formula from DPRAnalysis.js, applied to cumulative averages
+            if (leagueAvgPF_Cumulative > 0 && leagueAvgPA_Cumulative > 0) {
+              dpr = (teamAvgPF_Cumulative / leagueAvgPF_Cumulative) - (teamAvgPA_Cumulative / leagueAvgPA_Cumulative);
+            } else if (leagueAvgPF_Cumulative > 0) {
+              dpr = (teamAvgPF_Cumulative / leagueAvgPF_Cumulative);
+            } else if (leagueAvgPA_Cumulative > 0) {
+              dpr = -(teamAvgPA_Cumulative / leagueAvgPA_Cumulative);
             }
 
             weeklyEntry[team] = parseFloat(dpr.toFixed(3));
           } else {
-            // If team hasn't played in this specific week, or no valid scores, DPR is 0 for this week.
-            // This is crucial for non-cumulative display.
+            // If team hasn't played yet or no valid scores up to this week, DPR is 0
             weeklyEntry[team] = 0; 
           }
         });
@@ -193,7 +196,6 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
       setWeeklyChartData(weeklyDPRsChartData);
       
       // Chart teams should include only teams that have recorded a non-zero DPR at any point in the season
-      // to avoid drawing lines for teams that never played or only had 0 DPRs.
       const activeChartTeams = uniqueTeamsInNewestYear.filter(team =>
         weeklyDPRsChartData.some(weekData => weekData[team] !== 0)
       );
@@ -277,8 +279,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                 </LineChart>
               </ResponsiveContainer>
               <p className="mt-4 text-sm text-gray-500 text-center">
-                This graph shows each team's Dominance Power Ranking (DPR) calculated based *only* on games played in that specific week of the newest season.
-                Note: Early season weekly DPRs can be highly volatile due to a small sample size.
+                This graph shows each team's Dominance Power Ranking (DPR) calculated cumulatively based on all games played up to each specific week of the newest season.
               </p>
             </section>
           )}
