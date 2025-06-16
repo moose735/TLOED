@@ -29,7 +29,7 @@ const getFinalSeedingGamePurpose = (value) => {
 const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName, historicalChampions }) => {
   const [allTimeStandings, setAllTimeStandings] = useState([]);
   const [championshipGames, setChampionshipGames] = useState([]);
-  const [seasonalDPRChartData, setSeasonalDPRChartData] = useState([]);
+  const [seasonalDPRChartData, setSeasonalDPRChartData] = useState([]); // Renamed for more general use
   const [uniqueTeamsForChart, setUniqueTeamsForChart] = useState([]);
 
   // A color palette for the teams in the chart
@@ -59,7 +59,6 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
         }
     });
 
-    // calculateAllLeagueMetrics now returns seasonalMetrics with adjustedDPR
     const { seasonalMetrics, careerDPRData } = calculateAllLeagueMetrics(historicalMatchups, getDisplayTeamName);
 
     const teamOverallStats = {}; // { teamName: { totalWins, totalLosses, totalTies, totalPointsFor, seasonsPlayed: Set<year>, awards: { champ: N, second: N, third: N, pts1st: N, pts2nd: N, pts3rd: N } } }
@@ -279,7 +278,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
       if (stats.seasonsPlayed.size === 0) return null;
 
       const careerDPR = careerDPRData.find(dpr => dpr.team === teamName)?.dpr || 0;
-      const totalGames = stats.totalWins + stats.totalLosses + stats.ties; // Use totalTies as originally defined
+      const totalGames = stats.totalWins + stats.totalLosses + stats.totalTies;
       const winPercentage = totalGames > 0 ? ((stats.totalWins + (0.5 * stats.totalTies)) / totalGames) : 0;
 
       // Determine the season display string
@@ -309,25 +308,40 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
 
     setAllTimeStandings(compiledStandings);
 
-    // Prepare data for the seasonal DPR chart
-    const chartDataMap = {}; // { year: { team1: dpr1, team2: dpr2, ... } }
-    const allYearsInChart = new Set();
-    const allTeamsInChart = new Set();
 
-    Object.keys(seasonalMetrics).forEach(year => {
-        allYearsInChart.add(parseInt(year));
-        chartDataMap[year] = { year: parseInt(year) };
-        Object.keys(seasonalMetrics[year]).forEach(team => {
-            allTeamsInChart.add(team);
-            chartDataMap[year][team] = seasonalMetrics[year][team].adjustedDPR;
+    // Prepare data for the total DPR progression line graph
+    const chartData = [];
+    const allYears = Array.from(new Set(historicalMatchups.map(m => parseInt(m.year)).filter(y => !isNaN(y)))).sort((a, b) => a - b);
+    const uniqueTeams = Array.from(new Set(
+      historicalMatchups.flatMap(m => [getDisplayTeamName(m.team1), getDisplayTeamName(m.team2)])
+        .filter(name => name !== null && name !== '')
+    )).sort();
+
+    setUniqueTeamsForChart(uniqueTeams); // Set unique teams once
+
+    // To store the cumulative DPR for each team as we progress through years
+    const cumulativeTeamDPRs = {}; // { teamName: latestDPR }
+
+    allYears.forEach(currentYear => {
+        const matchesUpToCurrentYear = historicalMatchups.filter(match => parseInt(match.year) <= currentYear);
+
+        // Recalculate metrics for games up to currentYear to get cumulative career DPR
+        // This is a computationally intensive step, but ensures correct cumulative DPR.
+        const { careerDPRData: cumulativeCareerDPRData } = calculateAllLeagueMetrics(matchesUpToCurrentYear, getDisplayTeamName);
+
+        const yearDataPoint = { year: currentYear };
+        uniqueTeams.forEach(team => {
+            const teamDPR = cumulativeCareerDPRData.find(dpr => dpr.team === team)?.dpr;
+            if (teamDPR !== undefined) {
+                cumulativeTeamDPRs[team] = teamDPR; // Update the latest cumulative DPR for the team
+            }
+            // Use the latest cumulative DPR. If a team didn't play yet, their DPR will be 0 or undefined.
+            yearDataPoint[team] = cumulativeTeamDPRs[team] || 0; // Default to 0 if not played yet
         });
+        chartData.push(yearDataPoint);
     });
+    setSeasonalDPRChartData(chartData);
 
-    const sortedChartYears = Array.from(allYearsInChart).sort((a, b) => a - b);
-    const finalChartData = sortedChartYears.map(year => chartDataMap[year]);
-
-    setUniqueTeamsForChart(Array.from(allTeamsInChart).sort()); // Store sorted unique teams
-    setSeasonalDPRChartData(finalChartData);
 
   }, [historicalMatchups, loading, error, getDisplayTeamName, historicalChampions]); // Dependencies
 
@@ -428,9 +442,9 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
             </div>
           </section>
 
-          {/* Seasonal DPR Progression Line Graph */}
+          {/* Total DPR Progression Line Graph */}
           <section className="mb-8 p-4 bg-gray-50 rounded-lg shadow-sm border border-gray-200">
-            <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Seasonal DPR Progression</h3>
+            <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Total DPR Progression Over Seasons</h3>
             {seasonalDPRChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height={400}>
                 <LineChart
@@ -439,7 +453,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
                 >
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="year" label={{ value: "Season Year", position: "insideBottom", offset: 0 }} />
-                  <YAxis label={{ value: "Adjusted DPR", angle: -90, position: "insideLeft" }} />
+                  <YAxis label={{ value: "Cumulative Adjusted DPR", angle: -90, position: "insideLeft" }} />
                   <Tooltip formatter={(value) => formatDPR(value)} />
                   <Legend />
                   {uniqueTeamsForChart.map((team, index) => (
@@ -456,7 +470,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
                 </LineChart>
               </ResponsiveContainer>
             ) : (
-              <p className="text-center text-gray-600">No seasonal DPR data available for charting.</p>
+              <p className="text-center text-gray-600">No total DPR progression data available for charting.</p>
             )}
           </section>
 
