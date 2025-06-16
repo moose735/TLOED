@@ -8,12 +8,12 @@ import {
 
 // Import existing components from your provided App.js
 import PowerRankings from './lib/PowerRankings';
-import LeagueHistory from './lib/MatchupHistory'; // Restored to its original content
+import LeagueHistory from './lib/LeagueHistory'; // Corrected import to the LeagueHistory component
 import RecordBook from './lib/RecordBook';
 import DPRAnalysis from './lib/DPRAnalysis';
 import LuckRatingAnalysis from './lib/LuckRatingAnalysis';
 import TeamDetailPage from './lib/TeamDetailPage';
-import Head2HeadGrid from './lib/Head2HeadGrid'; // New direct import for its own tab
+import Head2HeadGrid from './lib/Head2HeadGrid'; // Stays for its own tab
 
 
 // Define the available tabs and their categories for the dropdown
@@ -22,7 +22,7 @@ const NAV_CATEGORIES = {
   LEAGUE_DATA: {
     label: 'League Data',
     subTabs: [
-      { label: 'League History', tab: 'leagueHistory' }, // Now has original content + embedded H2H
+      { label: 'League History', tab: 'leagueHistory' }, // Now points to LeagueHistory
       { label: 'Record Book', tab: 'recordBook' },
       { label: 'Head-to-Head', tab: 'headToHead' }, // Separate tab for Head2HeadGrid
       { label: 'DPR Analysis', tab: 'dprAnalysis' },
@@ -38,12 +38,12 @@ const NAV_CATEGORIES = {
 // Flattened list of all possible tabs for conditional rendering
 const TABS = {
   POWER_RANKINGS: 'powerRankings',
-  LEAGUE_HISTORY: 'leagueHistory',
+  LEAGUE_HISTORY: 'leagueHistory', // Constant updated for LeagueHistory
   RECORD_BOOK: 'recordBook',
-  HEAD_TO_HEAD: 'headToHead', // New tab constant
+  HEAD_TO_HEAD: 'headToHead',
   DPR_ANALYSIS: 'dprAnalysis',
   LUCK_RATING: 'luckRating',
-  TEAM_DETAIL: 'teamDetail', // New tab for individual team details
+  TEAM_DETAIL: 'teamDetail',
 };
 
 const App = () => {
