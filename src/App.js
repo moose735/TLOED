@@ -3,7 +3,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   HISTORICAL_MATCHUPS_API_URL,
   GOOGLE_SHEET_POWER_RANKINGS_API_URL,
-  GOOGLE_SHEET_CHAMPIONS_API_URL, // Will use mock data if not provided
 } from './config';
 
 // Import existing components from your provided App.js
