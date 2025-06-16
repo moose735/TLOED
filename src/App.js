@@ -88,17 +88,17 @@ const App = () => {
         const textResponse = await response.text(); // Get raw text to inspect
         try {
           const parsedData = JSON.parse(textResponse);
-          // Crucial: Ensure the parsed data is an array
-          if (Array.isArray(parsedData)) {
-            fetchedMatchupData = parsedData;
+          // Crucial: Check if the parsed data is an object with a 'data' property that is an array
+          if (parsedData && typeof parsedData === 'object' && Array.isArray(parsedData.data)) {
+            fetchedMatchupData = parsedData.data; // Extract the actual array
             setHistoricalMatchups(fetchedMatchupData);
           } else {
-            console.error("API response for historical matchups is not an array:", parsedData);
-            throw new Error("Historical matchup data is not in the expected array format.");
+            console.error("API response for historical matchups is not in the expected format (object with 'data' array):", parsedData);
+            throw new Error("Historical matchup data is not in the expected array format. Raw response: " + textResponse);
           }
         } catch (jsonError) {
           console.error("Error parsing historical matchup data JSON. Raw response:", textResponse, jsonError);
-          throw new Error("Failed to parse historical matchup data as JSON. Check API response.");
+          throw new Error("Failed to parse historical matchup data as JSON. Check API response and format.");
         }
 
         // Dynamically populate TEAMS subTabs
@@ -112,7 +112,7 @@ const App = () => {
             if (team2) uniqueTeamsSet.add(team2);
           });
         } else {
-          console.warn("fetchedMatchupData is not an array, cannot populate team list.");
+          console.warn("fetchedMatchupData is not an array after processing, cannot populate team list.");
         }
        
         const uniqueTeams = Array.from(uniqueTeamsSet).sort();
@@ -126,7 +126,7 @@ const App = () => {
 
       } catch (error) {
         console.error("Error fetching historical matchup data:", error);
-        setHistoricalDataError(`Failed to load historical data: ${error.message}`);
+        setHistoricalDataError(`Failed to load historical data: ${error.message}. Please check your HISTORICAL_MATCHUPS_API_URL and its output format.`);
       } finally {
         setLoadingHistoricalData(false);
       }
@@ -147,15 +147,16 @@ const App = () => {
           const textResponse = await response.text(); // Get raw text to inspect
           try {
             const data = JSON.parse(textResponse);
-            // Crucial: Ensure the parsed data is an array
+            // Crucial: Ensure the parsed data is an array for champions
             if (Array.isArray(data)) {
                 setHistoricalChampions(data);
             } else {
-                console.error("API response for historical champions is not an array:", data);
+                console.error("API response for historical champions is not an array. Raw response:", textResponse, data);
                 throw new Error("Historical champions data is not in the expected array format.");
             }
           } catch (jsonError) {
-            console.warn("Error parsing historical champions data JSON. Raw response:", textResponse, jsonError);
+            // If parsing fails (e.g., due to HTML), use mock data and log the issue.
+            console.warn("Error parsing historical champions data JSON (likely non-JSON response), using mock data. Raw response:", textResponse, jsonError);
             setHistoricalChampions([
               { year: 2023, champion: "Mock Champion 2023" },
               { year: 2022, champion: "Mock Champion 2022" },
@@ -163,7 +164,7 @@ const App = () => {
           }
         }
       } catch (error) {
-        console.warn("Error fetching historical champions data, using mock data:", error);
+        console.warn("Error fetching historical champions data (network or configuration issue), using mock data:", error);
         // Continue with mock data or empty array if fetching fails
         setHistoricalChampions([
           { year: 2023, champion: "Mock Champion 2023" },
