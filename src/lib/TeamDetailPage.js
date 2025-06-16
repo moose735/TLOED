@@ -41,6 +41,18 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
 
     const seasonalData = {}; // { year: { wins, losses, ties, pointsFor, pointsAgainst, luckRating, adjustedDPR, allPlayWinPercentage } }
 
+    // Identify completed seasons (those with a championship game: finalSeedingGame = 1)
+    const completedSeasons = new Set();
+    historicalMatchups.forEach(match => {
+        // Check for both number 1 and string '1' for finalSeedingGame
+        if (match.finalSeedingGame === 1 || match.finalSeedingGame === '1') {
+            const year = parseInt(match.year);
+            if (!isNaN(year)) {
+                completedSeasons.add(year);
+            }
+        }
+    });
+
     historicalMatchups.forEach(match => {
       const displayTeam1 = getMappedTeamName(String(match.team1 || '').trim());
       const displayTeam2 = getMappedTeamName(String(match.team2 || '').trim());
@@ -106,8 +118,8 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
       seasonalData[year][teamName].pointsFor += currentTeamScore;
       seasonalData[year][teamName].pointsAgainst += opponentScore;
 
-      // Track playoff appearances if the match is a playoff match
-      if (match.playoffs === true || match.playoffs === 'true') {
+      // Track playoff appearances if the match is a playoff match AND it's not a PointsOnlyBye
+      if ((match.playoffs === true || match.playoffs === 'true') && !(match.pointsOnlyBye === true || match.pointsOnlyBye === 'true')) {
         overallStats.playoffAppearances.add(year);
       }
     });
@@ -117,11 +129,13 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
 
     // After aggregating raw stats, fill in derived seasonal metrics
     const compiledSeasonHistory = [];
-    Object.keys(seasonalData).sort().forEach(year => {
+    Object.keys(seasonalData).sort().forEach(yearStr => {
+      const year = parseInt(yearStr);
       const seasonTeamStats = seasonalData[year][teamName];
       const metricsForSeason = seasonalMetrics[year]?.[teamName];
 
-      if (seasonTeamStats && metricsForSeason) {
+      // Only process and display seasonal data for completed seasons in the table
+      if (seasonTeamStats && metricsForSeason && completedSeasons.has(year)) {
         // Calculate season record win percentage
         const seasonTotalGames = seasonTeamStats.wins + seasonTeamStats.losses + seasonTeamStats.ties;
         const seasonWinPercentage = seasonTotalGames > 0 ? ((seasonTeamStats.wins + (0.5 * seasonTeamStats.ties)) / seasonTotalGames) : 0;
@@ -143,7 +157,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
           finish: 'N/A', // Placeholder for actual league finish
         });
 
-        // Accumulate for overall averages
+        // Accumulate for overall averages ONLY if season is completed
         if (metricsForSeason.adjustedDPR !== 0) {
             overallStats.totalDPR += metricsForSeason.adjustedDPR;
         }
@@ -168,19 +182,21 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
         overallStats.avgAllPlayWinPercentage = 0;
     }
 
-    // Process championships from historicalChampions prop
+    // Process championships from historicalChampions prop ONLY for completed seasons
     overallStats.championships = historicalChampions.filter(champ =>
-      getMappedTeamName(String(champ.champion || '').trim()) === teamName
+      getMappedTeamName(String(champ.champion || '').trim()) === teamName &&
+      completedSeasons.has(parseInt(champ.year)) // Add condition for completed season
     ).length;
 
     overallStats.runnerUps = historicalChampions.filter(champ =>
-      getMappedTeamName(String(champ.runnerUp || '').trim()) === teamName
+      getMappedTeamName(String(champ.runnerUp || '').trim()) === teamName &&
+      completedSeasons.has(parseInt(champ.year)) // Add condition for completed season
     ).length;
 
     setTeamOverallStats(overallStats);
     setTeamSeasonHistory(compiledSeasonHistory.sort((a, b) => b.year - a.year)); // Sort by year descending
     setLoadingStats(false);
-  }, [teamName, historicalMatchups, getMappedTeamName, historicalChampions]); // Add historicalChampions to dependencies
+  }, [teamName, historicalMatchups, getMappedTeamName, historicalChampions]);
 
 
   const formatScore = (score) => {
@@ -274,7 +290,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
             </table>
           </div>
         ) : (
-          <p className="text-gray-600">No season-by-season data available for {teamName}.</p>
+          <p className="text-gray-600">No season-by-season data available for {teamName} for completed seasons.</p>
         )}
       </section>
     </div>
