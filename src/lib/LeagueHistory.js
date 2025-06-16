@@ -1,7 +1,7 @@
 // src/lib/LeagueHistory.js
 import React, { useState, useEffect } from 'react';
 import { calculateAllLeagueMetrics } from '../utils/calculations'; // For career DPR
-// Removed direct import of GOOGLE_SHEET_CHAMPIONS_API_URL as historicalChampions is passed as prop
+// historicalChampions is passed as prop but will not be used for trophy calculation based on user's latest rules
 
 // Helper function to get ordinal suffix (1st, 2nd, 3rd, 4th, etc.)
 const getOrdinalSuffix = (n) => {
@@ -47,7 +47,6 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
             }
         }
     });
-
 
     const { seasonalMetrics, careerDPRData } = calculateAllLeagueMetrics(historicalMatchups, getDisplayTeamName);
 
@@ -112,7 +111,6 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
       // Points For is accumulated regardless of PointsOnlyBye
       teamOverallStats[team1].totalPointsFor += team1Score;
       teamOverallStats[team2].totalPointsFor += team2Score;
-
     });
 
     // Populate yearlyPointsLeaders using seasonalMetrics (which has totalPointsFor per team per year)
@@ -131,13 +129,12 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
         yearlyPointsLeaders[year] = yearPointsData;
     });
 
-    // Process championship games and final seeding for overall finish awards
+    // Process championship games and final seeding for overall finish awards (Trophies)
     const newChampionshipGames = [];
-    const yearlyFinalStandings = {}; // {year: [{ team: "Winner", place: 1 }, { team: "RunnerUp", place: 2 }, ...]}
 
     historicalMatchups.forEach(match => {
-      // Only process final seeding games that are part of a completed season
       const year = parseInt(match.year);
+      // Only process final seeding games that are part of a completed season
       if (!(typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0 && completedSeasons.has(year))) {
           return; // Skip if not a final seeding game or season not completed
       }
@@ -173,7 +170,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
       }
 
       const winningPlace = match.finalSeedingGame;
-      const losingPlace = match.finalSeedingGame + 1;
+      const losingPlace = match.finalSeedingGame + 1; // This is only accurate for 1st place game loser (2nd place)
 
       newChampionshipGames.push({
           year: year,
@@ -191,23 +188,30 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
           loserPlace: losingPlace
       });
 
-      // Update yearly final standings for award calculation (Trophies)
-      if (!yearlyFinalStandings[year]) {
-        yearlyFinalStandings[year] = [];
-      }
-      if (winner !== 'Tie') {
-          if (match.finalSeedingGame === 1) {
-              yearlyFinalStandings[year].push({ team: winner, place: 1 }); // Gold Trophy winner
-              if (loser) {
-                  yearlyFinalStandings[year].push({ team: loser, place: 2 }); // Silver Trophy loser of 1st place game
+      // Directly assign trophies based on finalSeedingGame value
+      if (winner !== 'Tie') { // Only assign if there's a clear winner
+          if (match.finalSeedingGame === 1) { // 1st Place Game
+              if (teamOverallStats[winner]) {
+                  teamOverallStats[winner].awards.championships++; // Gold Trophy
               }
-          } else if (match.finalSeedingGame === 3) {
-              yearlyFinalStandings[year].push({ team: winner, place: 3 }); // Bronze Trophy winner of 3rd place game
+              if (loser && teamOverallStats[loser]) { // Loser of 1st place game gets 2nd (Silver Trophy)
+                  teamOverallStats[loser].awards.runnerUps++;
+              }
+          } else if (match.finalSeedingGame === 3) { // 3rd Place Game
+              if (teamOverallStats[winner]) {
+                  teamOverallStats[winner].awards.thirdPlace++; // Bronze Trophy
+              }
           }
-      } else if (match.finalSeedingGame === 1) { // Tie in Championship Game (both 1st place)
-          yearlyFinalStandings[year].push({ team: team1, place: winningPlace });
-          yearlyFinalStandings[year].push({ team: team2, place: winningPlace });
+      } else if (match.finalSeedingGame === 1) { // Special case: Tie in Championship Game
+          // If championship game is a tie, both get a championship (Gold Trophy)
+          if (teamOverallStats[team1]) {
+            teamOverallStats[team1].awards.championships++;
+          }
+          if (teamOverallStats[team2]) {
+            teamOverallStats[team2].awards.championships++;
+          }
       }
+      // No trophies for any other placing game (handled by the specific `if` conditions above)
     });
 
     // Sort championship games (most recent year first, then by winner place)
@@ -218,41 +222,8 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
       return a.winnerPlace - b.winnerPlace;
     }));
 
-    // Award Calculation Pass
+    // Medal Calculation Pass (based on yearlyPointsLeaders)
     Object.keys(teamOverallStats).forEach(teamName => {
-      // Overall Finish Awards (Trophies)
-      // Use historicalChampions prop data for championships and runner-ups (Gold & Silver Trophy)
-      historicalChampions.forEach(champEntry => {
-        const champYear = parseInt(champEntry.year);
-        // Ensure the champion entry corresponds to a completed season
-        if (!isNaN(champYear) && completedSeasons.has(champYear)) {
-          const mappedChampion = getDisplayTeamName(String(champEntry.champion || '').trim());
-          const mappedRunnerUp = getDisplayTeamName(String(champEntry.runnerUp || '').trim());
-
-          if (mappedChampion === teamName) {
-            teamOverallStats[teamName].awards.championships++;
-          }
-          if (mappedRunnerUp === teamName) {
-            teamOverallStats[teamName].awards.runnerUps++;
-          }
-        }
-      });
-
-
-      // Third Place Finishes (Bronze Trophy) - from yearlyFinalStandings
-      Object.keys(yearlyFinalStandings).forEach(year => {
-        // Ensure this year is a completed season
-        if (!completedSeasons.has(parseInt(year))) return;
-
-        const teamFinishesInYear = yearlyFinalStandings[year].filter(entry => entry.team === teamName);
-        teamFinishesInYear.forEach(teamFinish => {
-            if (teamFinish.place === 3) { // 3rd place
-              teamOverallStats[teamName].awards.thirdPlace++;
-            }
-        });
-      });
-
-      // Total Points Awards (Medals)
       Object.keys(yearlyPointsLeaders).forEach(year => {
           // Ensure this year is a completed season
           if (!completedSeasons.has(parseInt(year))) return;
@@ -272,7 +243,6 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
           const firstPlaceScore = uniqueSortedScores[0];
           const secondPlaceScore = uniqueSortedScores[1];
           const thirdPlaceScore = uniqueSortedScores[2];
-
 
           // Assign awards based on strict score comparison
           if (currentTeamYearlyScore === firstPlaceScore) {
@@ -298,7 +268,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
 
       const careerDPR = careerDPRData.find(dpr => dpr.team === teamName)?.dpr || 0;
       const totalGames = stats.totalWins + stats.totalLosses + stats.totalTies;
-      const winPercentage = totalGames > 0 ? ((stats.totalWins + (0.5 * stats.totalTies)) / totalGames) : 0;
+      const winPercentage = totalGames > 0 ? ((stats.wins + (0.5 * stats.ties)) / totalGames) : 0;
 
       return {
         team: teamName,
@@ -368,19 +338,19 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
                       <td className="py-2 px-3 text-sm text-gray-700 text-center">
                         <div className="flex flex-wrap justify-center items-center gap-2">
                           {team.awards.championships > 0 && (
-                            <span title="Championships" className="flex items-center space-x-1">
+                            <span title="Championships (1st Place)" className="flex items-center space-x-1">
                               <i className="fas fa-trophy text-yellow-500 text-lg"></i>
                               <span className="text-xs font-medium">{team.awards.championships}x</span>
                             </span>
                           )}
                           {team.awards.runnerUps > 0 && (
-                            <span title="Runner-Up Finishes" className="flex items-center space-x-1">
+                            <span title="Runner-Up Finishes (2nd Place)" className="flex items-center space-x-1">
                               <i className="fas fa-trophy text-gray-400 text-lg"></i>
                               <span className="text-xs font-medium">{team.awards.runnerUps}x</span>
                             </span>
                           )}
                           {team.awards.thirdPlace > 0 && (
-                            <span title="Third Place Finishes" className="flex items-center space-x-1">
+                            <span title="Third Place Finishes (3rd Place)" className="flex items-center space-x-1">
                               <i className="fas fa-trophy text-amber-800 text-lg"></i> {/* Deeper amber for bronze */}
                               <span className="text-xs font-medium">{team.awards.thirdPlace}x</span>
                             </span>
