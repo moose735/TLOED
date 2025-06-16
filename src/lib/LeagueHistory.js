@@ -453,7 +453,10 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
                 >
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="year" label={{ value: "Season Year", position: "insideBottom", offset: 0 }} />
-                  <YAxis label={{ value: "Cumulative Adjusted DPR", angle: -90, position: "insideLeft" }} />
+                  <YAxis
+                    label={{ value: "Cumulative Adjusted DPR", angle: -90, position: "insideLeft" }}
+                    domain={[0.900, 1.100]} // Set fixed domain for Y-axis
+                  />
                   <Tooltip formatter={(value) => formatDPR(value)} />
                   <Legend />
                   {uniqueTeamsForChart.map((team, index) => (
