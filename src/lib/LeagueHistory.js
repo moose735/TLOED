@@ -192,16 +192,19 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
       });
 
       // Update yearly final standings for award calculation
+      // Only consider the actual winner and loser for trophy purposes
       if (!yearlyFinalStandings[year]) {
         yearlyFinalStandings[year] = [];
       }
-      // Only add unique place/team entries. For simplicity, we assume winner/loser are unique for each finalSeedingGame.
       if (winner !== 'Tie') {
+          // If it's a 1st place game, the winner gets 1st, loser gets 2nd.
+          // If it's a 3rd place game, the winner gets 3rd.
           yearlyFinalStandings[year].push({ team: winner, place: winningPlace });
-          if (loser) { // The loser of the 1st place game gets 2nd place
-              yearlyFinalStandings[year].push({ team: loser, place: losingPlace });
+          // Only add a loser if it's a 1st or 3rd place game where there's a defined loser
+          if (finalSeedingGame === 1 && loser) { // Loser of the 1st place game gets 2nd
+            yearlyFinalStandings[year].push({ team: loser, place: 2 });
           }
-      } else { // Tie in championship/seeding game implies both get the same place.
+      } else if (finalSeedingGame === 1) { // Tie in Championship Game (both 1st)
           yearlyFinalStandings[year].push({ team: team1, place: winningPlace });
           yearlyFinalStandings[year].push({ team: team2, place: winningPlace });
       }
@@ -218,7 +221,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
     // Award Calculation Pass
     Object.keys(teamOverallStats).forEach(teamName => {
       // Overall Finish Awards (Trophies)
-      // Use historicalChampions prop data for championships and runner-ups
+      // Use historicalChampions prop data for championships and runner-ups (Gold & Silver Trophy)
       historicalChampions.forEach(champEntry => {
         const champYear = parseInt(champEntry.year);
         // Ensure the champion entry corresponds to a completed season
@@ -236,14 +239,13 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
       });
 
 
-      // Third Place Finishes (from yearlyFinalStandings)
+      // Third Place Finishes (Bronze Trophy) - from yearlyFinalStandings
       Object.keys(yearlyFinalStandings).forEach(year => {
         // Ensure this year is a completed season
         if (!completedSeasons.has(parseInt(year))) return;
 
         const teamFinishesInYear = yearlyFinalStandings[year].filter(entry => entry.team === teamName);
         teamFinishesInYear.forEach(teamFinish => {
-            // Already handled championship and runner-up via historicalChampions
             if (teamFinish.place === 3) { // 3rd place
               teamOverallStats[teamName].awards.thirdPlace++;
             }
@@ -259,30 +261,30 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName,
           // Filter out empty team names before processing leaders
           const filteredYearLeaders = yearLeaders.filter(entry => entry.team !== '');
 
-          const teamPointsEntryIndex = filteredYearLeaders.findIndex(entry => entry.team === teamName);
+          // Find the current team's points for this year
+          const teamPointsEntry = filteredYearLeaders.find(entry => entry.team === teamName);
+          if (!teamPointsEntry) return; // Skip if team not found in leaders for this year
 
-          if (teamPointsEntryIndex !== -1) {
-              // Get the score of the current team for comparison
-              const currentTeamYearlyScore = filteredYearLeaders[teamPointsEntryIndex].points;
+          const currentTeamYearlyScore = teamPointsEntry.points;
 
-              // Check for ties in top 3 positions
-              const firstPlaceScore = filteredYearLeaders[0]?.points;
-              const secondPlaceScore = filteredYearLeaders[1]?.points;
-              const thirdPlaceScore = filteredYearLeaders[2]?.points;
+          // Determine the scores for 1st, 2nd, and 3rd place, considering ties
+          const uniqueSortedScores = Array.from(new Set(filteredYearLeaders.map(l => l.points))).sort((a, b) => b - a);
+          const firstPlaceScore = uniqueSortedScores[0];
+          const secondPlaceScore = uniqueSortedScores[1];
+          const thirdPlaceScore = uniqueSortedScores[2];
 
-              if (currentTeamYearlyScore === firstPlaceScore) {
-                  teamOverallStats[teamName].awards.firstPoints++;
-              }
-              // Only count as second place if not already counted as first, and score matches second
-              // And ensure there is actually a second place entry
-              if (secondPlaceScore !== undefined && currentTeamYearlyScore === secondPlaceScore && currentTeamYearlyScore !== firstPlaceScore) {
-                  teamOverallStats[teamName].awards.secondPoints++;
-              }
-              // Only count as third place if not already counted as first or second, and score matches third
-              // And ensure there is actually a third place entry
-              if (thirdPlaceScore !== undefined && currentTeamYearlyScore === thirdPlaceScore && currentTeamYearlyScore !== firstPlaceScore && currentTeamYearlyScore !== secondPlaceScore) {
-                  teamOverallStats[teamName].awards.thirdPoints++;
-              }
+
+          // Assign awards based on strict score comparison
+          if (currentTeamYearlyScore === firstPlaceScore) {
+              teamOverallStats[teamName].awards.firstPoints++;
+          }
+          // Only count as second place if score matches secondPlaceScore AND it's not also the firstPlaceScore
+          if (secondPlaceScore !== undefined && currentTeamYearlyScore === secondPlaceScore && currentTeamYearlyScore < firstPlaceScore) {
+              teamOverallStats[teamName].awards.secondPoints++;
+          }
+          // Only count as third place if score matches thirdPlaceScore AND it's not also firstPlaceScore or secondPlaceScore
+          if (thirdPlaceScore !== undefined && currentTeamYearlyScore === thirdPlaceScore && currentTeamYearlyScore < firstPlaceScore && currentTeamYearlyScore < secondPlaceScore) {
+              teamOverallStats[teamName].awards.thirdPoints++;
           }
       });
     });
