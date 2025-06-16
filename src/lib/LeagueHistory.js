@@ -242,7 +242,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
 
       const careerDPR = careerDPRData.find(dpr => dpr.team === teamName)?.dpr || 0;
       const totalGames = stats.totalWins + stats.totalLosses + stats.totalTies;
-      const winPercentage = totalGames > 0 ? ((stats.totalWins + (0.5 * stats.totalTies)) / totalGames) : 0; // Corrected to use totalTies
+      const winPercentage = totalGames > 0 ? ((stats.totalWins + (0.5 * stats.totalTies)) / totalGames) : 0;
 
       // Determine the season display string
       const sortedYearsArray = Array.from(stats.seasonsPlayed).sort((a, b) => a - b);
@@ -368,6 +368,8 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
 
     // Sort years in descending order (most recent first) for display in the table
     const sortedYearsForAwards = Object.keys(newSeasonAwardsSummary).sort((a, b) => parseInt(b) - parseInt(a));
+    console.log("Sorted years for awards (most recent first):", sortedYearsForAwards); // Debugging line
+
     const finalSeasonAwardsSummary = {};
     sortedYearsForAwards.forEach(year => {
         finalSeasonAwardsSummary[year] = newSeasonAwardsSummary[year];
