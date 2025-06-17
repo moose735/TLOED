@@ -27,7 +27,7 @@ const formatPoints = (points) => {
 const formatLuckRating = (luck) => {
   if (typeof luck !== 'number' || isNaN(luck)) return 'N/A';
   // Luck rating can be positive or negative, display with sign and two decimals
-  return luck.toFixed(2);
+  return luck.toFixed(3);
 };
 
 // Color palette for chart lines - a diverse set for multiple teams
