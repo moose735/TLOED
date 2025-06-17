@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   HISTORICAL_MATCHUPS_API_URL,
-  // GOOGLE_SHEET_POWER_RANKINGS_API_URL is no longer needed here as PowerRankings.js derives its data from historicalMatchups
+  GOOGLE_SHEET_POWER_RANKINGS_API_URL, // Still imported, but PowerRankings.js no longer uses it directly
 } from './config';
 
 // Import existing components from your provided App.js
@@ -76,10 +76,6 @@ const App = () => {
       setLoadingHistoricalData(true);
       setHistoricalDataError(null); // Clear previous errors
 
-      // Define a minimum loading time (e.g., 2 seconds)
-      const MIN_LOADING_TIME = 2000;
-      const startTime = Date.now();
-
       // Fetch Historical Matchups
       let fetchedMatchupData = [];
       try {
@@ -105,7 +101,7 @@ const App = () => {
         } catch (jsonError) {
           console.error("Error parsing historical matchup data JSON. Raw response:", textResponse, jsonError);
           setHistoricalDataError(`Failed to load historical matchup data: The API response was not valid JSON. Please ensure your Google Apps Script for HISTORICAL_MATCHUPS_API_URL is correctly deployed as a Web App and returns JSON (e.g., using ContentService.MimeType.JSON). Raw response snippet: ${textResponse.substring(0, 200)}...`);
-          // Do not set loadingHistoricalData to false immediately here. It will be handled by the setTimeout.
+          setLoadingHistoricalData(false); // Ensure loading is false on error
           return; // Stop execution if parsing fails to avoid further issues
         }
 
@@ -125,8 +121,6 @@ const App = () => {
         
         const uniqueTeams = Array.from(uniqueTeamsSet).sort();
 
-        // Directly update NAV_CATEGORIES.TEAMS.subTabs here, as it's a mutable object.
-        // This ensures the tabs are available as soon as data is ready.
         NAV_CATEGORIES.TEAMS.subTabs = uniqueTeams.map(team => ({
           label: team,
           tab: TABS.TEAM_DETAIL, // All team links go to the team detail tab
@@ -136,20 +130,11 @@ const App = () => {
       } catch (error) {
         console.error("Error fetching historical matchup data:", error);
         setHistoricalDataError(`Failed to load historical data: ${error.message}. Please check your HISTORICAL_MATCHUPS_API_URL in config.js and ensure your Google Apps Script is deployed correctly as a Web App (Execute as: Me, Who has access: Anyone).`);
-        // Do not set loadingHistoricalData to false immediately here. It will be handled by the setTimeout.
+        setLoadingHistoricalData(false); // Ensure loading is false on error
         return; // Stop execution if fetching fails
       } finally {
-        // Calculate remaining time for the minimum loading duration
-        const elapsedTime = Date.now() - startTime;
-        const remainingTime = MIN_LOADING_TIME - elapsedTime;
-
-        if (remainingTime > 0) {
-          setTimeout(() => {
-            setLoadingHistoricalData(false);
-          }, remainingTime);
-        } else {
-          setLoadingHistoricalData(false);
-        }
+        // Ensure loading is false after data fetch (even if it fails, to stop spinner)
+        setLoadingHistoricalData(false);
       }
 
       // Always use mock data for historical champions as per request
@@ -160,7 +145,7 @@ const App = () => {
     };
 
     fetchHistoricalData();
-  }, [getMappedTeamName]); // Dependency array: re-run if getMappedTeamName changes (though it's useCallback, so it should be stable)
+  }, [getMappedTeamName]);
 
   // Handle tab change, including setting selectedTeam for TEAM_DETAIL tab
   const handleTabChange = (tab, teamName = null) => {
@@ -169,35 +154,6 @@ const App = () => {
     setIsMobileMenuOpen(false); // Close mobile menu on tab selection
   };
 
-  // Render content based on loading and error states
-  if (loadingHistoricalData) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 text-blue-600">
-        <svg className="animate-spin h-16 w-16 text-blue-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-        <p className="text-xl font-medium">Loading league data...</p>
-      </div>
-    );
-  }
-
-  if (historicalDataError) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-red-50 text-red-700 p-8 text-center">
-        <h2 className="text-2xl font-bold mb-4">Error Loading Data</h2>
-        <p className="text-lg mb-6">{historicalDataError}</p>
-        <p className="text-base font-semibold">
-          **Please check the following:**<br />
-          1. **Google Apps Script URLs (`config.js`):** Ensure `HISTORICAL_MATCHUPS_API_URL` is correct and points to your deployed Google Apps Script Web App.
-          2. **Google Apps Script Deployment:** For your script, verify its deployment settings: "Execute as: Me" and "Who has access: Anyone".
-          3. **API Response Format:** The API should return a JSON object with a `data` property that is an array (e.g., `{"data": [...]}`).
-        </p>
-      </div>
-    );
-  }
-
-  // If not loading and no error, render the full application
   return (
     <div className="min-h-screen bg-gray-100 font-sans antialiased text-gray-900 flex flex-col items-center">
       <header className="bg-white shadow-md py-4 px-6 flex justify-between items-center relative z-10 w-full">
@@ -218,7 +174,7 @@ const App = () => {
           <div className="relative group">
             <button className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none flex items-center transition-colors duration-200">
               {NAV_CATEGORIES.LEAGUE_DATA.label}
-              <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
               </svg>
             </button>
@@ -236,11 +192,11 @@ const App = () => {
           </div>
 
           {/* Dropdown for Teams (dynamic) */}
-          {NAV_CATEGORIES.TEAMS.subTabs.length > 0 && ( // Ensure subTabs is not empty before rendering dropdown
+          {NAV_CATEGORIES.TEAMS.subTabs.length > 0 && (
             <div className="relative group">
               <button className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none flex items-center transition-colors duration-200">
                 {NAV_CATEGORIES.TEAMS.label}
-                <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
                 </svg>
               </button>
@@ -266,7 +222,7 @@ const App = () => {
             className="text-gray-800 focus:outline-none p-2 rounded-md hover:bg-gray-100 transition-colors duration-200"
             aria-label="Toggle mobile menu"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7"></path>
             </svg>
           </button>
@@ -283,7 +239,7 @@ const App = () => {
               className="text-gray-800 focus:outline-none p-2 rounded-md hover:bg-gray-100 transition-colors duration-200"
               aria-label="Close mobile menu"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
               </svg>
             </button>
@@ -304,7 +260,7 @@ const App = () => {
                 onClick={() => toggleSubMenu('LEAGUE_DATA')}
               >
                 {NAV_CATEGORIES.LEAGUE_DATA.label}
-                <svg className={`w-5 h-5 transition-transform duration-200 ${openSubMenu === 'LEAGUE_DATA' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className={`w-5 h-5 transition-transform duration-200 ${openSubMenu === 'LEAGUE_DATA' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
                 </svg>
               </button>
@@ -332,7 +288,7 @@ const App = () => {
                   onClick={() => toggleSubMenu('TEAMS')}
                 >
                   {NAV_CATEGORIES.TEAMS.label}
-                  <svg className={`w-5 h-5 transition-transform duration-200 ${openSubMenu === 'TEAMS' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className={`w-5 h-5 transition-transform duration-200 ${openSubMenu === 'TEAMS' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
                   </svg>
                 </button>
@@ -361,7 +317,7 @@ const App = () => {
         {loadingHistoricalData ? (
           // Enhanced Loading Spinner
           <div className="flex flex-col items-center justify-center min-h-[200px] text-blue-600">
-            <svg className="animate-spin h-10 w-10 text-blue-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="animate-spin h-10 w-10 text-blue-500 mb-3" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
@@ -374,7 +330,7 @@ const App = () => {
             **Please check the following:**<br />
             1. **Google Apps Script URLs (`config.js`):** Ensure `HISTORICAL_MATCHUPS_API_URL` is correct and points to your deployed Google Apps Script Web App.
             2. **Google Apps Script Deployment:** For your script, verify its deployment settings: "Execute as: Me" and "Who has access: Anyone".
-            3. **API Response Format:** The API should return a JSON object with a `data` property that is an array (e.g., `{"data": [...]}`).
+            3. **Vercel Deployment / Local Server:** Ensure your `index.js` file (and other JavaScript files) are being served with the correct MIME type (`application/javascript`). This usually requires proper build configuration (e.g., using a `build` script that generates optimized JavaScript bundles, which Vercel handles automatically for standard React projects). If developing locally, ensure your development server is configured correctly.
           </p>
         ) : (
           <div className="w-full"> {/* Ensure content area takes full width */}
@@ -436,7 +392,7 @@ const App = () => {
         <p>This site displays league data powered by Google Apps Script.</p>
         <p className="mt-2">
           For Apps Script deployment instructions, visit:{" "}
-          <a href="https://developers.google.com/apps-script/guides/web" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+          <a href="[https://developers.google.com/apps-script/guides/web](https://developers.google.com/apps-script/guides/web)" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
             Google Apps Script Web Apps Guide
           </a>
         </p>
