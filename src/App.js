@@ -358,11 +358,26 @@ const App = () => {
 
 
       <main className="flex-grow w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8 mt-4"> {/* Adjusted for centering and max-width */}
-        {/*
-          Content rendered here only if data is loaded and no errors.
-          The loading/error states are handled by the conditional rendering above.
-        */}
-        <div className="w-full"> {/* Ensure content area takes full width */}
+        {loadingHistoricalData ? (
+          // Enhanced Loading Spinner
+          <div className="flex flex-col items-center justify-center min-h-[200px] text-blue-600">
+            <svg className="animate-spin h-10 w-10 text-blue-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p className="text-lg font-medium">Loading league data...</p>
+          </div>
+        ) : historicalDataError ? (
+          <p className="text-center text-red-600 text-lg">
+            {historicalDataError} <br />
+            <br />
+            **Please check the following:**<br />
+            1. **Google Apps Script URLs (`config.js`):** Ensure `HISTORICAL_MATCHUPS_API_URL` is correct and points to your deployed Google Apps Script Web App.
+            2. **Google Apps Script Deployment:** For your script, verify its deployment settings: "Execute as: Me" and "Who has access: Anyone".
+            3. **API Response Format:** The API should return a JSON object with a `data` property that is an array (e.g., `{"data": [...]}`).
+          </p>
+        ) : (
+          <div className="w-full"> {/* Ensure content area takes full width */}
             {activeTab === TABS.POWER_RANKINGS && (
               <PowerRankings
                 historicalMatchups={historicalMatchups}
@@ -414,6 +429,7 @@ const App = () => {
               />
             )}
           </div>
+        )}
       </main>
 
       <footer className="mt-8 text-center text-gray-600 text-sm pb-8 px-4">
