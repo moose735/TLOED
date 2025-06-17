@@ -196,9 +196,9 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
             </table>
           </section>
 
-          {/* DPR Rank History Chart */}
+          {/* DPR Rank History Chart (Desktop View) */}
           {dprHistoryChartData.length > 0 && (
-            <section className="mb-8 bg-blue-50 p-6 rounded-lg shadow-inner">
+            <section className="mb-8 bg-blue-50 p-6 rounded-lg shadow-inner hidden sm:block"> {/* Hidden on small screens */}
               <h3 className="text-xl font-bold text-blue-800 mb-4 text-center">DPR Rank History (Current Season)</h3>
               <ResponsiveContainer width="100%" height={400}>
                 <LineChart
@@ -230,6 +230,40 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
               </ResponsiveContainer>
               <p className="mt-4 text-sm text-gray-500 text-center">
                 This graph shows each team's rank based on their Dominance Power Ranking (DPR), calculated cumulatively based on all games played up to each specific week of the newest season. Rank 1 indicates the highest DPR.
+              </p>
+            </section>
+          )}
+
+          {/* DPR Rank History Table (Mobile View) */}
+          {dprHistoryChartData.length > 0 && (
+            <section className="mb-8 bg-blue-50 p-6 rounded-lg shadow-inner block sm:hidden overflow-x-auto"> {/* Shown on small screens, hidden on larger */}
+              <h3 className="text-xl font-bold text-blue-800 mb-4 text-center">DPR Rank History (Current Season)</h3>
+              <table className="min-w-full bg-white border border-gray-200 rounded-lg">
+                <thead className="bg-blue-600 text-white">
+                  <tr>
+                    <th className="py-2 px-3 text-left text-xs font-semibold uppercase tracking-wider">Team</th>
+                    {dprHistoryChartData.map((data, index) => (
+                      <th key={index} className="py-2 px-3 text-center text-xs font-semibold uppercase tracking-wider">
+                        {data.week}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {chartTeams.map((team, teamIndex) => (
+                    <tr key={team} className={teamIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                      <td className="py-2 px-3 text-sm text-gray-800 font-medium">{team}</td>
+                      {dprHistoryChartData.map((data, weekIndex) => (
+                        <td key={`${team}-${weekIndex}`} className="py-2 px-3 text-sm text-gray-700 text-center">
+                          {data[team] !== null ? data[team] : 'N/A'}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="mt-4 text-sm text-gray-500 text-center">
+                This table shows each team's rank based on their Dominance Power Ranking (DPR) per week for the newest season. Rank 1 indicates the highest DPR.
               </p>
             </section>
           )}
