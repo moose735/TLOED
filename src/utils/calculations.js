@@ -2,10 +2,10 @@
 
 /**
  * Helper function to calculate raw DPR for a team in a season.
- * @param {number} pointsFor - Total points for the team in the season.
- * @param {number} teamWinPercentage - Win percentage of the team in the season.
- * @param {number} leagueMaxScore - League-wide highest single-game score in the season.
- * @param {number} leagueMinScore - League-wide lowest single-game score in the season.
+ * @param {number} pointsFor - Average of seasonal average points scored for career DPR, or total points for seasonal DPR.
+ * @param {number} teamWinPercentage - Win percentage of the team in the season/career.
+ * @param {number} leagueMaxScore - Highest single-game score in the season for seasonal DPR, or highest season average for career DPR.
+ * @param {number} leagueMinScore - Lowest single-game score in the season for seasonal DPR, or lowest season average for career DPR.
  * @returns {number} The raw DPR value.
  */
 export const calculateRawDPR = (pointsFor, teamWinPercentage, leagueMaxScore, leagueMinScore) => {
@@ -166,6 +166,11 @@ const calculateAllPlayWinPercentage = (teamName, year, weeklyGameScoresByYearAnd
 };
 
 
+---
+
+## calculateAllLeagueMetrics Function
+
+```javascript
 /**
  * Calculates all league-wide and team-specific metrics (DPR, Luck Rating, All-Play)
  * for all seasons based on historical matchup data.
