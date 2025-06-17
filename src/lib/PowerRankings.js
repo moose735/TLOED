@@ -23,11 +23,11 @@ const formatPoints = (points) => {
   return points.toFixed(2); // Format to two decimals
 };
 
-// Helper function to format luck rating - now to three decimal places
+// Helper function to format luck rating
 const formatLuckRating = (luck) => {
   if (typeof luck !== 'number' || isNaN(luck)) return 'N/A';
-  // Luck rating can be positive or negative, display with sign and three decimals
-  return luck.toFixed(3);
+  // Luck rating can be positive or negative, display with sign and two decimals
+  return luck.toFixed(2);
 };
 
 // Color palette for chart lines - a diverse set for multiple teams
