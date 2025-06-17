@@ -218,6 +218,7 @@ const App = () => {
           <div className="relative group">
             <button className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none flex items-center transition-colors duration-200">
               {NAV_CATEGORIES.LEAGUE_DATA.label}
+              {/* Corrected xmlns attribute here */}
               <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
               </svg>
@@ -240,6 +241,7 @@ const App = () => {
             <div className="relative group">
               <button className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none flex items-center transition-colors duration-200">
                 {NAV_CATEGORIES.TEAMS.label}
+                {/* Corrected xmlns attribute here */}
                 <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
                 </svg>
@@ -266,6 +268,7 @@ const App = () => {
             className="text-gray-800 focus:outline-none p-2 rounded-md hover:bg-gray-100 transition-colors duration-200"
             aria-label="Toggle mobile menu"
           >
+            {/* Corrected xmlns attribute here */}
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7"></path>
             </svg>
@@ -283,6 +286,7 @@ const App = () => {
               className="text-gray-800 focus:outline-none p-2 rounded-md hover:bg-gray-100 transition-colors duration-200"
               aria-label="Close mobile menu"
             >
+              {/* Corrected xmlns attribute here */}
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
               </svg>
@@ -304,6 +308,7 @@ const App = () => {
                 onClick={() => toggleSubMenu('LEAGUE_DATA')}
               >
                 {NAV_CATEGORIES.LEAGUE_DATA.label}
+                {/* Corrected xmlns attribute here */}
                 <svg className={`w-5 h-5 transition-transform duration-200 ${openSubMenu === 'LEAGUE_DATA' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
                 </svg>
@@ -332,6 +337,7 @@ const App = () => {
                   onClick={() => toggleSubMenu('TEAMS')}
                 >
                   {NAV_CATEGORIES.TEAMS.label}
+                  {/* Corrected xmlns attribute here */}
                   <svg className={`w-5 h-5 transition-transform duration-200 ${openSubMenu === 'TEAMS' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
                   </svg>
@@ -420,6 +426,7 @@ const App = () => {
         <p>This site displays league data powered by Google Apps Script.</p>
         <p className="mt-2">
           For Apps Script deployment instructions, visit:{" "}
+          {/* Corrected xmlns attribute in the footer link is not needed, this is a regular href */}
           <a href="https://developers.google.com/apps-script/guides/web" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
             Google Apps Script Web Apps Guide
           </a>
