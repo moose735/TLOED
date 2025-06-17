@@ -1,7 +1,10 @@
 // PowerRankings.js
 import React, { useState, useEffect } from 'react';
-import { calculateAllLeagueMetrics } from '../utils/calculations';
+// Import the utility for calculating league metrics (DPR) and its helper calculateRawDPR
+import { calculateAllLeagueMetrics, calculateRawDPR } from '../utils/calculations';
+// Recharts for charting
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+
 
 // Helper function to format DPR value (now to three decimal places)
 const formatDPR = (dpr) => {
@@ -165,7 +168,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
         <p className="text-center text-gray-600">Loading power rankings...</p>
       ) : currentSeasonDPR.length > 0 ? (
         <>
-          <section className="mb-8 overflow-x-auto"> {/* Added overflow-x-auto here */}
+          <section className="mb-8">
             <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Standings by DPR</h3>
             <table className="min-w-full bg-white border border-gray-200 rounded-lg overflow-hidden">
               <thead className="bg-blue-600 text-white">
@@ -195,9 +198,9 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
 
           {/* DPR Rank History Chart */}
           {dprHistoryChartData.length > 0 && (
-            <section className="mb-8 bg-blue-50 p-6 rounded-lg shadow-inner overflow-x-auto"> {/* Added overflow-x-auto here */}
+            <section className="mb-8 bg-blue-50 p-6 rounded-lg shadow-inner">
               <h3 className="text-xl font-bold text-blue-800 mb-4 text-center">DPR Rank History (Current Season)</h3>
-              <ResponsiveContainer width="100%" height={400} minWidth={700}> {/* Set a minWidth for the chart */}
+              <ResponsiveContainer width="100%" height={400}>
                 <LineChart
                   data={dprHistoryChartData}
                   margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
