@@ -29,17 +29,24 @@ export const calculateRawDPR = (pointsFor, teamWinPercentage, leagueMaxScore, le
 export const calculateLuckRating = (historicalMatchups, teamName, year, weeklyGameScoresByYearAndWeek, getDisplayTeamName) => {
     let totalWeeklyLuckScoreSum = 0;
 
+    console.log(`--- Calculating Luck for ${teamName} in ${year} ---`);
+
     // Iterate through weeks for the given year
     if (weeklyGameScoresByYearAndWeek[year]) {
         Object.keys(weeklyGameScoresByYearAndWeek[year]).forEach(week => {
+            console.log(`  Week: ${week}`);
             const allScoresInCurrentWeek = weeklyGameScoresByYearAndWeek[year][week];
+            console.log('    All scores in current week (raw):', allScoresInCurrentWeek.map(s => `${s.team}: ${s.score}`));
 
             // If the selected team isn't in this week's data, skip.
             const uniqueTeamsWithScores = new Set(allScoresInCurrentWeek
                 .filter(entry => typeof entry.score === 'number' && !isNaN(entry.score) && entry.team !== '') // Ensure valid team name
                 .map(entry => entry.team)
             );
-            if (!uniqueTeamsWithScores.has(teamName)) return;
+            if (!uniqueTeamsWithScores.has(teamName)) {
+                console.log(`    Team ${teamName} did not play in week ${week}. Skipping.`);
+                return;
+            }
 
             // Explicitly filter for regular season matches in this specific week and year
             const relevantMatchupsForWeek = historicalMatchups.filter(m =>
@@ -49,7 +56,10 @@ export const calculateLuckRating = (historicalMatchups, teamName, year, weeklyGa
                 !(m?.pointsOnlyBye === true || m?.pointsOnlyBye === 'true') // Exclude points-only-bye
             );
 
-            if (relevantMatchupsForWeek.length === 0) return;
+            if (relevantMatchupsForWeek.length === 0) {
+                console.log(`    No relevant regular season matchups found for week ${week}. Skipping.`);
+                return;
+            }
 
             const currentTeamMatchEntry = relevantMatchupsForWeek.find(match => {
                 const matchTeam1 = getDisplayTeamName(String(match?.team1 || '').trim());
@@ -57,7 +67,10 @@ export const calculateLuckRating = (historicalMatchups, teamName, year, weeklyGa
                 return (matchTeam1 === teamName && matchTeam1 !== '') || (matchTeam2 === teamName && matchTeam2 !== ''); // Ensure team name is not empty
             });
 
-            if (!currentTeamMatchEntry) return;
+            if (!currentTeamMatchEntry) {
+                console.log(`    Current team's match entry not found for week ${week}. Skipping.`);
+                return;
+            }
 
             let currentTeamScoreForWeek;
             const mappedTeam1 = getDisplayTeamName(String(currentTeamMatchEntry?.team1 || '').trim());
@@ -68,10 +81,15 @@ export const calculateLuckRating = (historicalMatchups, teamName, year, weeklyGa
             } else if (mappedTeam2 === teamName) {
                 currentTeamScoreForWeek = parseFloat(currentTeamMatchEntry?.team2Score || '0');
             } else {
+                console.log(`    Team ${teamName} score not found in match entry for week ${week}. Skipping.`);
                 return; // Should not happen if currentTeamMatchEntry was found correctly
             }
 
-            if (isNaN(currentTeamScoreForWeek)) return;
+            if (isNaN(currentTeamScoreForWeek)) {
+                console.log(`    Current team's score is NaN for week ${week}. Skipping.`);
+                return;
+            }
+            console.log(`    Team ${teamName} score in week ${week}: ${currentTeamScoreForWeek}`);
 
             let outscoredCount = 0;
             let oneLessCount = 0;
@@ -79,14 +97,19 @@ export const calculateLuckRating = (historicalMatchups, teamName, year, weeklyGa
             allScoresInCurrentWeek.forEach(otherTeamEntry => {
                 // Ensure the other team is not empty and not the current team, and has a valid score
                 if (otherTeamEntry.team !== teamName && otherTeamEntry.team !== '' && typeof otherTeamEntry.score === 'number' && !isNaN(otherTeamEntry.score)) {
+                    console.log(`      Comparing ${currentTeamScoreForWeek} (Team ${teamName}) vs ${otherTeamEntry.score} (Team ${otherTeamEntry.team})`);
                     if (currentTeamScoreForWeek > otherTeamEntry.score) {
                         outscoredCount++;
                     }
                     if (currentTeamScoreForWeek - 1 === otherTeamEntry.score) {
                         oneLessCount++;
                     }
+                } else {
+                    // Log why an entry might be skipped in the comparison
+                    // console.log(`      Skipping comparison for entry: ${JSON.stringify(otherTeamEntry)} (is current team, empty, or invalid score)`);
                 }
             });
+            console.log(`    Outscored Count: ${outscoredCount}, One Less Count: ${oneLessCount}`);
 
             // Fixed denominators as per Excel formula
             const denominatorX = 11; // Assumes 12-team league, so 11 opponents
@@ -94,9 +117,11 @@ export const calculateLuckRating = (historicalMatchups, teamName, year, weeklyGa
 
             const weeklyProjectedWinComponentX = denominatorX > 0 ? (outscoredCount / denominatorX) : 0;
             const weeklyLuckScorePartY = denominatorY > 0 ? (oneLessCount / denominatorY) : 0;
+            console.log(`    Weekly Projected Win Comp X: ${weeklyProjectedWinComponentX.toFixed(3)}, Weekly Luck Score Part Y: ${weeklyLuckScorePartY.toFixed(3)}`);
 
             const combinedWeeklyLuckScore = weeklyProjectedWinComponentX + weeklyLuckScorePartY;
             totalWeeklyLuckScoreSum += combinedWeeklyLuckScore;
+            console.log(`    Combined Weekly Luck Score: ${combinedWeeklyLuckScore.toFixed(3)}, Total Weekly Luck Score Sum (cumulative): ${totalWeeklyLuckScoreSum.toFixed(3)}`);
         });
     }
 
@@ -122,13 +147,13 @@ export const calculateLuckRating = (historicalMatchups, teamName, year, weeklyGa
             if (!team1Won) actualRegularSeasonWins++;
         }
     });
+    console.log(`  Actual Regular Season Wins for ${teamName} in ${year}: ${actualRegularSeasonWins}`);
 
-    // The calculateLuckRating helper now returns the projectedWins and actualWins directly
-    // based on its internal logic, along with the final luckRating difference.
-    // This allows the calling function (calculateAllLeagueMetrics) to store these
-    // exact values in seasonalMetrics.
+    const finalLuckRating = actualRegularSeasonWins - totalWeeklyLuckScoreSum;
+    console.log(`  Final Luck Rating for ${teamName} in ${year}: ${finalLuckRating.toFixed(3)} (Actual Wins: ${actualRegularSeasonWins}, Projected Wins: ${totalWeeklyLuckScoreSum.toFixed(3)})`);
+
     return {
-        luckRating: actualRegularSeasonWins - totalWeeklyLuckScoreSum,
+        luckRating: finalLuckRating,
         actualWins: actualRegularSeasonWins,
         projectedWins: totalWeeklyLuckScoreSum // This now correctly represents the projected wins
     };
@@ -355,8 +380,8 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getDisplayTeamName
                 );
                 stats.luckRating = luckRating;
                 stats.projectedWins = projectedWins; // Store projected wins directly in seasonalMetrics
-                // Ensure the 'wins' property in seasonalTeamStats is consistent with the 'actualWins' from luck calculation
-                stats.wins = actualWins;
+                // stats.wins is already correctly populated from the first pass, no need to re-assign
+                // stats.wins = actualWins; // Removed this line
 
             } else {
                 seasonalDPRsForNormalization[team] = 0; // No games played, raw DPR is 0
