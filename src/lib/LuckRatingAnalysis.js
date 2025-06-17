@@ -15,23 +15,134 @@ const LuckRatingAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
 
     setLoading(true);
 
-    // Use the centralized calculation logic, which now correctly returns projectedWins
+    // Use the centralized calculation logic
     const { seasonalMetrics } = calculateAllLeagueMetrics(historicalMatchups, getDisplayTeamName);
 
     const allLuckRatings = [];
     Object.keys(seasonalMetrics).forEach(year => {
       Object.keys(seasonalMetrics[year]).forEach(team => {
+        // Ensure that the luckRating is populated for the team in this year
         const teamData = seasonalMetrics[year][team];
-        // Ensure that luckRating and projectedWins are populated for the team in this year
-        if (typeof teamData.luckRating === 'number' && !isNaN(teamData.luckRating) &&
-            typeof teamData.projectedWins === 'number' && !isNaN(teamData.projectedWins)) {
-          
+        if (typeof teamData.luckRating === 'number' && !isNaN(teamData.luckRating)) {
+          // We need projectedWins from the luck calculation, which is not directly returned by seasonalMetrics
+          // For now, we will re-calculate projected wins here if it's strictly needed for display.
+          // Or, better, enhance calculateAllLeagueMetrics to return projected wins per season per team.
+          // For simplicity and direct use of the centralized function, we rely on `luckRating` here.
+          // If the original component showed projectedWins, we need to adapt this or adjust `calculations.js` output.
+          // Assuming `LuckRatingAnalysis` primarily needs `luckRating` and `actualWins`.
+          let actualWins = 0;
+          historicalMatchups.forEach(match => {
+            if (!(match?.regSeason === true || match?.regSeason === 'true') || parseInt(match?.year || '0') !== parseInt(year)) return;
+            const displayTeam1 = getDisplayTeamName(String(match?.team1 || '').trim());
+            const displayTeam2 = getDisplayTeamName(String(match?.team2 || '').trim());
+            if (displayTeam1 === team) {
+                if (parseFloat(match?.team1Score || '0') > parseFloat(match?.team2Score || '0')) actualWins++;
+            } else if (displayTeam2 === team) {
+                if (parseFloat(match?.team2Score || '0') > parseFloat(match?.team1Score || '0')) actualWins++;
+            }
+          });
+
+          // To get projectedWins, we would need to pass weeklyGameScoresByYearAndWeek to calculateLuckRating
+          // and have calculateLuckRating return both luckRating and projectedWins.
+          // For now, if the original component showed it, we will put a placeholder or add it if `calculations.js` is updated.
+          // Let's assume for this fix, we only show `luckRating` as the primary metric, and `actualWins`.
+          // To get projected wins, the calculations.js would need to expose it or be modified.
+
+          // REVISIT: The current `calculateLuckRating` only returns the difference.
+          // To show projected wins, we need to extract `totalWeeklyLuckScoreSum` from `calculateLuckRating`.
+          // For now, I'll calculate it inline *again* or simplify the table display if not directly available.
+
+          // To avoid redundant calculation and keep components lean:
+          // Modify `calculateAllLeagueMetrics` in `calculations.js` to return `projectedWins` per team per season.
+          // This will require an update to `calculations.js` structure.
+
+          // For this immediate fix, let's include a temporary re-calculation of projected wins for display only.
+          // This is not ideal, but necessary if calculations.js doesn't expose it.
+          // Better: update calculations.js.
+
+          // Recalculating projectedWins here for display consistency:
+          let totalWeeklyLuckScoreSumForDisplay = 0;
+          const weeklyGameScoresByYearAndWeekForLuck = {}; // Rebuild for this specific need
+
+          historicalMatchups.forEach(m => {
+            const t1 = getDisplayTeamName(String(m?.team1 || '').trim());
+            const t2 = getDisplayTeamName(String(m?.team2 || '').trim());
+            const y = parseInt(m?.year || '0');
+            const w = parseInt(m?.week || '0');
+            const s1 = parseFloat(m?.team1Score || '0');
+            const s2 = parseFloat(m?.team2Score || '0');
+            if (isNaN(y) || isNaN(w) || isNaN(s1) || isNaN(s2) || !(m?.regSeason === true || m?.regSeason === 'true')) return;
+
+            if (!weeklyGameScoresByYearAndWeekForLuck[y]) weeklyGameScoresByYearAndWeekForLuck[y] = {};
+            if (!weeklyGameScoresByYearAndWeekForLuck[y][w]) weeklyGameScoresByYearAndWeekForLuck[y][w] = [];
+            weeklyGameScoresByYearAndWeekForLuck[y][w].push({ team: t1, score: s1 });
+            weeklyGameScoresByYearAndWeekForLuck[y][w].push({ team: t2, score: s2 });
+          });
+
+
+          if (weeklyGameScoresByYearAndWeekForLuck[year]) {
+              Object.keys(weeklyGameScoresByYearAndWeekForLuck[year]).forEach(week => {
+                  const allScoresInCurrentWeek = weeklyGameScoresByYearAndWeekForLuck[year][week];
+                  const uniqueTeamsWithScores = new Set(allScoresInCurrentWeek
+                      .filter(entry => typeof entry.score === 'number' && !isNaN(entry.score))
+                      .map(entry => entry.team)
+                  );
+                  if (!uniqueTeamsWithScores.has(team)) return; // Use 'team' (current team in loop)
+
+                  const relevantMatchupsForWeek = historicalMatchups.filter(m =>
+                      parseInt(m?.year || '0') === parseInt(year) &&
+                      parseInt(m?.week || '0') === parseInt(week) &&
+                      (m?.regSeason === true || m?.regSeason === 'true')
+                  );
+                  if (relevantMatchupsForWeek.length === 0) return;
+
+                  const currentTeamMatchEntry = relevantMatchupsForWeek.find(match => {
+                      const matchTeam1 = getDisplayTeamName(String(match?.team1 || '').trim());
+                      const matchTeam2 = getDisplayTeamName(String(match?.team2 || '').trim());
+                      return matchTeam1 === team || matchTeam2 === team; // Use 'team' (current team in loop)
+                  });
+                  if (!currentTeamMatchEntry) return;
+
+                  let currentTeamScoreForWeek;
+                  const mappedTeam1 = getDisplayTeamName(String(currentTeamMatchEntry?.team1 || '').trim());
+                  const mappedTeam2 = getDisplayTeamName(String(currentTeamMatchEntry?.team2 || '').trim());
+
+                  if (mappedTeam1 === team) { // Use 'team'
+                      currentTeamScoreForWeek = parseFloat(currentTeamMatchEntry?.team1Score || '0');
+                  } else if (mappedTeam2 === team) { // Use 'team'
+                      currentTeamScoreForWeek = parseFloat(currentTeamMatchEntry?.team2Score || '0');
+                  } else { return; }
+
+                  if (isNaN(currentTeamScoreForWeek)) return;
+
+                  let outscoredCount = 0;
+                  let oneLessCount = 0;
+
+                  allScoresInCurrentWeek.forEach(otherTeamEntry => {
+                      if (otherTeamEntry.team !== team) { // Use 'team'
+                          if (currentTeamScoreForWeek > otherTeamEntry.score) {
+                              outscoredCount++;
+                          }
+                          if (currentTeamScoreForWeek - 1 === otherTeamEntry.score) {
+                              oneLessCount++;
+                          }
+                      }
+                  });
+
+                  const denominatorX = 11;
+                  const denominatorY = 22;
+                  const weeklyProjectedWinComponentX = denominatorX > 0 ? (outscoredCount / denominatorX) : 0;
+                  const weeklyLuckScorePartY = denominatorY > 0 ? (oneLessCount / denominatorY) : 0;
+                  totalWeeklyLuckScoreSumForDisplay += (weeklyProjectedWinComponentX + weeklyLuckScorePartY);
+              });
+          }
+
           allLuckRatings.push({
             year: parseInt(year),
             team: team,
             luckRating: teamData.luckRating,
-            actualWins: teamData.wins, // Use actual wins directly from seasonalMetrics (first pass calculation)
-            projectedWins: teamData.projectedWins // Use projected wins directly from seasonalMetrics
+            actualWins: actualWins,
+            projectedWins: totalWeeklyLuckScoreSumForDisplay // This is a temporary re-calculation for display
           });
         }
       });
