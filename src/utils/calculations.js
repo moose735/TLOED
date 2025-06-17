@@ -134,7 +134,7 @@ const calculateLuckRating = (historicalMatchups, teamName, year, weeklyGameScore
  * @param {number} year - The year.
  * @param {Object} weeklyGameScoresByYearAndWeek - Object containing all weekly scores.
  * @returns {number} The all-play win percentage.
- */
+*/
 const calculateAllPlayWinPercentage = (teamName, year, weeklyGameScoresByYearAndWeek) => {
     let allPlayWinsSeason = 0;
     let allPlayLossesSeason = 0;
@@ -172,14 +172,14 @@ const calculateAllPlayWinPercentage = (teamName, year, weeklyGameScoresByYearAnd
  * @param {Array<Object>} historicalMatchups - The raw historical matchup data.
  * @param {Function} getMappedTeamName - Function to get mapped team names.
  * @returns {{seasonalMetrics: Object, careerDPRData: Array}}
- * seasonalMetrics: { year: { teamName: { wins, losses, ties, pointsFor, adjustedDPR, luckRating, allPlayWinPercentage } } }
- * careerDPRData: Array of { team, dpr, wins, losses, ties, pointsFor }
+ * seasonalMetrics: { year: { teamName: { wins, losses, ties, pointsFor, pointsAgainst, adjustedDPR, luckRating, allPlayWinPercentage } } }
+ * careerDPRData: Array of { team, dpr, wins, losses, ties, pointsFor, pointsAgainst }
  */
 export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName) => {
-    const seasonalTeamStatsRaw = {}; // { year: { teamName: { totalPointsFor, wins, losses, ties, totalGames, weeklyScores: [] } } }
+    const seasonalTeamStatsRaw = {}; // { year: { teamName: { totalPointsFor, totalPointsAgainst, wins, losses, ties, totalGames, weeklyScores: [] } } }
     const allLeagueScoresByYear = {}; // { year: [score1, score2, ...] }
     const weeklyGameScoresByYearAndWeek = {}; // { year: { week: [{ team: 'TeamA', score: 100 }, ...] } }
-    const careerTeamStatsRaw = {}; // { teamName: { totalPointsFor, wins, losses, ties, totalGames, careerWeeklyScores: [] } }
+    const careerTeamStatsRaw = {}; // { teamName: { totalPointsFor, totalPointsAgainst, wins, losses, ties, totalGames, careerWeeklyScores: [] } }
 
     historicalMatchups.forEach(match => {
         const displayTeam1 = getMappedTeamName(String(match?.team1 || '').trim());
@@ -202,17 +202,19 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
             if (!seasonalTeamStatsRaw[year]) seasonalTeamStatsRaw[year] = {};
             if (!seasonalTeamStatsRaw[year][displayTeam1]) {
                 seasonalTeamStatsRaw[year][displayTeam1] = {
-                    totalPointsFor: 0, wins: 0, losses: 0, ties: 0, totalGames: 0
+                    totalPointsFor: 0, totalPointsAgainst: 0, wins: 0, losses: 0, ties: 0, totalGames: 0
                 };
             }
             seasonalTeamStatsRaw[year][displayTeam1].totalPointsFor += team1Score;
+            seasonalTeamStatsRaw[year][displayTeam1].totalPointsAgainst += team2Score; // Points against for Team 1
 
             if (!careerTeamStatsRaw[displayTeam1]) {
                 careerTeamStatsRaw[displayTeam1] = {
-                    totalPointsFor: 0, wins: 0, losses: 0, ties: 0, totalGames: 0, careerWeeklyScores: []
+                    totalPointsFor: 0, totalPointsAgainst: 0, wins: 0, losses: 0, ties: 0, totalGames: 0, careerWeeklyScores: []
                 };
             }
             careerTeamStatsRaw[displayTeam1].totalPointsFor += team1Score;
+            careerTeamStatsRaw[displayTeam1].totalPointsAgainst += team2Score; // Points against for Team 1
             careerTeamStatsRaw[displayTeam1].careerWeeklyScores.push(team1Score);
 
             if (!weeklyGameScoresByYearAndWeek[year]) weeklyGameScoresByYearAndWeek[year] = {};
@@ -227,17 +229,19 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
             if (!seasonalTeamStatsRaw[year]) seasonalTeamStatsRaw[year] = {};
             if (!seasonalTeamStatsRaw[year][displayTeam2]) {
                 seasonalTeamStatsRaw[year][displayTeam2] = {
-                    totalPointsFor: 0, wins: 0, losses: 0, ties: 0, totalGames: 0
+                    totalPointsFor: 0, totalPointsAgainst: 0, wins: 0, losses: 0, ties: 0, totalGames: 0
                 };
             }
             seasonalTeamStatsRaw[year][displayTeam2].totalPointsFor += team2Score;
+            seasonalTeamStatsRaw[year][displayTeam2].totalPointsAgainst += team1Score; // Points against for Team 2
 
             if (!careerTeamStatsRaw[displayTeam2]) {
                 careerTeamStatsRaw[displayTeam2] = {
-                    totalPointsFor: 0, wins: 0, losses: 0, ties: 0, totalGames: 0, careerWeeklyScores: []
+                    totalPointsFor: 0, totalPointsAgainst: 0, wins: 0, losses: 0, ties: 0, totalGames: 0, careerWeeklyScores: []
                 };
             }
             careerTeamStatsRaw[displayTeam2].totalPointsFor += team2Score;
+            careerTeamStatsRaw[displayTeam2].totalPointsAgainst += team1Score; // Points against for Team 2
             careerTeamStatsRaw[displayTeam2].careerWeeklyScores.push(team2Score);
 
             if (!weeklyGameScoresByYearAndWeek[year]) weeklyGameScoresByYearAndWeek[year] = {};
@@ -321,6 +325,7 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
                     losses: stats.losses,
                     ties: stats.ties,
                     pointsFor: stats.totalPointsFor,
+                    pointsAgainst: stats.totalPointsAgainst, // Include pointsAgainst here
                     adjustedDPR: 0, // No adjusted DPR if no games played
                     luckRating: 0,  // No luck rating if no games played
                     allPlayWinPercentage: 0, // No all-play if no games played
@@ -342,6 +347,7 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
                 losses: stats.losses,
                 ties: stats.ties,
                 pointsFor: stats.totalPointsFor,
+                pointsAgainst: stats.totalPointsAgainst, // Include pointsAgainst here
                 adjustedDPR: adjustedDPR,
                 luckRating: luckRating,
                 allPlayWinPercentage: allPlayWinPercentage,
@@ -385,7 +391,8 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
             wins: stats.wins,
             losses: stats.losses,
             ties: stats.ties,
-            pointsFor: stats.totalPointsFor
+            pointsFor: stats.totalPointsFor,
+            pointsAgainst: stats.totalPointsAgainst // Include pointsAgainst here
         });
     });
 
