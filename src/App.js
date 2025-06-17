@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   HISTORICAL_MATCHUPS_API_URL,
-  GOOGLE_SHEET_POWER_RANKINGS_API_URL, // Re-imported for consistency with original structure, though not directly used by PowerRankings.js anymore in its internal logic
+  GOOGLE_SHEET_POWER_RANKINGS_API_URL, // Still imported, but PowerRankings.js no longer uses it directly
 } from './config';
 
 // Import existing components from your provided App.js
@@ -12,7 +12,7 @@ import RecordBook from './lib/RecordBook';
 import DPRAnalysis from './lib/DPRAnalysis';
 import LuckRatingAnalysis from './lib/LuckRatingAnalysis';
 import TeamDetailPage from './lib/TeamDetailPage';
-import Head2HeadGrid from './lib/Head2HeadGrid';
+import Head2HeadGrid from './lib/Head2HeadGrid'; // Stays for its own tab
 
 
 // Define the available tabs and their categories for the dropdown
@@ -76,8 +76,8 @@ const App = () => {
       setLoadingHistoricalData(true);
       setHistoricalDataError(null); // Clear previous errors
 
-      let fetchedMatchupData = []; // Initialize here to ensure it's always an array
-
+      // Fetch Historical Matchups
+      let fetchedMatchupData = [];
       try {
         if (HISTORICAL_MATCHUPS_API_URL === 'YOUR_GOOGLE_SHEET_HISTORICAL_MATCHUPS_API_URL') {
           throw new Error("HISTORICAL_MATCHUPS_API_URL not configured in config.js. Please update it.");
@@ -86,14 +86,14 @@ const App = () => {
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status} - Could not load historical matchup data.`);
         }
-
+        
         const textResponse = await response.text(); // Get raw text to inspect
-        let parsedData = null; // Declare parsedData here
         try {
-          parsedData = JSON.parse(textResponse);
+          const parsedData = JSON.parse(textResponse);
           // Crucial: Check if the parsed data is an object with a 'data' property that is an array
           if (parsedData && typeof parsedData === 'object' && Array.isArray(parsedData.data)) {
             fetchedMatchupData = parsedData.data; // Extract the actual array
+            setHistoricalMatchups(fetchedMatchupData);
           } else {
             console.error("API response for historical matchups is not in the expected format (object with 'data' array):", parsedData);
             throw new Error("Historical matchup data is not in the expected array format. Raw response: " + textResponse);
@@ -105,18 +105,20 @@ const App = () => {
           return; // Stop execution if parsing fails to avoid further issues
         }
 
-        setHistoricalMatchups(fetchedMatchupData); // Set state only after successful parsing and validation
-
         // Dynamically populate TEAMS subTabs
         const uniqueTeamsSet = new Set();
-        // The `fetchedMatchupData` is now guaranteed to be an array here due to previous checks
-        fetchedMatchupData.forEach(match => {
-          const team1 = getMappedTeamName(match.team1);
-          const team2 = getMappedTeamName(match.team2);
-          if (team1) uniqueTeamsSet.add(team1);
-          if (team2) uniqueTeamsSet.add(team2);
-        });
-
+        // Check if fetchedMatchupData is actually an array before iterating
+        if (Array.isArray(fetchedMatchupData)) {
+          fetchedMatchupData.forEach(match => {
+            const team1 = getMappedTeamName(match.team1);
+            const team2 = getMappedTeamName(match.team2);
+            if (team1) uniqueTeamsSet.add(team1);
+            if (team2) uniqueTeamsSet.add(team2);
+          });
+        } else {
+          console.warn("fetchedMatchupData is not an array after processing, cannot populate team list.");
+        }
+        
         const uniqueTeams = Array.from(uniqueTeamsSet).sort();
 
         NAV_CATEGORIES.TEAMS.subTabs = uniqueTeams.map(team => ({
@@ -136,7 +138,6 @@ const App = () => {
       }
 
       // Always use mock data for historical champions as per request
-      // This should ideally come from the fetched data if possible
       setHistoricalChampions([
         { year: 2023, champion: "Mock Champion 2023" },
         { year: 2022, champion: "Mock Champion 2022" },
@@ -173,7 +174,7 @@ const App = () => {
           <div className="relative group">
             <button className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none flex items-center transition-colors duration-200">
               {NAV_CATEGORIES.LEAGUE_DATA.label}
-              <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
               </svg>
             </button>
@@ -195,7 +196,7 @@ const App = () => {
             <div className="relative group">
               <button className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none flex items-center transition-colors duration-200">
                 {NAV_CATEGORIES.TEAMS.label}
-                <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
                 </svg>
               </button>
@@ -221,7 +222,7 @@ const App = () => {
             className="text-gray-800 focus:outline-none p-2 rounded-md hover:bg-gray-100 transition-colors duration-200"
             aria-label="Toggle mobile menu"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7"></path>
             </svg>
           </button>
@@ -238,7 +239,7 @@ const App = () => {
               className="text-gray-800 focus:outline-none p-2 rounded-md hover:bg-gray-100 transition-colors duration-200"
               aria-label="Close mobile menu"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
               </svg>
             </button>
@@ -259,7 +260,7 @@ const App = () => {
                 onClick={() => toggleSubMenu('LEAGUE_DATA')}
               >
                 {NAV_CATEGORIES.LEAGUE_DATA.label}
-                <svg className={`w-5 h-5 transition-transform duration-200 ${openSubMenu === 'LEAGUE_DATA' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <svg className={`w-5 h-5 transition-transform duration-200 ${openSubMenu === 'LEAGUE_DATA' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
                 </svg>
               </button>
@@ -287,7 +288,7 @@ const App = () => {
                   onClick={() => toggleSubMenu('TEAMS')}
                 >
                   {NAV_CATEGORIES.TEAMS.label}
-                  <svg className={`w-5 h-5 transition-transform duration-200 ${openSubMenu === 'TEAMS' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <svg className={`w-5 h-5 transition-transform duration-200 ${openSubMenu === 'TEAMS' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
                   </svg>
                 </button>
@@ -316,7 +317,7 @@ const App = () => {
         {loadingHistoricalData ? (
           // Enhanced Loading Spinner
           <div className="flex flex-col items-center justify-center min-h-[200px] text-blue-600">
-            <svg className="animate-spin h-10 w-10 text-blue-500 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <svg className="animate-spin h-10 w-10 text-blue-500 mb-3" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
@@ -391,7 +392,7 @@ const App = () => {
         <p>This site displays league data powered by Google Apps Script.</p>
         <p className="mt-2">
           For Apps Script deployment instructions, visit:{" "}
-          <a href="https://developers.google.com/apps-script/guides/web" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+          <a href="[https://developers.google.com/apps-script/guides/web](https://developers.google.com/apps-script/guides/web)" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
             Google Apps Script Web Apps Guide
           </a>
         </p>
