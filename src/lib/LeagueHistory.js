@@ -257,7 +257,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
       if (seasonsCount > 0) {
           seasonsDisplay = `${minYear}-${maxYear} (${seasonsCount})`;
           if (minYear === maxYear) { // Handle single season case: "2023 (1)"
-              seasonsDisplay = `${minYear} (${seasonsCount})`;
+            seasonsDisplay = `${minYear} (${seasonsCount})`;
           }
       }
 
@@ -383,10 +383,16 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
   // Formatters
   const formatPercentage = (value) => {
     if (typeof value === 'number' && !isNaN(value)) {
-      // Format as decimal with 3 places, then append '%'
-      return `${value.toFixed(3)}%`;
+      // Format as decimal with 3 places, then remove leading '0.' if present
+      let formatted = value.toFixed(3);
+      if (formatted.startsWith('0.')) {
+        formatted = formatted.substring(1); // Remove the '0'
+      } else if (formatted.startsWith('-0.')) {
+        formatted = `-${formatted.substring(2)}`; // Remove '-0'
+      }
+      return `${formatted}%`;
     }
-    return '0.000%';
+    return '.000%';
   };
 
   const formatDPR = (dprValue) => {
