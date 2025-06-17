@@ -181,7 +181,6 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
         const team1Score = parseFloat(match?.team1Score || '0');
         const team2Score = parseFloat(match?.team2Score || '0');
 
-        // IMPORTANT: Filter out invalid data or empty team names
         if (isNaN(year) || isNaN(week) || isNaN(team1Score) || isNaN(team2Score) || (displayTeam1 === '' && displayTeam2 === '')) {
             console.warn(`Skipping invalid matchup data at index ${index}:`, match);
             return;
@@ -190,13 +189,11 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
         const isTie = team1Score === team2Score;
         const team1Won = team1Score > team2Score;
 
-        // Points and weekly scores are always populated for valid matches, regardless of bye status
-        // These accumulated points and scores will be used for AVERAGE SCORE and HIGH/LOW SCORE
         if (displayTeam1 !== '') {
             if (!seasonalTeamStatsRaw[year]) seasonalTeamStatsRaw[year] = {};
             if (!seasonalTeamStatsRaw[year][displayTeam1]) {
                 seasonalTeamStatsRaw[year][displayTeam1] = {
-                    totalPointsFor: 0, wins: 0, losses: 0, ties: 0, totalGames: 0 // totalGames here is for record only
+                    totalPointsFor: 0, wins: 0, losses: 0, ties: 0, totalGames: 0
                 };
             }
             seasonalTeamStatsRaw[year][displayTeam1].totalPointsFor += team1Score;
@@ -207,7 +204,7 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
                 };
             }
             careerTeamStatsRaw[displayTeam1].totalPointsFor += team1Score;
-            careerTeamStatsRaw[displayTeam1].careerWeeklyScores.push(team1Score); // This builds the array for ALL scored weeks
+            careerTeamStatsRaw[displayTeam1].careerWeeklyScores.push(team1Score);
 
             if (!weeklyGameScoresByYearAndWeek[year]) weeklyGameScoresByYearAndWeek[year] = {};
             if (!weeklyGameScoresByYearAndWeek[year][week]) weeklyGameScoresByYearAndWeek[year][week] = [];
@@ -218,7 +215,7 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
             if (!seasonalTeamStatsRaw[year]) seasonalTeamStatsRaw[year] = {};
             if (!seasonalTeamStatsRaw[year][displayTeam2]) {
                 seasonalTeamStatsRaw[year][displayTeam2] = {
-                    totalPointsFor: 0, wins: 0, losses: 0, ties: 0, totalGames: 0 // totalGames here is for record only
+                    totalPointsFor: 0, wins: 0, losses: 0, ties: 0, totalGames: 0
                 };
             }
             seasonalTeamStatsRaw[year][displayTeam2].totalPointsFor += team2Score;
@@ -229,7 +226,7 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
                 };
             }
             careerTeamStatsRaw[displayTeam2].totalPointsFor += team2Score;
-            careerTeamStatsRaw[displayTeam2].careerWeeklyScores.push(team2Score); // This builds the array for ALL scored weeks
+            careerTeamStatsRaw[displayTeam2].careerWeeklyScores.push(team2Score);
 
             if (!weeklyGameScoresByYearAndWeek[year]) weeklyGameScoresByYearAndWeek[year] = {};
             if (!weeklyGameScoresByYearAndWeek[year][week]) weeklyGameScoresByYearAndWeek[year][week] = [];
@@ -239,8 +236,8 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
         // Only update win/loss/tie records and totalGames if it's a REGULAR SEASON game AND NOT a PointsOnlyBye
         if ((match.regSeason === true || match.regSeason === 'true') && !(match.pointsOnlyBye === true || match.pointsOnlyBye === 'true')) {
             if (displayTeam1 !== '') {
-                seasonalTeamStatsRaw[year][displayTeam1].totalGames++; // This `totalGames` is for the W-L-T record
-                careerTeamStatsRaw[displayTeam1].totalGames++; // This `totalGames` is for the W-L-T record
+                seasonalTeamStatsRaw[year][displayTeam1].totalGames++;
+                careerTeamStatsRaw[displayTeam1].totalGames++;
                 if (isTie) {
                     seasonalTeamStatsRaw[year][displayTeam1].ties++;
                     careerTeamStatsRaw[displayTeam1].ties++;
@@ -254,8 +251,8 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
             }
 
             if (displayTeam2 !== '') {
-                seasonalTeamStatsRaw[year][displayTeam2].totalGames++; // This `totalGames` is for the W-L-T record
-                careerTeamStatsRaw[displayTeam2].totalGames++; // This `totalGames` is for the W-L-T record
+                seasonalTeamStatsRaw[year][displayTeam2].totalGames++;
+                careerTeamStatsRaw[displayTeam2].totalGames++;
                 if (isTie) {
                     seasonalTeamStatsRaw[year][displayTeam2].ties++;
                     careerTeamStatsRaw[displayTeam2].ties++;
@@ -292,13 +289,9 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
                                          .map(entry => entry.score)
                                          : [];
 
-            // --- FIX APPLIED HERE for Average Score ---
-            // The average score should be total points / total weeks played (including playoffs/consolation/byes)
+            // FIX: Average score is total points / total weeks a score was recorded (including playoffs/consolation/byes)
             const totalWeeksPlayedForAverage = teamSeasonalScores.length;
             const averageScoreForSeason = totalWeeksPlayedForAverage > 0 ? stats.totalPointsFor / totalWeeksPlayedForAverage : 0;
-            console.log(`\nDEBUG: ${team} in ${year} - Total Points: ${stats.totalPointsFor}, Total Weeks Played (for Avg Score): ${totalWeeksPlayedForAverage}`);
-            console.log(`DEBUG: Calculated Average Score for ${team} in ${year}: ${averageScoreForSeason}`);
-            // --- END FIX ---
 
             const teamHighScoreForSeason = totalWeeksPlayedForAverage > 0 ? Math.max(...teamSeasonalScores) : 0;
             const teamLowScoreForSeason = totalWeeksPlayedForAverage > 0 ? Math.min(...teamSeasonalScores) : 0;
@@ -306,13 +299,24 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
             // Win percentage is still based on regular season games that count for record
             const teamWinPercentage = (stats.totalGames > 0) ? ((stats.wins + 0.5 * stats.ties) / stats.totalGames) : 0;
 
-            if (totalWeeksPlayedForAverage === 0 && stats.totalGames === 0) { // If a team had no games whatsoever where points were scored or record was kept
-                console.log(`Team ${team} in ${year} has no recorded scores or games. Skipping Raw DPR calculation.`);
+            console.log(`\n--- SEASONAL DPR Inputs for ${team} in ${year} ---`);
+            console.log(`  Raw Stats: Points For: ${stats.totalPointsFor}, Total Games (Record): ${stats.totalGames}, Wins: ${stats.wins}, Losses: ${stats.losses}, Ties: ${stats.ties}`);
+            console.log(`  Derived Inputs for DPR:`);
+            console.log(`    Average Score (total points / total weeks with score): ${averageScoreForSeason} (Total weeks with score: ${totalWeeksPlayedForAverage})`);
+            console.log(`    High Score: ${teamHighScoreForSeason}`);
+            console.log(`    Low Score: ${teamLowScoreForSeason}`);
+            console.log(`    Win Percentage (Reg. Season Record): ${teamWinPercentage}`);
+            console.log(`    Raw Scores Used for High/Low/Average:`, teamSeasonalScores);
+            console.log(`  ------------------------------------`);
+
+
+            if (totalWeeksPlayedForAverage === 0 && stats.totalGames === 0) {
+                console.log(`Skipping Raw DPR calculation for ${team} in ${year} as no scores or games recorded.`);
                 return;
             }
 
             const rawDPR = calculateRawDPR(averageScoreForSeason, teamHighScoreForSeason, teamLowScoreForSeason, teamWinPercentage);
-            stats.rawDPR = rawDPR; // Store raw DPR temporarily
+            stats.rawDPR = rawDPR;
 
             console.log(`Calculated Raw DPR for ${team} in ${year}: ${rawDPR}`);
 
@@ -323,7 +327,7 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
         });
 
         const avgRawDPRForSeason = teamsCountForDPR > 0 ? totalRawDPRForSeason / teamsCountForDPR : 0;
-        console.log(`\nAverage Raw DPR for ${year} season: ${avgRawDPRForSeason} (from ${teamsCountForDPR} teams)`);
+        console.log(`\nAverage Raw DPR for ${year} season (used for Adjusted DPR): ${avgRawDPRForSeason} (from ${teamsCountForDPR} teams)`);
 
 
         // Second pass for adjusted DPR, Luck Rating, and All-Play
@@ -354,14 +358,16 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
 
             const averageScoreForSeason = totalWeeksPlayedForAverage > 0 ? stats.totalPointsFor / totalWeeksPlayedForAverage : 0;
 
-            // Adjusted DPR
             const adjustedDPR = avgRawDPRForSeason > 0 ? stats.rawDPR / avgRawDPRForSeason : 0;
-
-            // Luck Rating
             const luckRating = calculateLuckRating(historicalMatchups, team, parseInt(year), weeklyGameScoresByYearAndWeek, getMappedTeamName);
-
-            // All-Play Win Percentage
             const allPlayWinPercentage = calculateAllPlayWinPercentage(team, parseInt(year), weeklyGameScoresByYearAndWeek);
+
+            console.log(`\nFinal Seasonal Metrics for ${team} in ${year}:`);
+            console.log(`  Adjusted DPR: ${adjustedDPR}`);
+            console.log(`  Luck Rating: ${luckRating}`);
+            console.log(`  All-Play Win Percentage: ${allPlayWinPercentage}`);
+            console.log(`  (Raw DPR: ${stats.rawDPR}, Average Score: ${averageScoreForSeason}, High: ${teamSeasonalScores.length > 0 ? Math.max(...teamSeasonalScores) : 0}, Low: ${teamSeasonalScores.length > 0 ? Math.min(...teamSeasonalScores) : 0}, Win%: ${(stats.totalGames > 0) ? ((stats.wins + 0.5 * stats.ties) / stats.totalGames) : 0})`);
+
 
             seasonalMetrics[year][team] = {
                 wins: stats.wins,
@@ -385,13 +391,9 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
     Object.keys(careerTeamStatsRaw).filter(team => team !== '').forEach(team => {
         const stats = careerTeamStatsRaw[team];
 
-        // --- FIX APPLIED HERE for Career Average Score ---
-        // The average score should be total career points / total career weeks played (including playoffs/consolation/byes)
+        // FIX: Average score is total career points / total career weeks a score was recorded
         const totalCareerWeeksPlayedForAverage = stats.careerWeeklyScores.length;
         const averageScoreOverall = totalCareerWeeksPlayedForAverage > 0 ? stats.totalPointsFor / totalCareerWeeksPlayedForAverage : 0;
-        console.log(`\nDEBUG: ${team} (Career) - Total Points: ${stats.totalPointsFor}, Total Weeks Played (for Avg Score): ${totalCareerWeeksPlayedForAverage}`);
-        console.log(`DEBUG: Calculated Career Average Score for ${team}: ${averageScoreOverall}`);
-        // --- END FIX ---
 
         const teamMaxScoreOverall = totalCareerWeeksPlayedForAverage > 0 ? Math.max(...stats.careerWeeklyScores) : 0;
         const teamMinScoreOverall = totalCareerWeeksPlayedForAverage > 0 ? Math.min(...stats.careerWeeklyScores) : 0;
@@ -399,13 +401,23 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
         // Career win percentage is still based on regular season games that count for record
         const careerWinPercentage = (stats.totalGames > 0) ? ((stats.wins + 0.5 * stats.ties) / stats.totalGames) : 0;
 
+        console.log(`\n--- CAREER DPR Inputs for ${team} ---`);
+        console.log(`  Raw Stats: Career Points For: ${stats.totalPointsFor}, Career Games (Record): ${stats.totalGames}, Wins: ${stats.wins}, Losses: ${stats.losses}, Ties: ${stats.ties}`);
+        console.log(`  Derived Inputs for DPR:`);
+        console.log(`    Average Score (total points / total weeks with score): ${averageScoreOverall} (Total career weeks with score: ${totalCareerWeeksPlayedForAverage})`);
+        console.log(`    High Score: ${teamMaxScoreOverall}`);
+        console.log(`    Low Score: ${teamMinScoreOverall}`);
+        console.log(`    Win Percentage (Career Reg. Season Record): ${careerWinPercentage}`);
+        console.log(`    Raw Scores Used for High/Low/Average:`, stats.careerWeeklyScores);
+        console.log(`  ------------------------------------`);
+
         if (totalCareerWeeksPlayedForAverage === 0 && stats.totalGames === 0) {
-            console.log(`Team ${team} has no recorded scores or games across career. Skipping Career Raw DPR calculation.`);
+            console.log(`Skipping Career Raw DPR calculation for ${team} as no scores or games recorded.`);
             return;
         }
 
         const rawDPR = calculateRawDPR(averageScoreOverall, teamMaxScoreOverall, teamMinScoreOverall, careerWinPercentage);
-        stats.rawDPR = rawDPR; // Store raw DPR temporarily
+        stats.rawDPR = rawDPR;
 
         if (!isNaN(rawDPR)) {
             totalRawDPROverall += rawDPR;
@@ -414,7 +426,7 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
     });
 
     const avgRawDPROverall = teamsWithValidCareerDPR > 0 ? totalRawDPROverall / teamsWithValidCareerDPR : 0;
-    console.log(`\nAverage Raw DPR Overall (across all teams and seasons): ${avgRawDPROverall} (from ${teamsWithValidCareerDPR} teams)`);
+    console.log(`\nAverage Raw DPR Overall (across all teams and seasons, used for Career Adjusted DPR): ${avgRawDPROverall} (from ${teamsWithValidCareerDPR} teams)`);
 
 
     Object.keys(careerTeamStatsRaw).filter(team => team !== '').forEach(team => {
@@ -437,7 +449,9 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
 
         const adjustedDPR = avgRawDPROverall > 0 ? stats.rawDPR / avgRawDPROverall : 0;
 
-        console.log(`Career Adjusted DPR for ${team}: ${adjustedDPR} (Raw DPR: ${stats.rawDPR}, Avg Raw DPR Overall: ${avgRawDPROverall})`);
+        console.log(`\nFinal Career Metrics for ${team}:`);
+        console.log(`  Adjusted DPR: ${adjustedDPR}`);
+        console.log(`  (Raw DPR: ${stats.rawDPR}, Average Score: ${averageScoreOverall}, High: ${stats.careerWeeklyScores.length > 0 ? Math.max(...stats.careerWeeklyScores) : 0}, Low: ${stats.careerWeeklyScores.length > 0 ? Math.min(...stats.careerWeeklyScores) : 0}, Win%: ${(stats.totalGames > 0) ? ((stats.wins + 0.5 * stats.ties) / stats.totalGames) : 0})`);
 
         careerDPRData.push({
             team,
