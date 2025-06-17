@@ -71,9 +71,9 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
     const [powerRankings, setPowerRankings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [weeklyChartData, setWeeklyChartData] = useState([]); // State for chart data (weekly DPR)
-    const [chartTeams, setChartTeams] = useState([]); // State for teams represented in the chart
-    const [maxTeamsInChart, setMaxTeamsInChart] = useState(1); // To set Y-axis domain dynamically
+    const [weeklyChartData, setWeeklyChartData] = useState([]);
+    const [chartTeams, setChartTeams] = useState([]);
+    const [maxTeamsInChart, setMaxTeamsInChart] = useState(1);
 
 
     useEffect(() => {
@@ -109,8 +109,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                 return;
             }
 
-            // The sorting for `calculatedRankings` will now happen AFTER movement is added,
-            // as the rank itself will be assigned in the final map.
+            const yearData = seasonalMetrics[newestYear]; // This was missing in the previous snippet, crucial for initialCalculatedRankings
             let initialCalculatedRankings = Object.keys(yearData)
                 .map(teamName => ({
                     team: teamName,
@@ -227,6 +226,13 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                 weeklyDPRsChartData.push(weeklyEntry);
             }
 
+            // --- DEBUG LOGS START ---
+            console.log("--- DEBUG: weeklyDPRsChartData ---");
+            console.log(weeklyDPRsChartData);
+            console.log("-----------------------------------");
+            // --- DEBUG LOGS END ---
+
+
             setWeeklyChartData(weeklyDPRsChartData);
             
             const activeChartTeams = uniqueTeamsInNewestYear.filter(team =>
@@ -239,29 +245,51 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
             const currentWeekDataForTable = weeklyDPRsChartData[weeklyDPRsChartData.length - 1];
             const previousWeekDataForTable = weeklyDPRsChartData.length > 1 ? weeklyDPRsChartData[weeklyDPRsChartData.length - 2] : null;
 
+            // --- DEBUG LOGS START ---
+            console.log("--- DEBUG: currentWeekDataForTable ---");
+            console.log(currentWeekDataForTable);
+            console.log("--- DEBUG: previousWeekDataForTable ---");
+            console.log(previousWeekDataForTable);
+            console.log("--------------------------------------");
+            // --- DEBUG LOGS END ---
+
             // Create a map for quick lookup of current week's ranks
             const currentRanksMap = {};
             if (currentWeekDataForTable) {
+                // IMPORTANT: Iterate over uniqueTeamsInNewestYear to ensure all teams are covered
+                // and to avoid issues if a team is missing from a specific weekly entry
                 uniqueTeamsInNewestYear.forEach(team => {
-                    // Use a default of 0 if rank is undefined (e.g., team hasn't played yet)
-                    currentRanksMap[team] = currentWeekDataForTable[team] || 0;
+                    currentRanksMap[team] = currentWeekDataForTable[team] || 0; // Default to 0 if rank is undefined
                 });
             }
 
             // Re-map initialCalculatedRankings to add current rank and movement
             const finalCalculatedRankings = initialCalculatedRankings
                 .map(team => {
-                    const currentRank = currentRanksMap[team.team] || 0; // Get current rank from the map
+                    const currentRank = currentRanksMap[team.team] || 0; // Safely get current rank
                     let movement = 0; // Default to no movement
+
+                    // --- DEBUG LOGS START FOR EACH TEAM ---
+                    console.log(`--- DEBUG: Team: ${team.team} ---`);
+                    console.log(`  Current Rank (from chart data): ${currentRank}`);
+                    // --- DEBUG LOGS END ---
 
                     if (previousWeekDataForTable) { // Only calculate movement if there's a previous week
                         const previousRank = previousWeekDataForTable[team.team];
 
+                        // --- DEBUG LOGS START FOR EACH TEAM ---
+                        console.log(`  Previous Rank (from chart data): ${previousRank}`);
+                        // --- DEBUG LOGS END ---
+
                         if (typeof previousRank === 'number' && !isNaN(previousRank) && previousRank !== 0) {
-                             // Movement is previous rank minus current rank.
-                             // Positive = moved up (rank number decreased)
-                             // Negative = moved down (rank number increased)
-                            movement = previousRank - currentRank;
+                             movement = previousRank - currentRank;
+                        } else {
+                            // This branch means previousRank was not a valid number or was 0
+                            // For Week 2, previousRank might be 0 if the team didn't play Week 1,
+                            // or it could be undefined if previousWeekDataForTable[team.team] was not set.
+                            // We already default to 0 for currentRank if not found.
+                            // If previousRank is problematic, we want movement to be 0 or 'N/A' not NaN.
+                            movement = 0; // Explicitly set to 0 if previousRank is invalid
                         }
                     }
                     // Assign the current rank here. The table will be sorted by DPR, not this rank property.
