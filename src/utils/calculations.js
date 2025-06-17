@@ -165,9 +165,6 @@ const calculateAllPlayWinPercentage = (teamName, year, weeklyGameScoresByYearAnd
     return totalAllPlayGamesSeason > 0 ? ((allPlayWinsSeason + (0.5 * allPlayTiesSeason)) / totalAllPlayGamesSeason) : 0;
 };
 
-
----
-
 ## calculateAllLeagueMetrics Function
 
 ```javascript
