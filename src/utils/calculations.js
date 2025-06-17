@@ -301,6 +301,7 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
 
 
     const seasonalMetrics = {}; // Final output structure for seasonal data
+    const leagueSeasonalAverageRawDPRs = []; // Stores the average raw DPR for each season
 
     // --- Calculate Seasonal DPR, Luck Rating, All-Play ---
     Object.keys(seasonalTeamStatsRaw).sort().forEach(year => {
@@ -329,6 +330,9 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
         });
 
         const avgRawDPRForSeason = teamsCountForDPR > 0 ? totalRawDPRForSeason / teamsCountForDPR : 0;
+        if (avgRawDPRForSeason > 0) { // Only add if there were teams with valid DPR for that season
+            leagueSeasonalAverageRawDPRs.push(avgRawDPRForSeason);
+        }
 
         // Second pass for adjusted DPR, Luck Rating, and All-Play
         teamsInSeason.forEach(team => {
@@ -371,8 +375,11 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
 
     // --- Calculate Career DPR ---
     const careerDPRData = [];
-    let totalRawDPROverall = 0;
-    let teamsWithValidCareerDPR = 0;
+
+    // Calculate the "Average Raw DPR of all teams in the league (career)" by averaging seasonal averages
+    const avgRawDPROverall = leagueSeasonalAverageRawDPRs.length > 0
+        ? leagueSeasonalAverageRawDPRs.reduce((sum, avg) => sum + avg, 0) / leagueSeasonalAverageRawDPRs.length
+        : 0;
 
     Object.keys(careerTeamStatsRaw).filter(team => team !== '').forEach(team => { // Filter out empty teams
         const stats = careerTeamStatsRaw[team];
@@ -403,17 +410,7 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
         const rawDPR = calculateRawDPR(averageOfSeasonalAverages, careerWinPercentage, highestSeasonAverageScore, lowestSeasonAverageScore);
         stats.rawDPR = rawDPR; // Store raw DPR temporarily
 
-        if (!isNaN(rawDPR)) {
-            totalRawDPROverall += rawDPR;
-            teamsWithValidCareerDPR++;
-        }
-    });
-
-    const avgRawDPROverall = teamsWithValidCareerDPR > 0 ? totalRawDPROverall / teamsWithValidCareerDPR : 0;
-
-    Object.keys(careerTeamStatsRaw).filter(team => team !== '').forEach(team => { // Filter out empty teams
-        const stats = careerTeamStatsRaw[team];
-        const adjustedDPR = avgRawDPROverall > 0 ? stats.rawDPR / avgRawDPROverall : 0;
+        const adjustedDPR = avgRawDPROverall > 0 ? rawDPR / avgRawDPROverall : 0;
         careerDPRData.push({
             team,
             dpr: adjustedDPR,
