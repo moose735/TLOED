@@ -129,290 +129,234 @@ const calculateLuckRating = (historicalMatchups, teamName, year, weeklyGameScore
 
 
 /**
- * Calculates various league metrics (DPR, Luck Rating, records) across all seasons and career.
- * This is a centralized utility to avoid redundant calculations across components.
- * @param {Array<Object>} historicalMatchups - Array of all historical matchup data.
- * @param {Function} getDisplayTeamName - Function to map raw team names to display names.
- * @returns {Object} Contains seasonalMetrics and careerDPRData.
+ * Helper function to calculate All-Play Win Percentage for a team in a season.
+ * @param {string} teamName - The name of the team.
+ * @param {number} year - The year.
+ * @param {Object} weeklyGameScoresByYearAndWeek - Object containing all weekly scores.
+ * @returns {number} The all-play win percentage.
  */
-export const calculateAllLeagueMetrics = (historicalMatchups, getDisplayTeamName) => {
-    // --- Data Aggregation Structures ---
-    // Note: seasonalTeamStats will store the final processed seasonal metrics
-    const seasonalTeamStats = {}; // { year: { teamName: { wins, losses, ties, pointsFor, pointsAgainst, totalGames, weeklyScores: [], allPlayWins: 0, allPlayGames: 0, luckRating: null, adjustedDPR: null, finish: null, weeklyHighScores: 0, weeklyTop2Scores: 0, weeklyTop3Scores: 0, projectedWins: 0 } } }
-    const careerTeamStatsRaw = {}; // { teamName: { wins, losses, ties, totalPointsFor, totalPointsAgainst, totalGames, careerWeeklyScores: [], championships: 0, playoffAppearances: Set<year>, highestScore: {value, year, week, matchup}, lowestScore: {value: Infinity, year, week, matchup} } }
-    const seasonLeagueScores = {}; // { year: { allGameScores: [], weeklyScores: { week: [{ team, score }] } } }
-    const championshipData = {}; // { year: { champion: 'Team', secondPlace: 'Team', thirdPlace: 'Team', fourthPlace: 'Team', winnerScore: 0, loserScore: 0, games: [] } }
+const calculateAllPlayWinPercentage = (teamName, year, weeklyGameScoresByYearAndWeek) => {
+    let allPlayWinsSeason = 0;
+    let allPlayLossesSeason = 0;
+    let allPlayTiesSeason = 0;
 
-    // --- First Pass: Aggregate raw seasonal and career stats ---
+    if (weeklyGameScoresByYearAndWeek[year]) {
+        Object.keys(weeklyGameScoresByYearAndWeek[year]).forEach(week => {
+            const allScoresInWeek = weeklyGameScoresByYearAndWeek[year][week];
+            const currentTeamScoreInWeek = allScoresInWeek.find(entry => entry.team === teamName)?.score;
+
+            if (currentTeamScoreInWeek !== undefined && !isNaN(currentTeamScoreInWeek)) {
+                allScoresInWeek.forEach(otherTeamEntry => {
+                    // Ensure the other team is not empty and not the current team
+                    if (otherTeamEntry.team !== teamName && otherTeamEntry.team !== '' && otherTeamEntry.score !== undefined && !isNaN(otherTeamEntry.score)) {
+                        if (currentTeamScoreInWeek > otherTeamEntry.score) {
+                            allPlayWinsSeason++;
+                        } else if (currentTeamScoreInWeek === otherTeamEntry.score) {
+                            allPlayTiesSeason++;
+                        } else {
+                            allPlayLossesSeason++;
+                        }
+                    }
+                });
+            }
+        });
+    }
+    const totalAllPlayGamesSeason = allPlayWinsSeason + allPlayLossesSeason + allPlayTiesSeason;
+    return totalAllPlayGamesSeason > 0 ? ((allPlayWinsSeason + (0.5 * allPlayTiesSeason)) / totalAllPlayGamesSeason) : 0;
+};
+
+
+/**
+ * Calculates all league-wide and team-specific metrics (DPR, Luck Rating, All-Play)
+ * for all seasons based on historical matchup data.
+ * @param {Array<Object>} historicalMatchups - The raw historical matchup data.
+ * @param {Function} getMappedTeamName - Function to get mapped team names.
+ * @returns {{seasonalMetrics: Object, careerDPRData: Array}}
+ * seasonalMetrics: { year: { teamName: { wins, losses, ties, pointsFor, adjustedDPR, luckRating, allPlayWinPercentage } } }
+ * careerDPRData: Array of { team, dpr, wins, losses, ties, pointsFor }
+ */
+export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName) => {
+    const seasonalTeamStatsRaw = {}; // { year: { teamName: { totalPointsFor, wins, losses, ties, totalGames, weeklyScores: [] } } }
+    const allLeagueScoresByYear = {}; // { year: [score1, score2, ...] }
+    const weeklyGameScoresByYearAndWeek = {}; // { year: { week: [{ team: 'TeamA', score: 100 }, ...] } }
+    const careerTeamStatsRaw = {}; // { teamName: { totalPointsFor, wins, losses, ties, totalGames, careerWeeklyScores: [] } }
+
     historicalMatchups.forEach(match => {
-        const team1 = getDisplayTeamName(String(match.team1 || '').trim());
-        const team2 = getDisplayTeamName(String(match.team2 || '').trim());
-        const year = parseInt(match.year);
-        const week = parseInt(match.week);
-        const team1Score = parseFloat(match.team1Score);
-        const team2Score = parseFloat(match.team2Score);
+        const displayTeam1 = getMappedTeamName(String(match?.team1 || '').trim());
+        const displayTeam2 = getMappedTeamName(String(match?.team2 || '').trim());
+        const year = parseInt(match?.year || '0');
+        const week = parseInt(match?.week || '0');
+        const team1Score = parseFloat(match?.team1Score || '0');
+        const team2Score = parseFloat(match?.team2Score || '0');
 
-        // Crucial check: Ensure scores are numbers before proceeding
-        if (isNaN(team1Score) || isNaN(team2Score)) {
-            // console.warn(`Skipping matchup due to invalid scores for year ${year}, week ${week}:`, match);
+        // IMPORTANT: Filter out invalid data or empty team names
+        if (isNaN(year) || isNaN(week) || isNaN(team1Score) || isNaN(team2Score) || (displayTeam1 === '' && displayTeam2 === '')) {
             return;
         }
 
-        // Initialize structures for year, teams if they don't exist
-        if (!seasonalTeamStats[year]) seasonalTeamStats[year] = {};
-        if (!seasonLeagueScores[year]) seasonLeagueScores[year] = { allGameScores: [], weeklyScores: {} };
-        if (!seasonLeagueScores[year].weeklyScores[week]) seasonLeagueScores[year].weeklyScores[week] = [];
+        const isTie = team1Score === team2Score;
+        const team1Won = team1Score > team2Score;
 
-        // Helper to initialize team stats if they don't exist for the current year or career
-        const initializeTeamStats = (teamName) => {
-            if (teamName && teamName !== '') {
-                if (!seasonalTeamStats[year][teamName]) {
-                    seasonalTeamStats[year][teamName] = {
-                        wins: 0, losses: 0, ties: 0, pointsFor: 0, pointsAgainst: 0, totalGames: 0,
-                        weeklyScores: [], allPlayWins: 0, allPlayGames: 0, luckRating: null, adjustedDPR: null, finish: null,
-                        weeklyHighScores: 0, weeklyTop2Scores: 0, weeklyTop3Scores: 0, projectedWins: 0
-                    };
-                }
-                if (!careerTeamStatsRaw[teamName]) {
-                    careerTeamStatsRaw[teamName] = {
-                        wins: 0, losses: 0, ties: 0, totalPointsFor: 0, totalPointsAgainst: 0, totalGames: 0,
-                        careerWeeklyScores: [], championships: 0, playoffAppearances: new Set(),
-                        highestScore: { value: 0, matchup: null, year: null, week: null },
-                        lowestScore: { value: Infinity, matchup: null, year: null, week: null },
-                    };
-                }
-            }
-        };
-
-        initializeTeamStats(team1);
-        initializeTeamStats(team2);
-
-        // Update pointsFor and weeklyScores for both teams
-        if (team1 && team1 !== '') {
-            const team1SeasonStats = seasonalTeamStats[year][team1];
-            const team1CareerStats = careerTeamStatsRaw[team1];
-
-            team1SeasonStats.pointsFor += team1Score;
-            team1SeasonStats.weeklyScores.push(team1Score);
-            team1CareerStats.totalPointsFor += team1Score;
-            team1CareerStats.careerWeeklyScores.push(team1Score);
-
-            if (team1Score > team1CareerStats.highestScore.value) {
-                team1CareerStats.highestScore = { value: team1Score, matchup: `${team1} vs ${team2}`, year: year, week: week };
-            }
-            if (team1Score < team1CareerStats.lowestScore.value) {
-                team1CareerStats.lowestScore = { value: team1Score, matchup: `${team1} vs ${team2}`, year: year, week: week };
-            }
-
-            seasonLeagueScores[year].weeklyScores[week].push({ team: team1, score: team1Score });
-        }
-
-        if (team2 && team2 !== '') {
-            const team2SeasonStats = seasonalTeamStats[year][team2];
-            const team2CareerStats = careerTeamStatsRaw[team2];
-
-            team2SeasonStats.pointsFor += team2Score;
-            team2SeasonStats.weeklyScores.push(team2Score);
-            team2CareerStats.totalPointsFor += team2Score;
-            team2CareerStats.careerWeeklyScores.push(team2Score);
-
-            if (team2Score > team2CareerStats.highestScore.value) {
-                team2CareerStats.highestScore = { value: team2Score, matchup: `${team2} vs ${team1}`, year: year, week: week };
-            }
-            if (team2Score < team2CareerStats.lowestScore.value) {
-                team2CareerStats.lowestScore = { value: team2Score, matchup: `${team2} vs ${team1}`, year: year, week: week };
-            }
-
-            seasonLeagueScores[year].weeklyScores[week].push({ team: team2, score: team2Score });
-        }
-
-        // Handle head-to-head win/loss/tie records, totalGames, and points against
-        // This block executes if both team names are valid and non-empty
-        if (team1 && team2 && team1 !== '' && team2 !== '') {
-            const team1SeasonStats = seasonalTeamStats[year][team1];
-            const team2SeasonStats = seasonalTeamStats[year][team2];
-            const team1CareerStats = careerTeamStatsRaw[team1];
-            const team2CareerStats = careerTeamStatsRaw[team2];
-
-            const isTie = team1Score === team2Score;
-            const team1Won = team1Score > team2Score;
-            // No need for team2Won, as it's the opposite of team1Won if not a tie
-
-            // Update points against regardless of regSeason or pointsOnlyBye, as it's a raw stat
-            team1SeasonStats.pointsAgainst += team2Score;
-            team2SeasonStats.pointsAgainst += team1Score;
-            team1CareerStats.totalPointsAgainst += team2Score;
-            team2CareerStats.totalPointsAgainst += team1Score;
-
-            // Only update win/loss/tie records and totalGames if it's a regular season game and not a points-only-bye
-            if ((match.regSeason === true || match.regSeason === 'true') && !(match.pointsOnlyBye === true || match.pointsOnlyBye === 'true')) {
-                team1SeasonStats.totalGames++;
-                team2SeasonStats.totalGames++;
-                team1CareerStats.totalGames++;
-                team2CareerStats.totalGames++;
-
-                if (isTie) {
-                    team1SeasonStats.ties++;
-                    team2SeasonStats.ties++;
-                    team1CareerStats.ties++;
-                    team2CareerStats.ties++;
-                } else if (team1Won) {
-                    team1SeasonStats.wins++;
-                    team2SeasonStats.losses++;
-                    team1CareerStats.wins++;
-                    team2CareerStats.losses++;
-                } else { // team2Won
-                    team1SeasonStats.losses++;
-                    team2SeasonStats.wins++;
-                    team1CareerStats.losses++;
-                    team2CareerStats.wins++;
-                }
-            } else {
-                console.warn(`Skipping W-L-T and total games for non-regular season or points-only-bye matchup:`, match);
-            }
-        } else {
-            console.warn(`Skipping head-to-head stats (W-L-T, totalGames, pointsAgainst) for incomplete matchup (missing team name):`, match);
-        }
-
-        // Aggregate all game scores for league-wide min/max (used by DPR)
-        seasonLeagueScores[year].allGameScores.push(team1Score, team2Score);
-
-        // Process final seeding games for champions
-        if (match.finalSeedingGame !== undefined && match.finalSeedingGame !== null && !isNaN(match.finalSeedingGame)) {
-            if (!championshipData[year]) {
-                championshipData[year] = {
-                    champion: null, secondPlace: null, thirdPlace: null, fourthPlace: null,
-                    winnerScore: null, loserScore: null,
-                    games: []
+        // Points and weekly scores are always populated for valid matches, regardless of bye status
+        if (displayTeam1 !== '') {
+            if (!seasonalTeamStatsRaw[year]) seasonalTeamStatsRaw[year] = {};
+            if (!seasonalTeamStatsRaw[year][displayTeam1]) {
+                seasonalTeamStatsRaw[year][displayTeam1] = {
+                    totalPointsFor: 0, wins: 0, losses: 0, ties: 0, totalGames: 0
                 };
             }
-            const matchWinner = team1Score > team2Score ? team1 : (team2Score > team1Score ? team2 : 'Tie');
-            const matchLoser = team1Score > team2Score ? team2 : (team2Score > team1Score ? team1 : 'Tie');
+            seasonalTeamStatsRaw[year][displayTeam1].totalPointsFor += team1Score;
 
-            championshipData[year].games.push({
-                week: week,
-                team1: team1, team2: team2,
-                team1Score: team1Score, team2Score: team2Score,
-                winner: matchWinner,
-                loser: matchLoser,
-                winnerScore: matchWinner === team1 ? team1Score : team2Score,
-                loserScore: matchLoser === team1 ? team1Score : team2Score,
-                winnerPlace: match.finalSeedingGame, // Place for the winner/participants
-                loserPlace: match.finalSeedingGame + 1, // Place for the loser
-            });
+            if (!careerTeamStatsRaw[displayTeam1]) {
+                careerTeamStatsRaw[displayTeam1] = {
+                    totalPointsFor: 0, wins: 0, losses: 0, ties: 0, totalGames: 0, careerWeeklyScores: []
+                };
+            }
+            careerTeamStatsRaw[displayTeam1].totalPointsFor += team1Score;
+            careerTeamStatsRaw[displayTeam1].careerWeeklyScores.push(team1Score);
+
+            if (!weeklyGameScoresByYearAndWeek[year]) weeklyGameScoresByYearAndWeek[year] = {};
+            if (!weeklyGameScoresByYearAndWeek[year][week]) weeklyGameScoresByYearAndWeek[year][week] = [];
+            weeklyGameScoresByYearAndWeek[year][week].push({ team: displayTeam1, score: team1Score });
+
+            if (!allLeagueScoresByYear[year]) allLeagueScoresByYear[year] = [];
+            allLeagueScoresByYear[year].push(team1Score);
+        }
+
+        if (displayTeam2 !== '') {
+            if (!seasonalTeamStatsRaw[year]) seasonalTeamStatsRaw[year] = {};
+            if (!seasonalTeamStatsRaw[year][displayTeam2]) {
+                seasonalTeamStatsRaw[year][displayTeam2] = {
+                    totalPointsFor: 0, wins: 0, losses: 0, ties: 0, totalGames: 0
+                };
+            }
+            seasonalTeamStatsRaw[year][displayTeam2].totalPointsFor += team2Score;
+
+            if (!careerTeamStatsRaw[displayTeam2]) {
+                careerTeamStatsRaw[displayTeam2] = {
+                    totalPointsFor: 0, wins: 0, losses: 0, ties: 0, totalGames: 0, careerWeeklyScores: []
+                };
+            }
+            careerTeamStatsRaw[displayTeam2].totalPointsFor += team2Score;
+            careerTeamStatsRaw[displayTeam2].careerWeeklyScores.push(team2Score);
+
+            if (!weeklyGameScoresByYearAndWeek[year]) weeklyGameScoresByYearAndWeek[year] = {};
+            if (!weeklyGameScoresByYearAndWeek[year][week]) weeklyGameScoresByYearAndWeek[year][week] = [];
+            weeklyGameScoresByYearAndWeek[year][week].push({ team: displayTeam2, score: team2Score });
+
+            if (!allLeagueScoresByYear[year]) allLeagueScoresByYear[year] = [];
+            allLeagueScoresByYear[year].push(team2Score);
+        }
+
+        // Only update win/loss/tie records and totalGames if it's NOT a PointsOnlyBye
+        if (!(match.pointsOnlyBye === true || match.pointsOnlyBye === 'true')) {
+            if (displayTeam1 !== '') {
+                seasonalTeamStatsRaw[year][displayTeam1].totalGames++;
+                careerTeamStatsRaw[displayTeam1].totalGames++;
+                if (isTie) {
+                    seasonalTeamStatsRaw[year][displayTeam1].ties++;
+                    careerTeamStatsRaw[displayTeam1].ties++;
+                } else if (team1Won) {
+                    seasonalTeamStatsRaw[year][displayTeam1].wins++;
+                    careerTeamStatsRaw[displayTeam1].wins++;
+                } else {
+                    seasonalTeamStatsRaw[year][displayTeam1].losses++;
+                    careerTeamStatsRaw[displayTeam1].losses++;
+                }
+            }
+
+            if (displayTeam2 !== '') {
+                seasonalTeamStatsRaw[year][displayTeam2].totalGames++;
+                careerTeamStatsRaw[displayTeam2].totalGames++;
+                if (isTie) {
+                    seasonalTeamStatsRaw[year][displayTeam2].ties++;
+                    careerTeamStatsRaw[displayTeam2].ties++;
+                } else if (!team1Won) { // Team 2 won if team1 didn't and it wasn't a tie
+                    seasonalTeamStatsRaw[year][displayTeam2].wins++;
+                    careerTeamStatsRaw[displayTeam2].wins++;
+                } else {
+                    seasonalTeamStatsRaw[year][displayTeam2].losses++;
+                    careerTeamStatsRaw[displayTeam2].losses++;
+                }
+            }
         }
     });
 
+    const seasonalMetrics = {}; // Final output structure for seasonal data
 
-    // --- Second Pass: Calculate derived metrics (DPR, All-Play, Luck, Finishes) ---
-    const allYears = Object.keys(seasonalTeamStats).map(Number).sort((a, b) => a - b);
-    const careerDPRData = [];
+    // --- Calculate Seasonal DPR, Luck Rating, All-Play ---
+    Object.keys(seasonalTeamStatsRaw).sort().forEach(year => {
+        seasonalMetrics[year] = {};
+        const teamsInSeason = Object.keys(seasonalTeamStatsRaw[year]).filter(team => team !== ''); // Filter out empty teams
 
-    // Process each year for seasonal metrics
-    allYears.forEach(year => {
-        const currentYearTeams = Object.keys(seasonalTeamStats[year]);
-        const leagueMaxScore = seasonLeagueScores[year].allGameScores.length > 0 ? Math.max(...seasonLeagueScores[year].allGameScores) : 0;
-        const leagueMinScore = seasonLeagueScores[year].allGameScores.length > 0 ? Math.min(...seasonLeagueScores[year].allGameScores) : 0;
+        const leagueScoresForYear = allLeagueScoresByYear[year] || [];
+        const leagueMaxScoreInSeason = leagueScoresForYear.length > 0 ? Math.max(...leagueScoresForYear) : 0;
+        const leagueMinScoreInSeason = leagueScoresForYear.length > 0 ? Math.min(...leagueScoresForYear) : 0;
 
-        let totalRawDPRThisSeason = 0;
-        let teamsWithValidSeasonalDPR = 0;
-        const seasonalDPRsForNormalization = {}; // { team: rawDPR }
+        let totalRawDPRForSeason = 0;
+        let teamsCountForDPR = 0;
 
-        currentYearTeams.forEach(team => {
-            const stats = seasonalTeamStats[year][team];
-            if (stats.totalGames > 0) {
-                const teamWinPercentage = (stats.wins + 0.5 * stats.ties) / stats.totalGames;
-                stats.winPercentage = teamWinPercentage; // Store for direct access
+        // First pass for raw DPR to calculate average raw DPR for the season
+        teamsInSeason.forEach(team => {
+            const stats = seasonalTeamStatsRaw[year][team];
+            // Ensure totalGames is not 0 before calculating win percentage
+            const teamWinPercentage = (stats.totalGames > 0) ? ((stats.wins + 0.5 * stats.ties) / stats.totalGames) : 0;
+            const rawDPR = calculateRawDPR(stats.totalPointsFor, teamWinPercentage, leagueMaxScoreInSeason, leagueMinScoreInSeason);
+            stats.rawDPR = rawDPR; // Store raw DPR temporarily
 
-                const rawDPR = calculateRawDPR(
-                    stats.pointsFor,
-                    teamWinPercentage,
-                    leagueMaxScore,
-                    leagueMinScore
-                );
-                seasonalDPRsForNormalization[team] = rawDPR;
-
-                if (!isNaN(rawDPR)) {
-                    totalRawDPRThisSeason += rawDPR;
-                    teamsWithValidSeasonalDPR++;
-                }
-
-                // Calculate All-Play Win Percentage for the season
-                let allPlayWinsSeason = 0;
-                let allPlayTiesSeason = 0;
-                let allPlayGamesSeason = 0;
-
-                Object.keys(seasonLeagueScores[year].weeklyScores).forEach(week => {
-                    const weeklyScores = seasonLeagueScores[year].weeklyScores[week];
-                    const teamScoreInWeek = weeklyScores.find(entry => entry.team === team)?.score;
-
-                    if (teamScoreInWeek !== undefined) {
-                        const otherScoresInWeek = weeklyScores.filter(entry => entry.team !== team);
-                        allPlayGamesSeason += otherScoresInWeek.length; // Number of 'games' played in all-play format
-                        otherScoresInWeek.forEach(otherTeam => {
-                            if (teamScoreInWeek > otherTeam.score) {
-                                allPlayWinsSeason++;
-                            } else if (teamScoreInWeek === otherTeam.score) {
-                                allPlayTiesSeason++;
-                            }
-                        });
-                    }
-                });
-
-                stats.allPlayWins = allPlayWinsSeason;
-                stats.allPlayTies = allPlayTiesSeason; // Storing ties for completeness
-                stats.allPlayGames = allPlayGamesSeason; // Storing total games for completeness
-                stats.allPlayWinPercentage = allPlayGamesSeason > 0 ? (allPlayWinsSeason + 0.5 * allPlayTiesSeason) / allPlayGamesSeason : 0;
-
-
-                // Calculate Luck Rating - this now returns a single number
-                const luckRatingValue = calculateLuckRating(
-                    historicalMatchups,
-                    team,
-                    year,
-                    seasonLeagueScores[year].weeklyScores,
-                    getDisplayTeamName // Pass getDisplayTeamName as getMappedTeamName
-                );
-                stats.luckRating = luckRatingValue;
-                // Projected wins are not directly returned by the calculateLuckRating function
-                // in its current (user-requested) format, so it will remain 0 here.
-                stats.projectedWins = 0; // Explicitly set to 0 if not returned by luck calc
-
-
-            } else {
-                seasonalDPRsForNormalization[team] = 0; // No games played, raw DPR is 0
-                stats.winPercentage = 0;
-                stats.allPlayWinPercentage = 0;
-                stats.luckRating = 0;
-                stats.projectedWins = 0;
+            if (!isNaN(rawDPR)) {
+                totalRawDPRForSeason += rawDPR;
+                teamsCountForDPR++;
             }
         });
 
-        const avgRawDPRThisSeason = teamsWithValidSeasonalDPR > 0 ? totalRawDPRThisSeason / teamsWithValidSeasonalDPR : 0;
+        const avgRawDPRForSeason = teamsCountForDPR > 0 ? totalRawDPRForSeason / teamsCountForDPR : 0;
 
-        // Normalize seasonal DPRs and determine finish based on adjusted DPR
-        const teamsSortedByDPR = currentYearTeams
-            .map(team => ({
-                team,
-                dpr: seasonalDPRsForNormalization[team],
-                adjustedDPR: avgRawDPRThisSeason > 0 ? seasonalDPRsForNormalization[team] / avgRawDPRThisSeason : 0
-            }))
-            .sort((a, b) => b.adjustedDPR - a.adjustedDPR); // Sort by adjusted DPR descending
+        // Second pass for adjusted DPR, Luck Rating, and All-Play
+        teamsInSeason.forEach(team => {
+            const stats = seasonalTeamStatsRaw[year][team];
+            if (stats.totalGames === 0) { // If a team had only bye weeks, their totalGames would be 0
+                seasonalMetrics[year][team] = {
+                    wins: stats.wins,
+                    losses: stats.losses,
+                    ties: stats.ties,
+                    pointsFor: stats.totalPointsFor,
+                    adjustedDPR: 0, // No adjusted DPR if no games played
+                    luckRating: 0,  // No luck rating if no games played
+                    allPlayWinPercentage: 0, // No all-play if no games played
+                };
+                return;
+            }
 
-        teamsSortedByDPR.forEach((teamEntry, index) => {
-            seasonalTeamStats[year][teamEntry.team].adjustedDPR = teamEntry.adjustedDPR;
-            seasonalTeamStats[year][teamEntry.team].finish = index + 1; // Assign rank as finish
+            // Adjusted DPR
+            const adjustedDPR = avgRawDPRForSeason > 0 ? stats.rawDPR / avgRawDPRForSeason : 0;
+
+            // Luck Rating
+            const luckRating = calculateLuckRating(historicalMatchups, team, parseInt(year), weeklyGameScoresByYearAndWeek, getMappedTeamName);
+
+            // All-Play Win Percentage
+            const allPlayWinPercentage = calculateAllPlayWinPercentage(team, parseInt(year), weeklyGameScoresByYearAndWeek);
+
+            seasonalMetrics[year][team] = {
+                wins: stats.wins,
+                losses: stats.losses,
+                ties: stats.ties,
+                pointsFor: stats.totalPointsFor,
+                adjustedDPR: adjustedDPR,
+                luckRating: luckRating,
+                allPlayWinPercentage: allPlayWinPercentage,
+            };
         });
     });
 
-    // --- Process Career DPR for normalization ---
+    // --- Calculate Career DPR ---
+    const careerDPRData = [];
     let totalRawDPROverall = 0;
     let teamsWithValidCareerDPR = 0;
 
     Object.keys(careerTeamStatsRaw).filter(team => team !== '').forEach(team => { // Filter out empty teams
         const stats = careerTeamStatsRaw[team];
-        if (stats.totalGames === 0) { // Skip teams with no games
-            stats.rawDPR = 0;
+        if (stats.totalGames === 0) { // If a team has 0 total games over career (only bye weeks)
             return;
         }
 
@@ -441,58 +385,11 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getDisplayTeamName
             wins: stats.wins,
             losses: stats.losses,
             ties: stats.ties,
-            pointsFor: stats.totalPointsFor,
-            pointsAgainst: stats.totalPointsAgainst, // Include pointsAgainst here
-            winPercentage: (stats.wins + 0.5 * stats.ties) / stats.totalGames,
-            totalGames: stats.totalGames
-            // You might want to add career all-play win percentage, etc. here later if needed
+            pointsFor: stats.totalPointsFor
         });
     });
 
+    careerDPRData.sort((a, b) => b.dpr - a.dpr); // Sort career DPR descending
 
-    // --- Process Championship Data (to determine champions/runner-ups from finalSeedingGame) ---
-    Object.keys(championshipData).forEach(year => {
-        // Sort games for the year by their 'finalSeedingGame' value to determine 1st, 3rd, etc.
-        const sortedGames = championshipData[year].games.sort((a, b) => a.winnerPlace - b.winnerPlace);
-
-        // Assuming finalSeedingGame=1 is Championship, 3 is 3rd place, etc.
-        sortedGames.forEach(game => {
-            if (game.winnerPlace === 1) {
-                championshipData[year].champion = game.winner;
-                championshipData[year].secondPlace = game.loser;
-                championshipData[year].winnerScore = game.winnerScore;
-                championshipData[year].loserScore = game.loserScore;
-            } else if (game.winnerPlace === 3) {
-                championshipData[year].thirdPlace = game.winner;
-                championshipData[year].fourthPlace = game.loser;
-            }
-            // Can add more conditions for 5th, 7th etc. if desired
-        });
-
-        // Update career stats for playoff appearances and championships
-        const championTeam = championshipData[year].champion;
-        const secondPlaceTeam = championshipData[year].secondPlace;
-
-        if (championTeam && careerTeamStatsRaw[championTeam]) {
-            careerTeamStatsRaw[championTeam].championships++;
-            careerTeamStatsRaw[championTeam].playoffAppearances.add(year); // Add year to set
-        }
-        if (secondPlaceTeam && careerTeamStatsRaw[secondPlaceTeam]) {
-            careerTeamStatsRaw[secondPlaceTeam].playoffAppearances.add(year); // Add year to set
-        }
-
-        // Also update playoff appearances for all teams involved in final seeding games
-        championshipData[year].games.forEach(game => {
-            if (careerTeamStatsRaw[game.team1]) careerTeamStatsRaw[game.team1].playoffAppearances.add(year);
-            if (careerTeamStatsRaw[game.team2]) careerTeamStatsRaw[game.team2].playoffAppearances.add(year);
-        });
-    });
-
-
-    return {
-        seasonalMetrics: seasonalTeamStats,
-        careerDPRData: careerDPRData.sort((a, b) => b.dpr - a.dpr), // Ensure career DPR is sorted
-        championshipData: championshipData, // Include championship data
-        careerStats: careerTeamStatsRaw // Include full career stats for other records
-    };
+    return { seasonalMetrics, careerDPRData, weeklyGameScoresByYearAndWeek };
 };
