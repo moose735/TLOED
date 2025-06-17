@@ -355,9 +355,8 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getDisplayTeamName
                 );
                 stats.luckRating = luckRating;
                 stats.projectedWins = projectedWins; // Store projected wins directly in seasonalMetrics
-                // Note: 'wins' in seasonalTeamStats should ideally be populated from the initial pass over historicalMatchups.
-                // However, if the calculateLuckRating also returns actualWins, we can ensure consistency.
-                // For now, seasonalTeamStats[year][team].wins is already calculated from the first pass.
+                // Ensure the 'wins' property in seasonalTeamStats is consistent with the 'actualWins' from luck calculation
+                stats.wins = actualWins;
 
             } else {
                 seasonalDPRsForNormalization[team] = 0; // No games played, raw DPR is 0
@@ -424,7 +423,7 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getDisplayTeamName
             pointsFor: stats.totalPointsFor,
             pointsAgainst: stats.totalPointsAgainst, // Include pointsAgainst here
             winPercentage: (stats.wins + 0.5 * stats.ties) / stats.totalGames,
-            totalGames: stats.totalGames // Removed trailing comma here
+            totalGames: stats.totalGames
             // You might want to add career all-play win percentage, etc. here later if needed
         });
     });
