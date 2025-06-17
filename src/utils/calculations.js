@@ -376,7 +376,7 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
 
     Object.keys(careerTeamStatsRaw).filter(team => team !== '').forEach(team => { // Filter out empty teams
         const stats = careerTeamStatsRaw[team];
-        if (stats.totalGames === 0) { // If a team has 0 total games over career (only bye weeks)
+        if (stats.totalGames === 0) { // If a team has 0 total games over career (only bye weeks or no games)
             return;
         }
 
@@ -394,8 +394,13 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
             ? Math.min(...teamSeasonalAverages)
             : 0;
 
-        // For career DPR, use the highest and lowest seasonal average scores
-        const rawDPR = calculateRawDPR(stats.totalPointsFor, careerWinPercentage, highestSeasonAverageScore, lowestSeasonAverageScore);
+        // Calculate the average of the seasonal average scores for the team
+        const averageOfSeasonalAverages = teamSeasonalAverages.length > 0
+            ? teamSeasonalAverages.reduce((sum, avg) => sum + avg, 0) / teamSeasonalAverages.length
+            : 0;
+
+        // For career DPR, use the AVERAGE OF SEASONAL AVERAGES for the pointsFor component
+        const rawDPR = calculateRawDPR(averageOfSeasonalAverages, careerWinPercentage, highestSeasonAverageScore, lowestSeasonAverageScore);
         stats.rawDPR = rawDPR; // Store raw DPR temporarily
 
         if (!isNaN(rawDPR)) {
@@ -415,7 +420,7 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
             wins: stats.wins,
             losses: stats.losses,
             ties: stats.ties,
-            pointsFor: stats.totalPointsFor,
+            pointsFor: stats.totalPointsFor, // This remains total for display, but DPR uses the average of averages
             pointsAgainst: stats.totalPointsAgainst // Include pointsAgainst here
         });
     });
