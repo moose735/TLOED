@@ -76,6 +76,10 @@ const App = () => {
       setLoadingHistoricalData(true);
       setHistoricalDataError(null); // Clear previous errors
 
+      // Define a minimum loading time (e.g., 2 seconds)
+      const MIN_LOADING_TIME = 2000;
+      const startTime = Date.now();
+
       // Fetch Historical Matchups
       let fetchedMatchupData = [];
       try {
@@ -101,7 +105,7 @@ const App = () => {
         } catch (jsonError) {
           console.error("Error parsing historical matchup data JSON. Raw response:", textResponse, jsonError);
           setHistoricalDataError(`Failed to load historical matchup data: The API response was not valid JSON. Please ensure your Google Apps Script for HISTORICAL_MATCHUPS_API_URL is correctly deployed as a Web App and returns JSON (e.g., using ContentService.MimeType.JSON). Raw response snippet: ${textResponse.substring(0, 200)}...`);
-          setLoadingHistoricalData(false); // Ensure loading is false on error
+          // Do not set loadingHistoricalData to false immediately here. It will be handled by the setTimeout.
           return; // Stop execution if parsing fails to avoid further issues
         }
 
@@ -132,11 +136,20 @@ const App = () => {
       } catch (error) {
         console.error("Error fetching historical matchup data:", error);
         setHistoricalDataError(`Failed to load historical data: ${error.message}. Please check your HISTORICAL_MATCHUPS_API_URL in config.js and ensure your Google Apps Script is deployed correctly as a Web App (Execute as: Me, Who has access: Anyone).`);
-        setLoadingHistoricalData(false); // Ensure loading is false on error
+        // Do not set loadingHistoricalData to false immediately here. It will be handled by the setTimeout.
         return; // Stop execution if fetching fails
       } finally {
-        // Ensure loading is false after data fetch (even if it fails, to stop spinner)
-        setLoadingHistoricalData(false);
+        // Calculate remaining time for the minimum loading duration
+        const elapsedTime = Date.now() - startTime;
+        const remainingTime = MIN_LOADING_TIME - elapsedTime;
+
+        if (remainingTime > 0) {
+          setTimeout(() => {
+            setLoadingHistoricalData(false);
+          }, remainingTime);
+        } else {
+          setLoadingHistoricalData(false);
+        }
       }
 
       // Always use mock data for historical champions as per request
