@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   HISTORICAL_MATCHUPS_API_URL,
-  // GOOGLE_SHEET_POWER_RANKINGS_API_URL is no longer needed here as PowerRankings.js derives its data from historicalMatchups
 } from './config';
 
 // Import existing components
@@ -173,15 +172,15 @@ const App = () => {
   return (
     <div className="min-h-screen bg-gray-100 font-sans antialiased text-gray-900">
       <header className="bg-gradient-to-r from-blue-700 to-blue-500 text-white p-4 shadow-md">
-        <div className="container mx-auto flex flex-col sm:flex-row justify-between items-center">
-          <h1 className="text-3xl font-extrabold mb-2 sm:mb-0">Fantasy League Dashboard</h1>
-          <nav className="flex flex-wrap justify-center sm:justify-end gap-2">
+        <div className="container mx-auto flex justify-between items-center">
+          <h1 className="text-3xl font-extrabold">Fantasy League Dashboard</h1>
+          <nav className="flex flex-wrap justify-end gap-2">
             {Object.values(NAV_CATEGORIES).map(renderNavItem)}
           </nav>
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-8 overflow-x-auto"> {/* Added overflow-x-auto for horizontal scrolling */}
         {loading && (
           <p className="text-center text-lg text-blue-600">Loading historical data...</p>
         )}
@@ -194,7 +193,6 @@ const App = () => {
               <PowerRankings
                 historicalMatchups={historicalMatchups}
                 getDisplayTeamName={getMappedTeamName}
-                // powerRankingsData prop removed as PowerRankings.js now calculates its own DPR from historicalMatchups
               />
             )}
             {activeTab === TABS.LEAGUE_HISTORY && (
