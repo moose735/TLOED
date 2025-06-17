@@ -165,9 +165,6 @@ const calculateAllPlayWinPercentage = (teamName, year, weeklyGameScoresByYearAnd
     return totalAllPlayGamesSeason > 0 ? ((allPlayWinsSeason + (0.5 * allPlayTiesSeason)) / totalAllPlayGamesSeason) : 0;
 };
 
-## calculateAllLeagueMetrics Function
-
-```javascript
 /**
  * Calculates all league-wide and team-specific metrics (DPR, Luck Rating, All-Play)
  * for all seasons based on historical matchup data.
