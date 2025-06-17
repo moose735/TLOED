@@ -67,7 +67,6 @@ const CustomDPRRankTooltip = ({ active, payload, label }) => {
     return null;
 };
 
-
 const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
     const [powerRankings, setPowerRankings] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -78,7 +77,6 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
 
 
     useEffect(() => {
-        // If no historical matchups, clear data and stop loading
         if (!historicalMatchups || historicalMatchups.length === 0) {
             setPowerRankings([]);
             setWeeklyChartData([]);
@@ -88,11 +86,10 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
             return;
         }
 
-        setLoading(true); // Indicate loading state
-        setError(null);    // Clear any previous errors
+        setLoading(true);
+        setError(null);
 
         try {
-            // Find the newest year from the historical matchups
             const allYears = historicalMatchups
                 .map(match => parseInt(match.year))
                 .filter(year => !isNaN(year));
@@ -104,20 +101,17 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                 return;
             }
 
-            // Calculate all league metrics for the table display (seasonal DPR, etc.)
-            // This uses the calculateAllLeagueMetrics from utils/calculations.js
             const { seasonalMetrics } = calculateAllLeagueMetrics(historicalMatchups, getDisplayTeamName);
 
-            // Check if data for the newest year exists for the table
             if (!seasonalMetrics[newestYear]) {
                 setError(`No seasonal data available for the newest year (${newestYear}) to calculate power rankings table.`);
                 setLoading(false);
                 return;
             }
 
-            // Extract teams' DPRs and other stats for the newest year and sort them for the table
-            const yearData = seasonalMetrics[newestYear];
-            let calculatedRankings = Object.keys(yearData)
+            // The sorting for `calculatedRankings` will now happen AFTER movement is added,
+            // as the rank itself will be assigned in the final map.
+            let initialCalculatedRankings = Object.keys(yearData)
                 .map(teamName => ({
                     team: teamName,
                     dpr: yearData[teamName].adjustedDPR || 0,
@@ -125,11 +119,10 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                     losses: yearData[teamName].losses || 0,
                     ties: yearData[teamName].ties || 0,
                     pointsFor: yearData[teamName].pointsFor || 0,
-                    pointsAgainst: yearData[teamName].pointsAgainst || 0, // This is expected from seasonalMetrics
-                    luckRating: yearData[teamName].luckRating || 0, // This is expected from seasonalMetrics
+                    pointsAgainst: yearData[teamName].pointsAgainst || 0,
+                    luckRating: yearData[teamName].luckRating || 0,
                     year: newestYear,
-                }))
-                .sort((a, b) => b.dpr - a.dpr); // Sort by DPR in descending order
+                }));
 
 
             // --- Chart Data Preparation (Weekly Cumulative Adjusted DPR and Rank) ---
@@ -142,19 +135,17 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
 
             const weeklyDPRsChartData = [];
 
-            // Initialize cumulative stats for each team and for the league outside the loop
-            const cumulativeTeamStats = {}; // { teamName: { totalPF: 0, wins: 0, losses: 0, ties: 0, gamesPlayed: 0, scores: [] } }
+            const cumulativeTeamStats = {};
             uniqueTeamsInNewestYear.forEach(team => {
                 cumulativeTeamStats[team] = { totalPF: 0, wins: 0, losses: 0, ties: 0, gamesPlayed: 0, scores: [] };
             });
 
-            let cumulativeLeagueScores = []; // All individual scores in the league up to current week
+            let cumulativeLeagueScores = [];
 
             for (let week = 1; week <= maxWeek; week++) {
-                const weeklyEntry = { week: week, dprValues: {} }; // Add dprValues for tooltip sorting
+                const weeklyEntry = { week: week, dprValues: {} };
                 const matchesInCurrentWeek = newestYearMatchups.filter(match => parseInt(match.week) === week);
 
-                // Accumulate stats based on matches in the current week
                 matchesInCurrentWeek.forEach(match => {
                     const team1 = getDisplayTeamName(match.team1);
                     const team2 = getDisplayTeamName(match.team2);
@@ -165,7 +156,6 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                         const isTie = team1Score === team2Score;
                         const team1Won = team1Score > team2Score;
 
-                        // Update team 1 cumulative stats
                         if (cumulativeTeamStats[team1]) {
                             cumulativeTeamStats[team1].totalPF += team1Score;
                             cumulativeTeamStats[team1].gamesPlayed += 1;
@@ -176,7 +166,6 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                                 else cumulativeTeamStats[team1].losses += 1;
                             }
                         }
-                        // Update team 2 cumulative stats
                         if (cumulativeTeamStats[team2]) {
                             cumulativeTeamStats[team2].totalPF += team2Score;
                             cumulativeTeamStats[team2].gamesPlayed += 1;
@@ -187,46 +176,39 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                                 else cumulativeTeamStats[team2].losses += 1;
                             }
                         }
-                        
-                        // Update cumulative league scores
                         cumulativeLeagueScores.push(team1Score, team2Score);
                     }
                 });
 
-                // Calculate League Max/Min Score for the cumulative period up to this week
                 const leagueMaxScore_Cumulative = cumulativeLeagueScores.length > 0 ? Math.max(...cumulativeLeagueScores) : 0;
                 const leagueMinScore_Cumulative = cumulativeLeagueScores.length > 0 ? Math.min(...cumulativeLeagueScores) : 0;
 
                 let totalRawDPRForWeek = 0;
                 let teamsCountForWeeklyDPR = 0;
-                const currentWeekTeamDPRs = []; // To store { team, dpr } for ranking this week
+                const currentWeekTeamDPRs = [];
 
                 uniqueTeamsInNewestYear.forEach(team => {
                     const teamStats = cumulativeTeamStats[team];
                     if (teamStats && teamStats.gamesPlayed > 0) {
                         const teamWinPercentage = (teamStats.wins + 0.5 * teamStats.ties) / teamStats.gamesPlayed;
-                        
-                        // Use the calculateRawDPR function from calculations.js
                         const rawDPR = calculateRawDPR(
                             teamStats.totalPF,
                             teamWinPercentage,
                             leagueMaxScore_Cumulative,
                             leagueMinScore_Cumulative
                         );
-                        
                         if (!isNaN(rawDPR)) {
                             totalRawDPRForWeek += rawDPR;
                             teamsCountForWeeklyDPR++;
                         }
-                        currentWeekTeamDPRs.push({ team, dpr: rawDPR }); // Store raw DPR for ranking
+                        currentWeekTeamDPRs.push({ team, dpr: rawDPR });
                     } else {
-                        currentWeekTeamDPRs.push({ team, dpr: 0 }); // Team hasn't played or no valid scores yet
+                        currentWeekTeamDPRs.push({ team, dpr: 0 });
                     }
                 });
 
                 const avgRawDPRForWeek = teamsCountForWeeklyDPR > 0 ? totalRawDPRForWeek / teamsCountForWeeklyDPR : 0;
 
-                // Calculate adjusted DPR and assign ranks for this week
                 const rankedTeamsForWeek = currentWeekTeamDPRs
                     .map(teamDPR => {
                         let adjustedDPR = 0;
@@ -235,11 +217,11 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                         }
                         return { team: teamDPR.team, dpr: adjustedDPR };
                     })
-                    .sort((a, b) => b.dpr - a.dpr); // Sort by adjusted DPR descending for ranking
+                    .sort((a, b) => b.dpr - a.dpr);
 
                 rankedTeamsForWeek.forEach((rankedTeam, index) => {
-                    weeklyEntry[rankedTeam.team] = index + 1; // Store rank (1-based)
-                    weeklyEntry.dprValues[rankedTeam.team] = rankedTeam.dpr; // Store actual DPR for tooltip
+                    weeklyEntry[rankedTeam.team] = index + 1;
+                    weeklyEntry.dprValues[rankedTeam.team] = rankedTeam.dpr;
                 });
                 
                 weeklyDPRsChartData.push(weeklyEntry);
@@ -247,45 +229,48 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
 
             setWeeklyChartData(weeklyDPRsChartData);
             
-            // Chart teams should include only teams that have recorded a non-zero DPR (and thus a rank) at any point in the season
             const activeChartTeams = uniqueTeamsInNewestYear.filter(team =>
-                weeklyDPRsChartData.some(weekData => weekData[team] !== 0) // Check for non-zero rank
+                weeklyDPRsChartData.some(weekData => weekData[team] !== 0)
             );
             setChartTeams(activeChartTeams);
-            // Ensure maxTeamsInChart reflects the actual number of participating teams for the Y-axis domain
             setMaxTeamsInChart(activeChartTeams.length > 0 ? activeChartTeams.length : 1);
 
-            // --- Calculate Movement from Previous Week ---
-            // Get the current week's rankings (last entry in weeklyDPRsChartData)
-            const currentWeekData = weeklyDPRsChartData[weeklyDPRsChartData.length - 1];
-            // Get the previous week's rankings (second to last entry)
-            const previousWeekData = weeklyDPRsChartData.length > 1 ? weeklyDPRsChartData[weeklyDPRsChartData.length - 2] : null;
+            // --- Calculate Movement for the Power Rankings Table ---
+            const currentWeekDataForTable = weeklyDPRsChartData[weeklyDPRsChartData.length - 1];
+            const previousWeekDataForTable = weeklyDPRsChartData.length > 1 ? weeklyDPRsChartData[weeklyDPRsChartData.length - 2] : null;
 
-            if (currentWeekData && previousWeekData) {
-                // Create a map for quick lookup of previous week's ranks
-                const previousRanksMap = {};
+            // Create a map for quick lookup of current week's ranks
+            const currentRanksMap = {};
+            if (currentWeekDataForTable) {
                 uniqueTeamsInNewestYear.forEach(team => {
-                    previousRanksMap[team] = previousWeekData[team];
+                    // Use a default of 0 if rank is undefined (e.g., team hasn't played yet)
+                    currentRanksMap[team] = currentWeekDataForTable[team] || 0;
                 });
-
-                // Add movement to the calculatedRankings
-                calculatedRankings = calculatedRankings.map(team => {
-                    const currentRank = team.rank;
-                    const previousRank = previousRanksMap[team.team];
-                    let movement = 0; // Default to no movement
-
-                    // Check if previousRank is a valid number (not undefined, null, or NaN)
-                    if (typeof previousRank === 'number' && !isNaN(previousRank) && previousRank !== 0) {
-                        movement = previousRank - currentRank; // Positive if moved up (rank decreased), negative if moved down (rank increased)
-                    }
-                    return { ...team, movement };
-                });
-            } else {
-                // If there's no previous week data (e.g., Week 1), all movements are 0
-                calculatedRankings = calculatedRankings.map(team => ({ ...team, movement: 0 }));
             }
 
-            setPowerRankings(calculatedRankings.map((team, index) => ({ rank: index + 1, ...team })));
+            // Re-map initialCalculatedRankings to add current rank and movement
+            const finalCalculatedRankings = initialCalculatedRankings
+                .map(team => {
+                    const currentRank = currentRanksMap[team.team] || 0; // Get current rank from the map
+                    let movement = 0; // Default to no movement
+
+                    if (previousWeekDataForTable) { // Only calculate movement if there's a previous week
+                        const previousRank = previousWeekDataForTable[team.team];
+
+                        if (typeof previousRank === 'number' && !isNaN(previousRank) && previousRank !== 0) {
+                             // Movement is previous rank minus current rank.
+                             // Positive = moved up (rank number decreased)
+                             // Negative = moved down (rank number increased)
+                            movement = previousRank - currentRank;
+                        }
+                    }
+                    // Assign the current rank here. The table will be sorted by DPR, not this rank property.
+                    return { ...team, currentRank: currentRank, movement: movement };
+                })
+                .sort((a, b) => b.dpr - a.dpr); // Still sort by DPR for the table display
+
+            // Finally, assign the display rank based on the sorted order for the table
+            setPowerRankings(finalCalculatedRankings.map((team, index) => ({ rank: index + 1, ...team })));
 
 
             setLoading(false);
