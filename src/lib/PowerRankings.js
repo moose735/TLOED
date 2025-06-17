@@ -274,13 +274,14 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                     const previousRank = previousRanksMap[team.team];
                     let movement = 0; // Default to no movement
 
-                    if (previousRank) { // If the team had a rank last week
-                        movement = previousRank - currentRank; // Positive if moved up, negative if moved down
+                    // Check if previousRank is a valid number (not undefined, null, or NaN)
+                    if (typeof previousRank === 'number' && !isNaN(previousRank) && previousRank !== 0) {
+                        movement = previousRank - currentRank; // Positive if moved up (rank decreased), negative if moved down (rank increased)
                     }
                     return { ...team, movement };
                 });
             } else {
-                // If there's no previous week data, all movements are 0
+                // If there's no previous week data (e.g., Week 1), all movements are 0
                 calculatedRankings = calculatedRankings.map(team => ({ ...team, movement: 0 }));
             }
 
@@ -307,7 +308,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                     {movement}
                 </span>
             );
-        } else {
+        } else { // movement < 0
             return (
                 <span className="text-red-600 flex items-center justify-start">
                     <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
@@ -334,7 +335,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                             <thead className="bg-blue-100">
                                 <tr>
                                     <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Rank</th>
-                                    <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Movement</th> {/* New Column */}
+                                    <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Movement</th> {/* NEW COLUMN HEADER */}
                                     <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
                                     <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">DPR</th>
                                     <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record (W-L)</th>
@@ -347,7 +348,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                                 {powerRankings.map((row, rowIndex) => (
                                     <tr key={row.team} className={rowIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                                         <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{row.rank}</td>
-                                        <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{renderMovement(row.movement)}</td> {/* Display Movement */}
+                                        <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{renderMovement(row.movement)}</td> {/* NEW COLUMN CELL */}
                                         <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{row.team}</td>
                                         <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{formatDPR(row.dpr)}</td>
                                         <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{renderRecordNoTies(row.wins, row.losses)}</td>
