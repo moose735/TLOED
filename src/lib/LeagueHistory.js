@@ -453,6 +453,9 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
   // Generate ticks for Y-axis (ranks from 1 to uniqueTeamsForChart.length)
   const yAxisTicks = Array.from({length: uniqueTeamsForChart.length}, (_, i) => i + 1);
 
+  // Define activeDot and dot props outside the map for clarity/ESLint
+  const activeDotProps = { r: 8 };
+  const dotProps = { r: 4 };
 
   return (
     // Removed all styling that creates a "card" effect from the main container
@@ -569,10 +572,10 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                     <Line
                       key={team}
                       type="monotone"
-                      dataKey={team + '.rank'} {/* MODIFIED: Changed from template literal to string concatenation */}
+                      dataKey={team + '.rank'}
                       stroke={teamColors[index % teamColors.length]}
-                      activeDot={{ r: 8 }}
-                      dot={{ r: 4 }}
+                      activeDot={activeDotProps} {/* MODIFIED: Use variable for activeDot */}
+                      dot={dotProps} {/* MODIFIED: Use variable for dot */}
                       strokeWidth={2}
                     />
                   ))}
