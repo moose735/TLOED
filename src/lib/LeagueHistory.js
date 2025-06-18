@@ -318,13 +318,14 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
         // Sort teams by DPR in descending order to assign ranks (higher DPR is better)
         teamsWithDPRForRanking.sort((a, b) => b.dpr - a.dpr);
 
-        // Assign ranks, handling ties
+        // Assign ranks and store both rank and DPR for each team
         let currentRank = 1;
         for (let i = 0; i < teamsWithDPRForRanking.length; i++) {
           if (i > 0 && teamsWithDPRForRanking[i].dpr < teamsWithDPRForRanking[i - 1].dpr) {
             currentRank = i + 1;
           }
-          yearDataPoint[teamsWithDPRForRanking[i].team] = currentRank;
+          yearDataPoint[teamsWithDPRForRanking[i].team] = currentRank; // Store rank for the Line chart
+          yearDataPoint[`${teamsWithDPRForRanking[i].team}_DPR`] = teamsWithDPRForRanking[i].dpr; // Store actual DPR for tooltip
         }
 
         chartData.push(yearDataPoint);
@@ -429,18 +430,21 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
   // Custom Tooltip component for Recharts
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
-      // Sort the payload by value (rank) in ascending order (lower rank is better)
+      // Sort the payload by rank (value) in ascending order (lower rank is better)
       const sortedPayload = [...payload].sort((a, b) => a.value - b.value);
 
       return (
         <div className="bg-white p-3 border border-gray-300 rounded-md shadow-lg text-sm">
           <p className="font-bold text-gray-800 mb-1">{`Year: ${label}`}</p>
-          {sortedPayload.map((entry, index) => (
-            <p key={`item-${index}`} style={{ color: entry.color }}>
-              {/* MODIFIED: Display rank with ordinal suffix */}
-              {`${entry.name}: ${entry.value}${getOrdinalSuffix(entry.value)} Place`}
-            </p>
-          ))}
+          {sortedPayload.map((entry, index) => {
+            const teamDPR = entry.payload[`${entry.dataKey}_DPR`]; // Access the stored DPR value
+            return (
+              <p key={`item-${index}`} style={{ color: entry.color }}>
+                {/* Display team name, rank, and DPR value */}
+                {`${entry.name}: Rank ${entry.value}${getOrdinalSuffix(entry.value)} (${formatDPR(teamDPR)} DPR)`}
+              </p>
+            );
+          })}
         </div>
       );
     }
@@ -553,11 +557,11 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="year" label={{ value: "Season Year", position: "insideBottom", offset: 0 }} />
                   <YAxis
-                    label={{ value: "Rank", angle: -90, position: "insideLeft" }} // MODIFIED: Y-axis label changed to "Rank"
-                    domain={[1, uniqueTeamsForChart.length]} // MODIFIED: Y-axis domain now explicitly from 1 to max
-                    reversed={true} // ADDED: Explicitly reverse the axis so 1 is at the top
-                    tickFormatter={value => value} // MODIFIED: Removed DPR formatter, now just display rank number
-                    ticks={yAxisTicks} // ADDED: Force all rank ticks from 1 to max
+                    label={{ value: "Rank", angle: -90, position: "insideLeft" }} // Y-axis label is "Rank"
+                    domain={[1, uniqueTeamsForChart.length]} // Y-axis domain now explicitly from 1 to max rank
+                    reversed={true} // Reverse the axis so 1st rank is at the top
+                    tickFormatter={value => value} // Display rank number
+                    ticks={yAxisTicks} // Force all rank ticks from 1 to max
                   />
                   <Tooltip content={<CustomTooltip />} />
                   <Legend />
@@ -565,7 +569,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                     <Line
                       key={team}
                       type="monotone"
-                      dataKey={team}
+                      dataKey={team} // Data key is the rank
                       stroke={teamColors[index % teamColors.length]}
                       activeDot={{ r: 8 }}
                       dot={{ r: 4 }}
