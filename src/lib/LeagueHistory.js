@@ -555,9 +555,9 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                   margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="year" label={{ value: "Season Year", position: "insideBottom", offset: 0 }} />
+                  <XAxis dataKey="year" label={{ value: "Season", position: "insideBottom", offset: 0 }} />
                   <YAxis
-                    label={{ value: "Rank", angle: -90, position: "insideLeft", offset: -20 }} // Corrected offset for Y-axis label to -20
+                    label={{ value: "Rank", angle: -90, position: "insideLeft", offset: 35 }} // Corrected offset for Y-axis label to -20
                     domain={[1, uniqueTeamsForChart.length]} // Y-axis domain now explicitly from 1 to max rank
                     reversed={true} // Reverse the axis so 1st rank is at the top
                     tickFormatter={value => value} // Display rank number
