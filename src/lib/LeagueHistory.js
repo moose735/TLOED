@@ -537,45 +537,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
             </div>
           </section>
 
-          {/* Total DPR Progression Line Graph */}
-          <section className="mb-8">
-            <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Total DPR Progression Over Seasons</h3>
-            {seasonalDPRChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" aspect={4 / 3}>
-                <LineChart
-                  data={seasonalDPRChartData}
-                  margin={{ top: 20, right: 10, left: 10, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="year" label={{ value: "Season", position: "insideBottom", offset: 0 }} />
-                  <YAxis
-                    label={{ value: "Rank", angle: -90, position: "insideLeft", offset: 0 }}
-                    domain={[1, uniqueTeamsForChart.length]}
-                    reversed={true}
-                    tickFormatter={value => value}
-                    ticks={yAxisTicks}
-                  />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend />
-                  {uniqueTeamsForChart.map((team, index) => (
-                    <Line
-                      key={team}
-                      type="monotone"
-                      dataKey={team}
-                      stroke={teamColors[index % teamColors.length]}
-                      activeDot={{ r: 8 }}
-                      dot={{ r: 4 }}
-                      strokeWidth={2}
-                    />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <p className="text-center text-gray-600">No total DPR progression data available for charting.</p>
-            )}
-          </section>
-
-          {/* New: Season-by-Season Champions & Awards */}
+          {/* New: Season-by-Season Champions & Awards - MOVED UP */}
           <section className="mb-8">
             <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Season-by-Season Champions & Awards</h3>
             {Object.keys(seasonAwardsSummary).length > 0 ? (
@@ -624,6 +586,46 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
               </div>
             ) : (
               <p className="text-center text-gray-600">No season-by-season award data available.</p>
+            )}
+          </section>
+
+          {/* Total DPR Progression Line Graph - MOVED DOWN */}
+          <section className="mb-8">
+            <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Total DPR Progression Over Seasons</h3>
+            {seasonalDPRChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" aspect={1.5}> {/* Changed aspect ratio */}
+                <LineChart
+                  data={seasonalDPRChartData}
+                  margin={{ top: 20, right: 10, left: 10, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="year" label={{ value: "Season", position: "insideBottom", offset: 0 }} />
+                  <YAxis
+                    label={{ value: "Rank", angle: -90, position: "insideLeft", offset: 0 }}
+                    domain={[1, uniqueTeamsForChart.length]}
+                    reversed={true}
+                    tickFormatter={value => value}
+                    ticks={yAxisTicks}
+                    tickCount={uniqueTeamsForChart.length} // Ensure all ticks are attempted to be shown
+                    interval={0} // Prevents skipping ticks
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend />
+                  {uniqueTeamsForChart.map((team, index) => (
+                    <Line
+                      key={team}
+                      type="monotone"
+                      dataKey={team}
+                      stroke={teamColors[index % teamColors.length]}
+                      activeDot={{ r: 8 }}
+                      dot={{ r: 4 }}
+                      strokeWidth={2}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-center text-gray-600">No total DPR progression data available for charting.</p>
             )}
           </section>
         </>
