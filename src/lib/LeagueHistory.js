@@ -601,7 +601,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="year" label={{ value: "Season", position: "insideBottom", offset: 0 }} />
                   <YAxis
-                    label={{ value: "Rank", angle: -90, position: "insideLeft", offset: 0 }}
+                    label={{ value: "Rank", angle: -90, position: "outsideLeft", offset: -10 }} {/* Adjusted position and offset */}
                     domain={[1, uniqueTeamsForChart.length]}
                     reversed={true}
                     tickFormatter={value => value}
