@@ -77,7 +77,7 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
       ) : (
         <>
           {/* Career DPR Rankings */}
-          <section className="mb-8 p-4 bg-blue-50 rounded-lg shadow-sm border border-blue-200">
+          <section className="mb-8"> {/* Removed background card styling */}
             <h3 className="text-xl font-bold text-blue-800 mb-4 border-b pb-2">All-Time Career DPR</h3>
             {careerDPRData.length > 0 ? (
               <div className="overflow-x-auto">
@@ -110,7 +110,7 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
           </section>
 
           {/* Seasonal DPR Rankings (Consolidated) */}
-          <section className="mb-8 p-4 bg-green-50 rounded-lg shadow-sm border border-green-200">
+          <section className="mb-8"> {/* Removed background card styling */}
             <h3 className="text-xl font-bold text-green-800 mb-4 border-b pb-2">Seasonal DPR Rankings</h3>
             {seasonalDPRData.length > 0 ? (
               <div className="overflow-x-auto">
