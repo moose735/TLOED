@@ -49,12 +49,12 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         if (typeof seasonData.winPercentage === 'number' && !isNaN(seasonData.winPercentage)) { // More robust check
             teamStats.winPercentages.push(seasonData.winPercentage);
         } else {
-            console.warn(`LeagueRecords: Skipping invalid winPercentage for ${team} in ${year}:`, seasonData.winPercentage);
+            console.warn(`LeagueRecords: Skipping invalid winPercentage for ${team} in ${year} (Type: ${typeof seasonData.winPercentage}, Value: ${seasonData.winPercentage}).`);
         }
         if (typeof seasonData.allPlayWinPercentage === 'number' && !isNaN(seasonData.allPlayWinPercentage)) { // More robust check
             teamStats.allPlayWinPercentages.push(seasonData.allPlayWinPercentage);
         } else {
-            console.warn(`LeagueRecords: Skipping invalid allPlayWinPercentage for ${team} in ${year}:`, seasonData.allPlayWinPercentage);
+            console.warn(`LeagueRecords: Skipping invalid allPlayWinPercentage for ${team} in ${year} (Type: ${typeof seasonData.allPlayWinPercentage}, Value: ${seasonData.allPlayWinPercentage}).`);
         }
 
         if (seasonData.wins > seasonData.losses) {
@@ -166,8 +166,8 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     newCalculatedRecords.lowestDPR = { value: null, entries: [] };
     newCalculatedRecords.mostWins = { value: null, entries: [] };
     newCalculatedRecords.mostLosses = { value: null, entries: [] };
-    newCalculatedRecords.bestWinPct = { value: -Infinity, entries: [] }; // FIX: Initialize to -Infinity
-    newCalculatedRecords.bestAllPlayWinPct = { value: -Infinity, entries: [] }; // FIX: Initialize to -Infinity
+    newCalculatedRecords.bestWinPct = { value: -Infinity, entries: [] }; // Correctly initialized to -Infinity
+    newCalculatedRecords.bestAllPlayWinPct = { value: -Infinity, entries: [] }; // Correctly initialized to -Infinity
     newCalculatedRecords.mostWeeklyHighScores = { value: null, entries: [] };
     newCalculatedRecords.mostWeeklyTop2Scores = { value: null, entries: [] };
     newCalculatedRecords.mostWinningSeasons = { value: null, entries: [] };
@@ -176,8 +176,8 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     newCalculatedRecords.mostBlowoutLosses = { value: null, entries: [] };
     newCalculatedRecords.mostSlimWins = { value: null, entries: [] };
     newCalculatedRecords.mostSlimLosses = { value: null, entries: [] };
-    newCalculatedRecords.mostTotalPoints = { value: -Infinity, entries: [] }; // FIX: Initialize to -Infinity
-    newCalculatedRecords.mostPointsAgainst = { value: -Infinity, entries: [] }; // FIX: Initialize to -Infinity
+    newCalculatedRecords.mostTotalPoints = { value: -Infinity, entries: [] };
+    newCalculatedRecords.mostPointsAgainst = { value: -Infinity, entries: [] };
 
 
     // Highest/Lowest Career DPR
@@ -234,10 +234,16 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         // Only calculate and consider if the team has played at least one game
         if (stats.totalGames > 0) {
             const currentWinPct = (stats.totalWins + 0.5 * stats.ties) / stats.totalGames;
-            if (currentWinPct > bestWinPct.value) {
-                bestWinPct = { value: currentWinPct, entries: [{ team: team }] };
-            } else if (currentWinPct === bestWinPct.value) {
-                bestWinPct.entries.push({ team: team });
+            console.log(`LeagueRecords: Processing Best Win % for ${team}. totalGames: ${stats.totalGames}, (Wins: ${stats.totalWins}, Ties: ${stats.ties}) currentWinPct: ${currentWinPct} (Type: ${typeof currentWinPct})`);
+
+            if (typeof currentWinPct === 'number' && !isNaN(currentWinPct)) { // Added check for currentWinPct validity
+                if (currentWinPct > bestWinPct.value) {
+                    bestWinPct = { value: currentWinPct, entries: [{ team: team }] };
+                } else if (currentWinPct === bestWinPct.value) {
+                    bestWinPct.entries.push({ team: team });
+                }
+            } else {
+                console.warn(`LeagueRecords: currentWinPct for ${team} is invalid (will not update bestWinPct):`, currentWinPct);
             }
         } else {
             // console.log(`LeagueRecords: Team ${team} has 0 total games, skipping Win % calculation.`);
@@ -337,7 +343,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     if (maxWins.entries.length > 0) newCalculatedRecords.mostWins = maxWins;
     if (maxLosses.entries.length > 0) newCalculatedRecords.mostLosses = maxLosses;
 
-    // Check value directly as they were initialized to -Infinity
+    // These were initialized to -Infinity, so if they are still -Infinity, it means no valid data was found
     if (bestWinPct.value !== -Infinity) newCalculatedRecords.bestWinPct = bestWinPct;
     if (bestAllPlayWinPct.value !== -Infinity) newCalculatedRecords.bestAllPlayWinPct = bestAllPlayWinPct;
 
@@ -350,7 +356,6 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     if (maxSlimWins.entries.length > 0) newCalculatedRecords.mostSlimWins = maxSlimWins;
     if (maxSlimLosses.entries.length > 0) newCalculatedRecords.mostSlimLosses = maxSlimLosses;
 
-    // Check value directly as they were initialized to -Infinity
     if (maxTotalPoints.value !== -Infinity) newCalculatedRecords.mostTotalPoints = maxTotalPoints;
     if (maxPointsAgainst.value !== -Infinity) newCalculatedRecords.mostPointsAgainst = maxPointsAgainst;
 
@@ -371,11 +376,11 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     return 'N/A';
   };
 
-  // Formats as ".xxx"
+  // Formats as ".xxx%"
   const formatAllPlayWinPct = (pct) => {
     console.log("formatAllPlayWinPct called with value:", pct, "type:", typeof pct);
     if (typeof pct === 'number' && !isNaN(pct) && pct !== -Infinity) {
-        return String(pct.toFixed(3)); // Explicitly convert to string
+        return String(pct.toFixed(3)) + '%'; // Appended '%'
     }
     return 'N/A';
   };
@@ -408,17 +413,6 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
           <td colSpan="2" className="py-2 px-3 text-sm text-gray-500 text-center">N/A</td>
         </>
       );
-    }
-    return (
-      <>
-        <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{label}</td>
-        <td className="py-2 px-3 text-sm text-gray-800">{formatter(record.value)}</td>
-        <td className="py-2 px-3 text-sm text-gray-700">
-          {record.entries.map((entry, idx) => (
-            <span key={idx} className="block">{entry.team}</span>
-          ))}
-        </td>
-      </>
     );
   };
 
@@ -428,7 +422,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     { key: 'mostWins', label: 'Most Wins' },
     { key: 'mostLosses', label: 'Most Losses' },
     { key: 'bestWinPct', label: 'Best Win %', formatter: formatWinPct },
-    { key: 'bestAllPlayWinPct', label: 'Best All-Play Win %', formatter: formatAllPlayWinPct },
+    { key: 'bestAllPlayWinPct', label: 'Best All-Play Win %', formatter: formatAllPlayWinPct }, // Updated formatter
     { key: 'mostWeeklyHighScores', label: 'Most Weekly High Scores' },
     { key: 'mostWeeklyTop2Scores', label: 'Most Weekly Top 2 Scores' },
     { key: 'mostWinningSeasons', label: 'Most Winning Seasons' },
