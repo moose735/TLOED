@@ -4,45 +4,10 @@ import { calculateAllLeagueMetrics } from '../utils/calculations'; // Import the
 
 const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
   const [allTimeRecords, setAllTimeRecords] = useState({});
-  const [highestDPRCareerRecord, setHighestDPRCareerRecord] = useState(null);
-  const [lowestDPRCareerRecord, setLowestDPRCareerRecord] = useState(null);
-
-  // New state variables for other all-time records
-  const [mostWinsCareerRecord, setMostWinsCareerRecord] = useState(null);
-  const [mostLossesCareerRecord, setMostLossesCareerRecord] = useState(null);
-  const [bestWinPctCareerRecord, setBestWinPctCareerRecord] = useState(null);
-  const [bestAllPlayWinPctCareerRecord, setBestAllPlayWinPctCareerRecord] = useState(null);
-  const [mostWeeklyHighScoresCareerRecord, setMostWeeklyHighScoresCareerRecord] = useState(null);
-  const [mostWeeklyTop2ScoresCareerRecord, setMostWeeklyTop2ScoresCareerRecord] = useState(null);
-  const [mostWinningSeasonsRecord, setMostWinningSeasonsRecord] = useState(null);
-  const [mostLosingSeasonsRecord, setMostLosingSeasonsRecord] = useState(null);
-  const [mostBlowoutWinsCareerRecord, setMostBlowoutWinsCareerRecord] = useState(null);
-  const [mostBlowoutLossesCareerRecord, setMostBlowoutLossesCareerRecord] = useState(null);
-  const [mostSlimWinsCareerRecord, setMostSlimWinsCareerRecord] = useState(null);
-  const [mostSlimLossesCareerRecord, setMostSlimLossesCareerRecord] = useState(null);
-  const [mostTotalPointsCareerRecord, setMostTotalPointsCareerRecord] = useState(null);
-  const [mostPointsAgainstCareerRecord, setMostPointsAgainstCareerRecord] = useState(null);
-
 
   useEffect(() => {
     if (!historicalMatchups || historicalMatchups.length === 0) {
       setAllTimeRecords({});
-      setHighestDPRCareerRecord(null);
-      setLowestDPRCareerRecord(null);
-      setMostWinsCareerRecord(null);
-      setMostLossesCareerRecord(null);
-      setBestWinPctCareerRecord(null);
-      setBestAllPlayWinPctCareerRecord(null);
-      setMostWeeklyHighScoresCareerRecord(null);
-      setMostWeeklyTop2ScoresCareerRecord(null);
-      setMostWinningSeasonsRecord(null);
-      setMostLosingSeasonsRecord(null);
-      setMostBlowoutWinsCareerRecord(null);
-      setMostBlowoutLossesCareerRecord(null);
-      setMostSlimWinsCareerRecord(null);
-      setMostSlimLossesCareerRecord(null);
-      setMostTotalPointsCareerRecord(null);
-      setMostPointsAgainstCareerRecord(null);
       return;
     }
 
@@ -60,12 +25,11 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
             totalWins: 0, totalLosses: 0, totalTies: 0, totalGames: 0,
             totalPointsFor: 0, totalPointsAgainst: 0,
             winPercentages: [], allPlayWinPercentages: [],
-            weeklyHighScores: 0, weeklyTop2Scores: 0,
+            weeklyHighScores: 0, // This needs to be calculated in calculateAllLeagueMetrics or here from raw matches
+            weeklyTop2Scores: 0, // This needs to be calculated in calculateAllLeagueMetrics or here from raw matches
             winningSeasons: 0, losingSeasons: 0,
             blowoutWins: 0, blowoutLosses: 0,
             slimWins: 0, slimLosses: 0,
-            allMatches: [], // To calculate blowouts/slims
-            seasonFinishes: [], // For winning/losing seasons
           };
         }
 
@@ -79,73 +43,118 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         if (seasonData.winPercentage !== undefined) teamStats.winPercentages.push(seasonData.winPercentage);
         if (seasonData.allPlayWinPercentage !== undefined) teamStats.allPlayWinPercentages.push(seasonData.allPlayWinPercentage);
 
-        // Track weekly high scores and top 2 scores
-        // This requires access to league-wide weekly data, which is better done during initial calculation
-        // For simplicity, we'll assume `seasonalMetrics` provides these directly or recalculate here
-        // if `seasonalMetrics` does not provide them.
-        // For now, we'll focus on the career aggregation aspect based on existing seasonalMetrics data.
-        // The original calculations.js doesn't provide weekly high/top2 counts directly in seasonalMetrics.
-        // So, these specific career records might remain null unless calculations.js is enhanced.
-        // We will mock them or derive them if sufficient data exists.
-
-        // For winning/losing seasons, we need to know the 'finish' or if they had a winning record
+        // For winning/losing seasons
         if (seasonData.wins > seasonData.losses) {
           teamStats.winningSeasons++;
         } else if (seasonData.losses > seasonData.wins) {
           teamStats.losingSeasons++;
         }
-
-        // To calculate blowouts/slims, we need individual match data for each team
-        // This loop aggregates matches for career stats
-        historicalMatchups.filter(match => parseInt(match.year) === year && (getDisplayTeamName(match.team1) === team || getDisplayTeamName(match.team2) === team))
-          .forEach(match => {
-            const team1 = getDisplayTeamName(match.team1);
-            const team2 = getDisplayTeamName(match.team2);
-            const team1Score = parseFloat(match.team1Score);
-            const team2Score = parseFloat(match.team2Score);
-
-            if (isNaN(team1Score) || isNaN(team2Score)) return; // Skip invalid scores
-
-            const isTeam1 = team1 === team;
-            const currentTeamScore = isTeam1 ? team1Score : team2Score;
-            const opponentScore = isTeam1 ? team2Score : team1Score;
-            const scoreDiff = Math.abs(currentTeamScore - opponentScore);
-
-            if (currentTeamScore > opponentScore) { // Team won
-              if (scoreDiff >= 40) { // Example threshold for blowout win
-                teamStats.blowoutWins++;
-              }
-              if (scoreDiff <= 5 && scoreDiff > 0) { // Example threshold for slim win (not a tie)
-                teamStats.slimWins++;
-              }
-            } else if (currentTeamScore < opponentScore) { // Team lost
-              if (scoreDiff >= 40) { // Example threshold for blowout loss
-                teamStats.blowoutLosses++;
-              }
-              if (scoreDiff <= 5 && scoreDiff > 0) { // Example threshold for slim loss
-                teamStats.slimLosses++;
-              }
-            }
-          });
       });
     });
 
-    // Determine the overall career records based on aggregatedCareerStats and careerDPRData
-    const newAllTimeRecords = {};
+    // Second pass over historicalMatchups to calculate weekly high scores, top 2, and blowout/slim wins/losses
+    // This is more efficient than doing it per team per season in the first loop
+    const weeklyScores = {}; // { year_week: [{ team, score }] }
+
+    historicalMatchups.forEach(match => {
+        const year = parseInt(match.year);
+        const week = parseInt(match.week);
+        const team1 = getDisplayTeamName(String(match.team1 || '').trim());
+        const team2 = getDisplayTeamName(String(match.team2 || '').trim());
+        const team1Score = parseFloat(match.team1Score);
+        const team2Score = parseFloat(match.team2Score);
+
+        if (isNaN(year) || isNaN(week) || !team1 || !team2 || isNaN(team1Score) || isNaN(team2Score)) {
+            return; // Skip invalid or incomplete data
+        }
+
+        const weekKey = `${year}_${week}`;
+        if (!weeklyScores[weekKey]) {
+            weeklyScores[weekKey] = [];
+        }
+        weeklyScores[weekKey].push({ team: team1, score: team1Score });
+        weeklyScores[weekKey].push({ team: team2, score: team2Score });
+
+        // Calculate blowout/slim for individual matches directly here
+        const matchesForBlowoutSlim = [
+            { team: team1, ownScore: team1Score, opponentScore: team2Score },
+            { team: team2, ownScore: team2Score, opponentScore: team1Score }
+        ];
+
+        matchesForBlowoutSlim.forEach(entry => {
+            if (!aggregatedCareerStats[entry.team]) return; // Ensure team exists in aggregated stats
+
+            const scoreDiff = Math.abs(entry.ownScore - entry.opponentScore);
+
+            if (entry.ownScore > entry.opponentScore) { // Team won
+                if (scoreDiff >= 40) { // Example threshold for blowout win
+                    aggregatedCareerStats[entry.team].blowoutWins++;
+                }
+                if (scoreDiff > 0 && scoreDiff <= 5) { // Example threshold for slim win (not a tie)
+                    aggregatedCareerStats[entry.team].slimWins++;
+                }
+            } else if (entry.ownScore < entry.opponentScore) { // Team lost
+                if (scoreDiff >= 40) { // Example threshold for blowout loss
+                    aggregatedCareerStats[entry.team].blowoutLosses++;
+                }
+                if (scoreDiff > 0 && scoreDiff <= 5) { // Example threshold for slim loss
+                    aggregatedCareerStats[entry.team].slimLosses++;
+                }
+            }
+        });
+    });
+
+    // Process weekly scores to find high scores and top 2 scores
+    Object.keys(weeklyScores).forEach(weekKey => {
+        const scoresInWeek = weeklyScores[weekKey];
+        if (scoresInWeek.length === 0) return;
+
+        // Sort scores in descending order
+        scoresInWeek.sort((a, b) => b.score - a.score);
+
+        // First place
+        const firstPlaceScore = scoresInWeek[0].score;
+        scoresInWeek.filter(entry => entry.score === firstPlaceScore).forEach(entry => {
+            if (aggregatedCareerStats[entry.team]) {
+                aggregatedCareerStats[entry.team].weeklyHighScores++;
+                aggregatedCareerStats[entry.team].weeklyTop2Scores++; // High score is also a top 2 score
+            }
+        });
+
+        // Second place (if distinct from first place)
+        if (scoresInWeek.length > 1) {
+            let secondPlaceScore = -1; // Initialize with a value lower than any possible score
+            for (let i = 1; i < scoresInWeek.length; i++) {
+                if (scoresInWeek[i].score < firstPlaceScore) { // Find the first score strictly less than firstPlaceScore
+                    secondPlaceScore = scoresInWeek[i].score;
+                    break;
+                }
+            }
+
+            if (secondPlaceScore !== -1) {
+                scoresInWeek.filter(entry => entry.score === secondPlaceScore).forEach(entry => {
+                    if (aggregatedCareerStats[entry.team]) {
+                        aggregatedCareerStats[entry.team].weeklyTop2Scores++;
+                    }
+                });
+            }
+        }
+    });
+
+
+    const newCalculatedRecords = {};
 
     // Highest/Lowest Career DPR
     const sortedCareerDPR = [...careerDPRData].sort((a, b) => b.dpr - a.dpr);
     if (sortedCareerDPR.length > 0) {
-      setHighestDPRCareerRecord({
-        label: 'Highest Career DPR',
+      newCalculatedRecords.highestDPR = {
         value: sortedCareerDPR[0].dpr,
-        entries: [{ team: sortedCareerDPR[0].team }]
-      });
-      setLowestDPRCareerRecord({
-        label: 'Lowest Career DPR',
+        entries: sortedCareerDPR.filter(d => d.dpr === sortedCareerDPR[0].dpr).map(d => ({ team: d.team }))
+      };
+      newCalculatedRecords.lowestDPR = {
         value: sortedCareerDPR[sortedCareerDPR.length - 1].dpr,
-        entries: [{ team: sortedCareerDPR[sortedCareerDPR.length - 1].team }]
-      });
+        entries: sortedCareerDPR.filter(d => d.dpr === sortedCareerDPR[sortedCareerDPR.length - 1].dpr).map(d => ({ team: d.team }))
+      };
     }
 
     let maxWins = { value: 0, entries: [] };
@@ -164,7 +173,6 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     let maxPointsAgainst = { value: 0, entries: [] };
 
 
-    // *** Defensive check: Ensure aggregatedCareerStats is an object before using Object.keys ***
     if (typeof aggregatedCareerStats === 'object' && aggregatedCareerStats !== null) {
       Object.keys(aggregatedCareerStats).forEach(team => {
         const stats = aggregatedCareerStats[team];
@@ -200,11 +208,19 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
           bestAllPlayWinPct.entries.push({ team: team });
         }
 
-        // Most Weekly High Scores (Career) - Requires actual data; using a placeholder/mock if not available
-        // If seasonalMetrics[year][team].weeklyHighScores was available
-        // maxWeeklyHighScores.value += seasonData.weeklyHighScores; etc.
-        // For now, if your data doesn't provide this, these will remain 0 unless manually set.
-        // Assume you need to sum these up from seasonal data if they were calculated there.
+        // Most Weekly High Scores (Career)
+        if (stats.weeklyHighScores > maxWeeklyHighScores.value) {
+            maxWeeklyHighScores = { value: stats.weeklyHighScores, entries: [{ team: team }] };
+        } else if (stats.weeklyHighScores === maxWeeklyHighScores.value) {
+            maxWeeklyHighScores.entries.push({ team: team });
+        }
+
+        // Most Weekly Top 2 Scores (Career)
+        if (stats.weeklyTop2Scores > maxWeeklyTop2Scores.value) {
+            maxWeeklyTop2Scores = { value: stats.weeklyTop2Scores, entries: [{ team: team }] };
+        } else if (stats.weeklyTop2Scores === maxWeeklyTop2Scores.value) {
+            maxWeeklyTop2Scores.entries.push({ team: team });
+        }
 
         // Most Winning Seasons (Career)
         if (stats.winningSeasons > maxWinningSeasons.value) {
@@ -261,31 +277,13 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         } else if (stats.totalPointsAgainst === maxPointsAgainst.value) {
           maxPointsAgainst.entries.push({ team: team });
         }
-
       });
     }
 
-
-    setMostWinsCareerRecord(maxWins);
-    setMostLossesCareerRecord(maxLosses);
-    setBestWinPctCareerRecord(bestWinPct);
-    setBestAllPlayWinPctCareerRecord(bestAllPlayWinPct);
-    setMostWeeklyHighScoresCareerRecord(maxWeeklyHighScores);
-    setMostWeeklyTop2ScoresCareerRecord(maxWeeklyTop2Scores);
-    setMostWinningSeasonsRecord(maxWinningSeasons);
-    setMostLosingSeasonsRecord(maxLosingSeasons);
-    setMostBlowoutWinsCareerRecord(maxBlowoutWins);
-    setMostBlowoutLossesCareerRecord(maxBlowoutLosses);
-    setMostSlimWinsCareerRecord(maxSlimWins);
-    setMostSlimLossesCareerRecord(maxSlimLosses);
-    setMostTotalPointsCareerRecord(maxTotalPoints);
-    setMostPointsAgainstCareerRecord(maxPointsAgainst);
-
-
-    // Consolidate all records for rendering
+    // Consolidate all records for rendering in a single object
     setAllTimeRecords({
-      highestDPR: highestDPRCareerRecord,
-      lowestDPR: lowestDPRCareerRecord,
+      highestDPR: newCalculatedRecords.highestDPR, // Directly use from newCalculatedRecords
+      lowestDPR: newCalculatedRecords.lowestDPR,   // Directly use from newCalculatedRecords
       mostWins: maxWins,
       mostLosses: maxLosses,
       bestWinPct: bestWinPct,
@@ -340,6 +338,8 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     { key: 'mostLosses', label: 'Most Losses (Career)' },
     { key: 'bestWinPct', label: 'Best Win % (Career)', formatter: formatWinPct },
     { key: 'bestAllPlayWinPct', label: 'Best All-Play Win % (Career)', formatter: formatWinPct },
+    { key: 'mostWeeklyHighScores', label: 'Most Weekly High Scores (Career)' },
+    { key: 'mostWeeklyTop2Scores', label: 'Most Weekly Top 2 Scores (Career)' },
     { key: 'mostWinningSeasons', label: 'Most Winning Seasons (Career)' },
     { key: 'mostLosingSeasons', label: 'Most Losing Seasons (Career)' },
     { key: 'mostBlowoutWins', label: 'Most Blowout Wins (Career)' },
