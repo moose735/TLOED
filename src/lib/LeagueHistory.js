@@ -144,7 +144,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
     });
 
     // Process championship games and final seeding for overall finish awards (Trophies)
-    historicalMatchups.forEach(match => { // Changed 'game' back to 'match' here
+    historicalMatchups.forEach(match => {
       const year = parseInt(match.year);
       // Only process final seeding games that are part of a completed season
       if (!(typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0 && completedSeasons.has(year))) {
@@ -176,19 +176,19 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
 
       // Directly assign trophies based on finalSeedingGame value
       if (winner !== 'Tie') { // Only assign if there's a clear winner
-          if (match.finalSeedingGame === 1) { // 1st Place Game // Changed 'game' to 'match'
+          if (match.finalSeedingGame === 1) { // 1st Place Game
               if (teamOverallStats[winner]) {
                   teamOverallStats[winner].awards.championships++;
               }
               if (loser && teamOverallStats[loser]) { // Loser of 1st place game gets 2nd (Silver Trophy)
                   teamOverallStats[loser].awards.runnerUps++;
               }
-          } else if (match.finalSeedingGame === 3) { // 3rd Place Game // Changed 'game' to 'match'
+          } else if (match.finalSeedingGame === 3) { // 3rd Place Game
               if (teamOverallStats[winner]) { // Ensure winner is defined
                   teamOverallStats[winner].awards.thirdPlace++;
               }
           }
-      } else if (match.finalSeedingGame === 1) { // Special case: Tie in Championship Game // Changed 'game' to 'match'
+      } else if (match.finalSeedingGame === 1) { // Special case: Tie in Championship Game
           // If championship game is a tie, both get a championship (Gold Trophy)
           if (teamOverallStats[team1]) {
             teamOverallStats[team1].awards.championships++;
@@ -347,16 +347,16 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
         };
 
         // Find final seeding games for this year
-        const yearFinalGames = historicalMatchups.filter(match => // Changed 'game' back to 'match' here
+        const yearFinalGames = historicalMatchups.filter(match =>
             parseInt(match.year) === year &&
             (typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0)
         );
 
-        yearFinalGames.forEach(match => { // Changed 'game' back to 'match' here
-            const team1 = getDisplayTeamName(String(match.team1 || '').trim());
-            const team2 = getDisplayTeamName(String(match.team2 || '').trim());
-            const team1Score = parseFloat(match.team1Score);
-            const team2Score = parseFloat(match.team2Score);
+        yearFinalGames.forEach(game => {
+            const team1 = getDisplayTeamName(String(game.team1 || '').trim());
+            const team2 = getDisplayTeamName(String(game.team2 || '').trim());
+            const team1Score = parseFloat(game.team1Score);
+            const team2Score = parseFloat(game.team2Score);
 
             const isTie = team1Score === team2Score;
             const team1Won = team1Score > team2Score;
@@ -368,7 +368,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                 loser = team1Won ? team2 : team1;
             }
 
-            if (match.finalSeedingGame === 1) { // 1st Place Game // Changed 'game' to 'match'
+            if (game.finalSeedingGame === 1) { // 1st Place Game
                 if (isTie) {
                     newSeasonAwardsSummary[year].champion = `${team1} & ${team2} (Tie)`;
                     newSeasonAwardsSummary[year].secondPlace = 'N/A'; // No distinct 2nd place in a tie for 1st
@@ -376,7 +376,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                     newSeasonAwardsSummary[year].champion = winner;
                     newSeasonAwardsSummary[year].secondPlace = loser;
                 }
-            } else if (match.finalSeedingGame === 3) { // 3rd Place Game // Changed 'game' to 'match'
+            } else if (game.finalSeedingGame === 3) { // 3rd Place Game
                 if (teamOverallStats[winner]) { // Ensure winner is defined
                     newSeasonAwardsSummary[year].thirdPlace = winner;
                 }
@@ -456,7 +456,6 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
 
 
   return (
-    // MODIFIED: Changed max-w-4xl to max-w-full to allow more horizontal room
     <div className="w-full max-w-full mt-8 mx-auto">
       <h2 className="text-2xl font-bold text-blue-700 mb-4 text-center">League History & Awards</h2>
 
@@ -471,13 +470,10 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
           {/* All-Time League Standings */}
           <section className="mb-8">
             <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">All-Time Standings & Awards (Sorted by Win %)</h3>
-            {/* Removed card styling from this div */}
             <div className="overflow-x-auto">
               <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
                 <thead className="bg-blue-50">
                   <tr>
-                    {/* New Rank Column Header */}
-                    {/* MODIFIED: Changed text-left to text-center for the Rank column header */}
                     <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Rank</th>
                     <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Team</th>
                     <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Seasons</th>
@@ -489,15 +485,12 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                 <tbody>
                   {allTimeStandings.map((team, index) => (
                     <tr key={team.team} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                      {/* New Rank Column Data - Already centered */}
                       <td className="py-2 px-3 text-sm text-gray-800 text-center font-semibold whitespace-nowrap">{index + 1}</td>
                       <td className="py-2 px-3 text-sm text-gray-800 font-semibold whitespace-nowrap">{team.team}</td>
-                      {/* MODIFIED: Render team.seasons as JSX to apply specific styling to the count */}
                       <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{team.seasons}</td>
                       <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{team.record}</td>
                       <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{formatPercentage(team.winPercentage)}</td>
                       <td className="py-2 px-3 text-sm text-gray-700 text-center">
-                        {/* Awards: Remove flex-wrap and add whitespace-nowrap to the container div */}
                         <div className="flex justify-center items-center gap-2 whitespace-nowrap">
                           {team.awards.championships > 0 && (
                             <span title="Championships (1st Place Bowl)" className="flex items-center space-x-1 whitespace-nowrap">
@@ -545,23 +538,22 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
           </section>
 
           {/* Total DPR Progression Line Graph */}
-          {/* Removed card styling from this section */}
           <section className="mb-8">
             <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Total DPR Progression Over Seasons</h3>
             {seasonalDPRChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={600}> {/* Reverted width to "100%" */}
+              <ResponsiveContainer width="100%" aspect={4 / 3}> {/* MODIFIED: Changed height to aspect={4 / 3} */}
                 <LineChart
                   data={seasonalDPRChartData}
                   margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="year" label={{ value: "Season", position: "insideBottom", offset: 0 }} />
+                  <XAxis dataKey="year" label={{ value: "Season Year", position: "insideBottom", offset: 0 }} />
                   <YAxis
-                    label={{ value: "Rank", angle: -90, position: "insideLeft", offset: 35 }} // Corrected offset for Y-axis label to -20
-                    domain={[1, uniqueTeamsForChart.length]} // Y-axis domain now explicitly from 1 to max rank
-                    reversed={true} // Reverse the axis so 1st rank is at the top
-                    tickFormatter={value => value} // Display rank number
-                    ticks={yAxisTicks} // Force all rank ticks from 1 to max
+                    label={{ value: "Rank", angle: -90, position: "insideLeft", offset: -20 }}
+                    domain={[1, uniqueTeamsForChart.length]}
+                    reversed={true}
+                    tickFormatter={value => value}
+                    ticks={yAxisTicks}
                   />
                   <Tooltip content={<CustomTooltip />} />
                   <Legend />
@@ -569,7 +561,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                     <Line
                       key={team}
                       type="monotone"
-                      dataKey={team} // Data key is the rank
+                      dataKey={team}
                       stroke={teamColors[index % teamColors.length]}
                       activeDot={{ r: 8 }}
                       dot={{ r: 4 }}
@@ -584,11 +576,10 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
           </section>
 
           {/* New: Season-by-Season Champions & Awards */}
-          {/* Removed card styling from this section */}
           <section className="mb-8">
             <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Season-by-Season Champions & Awards</h3>
             {Object.keys(seasonAwardsSummary).length > 0 ? (
-              <div className="overflow-x-auto"> {/* Removed card styling from this div */}
+              <div className="overflow-x-auto">
                 <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
                   <thead className="bg-blue-50">
                     <tr>
@@ -614,7 +605,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedYearsForAwards.map((year, index) => { // Use sortedYearsForAwards directly
+                    {sortedYearsForAwards.map((year, index) => {
                       const awards = seasonAwardsSummary[year];
                       return (
                         <tr key={year} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
