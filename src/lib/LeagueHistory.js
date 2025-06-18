@@ -126,6 +126,43 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
       // Points For is accumulated regardless of PointsOnlyBye
       teamOverallStats[team1].totalPointsFor += team1Score;
       teamOverallStats[team2].totalPointsFor += team2Score;
+
+      // RE-INSERTED: Process championship games and final seeding for overall finish awards (Trophies) for teamOverallStats
+      // This uses 'match' data directly as it's within the 'historicalMatchups.forEach' loop.
+      if (typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0 && completedSeasons.has(year)) {
+        const isMatchTie = team1Score === team2Score;
+        const matchTeam1Won = team1Score > team2Score;
+
+        let matchWinner = '';
+        let matchLoser = '';
+        if (!isMatchTie) {
+          matchWinner = matchTeam1Won ? team1 : team2;
+          matchLoser = matchTeam1Won ? team2 : team1;
+        }
+
+        if (match.finalSeedingGame === 1) { // 1st Place Game
+            if (isMatchTie) {
+                // If championship game is a tie, both get a championship (Gold Trophy)
+                if (teamOverallStats[team1]) {
+                    teamOverallStats[team1].awards.championships++;
+                }
+                if (teamOverallStats[team2]) {
+                    teamOverallStats[team2].awards.championships++;
+                }
+            } else { // Clear winner
+                if (teamOverallStats[matchWinner]) {
+                    teamOverallStats[matchWinner].awards.championships++;
+                }
+                if (matchLoser && teamOverallStats[matchLoser]) { // Loser of 1st place game gets 2nd (Silver Trophy)
+                    teamOverallStats[matchLoser].awards.runnerUps++;
+                }
+            }
+        } else if (match.finalSeedingGame === 3) { // 3rd Place Game
+            if (!isMatchTie && teamOverallStats[matchWinner]) { // Only assign if there's a winner
+                teamOverallStats[matchWinner].awards.thirdPlace++;
+            }
+        }
+      }
     });
 
     // Populate yearlyPointsLeaders using seasonalMetrics (which has totalPointsFor per team per year)
@@ -141,48 +178,6 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
         })).sort((a, b) => b.points - a.points); // Sort descending by points
 
         yearlyPointsLeaders[year] = yearPointsData;
-    });
-
-    // Process championship games and final seeding for overall finish awards (Trophies)
-    historicalMatchups.forEach(match => {
-      const year = parseInt(match.year);
-      // Only process final seeding games that are part of a completed season
-      if (!(typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0 && completedSeasons.has(year))) {
-          return;
-      }
-
-      const team1 = getDisplayTeamName(String(match.team1 || '').trim());
-      const team2 = getDisplayTeamName(String(match.team2 || '').trim());
-      const team1Score = parseFloat(match.team1Score);
-      const team2Score = parseFloat(match.team2Score);
-
-      if (!team1 || team1 === '' || !team2 || team2 === '' || isNaN(team1Score) || isNaN(team2Score)) {
-          return;
-      }
-
-      const isTie = team1Score === team2Score;
-      const team1Won = team1Score > team2Score;
-
-      let winner = '';
-      let loser = '';
-      if (!isTie) {
-                winner = team1Won ? team1 : team2;
-                loser = team1Won ? team2 : team1;
-      }
-
-      if (game.finalSeedingGame === 1) { // 1st Place Game
-          if (isTie) {
-                    newSeasonAwardsSummary[year].champion = `${team1} & ${team2} (Tie)`;
-                    newSeasonAwardsSummary[year].secondPlace = 'N/A'; // No distinct 2nd place in a tie for 1st
-          } else {
-                    newSeasonAwardsSummary[year].champion = winner;
-                    newSeasonAwardsSummary[year].secondPlace = loser;
-          }
-      } else if (game.finalSeedingGame === 3) { // 3rd Place Game
-          if (teamOverallStats[winner]) { // Ensure winner is defined
-              newSeasonAwardsSummary[year].thirdPlace = winner;
-          }
-      }
     });
 
     // Medal Calculation Pass (based on yearlyPointsLeaders)
@@ -338,7 +333,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
             (typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0)
         );
 
-        yearFinalGames.forEach(game => {
+        yearFinalGames.forEach(game => { // 'game' is correctly defined here for this loop
             const team1 = getDisplayTeamName(String(game.team1 || '').trim());
             const team2 = getDisplayTeamName(String(game.team2 || '').trim());
             const team1Score = parseFloat(game.team1Score);
@@ -363,7 +358,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                     newSeasonAwardsSummary[year].secondPlace = loser;
                 }
             } else if (game.finalSeedingGame === 3) { // 3rd Place Game
-                if (teamOverallStats[winner]) { // Ensure winner is defined
+                if (winner && teamOverallStats[winner]) { // Ensure winner is defined and exists in stats
                     newSeasonAwardsSummary[year].thirdPlace = winner;
                 }
             }
