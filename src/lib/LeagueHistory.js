@@ -424,8 +424,8 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
 
 
   return (
-    // Centering the main card: Add mx-auto here
-    <div className="w-full max-w-4xl bg-white p-8 rounded-lg shadow-md mt-8 mx-auto">
+    // Removed all styling that creates a "card" effect from the main container
+    <div className="w-full max-w-4xl mt-8 mx-auto">
       <h2 className="text-2xl font-bold text-blue-700 mb-4 text-center">League History & Awards</h2>
 
       {loading ? (
@@ -439,6 +439,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
           {/* All-Time League Standings */}
           <section className="mb-8">
             <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">All-Time Standings & Awards (Sorted by Win %)</h3>
+            {/* Removed card styling from this div */}
             <div className="overflow-x-auto">
               <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
                 <thead className="bg-blue-50">
@@ -510,7 +511,8 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
           </section>
 
           {/* Total DPR Progression Line Graph */}
-          <section className="mb-8 p-4 bg-gray-50 rounded-lg shadow-sm border border-gray-200">
+          {/* Removed card styling from this section */}
+          <section className="mb-8">
             <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Total DPR Progression Over Seasons</h3>
             {seasonalDPRChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height={400}>
@@ -546,9 +548,11 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
           </section>
 
           {/* New: Season-by-Season Champions & Awards */}
-          <section className="mb-8 p-4 bg-gray-50 rounded-lg shadow-sm border border-gray-200">
+          {/* Removed card styling from this section */}
+          <section className="mb-8">
             <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Season-by-Season Champions & Awards</h3>
             {Object.keys(seasonAwardsSummary).length > 0 ? (
+              {/* Removed card styling from this div */}
               <div className="overflow-x-auto">
                 <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
                   <thead className="bg-blue-50">
