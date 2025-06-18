@@ -126,43 +126,6 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
       // Points For is accumulated regardless of PointsOnlyBye
       teamOverallStats[team1].totalPointsFor += team1Score;
       teamOverallStats[team2].totalPointsFor += team2Score;
-
-      // RE-INSERTED: Process championship games and final seeding for overall finish awards (Trophies) for teamOverallStats
-      // This uses 'match' data directly as it's within the 'historicalMatchups.forEach' loop.
-      if (typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0 && completedSeasons.has(year)) {
-        const isMatchTie = team1Score === team2Score;
-        const matchTeam1Won = team1Score > team2Score;
-
-        let matchWinner = '';
-        let matchLoser = '';
-        if (!isMatchTie) {
-          matchWinner = matchTeam1Won ? team1 : team2;
-          matchLoser = matchTeam1Won ? team2 : team1;
-        }
-
-        if (match.finalSeedingGame === 1) { // 1st Place Game
-            if (isMatchTie) {
-                // If championship game is a tie, both get a championship (Gold Trophy)
-                if (teamOverallStats[team1]) {
-                    teamOverallStats[team1].awards.championships++;
-                }
-                if (teamOverallStats[team2]) {
-                    teamOverallStats[team2].awards.championships++;
-                }
-            } else { // Clear winner
-                if (teamOverallStats[matchWinner]) {
-                    teamOverallStats[matchWinner].awards.championships++;
-                }
-                if (matchLoser && teamOverallStats[matchLoser]) { // Loser of 1st place game gets 2nd (Silver Trophy)
-                    teamOverallStats[matchLoser].awards.runnerUps++;
-                }
-            }
-        } else if (match.finalSeedingGame === 3) { // 3rd Place Game
-            if (!isMatchTie && teamOverallStats[matchWinner]) { // Only assign if there's a winner
-                teamOverallStats[matchWinner].awards.thirdPlace++;
-            }
-        }
-      }
     });
 
     // Populate yearlyPointsLeaders using seasonalMetrics (which has totalPointsFor per team per year)
@@ -178,6 +141,62 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
         })).sort((a, b) => b.points - a.points); // Sort descending by points
 
         yearlyPointsLeaders[year] = yearPointsData;
+    });
+
+    // Process championship games and final seeding for overall finish awards (Trophies)
+    historicalMatchups.forEach(match => {
+      const year = parseInt(match.year);
+      // Only process final seeding games that are part of a completed season
+      if (!(typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0 && completedSeasons.has(year))) {
+          return;
+      }
+
+      const team1 = getDisplayTeamName(String(match.team1 || '').trim());
+      const team2 = getDisplayTeamName(String(match.team2 || '').trim());
+      const team1Score = parseFloat(match.team1Score);
+      const team2Score = parseFloat(match.team2Score);
+
+      if (!team1 || team1 === '' || !team2 || team2 === '' || isNaN(team1Score) || isNaN(team2Score)) {
+          return;
+      }
+
+      const isTie = team1Score === team2Score;
+      const team1Won = team1Score > team2Score;
+
+      let winner = 'Tie';
+      let loser = 'Tie';
+
+      if (team1Won) {
+          winner = team1;
+          loser = team2;
+      } else if (team2Score > team1Score) {
+          winner = team2;
+          loser = team1;
+      }
+
+      // Directly assign trophies based on finalSeedingGame value
+      if (winner !== 'Tie') { // Only assign if there's a clear winner
+          if (match.finalSeedingGame === 1) { // 1st Place Game
+              if (teamOverallStats[winner]) {
+                  teamOverallStats[winner].awards.championships++;
+              }
+              if (loser && teamOverallStats[loser]) { // Loser of 1st place game gets 2nd (Silver Trophy)
+                  teamOverallStats[loser].awards.runnerUps++;
+              }
+          } else if (match.finalSeedingGame === 3) { // 3rd Place Game
+              if (teamOverallStats[winner]) { // Ensure winner is defined
+                  teamOverallStats[winner].awards.thirdPlace++;
+              }
+          }
+      } else if (match.finalSeedingGame === 1) { // Special case: Tie in Championship Game
+          // If championship game is a tie, both get a championship (Gold Trophy)
+          if (teamOverallStats[team1]) {
+            teamOverallStats[team1].awards.championships++;
+          }
+          if (teamOverallStats[team2]) {
+            teamOverallStats[team2].awards.championships++;
+          }
+      }
     });
 
     // Medal Calculation Pass (based on yearlyPointsLeaders)
@@ -333,7 +352,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
             (typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0)
         );
 
-        yearFinalGames.forEach(game => { // 'game' is correctly defined here for this loop
+        yearFinalGames.forEach(game => {
             const team1 = getDisplayTeamName(String(game.team1 || '').trim());
             const team2 = getDisplayTeamName(String(game.team2 || '').trim());
             const team1Score = parseFloat(game.team1Score);
@@ -358,7 +377,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                     newSeasonAwardsSummary[year].secondPlace = loser;
                 }
             } else if (game.finalSeedingGame === 3) { // 3rd Place Game
-                if (winner && teamOverallStats[winner]) { // Ensure winner is defined and exists in stats
+                if (teamOverallStats[winner]) { // Ensure winner is defined
                     newSeasonAwardsSummary[year].thirdPlace = winner;
                 }
             }
@@ -582,7 +601,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="year" label={{ value: "Season", position: "insideBottom", offset: 0 }} />
                   <YAxis
-                    label={{ value: "Rank", angle: -90, position: "insideLeft", offset: -20 }} {/* Adjusted position and offset */}
+                    label={{ value: "Rank", angle: -90, position: "insideLeft", offset: 0 }}
                     domain={[1, uniqueTeamsForChart.length]}
                     reversed={true}
                     tickFormatter={value => value}
