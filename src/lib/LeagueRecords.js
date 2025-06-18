@@ -16,6 +16,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     // Aggregate records across all seasons for career stats
     const aggregatedCareerStats = {};
 
+    // First pass to aggregate basic seasonal data, including pointsFor and pointsAgainst
     Object.keys(seasonalMetrics).forEach(year => {
       Object.keys(seasonalMetrics[year]).forEach(team => {
         const seasonData = seasonalMetrics[year][team];
@@ -23,7 +24,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         if (!aggregatedCareerStats[team]) {
           aggregatedCareerStats[team] = {
             totalWins: 0, totalLosses: 0, totalTies: 0, totalGames: 0,
-            totalPointsFor: 0, totalPointsAgainst: 0, // Ensure this is correctly summed
+            totalPointsFor: 0, totalPointsAgainst: 0, // Ensure this is initialized
             winPercentages: [], allPlayWinPercentages: [],
             weeklyHighScores: 0,
             weeklyTop2Scores: 0,
@@ -39,9 +40,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         teamStats.totalTies += seasonData.ties;
         teamStats.totalGames += seasonData.totalGames;
         teamStats.totalPointsFor += seasonData.pointsFor;
-        // The pointsAgainst is crucial. Ensure it's correctly calculated in calculateAllLeagueMetrics
-        // For now, let's assume it's correctly passed from seasonData
-        teamStats.totalPointsAgainst += seasonData.pointsAgainst; // Make sure calculateAllLeagueMetrics provides this correctly
+        teamStats.totalPointsAgainst += seasonData.pointsAgainst; // Directly sum from seasonalMetrics
         if (seasonData.winPercentage !== undefined) teamStats.winPercentages.push(seasonData.winPercentage);
         if (seasonData.allPlayWinPercentage !== undefined) teamStats.allPlayWinPercentages.push(seasonData.allPlayWinPercentage);
 
@@ -53,7 +52,8 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       });
     });
 
-    const weeklyScores = {};
+    // Second pass over historicalMatchups to calculate weekly high scores, top 2, and blowout/slim wins/losses
+    const weeklyScores = {}; // { year_week: [{ team, score }] }
 
     historicalMatchups.forEach(match => {
         const year = parseInt(match.year);
@@ -102,6 +102,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         });
     });
 
+    // Process weekly scores to find high scores and top 2 scores
     Object.keys(weeklyScores).forEach(weekKey => {
         const scoresInWeek = weeklyScores[weekKey];
         if (scoresInWeek.length === 0) return;
@@ -117,7 +118,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         });
 
         if (scoresInWeek.length > 1) {
-            let secondPlaceScore = -Infinity; // Initialize with lowest possible number
+            let secondPlaceScore = -Infinity;
             for (let i = 1; i < scoresInWeek.length; i++) {
                 if (scoresInWeek[i].score < firstPlaceScore) {
                     secondPlaceScore = scoresInWeek[i].score;
@@ -139,7 +140,6 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     const newCalculatedRecords = {};
 
     // Initialize all record objects with null/empty entries
-    // This ensures that if no valid record is found, they default to N/A
     newCalculatedRecords.highestDPR = { value: null, entries: [] };
     newCalculatedRecords.lowestDPR = { value: null, entries: [] };
     newCalculatedRecords.mostWins = { value: null, entries: [] };
@@ -172,11 +172,11 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     }
 
 
-    // Variables to find the max/min across all teams
-    let maxWins = { value: -Infinity, entries: [] }; // Initialize with -Infinity to correctly find max
+    // Variables to find the max/min across all teams, initialized to safe defaults
+    let maxWins = { value: -Infinity, entries: [] };
     let maxLosses = { value: -Infinity, entries: [] };
-    let bestWinPct = { value: -Infinity, entries: [] };
-    let bestAllPlayWinPct = { value: -Infinity, entries: [] };
+    let bestWinPct = { value: -Infinity, entries: [] }; // Initialized to -Infinity
+    let bestAllPlayWinPct = { value: -Infinity, entries: [] }; // Initialized to -Infinity
     let maxWeeklyHighScores = { value: -Infinity, entries: [] };
     let maxWeeklyTop2Scores = { value: -Infinity, entries: [] };
     let maxWinningSeasons = { value: -Infinity, entries: [] };
@@ -210,7 +210,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         // Best Win Percentage
         // Only calculate and consider if the team has played at least one game
         if (stats.totalGames > 0) {
-            const currentWinPct = (stats.totalWins + 0.5 * stats.totalTies) / stats.totalGames;
+            const currentWinPct = (stats.totalWins + 0.5 * stats.ties) / stats.totalGames;
             if (currentWinPct > bestWinPct.value) {
                 bestWinPct = { value: currentWinPct, entries: [{ team: team }] };
             } else if (currentWinPct === bestWinPct.value) {
@@ -285,7 +285,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
           maxSlimLosses.entries.push({ team: team });
         }
 
-        // Most Total Points
+        // Most Total Points For
         if (stats.totalPointsFor > maxTotalPoints.value) {
           maxTotalPoints = { value: stats.totalPointsFor, entries: [{ team: team }] };
         } else if (stats.totalPointsFor === maxTotalPoints.value) {
@@ -293,7 +293,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         }
 
         // Most Points Against
-        if (stats.totalPointsAgainst > maxPointsAgainst.value) {
+        if (stats.totalPointsAgainst > maxPointsAgainst.value) { // This now correctly uses the accumulated pointsAgainst
           maxPointsAgainst = { value: stats.totalPointsAgainst, entries: [{ team: team }] };
         } else if (stats.totalPointsAgainst === maxPointsAgainst.value) {
           maxPointsAgainst.entries.push({ team: team });
@@ -302,10 +302,9 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     }
 
     // Now, assign the calculated values to newCalculatedRecords
-    // This is crucial, as the initial assignment uses default {value: null, entries: []}
     if (maxWins.entries.length > 0) newCalculatedRecords.mostWins = maxWins;
     if (maxLosses.entries.length > 0) newCalculatedRecords.mostLosses = maxLosses;
-    // For win % and all-play win %, if value is -Infinity, it means no valid data was found
+    // For win % and all-play win %, ensure value is not -Infinity (meaning valid data was found)
     if (bestWinPct.value !== -Infinity) newCalculatedRecords.bestWinPct = bestWinPct;
     if (bestAllPlayWinPct.value !== -Infinity) newCalculatedRecords.bestAllPlayWinPct = bestAllPlayWinPct;
     if (maxWeeklyHighScores.entries.length > 0) newCalculatedRecords.mostWeeklyHighScores = maxWeeklyHighScores;
@@ -316,8 +315,8 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     if (maxBlowoutLosses.entries.length > 0) newCalculatedRecords.mostBlowoutLosses = maxBlowoutLosses;
     if (maxSlimWins.entries.length > 0) newCalculatedRecords.mostSlimWins = maxSlimWins;
     if (maxSlimLosses.entries.length > 0) newCalculatedRecords.mostSlimLosses = maxSlimLosses;
-    if (maxTotalPoints.value !== -Infinity) newCalculatedRecords.mostTotalPoints = maxTotalPoints; // Use value check for points
-    if (maxPointsAgainst.value !== -Infinity) newCalculatedRecords.mostPointsAgainst = maxPointsAgainst; // Use value check for points
+    if (maxTotalPoints.value !== -Infinity) newCalculatedRecords.mostTotalPoints = maxTotalPoints;
+    if (maxPointsAgainst.value !== -Infinity) newCalculatedRecords.mostPointsAgainst = maxPointsAgainst; // Ensure this is also checked against -Infinity
 
     setAllTimeRecords(newCalculatedRecords);
 
@@ -325,23 +324,37 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
 
   // Helper functions for formatting
   const formatDPR = (dpr) => (typeof dpr === 'number' && !isNaN(dpr)) ? dpr.toFixed(3) : 'N/A';
+
+  // Formats as ".xxx"
   const formatWinPct = (pct) => {
-    if (typeof pct === 'number' && !isNaN(pct) && pct !== -Infinity) { // Exclude -Infinity
-        return `${(pct * 100).toFixed(2)}%`;
-    }
-    return 'N/A';
-  };
-  const formatPoints = (points) => {
-    if (typeof points === 'number' && !isNaN(points) && points !== -Infinity) { // Exclude -Infinity
-        return points.toFixed(2);
+    if (typeof pct === 'number' && !isNaN(pct) && pct !== -Infinity) {
+        return pct.toFixed(3);
     }
     return 'N/A';
   };
 
+  // New function for All-Play Win % to ensure consistent formatting
+  const formatAllPlayWinPct = (pct) => {
+    if (typeof pct === 'number' && !isNaN(pct) && pct !== -Infinity) {
+        return pct.toFixed(3);
+    }
+    return 'N/A';
+  };
+
+  // Modified to format with commas and two decimal places
+  const formatPoints = (points) => {
+    if (typeof points === 'number' && !isNaN(points) && points !== -Infinity) {
+        return points.toFixed(2).toLocaleString(); // Add toLocaleString() for commas
+    }
+    return 'N/A';
+  };
+
+
   // Helper function to render a single record entry
   const renderSingleRecordEntry = (record, label, formatter = (value) => value) => {
     // If record.value is null (initial state or no data found), or no entries
-    if (!record || (record.value === null && record.entries.length === 0) || record.entries.length === 0) {
+    // Also check for -Infinity for numeric values that haven't been updated from initial state
+    if (!record || record.entries.length === 0 || record.value === null || record.value === -Infinity) {
       return (
         <>
           <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{label}</td>
@@ -367,8 +380,8 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     { key: 'lowestDPR', label: 'Lowest DPR', formatter: formatDPR },
     { key: 'mostWins', label: 'Most Wins' },
     { key: 'mostLosses', label: 'Most Losses' },
-    { key: 'bestWinPct', label: 'Best Win %', formatter: formatWinPct },
-    { key: 'bestAllPlayWinPct', label: 'Best All-Play Win %', formatter: formatWinPct },
+    { key: 'bestWinPct', label: 'Best Win %', formatter: formatWinPct }, // Using updated formatWinPct
+    { key: 'bestAllPlayWinPct', label: 'Best All-Play Win %', formatter: formatAllPlayWinPct }, // Using new formatAllPlayWinPct
     { key: 'mostWeeklyHighScores', label: 'Most Weekly High Scores' },
     { key: 'mostWeeklyTop2Scores', label: 'Most Weekly Top 2 Scores' },
     { key: 'mostWinningSeasons', label: 'Most Winning Seasons' },
