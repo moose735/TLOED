@@ -269,10 +269,10 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
       return {
         team: teamName,
         seasons: seasonsDisplay,
+        totalDPR: careerDPR, // Added totalDPR to the returned object
         record: `${stats.totalWins}-${stats.totalLosses}-${stats.totalTies}`,
         totalWins: stats.totalWins, // Add totalWins for sorting (if needed as secondary)
         winPercentage: winPercentage, // This is the numerical value (e.g., 0.46)
-        totalDPR: careerDPR,
         awards: stats.awards,
       };
     }).filter(Boolean).sort((a, b) => b.winPercentage - a.winPercentage); // SORTED BY WIN PERCENTAGE DESCENDING
@@ -477,6 +477,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                     <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Rank</th>
                     <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Team</th>
                     <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Seasons</th>
+                    <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Total DPR</th> { /* Added Total DPR header */ }
                     <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Record</th>
                     <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Win %</th>
                     <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Awards</th>
@@ -488,6 +489,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                       <td className="py-2 px-3 text-sm text-gray-800 text-center font-semibold whitespace-nowrap">{index + 1}</td>
                       <td className="py-2 px-3 text-sm text-gray-800 font-semibold whitespace-nowrap">{team.team}</td>
                       <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{team.seasons}</td>
+                      <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{formatDPR(team.totalDPR)}</td> { /* Added Total DPR data */ }
                       <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{team.record}</td>
                       <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{formatPercentage(team.winPercentage)}</td>
                       <td className="py-2 px-3 text-sm text-gray-700 text-center">
