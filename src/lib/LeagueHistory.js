@@ -442,21 +442,21 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
               <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
                 <thead className="bg-blue-50">
                   <tr>
-                    <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
-                    <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Seasons</th>
-                    <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record</th>
-                    <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Win %</th>
-                    <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Awards</th>
+                    <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Team</th>
+                    <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Seasons</th>
+                    <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Record</th>
+                    <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Win %</th>
+                    <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Awards</th>
                   </tr>
                 </thead>
                 <tbody>
                   {allTimeStandings.map((team, index) => (
                     <tr key={team.team} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                      <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{team.team}</td>
-                      <td className="py-2 px-3 text-sm text-gray-700 text-center">{team.seasons}</td>
-                      <td className="py-2 px-3 text-sm text-gray-700 text-center">{team.record}</td>
-                      <td className="py-2 px-3 text-sm text-gray-700 text-center">{formatPercentage(team.winPercentage)}</td>
-                      <td className="py-2 px-3 text-sm text-gray-700 text-center">
+                      <td className="py-2 px-3 text-sm text-gray-800 font-semibold whitespace-nowrap">{team.team}</td>
+                      <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{team.seasons}</td>
+                      <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{team.record}</td>
+                      <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{formatPercentage(team.winPercentage)}</td>
+                      <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">
                         <div className="flex flex-wrap justify-center items-center gap-2">
                           {team.awards.championships > 0 && (
                             <span title="Championships (1st Place)" className="flex items-center space-x-1">
@@ -547,23 +547,23 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                 <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
                   <thead className="bg-blue-50">
                     <tr>
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Year</th>
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Year</th>
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">
                         <i className="fas fa-trophy text-yellow-500 mr-1"></i> Champion
                       </th>
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">
                         <i className="fas fa-trophy text-gray-400 mr-1"></i> 2nd Place
                       </th>
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">
                         <i className="fas fa-trophy text-amber-800 mr-1"></i> 3rd Place
                       </th>
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">
                         <i className="fas fa-medal text-yellow-500 mr-1"></i> Points Champ
                       </th>
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">
                         <i className="fas fa-medal text-gray-400 mr-1"></i> Points 2nd
                       </th>
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">
                         <i className="fas fa-medal text-amber-800 mr-1"></i> Points 3rd
                       </th>
                     </tr>
@@ -573,13 +573,13 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                       const awards = seasonAwardsSummary[year];
                       return (
                         <tr key={year} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                          <td className="py-2 px-3 text-sm text-gray-800 font-semibold text-center">{year}</td>
-                          <td className="py-2 px-3 text-sm text-gray-700 text-center">{awards.champion}</td>
-                          <td className="py-2 px-3 text-sm text-gray-700 text-center">{awards.secondPlace}</td>
-                          <td className="py-2 px-3 text-sm text-gray-700 text-center">{awards.thirdPlace}</td>
-                          <td className="py-2 px-3 text-sm text-gray-700 text-center">{awards.pointsChamp}</td>
-                          <td className="py-2 px-3 text-sm text-gray-700 text-center">{awards.pointsSecond}</td>
-                          <td className="py-2 px-3 text-sm text-gray-700 text-center">{awards.pointsThird}</td>
+                          <td className="py-2 px-3 text-sm text-gray-800 font-semibold text-center whitespace-nowrap">{year}</td>
+                          <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{awards.champion}</td>
+                          <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{awards.secondPlace}</td>
+                          <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{awards.thirdPlace}</td>
+                          <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{awards.pointsChamp}</td>
+                          <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{awards.pointsSecond}</td>
+                          <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{awards.pointsThird}</td>
                         </tr>
                       );
                     })}
