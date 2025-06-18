@@ -440,8 +440,8 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
             const teamDPR = entry.payload[`${entry.dataKey}_DPR`]; // Access the stored DPR value
             return (
               <p key={`item-${index}`} style={{ color: entry.color }}>
-                {/* Display team name, rank, and DPR value */}
-                {`${entry.name}: Rank ${entry.value}${getOrdinalSuffix(entry.value)} (${formatDPR(teamDPR)} DPR)`}
+                {/* Display team name and their DPR value */}
+                {`${entry.name}: ${formatDPR(teamDPR)} DPR`}
               </p>
             );
           })}
