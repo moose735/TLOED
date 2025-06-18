@@ -17,7 +17,7 @@ const getFinalSeedingGamePurpose = (value) => {
   if (value === 1) return 'Championship Game';
   if (value === 3) return '3rd Place Game';
   if (value === 5) return '5th Place Game';
-  if (value === 7) return '7th Place Game';
+  if (value === 7) '7th Place Game';
   if (value === 9) return '9th Place Game';
   if (value === 11) return '11th Place Game';
   if (typeof value === 'number' && value > 0 && value % 2 !== 0) {
@@ -170,7 +170,8 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
           loser = team1Won ? team2 : team1;
       }
 
-      if (game.finalSeedingGame === 1) { // 1st Place Game
+      // FIX: Changed 'game' to 'match'
+      if (match.finalSeedingGame === 1) { // 1st Place Game
           if (isTie) {
               newSeasonAwardsSummary[year].champion = `${team1} & ${team2} (Tie)`;
               newSeasonAwardsSummary[year].secondPlace = 'N/A'; // No distinct 2nd place in a tie for 1st
@@ -178,7 +179,8 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
               newSeasonAwardsSummary[year].champion = winner;
               newSeasonAwardsSummary[year].secondPlace = loser;
           }
-      } else if (game.finalSeedingGame === 3) { // 3rd Place Game
+      // FIX: Changed 'game' to 'match'
+      } else if (match.finalSeedingGame === 3) { // 3rd Place Game
           if (teamOverallStats[winner]) { // Ensure winner is defined
             newSeasonAwardsSummary[year].thirdPlace = winner;
           }
