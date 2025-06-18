@@ -158,7 +158,7 @@ const App = () => {
     <div className="min-h-screen bg-gray-100 font-sans antialiased text-gray-900 flex flex-col items-center">
       <header className="bg-white shadow-md py-4 px-6 flex justify-between items-center relative z-10 w-full">
         <div className="flex items-center">
-          <h1 className="text-xl md:text-2xl font-bold text-blue-800">League Stats</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-blue-800">The League of Extraordinary Douchebags</h1>
         </div>
 
         {/* Desktop Navigation */}
