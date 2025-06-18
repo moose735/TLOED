@@ -443,6 +443,8 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
               <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
                 <thead className="bg-blue-50">
                   <tr>
+                    {/* New Rank Column Header */}
+                    <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Rank</th>
                     <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Team</th>
                     <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Seasons</th>
                     <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Record</th>
@@ -453,6 +455,8 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                 <tbody>
                   {allTimeStandings.map((team, index) => (
                     <tr key={team.team} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                      {/* New Rank Column Data */}
+                      <td className="py-2 px-3 text-sm text-gray-800 text-center font-semibold whitespace-nowrap">{index + 1}</td>
                       <td className="py-2 px-3 text-sm text-gray-800 font-semibold whitespace-nowrap">{team.team}</td>
                       <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{team.seasons}</td>
                       <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{team.record}</td>
