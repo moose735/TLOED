@@ -145,22 +145,22 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
       ) : (
         <>
           {/* Career DPR Rankings */}
-          <section className="mb-8"> {/* Removed background card styling classes */}
+          <section className="mb-8">
             <h3 className="text-xl font-bold text-blue-800 mb-4 border-b pb-2">All-Time Career DPR</h3>
             {careerDPRData.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
                   <thead className="bg-blue-100">
                     <tr>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Rank</th>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Team</th>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Adjusted DPR</th>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Win %</th> {/* Added Win % header */}
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Record (W-L-T)</th>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Points For</th>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Points Avg (Career)</th> {/* Added Points Avg header */}
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Highest Points Avg (Seasonal)</th> {/* Added Highest Points Avg header */}
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Lowest Points Avg (Seasonal)</th> {/* Added Lowest Points Avg header */}
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Rank</th> {/* Removed whitespace-nowrap */}
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th> {/* Removed whitespace-nowrap */}
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Adjusted DPR</th> {/* Removed whitespace-nowrap */}
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Win %</th> {/* Removed whitespace-nowrap */}
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record (W-L-T)</th> {/* Removed whitespace-nowrap */}
+                      {/* Removed Points For header */}
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Points Avg (Career)</th> {/* Removed whitespace-nowrap */}
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Highest Points Avg (Seasonal)</th> {/* Removed whitespace-nowrap */}
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Lowest Points Avg (Seasonal)</th> {/* Removed whitespace-nowrap */}
                     </tr>
                   </thead>
                   <tbody>
@@ -168,13 +168,13 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                       <tr key={data.team} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                         <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{index + 1}</td>
                         <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.team}</td>
-                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap">{formatDPR(data.dpr)}</td>
-                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap">{formatPercentage(data.winPercentage)}</td> {/* Added Win % data */}
-                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap">{renderRecord(data.wins, data.losses, data.ties)}</td>
-                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap">{formatPoints(data.pointsFor)}</td>
-                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap">{formatPointsAvg(data.pointsPerGame)}</td> {/* Added Points Avg data */}
-                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap">{formatPointsAvg(data.highestSeasonalPointsAvg)}</td> {/* Added Highest Points Avg data */}
-                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap">{formatPointsAvg(data.lowestSeasonalPointsAvg)}</td> {/* Added Lowest Points Avg data */}
+                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatDPR(data.dpr)}</td>
+                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPercentage(data.winPercentage)}</td>
+                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{renderRecord(data.wins, data.losses, data.ties)}</td>
+                        {/* Removed Points For data cell */}
+                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.pointsPerGame)}</td>
+                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.highestSeasonalPointsAvg)}</td>
+                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.lowestSeasonalPointsAvg)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -186,19 +186,19 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
           </section>
 
           {/* Seasonal DPR Rankings (Consolidated) */}
-          <section className="mb-8"> {/* Removed background card styling classes */}
+          <section className="mb-8">
             <h3 className="text-xl font-bold text-green-800 mb-4 border-b pb-2">Seasonal DPR Rankings</h3>
             {seasonalDPRData.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
                   <thead className="bg-green-100">
                     <tr>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Rank (Overall)</th>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Season</th>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Team</th>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Adjusted DPR</th>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Record (W-L-T)</th>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Points For</th>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Rank (Overall)</th> {/* Removed whitespace-nowrap */}
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Season</th> {/* Removed whitespace-nowrap */}
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Team</th> {/* Removed whitespace-nowrap */}
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Adjusted DPR</th> {/* Removed whitespace-nowrap */}
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Record (W-L-T)</th> {/* Removed whitespace-nowrap */}
+                      {/* Removed Points For header */}
                     </tr>
                   </thead>
                   <tbody>
@@ -207,9 +207,9 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                         <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{index + 1}</td>
                         <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.year}</td>
                         <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.team}</td>
-                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap">{formatDPR(data.dpr)}</td>
-                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap">{renderRecord(data.wins, data.losses, data.ties)}</td>
-                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap">{formatPoints(data.pointsFor)}</td>
+                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatDPR(data.dpr)}</td>
+                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{renderRecord(data.wins, data.losses, data.ties)}</td>
+                        {/* Removed Points For data cell */}
                       </tr>
                     ))}
                   </tbody>
