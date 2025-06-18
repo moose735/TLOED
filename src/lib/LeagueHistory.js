@@ -27,7 +27,6 @@ const getFinalSeedingGamePurpose = (value) => {
 };
 
 const LeagueHistory = ({ historicalMatchups, ...otherProps }) => {
-  // ... existing code ...
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [processedData, setProcessedData] = useState(null);
@@ -77,11 +76,12 @@ const LeagueHistory = ({ historicalMatchups, ...otherProps }) => {
       {historicalMatchups && (
         <>
           {/* Historical Matchup Data Section */}
+          {/* This section's outer card styling was removed as per your request */}
           <section className="mb-8">
             <h2 className="text-2xl font-bold text-gray-800 mb-4">Historical Matchup Data</h2>
 
             {careerWinLossRecords && Object.keys(careerWinLossRecords).length > 0 ? (
-              <div className="overflow-x-auto bg-white p-4 rounded-lg shadow-md"> {/* Keep this inner div for table styling */}
+              <div className="overflow-x-auto bg-white p-4 rounded-lg shadow-md"> {/* Inner div retains table styling */}
                 <h3 className="text-xl font-semibold text-gray-700 mb-3">Career Win/Loss Records</h3>
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
@@ -111,7 +111,7 @@ const LeagueHistory = ({ historicalMatchups, ...otherProps }) => {
             )}
 
             {careerPointsForAgainst && Object.keys(careerPointsForAgainst).length > 0 && (
-              <div className="mt-8 overflow-x-auto bg-white p-4 rounded-lg shadow-md"> {/* Keep this inner div for table styling */}
+              <div className="mt-8 overflow-x-auto bg-white p-4 rounded-lg shadow-md"> {/* Inner div retains table styling */}
                 <h3 className="text-xl font-semibold text-gray-700 mb-3">Career Points For/Against</h3>
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
@@ -139,7 +139,7 @@ const LeagueHistory = ({ historicalMatchups, ...otherProps }) => {
             )}
 
             {careerDPR && Object.keys(careerDPR).length > 0 && (
-              <div className="mt-8 overflow-x-auto bg-white p-4 rounded-lg shadow-md"> {/* Keep this inner div for table styling */}
+              <div className="mt-8 overflow-x-auto bg-white p-4 rounded-lg shadow-md"> {/* Inner div retains table styling */}
                 <h3 className="text-xl font-semibold text-gray-700 mb-3">Career DPR (Dominance Performance Rating)</h3>
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
@@ -163,7 +163,7 @@ const LeagueHistory = ({ historicalMatchups, ...otherProps }) => {
             )}
 
             {h2hRecords && Object.keys(h2hRecords).length > 0 && (
-              <div className="mt-8 overflow-x-auto bg-white p-4 rounded-lg shadow-md"> {/* Keep this inner div for table styling */}
+              <div className="mt-8 overflow-x-auto bg-white p-4 rounded-lg shadow-md"> {/* Inner div retains table styling */}
                 <h3 className="text-xl font-semibold text-gray-700 mb-3">Head-to-Head Records</h3>
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
@@ -198,10 +198,11 @@ const LeagueHistory = ({ historicalMatchups, ...otherProps }) => {
           </section>
 
           {/* Season-by-Season Awards Section */}
+          {/* This section's outer card styling was removed as per your request */}
           <section className="mb-8">
             <h2 className="text-2xl font-bold text-gray-800 mb-4">Season-by-Season Awards</h2>
             {seasonAwardsSummary && mostRecentYearsForAwards && mostRecentYearsForAwards.length > 0 ? (
-              <div className="overflow-x-auto bg-white p-4 rounded-lg shadow-md"> {/* Keep this inner div for table styling */}
+              <div className="overflow-x-auto bg-white p-4 rounded-lg shadow-md"> {/* Inner div retains table styling */}
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
@@ -222,11 +223,10 @@ const LeagueHistory = ({ historicalMatchups, ...otherProps }) => {
                   </thead>
                   <tbody className="divide-y divide-gray-200">
                     {mostRecentYearsForAwards.map((year, index) => {
-                      // Ensure we are accessing the correct year directly
                       const awards = seasonAwardsSummary[year];
                       return (
                         <tr key={year} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                          {/* Corrected: Removed backslashes from className attributes */}
+                          {/* Corrected: Removed unnecessary backslashes from className attributes */}
                           <td className="py-2 px-3 text-sm text-gray-800 font-semibold text-center whitespace-nowrap">{year}</td>
                           <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{awards.champion}</td>
                           <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{awards.secondPlace}</td>
