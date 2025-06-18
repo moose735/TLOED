@@ -70,14 +70,62 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
     const allSeasonalDPRs = [];
     Object.keys(seasonalMetrics).forEach(year => {
       Object.keys(seasonalMetrics[year]).forEach(team => {
+        const teamSeasonalData = seasonalMetrics[year][team];
+        const seasonalWins = teamSeasonalData.wins;
+        const seasonalLosses = teamSeasonalData.losses;
+        const seasonalTies = teamSeasonalData.ties;
+        const seasonalPointsFor = teamSeasonalData.pointsFor;
+        const seasonalTotalGames = seasonalWins + seasonalLosses + seasonalTies;
+
+        const seasonalWinPercentage = seasonalTotalGames > 0 ? ((seasonalWins + (0.5 * seasonalTies)) / seasonalTotalGames) : 0;
+        const seasonalPointsPerGame = seasonalTotalGames > 0 ? (seasonalPointsFor / seasonalTotalGames) : 0;
+
+        let seasonalHighestPointsGame = 0;
+        let seasonalLowestPointsGame = Infinity;
+
+        // Find highest and lowest points scored in a single game for this team in this season
+        historicalMatchups.forEach(match => {
+            const matchYear = parseInt(match.year);
+            const team1 = getDisplayTeamName(String(match.team1 || '').trim());
+            const team2 = getDisplayTeamName(String(match.team2 || '').trim());
+            const team1Score = parseFloat(match.team1Score);
+            const team2Score = parseFloat(match.team2Score);
+
+            if (matchYear === parseInt(year) && !isNaN(team1Score) && !isNaN(team2Score)) {
+                if (team1 === team) {
+                    if (team1Score > seasonalHighestPointsGame) {
+                        seasonalHighestPointsGame = team1Score;
+                    }
+                    if (team1Score < seasonalLowestPointsGame) {
+                        seasonalLowestPointsGame = team1Score;
+                    }
+                } else if (team2 === team) {
+                    if (team2Score > seasonalHighestPointsGame) {
+                        seasonalHighestPointsGame = team2Score;
+                    }
+                    if (team2Score < seasonalLowestPointsGame) {
+                        seasonalLowestPointsGame = team2Score;
+                    }
+                }
+            }
+        });
+
+        // If no games played, set lowest game score to 0 instead of Infinity
+        if (seasonalTotalGames === 0 || seasonalLowestPointsGame === Infinity) {
+            seasonalLowestPointsGame = 0;
+        }
+
         allSeasonalDPRs.push({
           year: parseInt(year),
           team: team,
-          dpr: seasonalMetrics[year][team].adjustedDPR,
-          wins: seasonalMetrics[year][team].wins,
-          losses: seasonalMetrics[year][team].losses,
-          ties: seasonalMetrics[year][team].ties,
-          pointsFor: seasonalMetrics[year][team].pointsFor
+          dpr: teamSeasonalData.adjustedDPR,
+          wins: seasonalWins,
+          losses: seasonalLosses,
+          ties: seasonalTies,
+          winPercentage: seasonalWinPercentage,
+          pointsPerGame: seasonalPointsPerGame,
+          highestPointsGame: seasonalHighestPointsGame,
+          lowestPointsGame: seasonalLowestPointsGame
         });
       });
     });
@@ -152,15 +200,14 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                 <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
                   <thead className="bg-blue-100">
                     <tr>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Rank</th> {/* Removed whitespace-nowrap */}
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th> {/* Removed whitespace-nowrap */}
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Adjusted DPR</th> {/* Removed whitespace-nowrap */}
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Win %</th> {/* Removed whitespace-nowrap */}
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record (W-L-T)</th> {/* Removed whitespace-nowrap */}
-                      {/* Removed Points For header */}
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Points Avg (Career)</th> {/* Removed whitespace-nowrap */}
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Highest Points Avg (Seasonal)</th> {/* Removed whitespace-nowrap */}
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Lowest Points Avg (Seasonal)</th> {/* Removed whitespace-nowrap */}
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Rank</th>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Adjusted DPR</th>
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Win %</th>
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record (W-L-T)</th>
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Points Avg (Career)</th>
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Highest Points Avg (Seasonal)</th>
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Lowest Points Avg (Seasonal)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -171,7 +218,6 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                         <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatDPR(data.dpr)}</td>
                         <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPercentage(data.winPercentage)}</td>
                         <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{renderRecord(data.wins, data.losses, data.ties)}</td>
-                        {/* Removed Points For data cell */}
                         <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.pointsPerGame)}</td>
                         <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.highestSeasonalPointsAvg)}</td>
                         <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.lowestSeasonalPointsAvg)}</td>
@@ -193,12 +239,15 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                 <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
                   <thead className="bg-green-100">
                     <tr>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Rank (Overall)</th> {/* Removed whitespace-nowrap */}
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Season</th> {/* Removed whitespace-nowrap */}
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Team</th> {/* Removed whitespace-nowrap */}
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Adjusted DPR</th> {/* Removed whitespace-nowrap */}
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Record (W-L-T)</th> {/* Removed whitespace-nowrap */}
-                      {/* Removed Points For header */}
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Rank (Overall)</th>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Season</th>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Team</th>
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Adjusted DPR</th>
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Win %</th> {/* Added Win % header */}
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Record (W-L-T)</th>
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Points Avg (Seasonal)</th> {/* Added Points Avg header */}
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Highest Points (Game)</th> {/* Added Highest Points Game header */}
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Lowest Points (Game)</th> {/* Added Lowest Points Game header */}
                     </tr>
                   </thead>
                   <tbody>
@@ -208,8 +257,11 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                         <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.year}</td>
                         <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.team}</td>
                         <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatDPR(data.dpr)}</td>
+                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPercentage(data.winPercentage)}</td> {/* Added Win % data */}
                         <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{renderRecord(data.wins, data.losses, data.ties)}</td>
-                        {/* Removed Points For data cell */}
+                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.pointsPerGame)}</td> {/* Added Points Avg data */}
+                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.highestPointsGame)}</td> {/* Added Highest Points Game data */}
+                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.lowestPointsGame)}</td> {/* Added Lowest Points Game data */}
                       </tr>
                     ))}
                   </tbody>
