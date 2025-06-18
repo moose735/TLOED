@@ -194,7 +194,7 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
         <>
           {/* Career DPR Rankings */}
           <section className="mb-8">
-            <h3 className="text-xl font-bold text-blue-800 mb-4 border-b pb-2">All-Time Career DPR</h3>
+            <h3 className="text-xl font-bold text-blue-800 mb-4 border-b pb-2">Career DPR Rankings</h3>
             {careerDPRData.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
@@ -205,9 +205,9 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                       <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Adjusted DPR</th>
                       <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Win %</th>
                       <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record (W-L-T)</th>
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Points Avg (Career)</th>
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Highest Points Avg (Seasonal)</th>
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Lowest Points Avg (Seasonal)</th>
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Points Avg /th>
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Highest Points Avg</th>
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Lowest Points Avg</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -233,21 +233,21 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
 
           {/* Seasonal DPR Rankings (Consolidated) */}
           <section className="mb-8">
-            <h3 className="text-xl font-bold text-green-800 mb-4 border-b pb-2">Seasonal DPR Rankings</h3>
+            <h3 className="text-xl font-bold text-green-800 mb-4 border-b pb-2">Best Seasons by DPR</h3>
             {seasonalDPRData.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
                   <thead className="bg-green-100">
                     <tr>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Rank (Overall)</th>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Rank</th>
                       <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Season</th>
                       <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Team</th>
                       <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Adjusted DPR</th>
                       <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Win %</th> {/* Added Win % header */}
                       <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Record (W-L-T)</th>
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Points Avg (Seasonal)</th> {/* Added Points Avg header */}
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Highest Points (Game)</th> {/* Added Highest Points Game header */}
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Lowest Points (Game)</th> {/* Added Lowest Points Game header */}
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Points Avg</th> {/* Added Points Avg header */}
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Highest Points</th> {/* Added Highest Points Game header */}
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Lowest Points</th> {/* Added Lowest Points Game header */}
                     </tr>
                   </thead>
                   <tbody>
