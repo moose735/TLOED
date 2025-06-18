@@ -71,7 +71,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
       const team1 = getDisplayTeamName(String(match.team1 || '').trim());
       const team2 = getDisplayTeamName(String(match.team2 || '').trim());
       const year = parseInt(match.year);
-      const week = parseInt(match.week);
+      // const week = parseInt(match.week); // Not used in this block
       const team1Score = parseFloat(match.team1Score);
       const team2Score = parseFloat(match.team2Score);
 
@@ -184,7 +184,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                   teamOverallStats[loser].awards.runnerUps++;
               }
           } else if (match.finalSeedingGame === 3) { // 3rd Place Game
-              if (teamOverallStats[winner]) {
+              if (teamOverallStats[winner]) { // Ensure winner is defined
                   teamOverallStats[winner].awards.thirdPlace++;
               }
           }
@@ -346,7 +346,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
             if (game.finalSeedingGame === 1) { // 1st Place Game
                 if (isTie) {
                     newSeasonAwardsSummary[year].champion = `${team1} & ${team2} (Tie)`;
-                    newSeasonAwardsSummary[year].secondPlace = 'N/A';
+                    newSeasonAwardsSummary[year].secondPlace = 'N/A'; // No distinct 2nd place in a tie for 1st
                 } else {
                     newSeasonAwardsSummary[year].champion = winner;
                     newSeasonAwardsSummary[year].secondPlace = loser;
@@ -465,20 +465,20 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                         {/* Awards: Remove flex-wrap and add whitespace-nowrap to the container div */}
                         <div className="flex justify-center items-center gap-2 whitespace-nowrap">
                           {team.awards.championships > 0 && (
-                            <span title="Championships (1st Place)" className="flex items-center space-x-1 whitespace-nowrap">
+                            <span title="Championships (1st Place Bowl)" className="flex items-center space-x-1 whitespace-nowrap">
                               <i className="fas fa-trophy text-yellow-500 text-lg"></i>
                               <span className="text-xs font-medium">{team.awards.championships}x</span>
                             </span>
                           )}
                           {team.awards.runnerUps > 0 && (
-                            <span title="Runner-Up Finishes (2nd Place)" className="flex items-center space-x-1 whitespace-nowrap">
+                            <span title="Runner-Up Finishes (2nd Place Bowl)" className="flex items-center space-x-1 whitespace-nowrap">
                               <i className="fas fa-trophy text-gray-400 text-lg"></i>
                               <span className="text-xs font-medium">{team.awards.runnerUps}x</span>
                             </span>
                           )}
                           {team.awards.thirdPlace > 0 && (
-                            <span title="Third Place Finishes (3rd Place)" className="flex items-center space-x-1 whitespace-nowrap">
-                              <i className="fas fa-trophy text-amber-800 text-lg"></i>
+                            <span title="Third Place Finishes (3rd Place Bowl)" className="flex items-center space-x-1 whitespace-nowrap">
+                              <i className="fas fa-trophy text-amber-800 text-lg"></i> {/* Using amber-800 for bronze-like color */}
                               <span className="text-xs font-medium">{team.awards.thirdPlace}x</span>
                             </span>
                           )}
@@ -496,7 +496,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                           )}
                           {team.awards.thirdPoints > 0 && (
                             <span title="3rd Place in Total Points" className="flex items-center space-x-1 whitespace-nowrap">
-                              <i className="fas fa-medal text-amber-800 text-lg"></i>
+                              <i className="fas fa-medal text-amber-800 text-lg"></i> {/* Using amber-800 for bronze-like color */}
                               <span className="text-xs font-medium">{team.awards.thirdPoints}x</span>
                             </span>
                           )}
