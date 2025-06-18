@@ -544,12 +544,12 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
               <ResponsiveContainer width="100%" aspect={4 / 3}>
                 <LineChart
                   data={seasonalDPRChartData}
-                  margin={{ top: 10, right: 10, left: 10, bottom: 10 }}
+                  margin={{ top: 15, right: 10, left: 10, bottom: 10 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="year" label={{ value: "Season", position: "insideBottom", offset: 0 }} />
                   <YAxis
-                    label={{ value: "Rank", angle: -90, position: "insideLeft", offset: 30 }}
+                    label={{ value: "Rank", angle: -90, position: "insideLeft", offset: 0 }}
                     domain={[1, uniqueTeamsForChart.length]}
                     reversed={true}
                     tickFormatter={value => value}
