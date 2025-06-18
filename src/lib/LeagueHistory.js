@@ -544,7 +544,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
               <ResponsiveContainer width="100%" aspect={4 / 3}>
                 <LineChart
                   data={seasonalDPRChartData}
-                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                  margin={{ top: 20, right: 30, left: 30, bottom: 5 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="year" label={{ value: "Season", position: "insideBottom", offset: 0 }} />
