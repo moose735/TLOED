@@ -569,7 +569,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                     <Line
                       key={team}
                       type="monotone"
-                      dataKey={`${team}.rank`} {/* MODIFIED: Use nested dataKey for rank */}
+                      dataKey={team + '.rank'} {/* MODIFIED: Changed from template literal to string concatenation */}
                       stroke={teamColors[index % teamColors.length]}
                       activeDot={{ r: 8 }}
                       dot={{ r: 4 }}
