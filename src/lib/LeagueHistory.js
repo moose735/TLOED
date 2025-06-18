@@ -291,7 +291,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
     setUniqueTeamsForChart(uniqueTeams);
 
     // To store the cumulative DPR for each team as we progress through years
-    const cumulativeTeamDPRs = {};
+    const cumulativeTeamDPRs = {}; // Stores the actual DPR values
 
     allYears.forEach(currentYear => {
         const matchesUpToCurrentYear = historicalMatchups.filter(match => parseInt(match.year) <= currentYear);
@@ -300,14 +300,33 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
         // This is a computationally intensive step, but ensures correct cumulative DPR.
         const { careerDPRData: cumulativeCareerDPRData } = calculateAllLeagueMetrics(matchesUpToCurrentYear, getDisplayTeamName);
 
-        const yearDataPoint = { year: currentYear };
+        // Populate cumulativeTeamDPRs with current cumulative DPRs
         uniqueTeams.forEach(team => {
             const teamDPR = cumulativeCareerDPRData.find(dpr => dpr.team === team)?.dpr;
             if (teamDPR !== undefined) {
                 cumulativeTeamDPRs[team] = teamDPR;
             }
-            yearDataPoint[team] = cumulativeTeamDPRs[team] || 0;
         });
+
+        const yearDataPoint = { year: currentYear };
+        // Create an array of teams with their current DPR for ranking purposes
+        const teamsWithDPRForRanking = uniqueTeams.map(team => ({
+          team: team,
+          dpr: cumulativeTeamDPRs[team] || 0 // Use 0 for teams that haven't played yet in a given year
+        }));
+
+        // Sort teams by DPR in descending order to assign ranks (higher DPR is better)
+        teamsWithDPRForRanking.sort((a, b) => b.dpr - a.dpr);
+
+        // Assign ranks, handling ties
+        let currentRank = 1;
+        for (let i = 0; i < teamsWithDPRForRanking.length; i++) {
+          if (i > 0 && teamsWithDPRForRanking[i].dpr < teamsWithDPRForRanking[i - 1].dpr) {
+            currentRank = i + 1;
+          }
+          yearDataPoint[teamsWithDPRForRanking[i].team] = currentRank;
+        }
+
         chartData.push(yearDataPoint);
     });
     setSeasonalDPRChartData(chartData);
@@ -410,15 +429,16 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
   // Custom Tooltip component for Recharts
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
-      // Sort the payload by value (DPR) in descending order
-      const sortedPayload = [...payload].sort((a, b) => b.value - a.value);
+      // Sort the payload by value (rank) in ascending order (lower rank is better)
+      const sortedPayload = [...payload].sort((a, b) => a.value - b.value);
 
       return (
         <div className="bg-white p-3 border border-gray-300 rounded-md shadow-lg text-sm">
           <p className="font-bold text-gray-800 mb-1">{`Year: ${label}`}</p>
           {sortedPayload.map((entry, index) => (
             <p key={`item-${index}`} style={{ color: entry.color }}>
-              {`${entry.name}: ${formatDPR(entry.value)}`}
+              {/* MODIFIED: Display rank with ordinal suffix */}
+              {`${entry.name}: ${entry.value}${getOrdinalSuffix(entry.value)} Place`}
             </p>
           ))}
         </div>
@@ -530,9 +550,9 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="year" label={{ value: "Season Year", position: "insideBottom", offset: 0 }} />
                   <YAxis
-                    label={{ value: "Cumulative Adjusted DPR", angle: -90, position: "insideLeft" }}
-                    domain={[0.900, 1.100]}
-                    tickFormatter={formatDPR}
+                    label={{ value: "Rank", angle: -90, position: "insideLeft" }} // MODIFIED: Y-axis label changed to "Rank"
+                    domain={[uniqueTeamsForChart.length, 1]} // MODIFIED: Y-axis domain reversed for ranks (1 at top)
+                    tickFormatter={value => value} // MODIFIED: Removed DPR formatter, now just display rank number
                   />
                   <Tooltip content={<CustomTooltip />} />
                   <Legend />
