@@ -447,6 +447,9 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
     return null;
   };
 
+  // Generate ticks for Y-axis (ranks from 1 to uniqueTeamsForChart.length)
+  const yAxisTicks = Array.from({length: uniqueTeamsForChart.length}, (_, i) => i + 1);
+
 
   return (
     // Removed all styling that creates a "card" effect from the main container
@@ -551,8 +554,10 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                   <XAxis dataKey="year" label={{ value: "Season Year", position: "insideBottom", offset: 0 }} />
                   <YAxis
                     label={{ value: "Rank", angle: -90, position: "insideLeft" }} // MODIFIED: Y-axis label changed to "Rank"
-                    domain={[uniqueTeamsForChart.length, 1]} // MODIFIED: Y-axis domain reversed for ranks (1 at top)
+                    domain={[1, uniqueTeamsForChart.length]} // MODIFIED: Y-axis domain now explicitly from 1 to max
+                    reversed={true} // ADDED: Explicitly reverse the axis so 1 is at the top
                     tickFormatter={value => value} // MODIFIED: Removed DPR formatter, now just display rank number
+                    ticks={yAxisTicks} // ADDED: Force all rank ticks from 1 to max
                   />
                   <Tooltip content={<CustomTooltip />} />
                   <Legend />
