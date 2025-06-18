@@ -166,6 +166,189 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
       let winner = '';
       let loser = '';
       if (!isTie) {
+          winner = team1Won ? team1 : team2;
+          loser = team1Won ? team2 : team1;
+      }
+
+      if (match.finalSeedingGame === 1) { // 1st Place Game
+          if (isTie) {
+              newSeasonAwardsSummary[year].champion = `${team1} & ${team2} (Tie)`;
+              newSeasonAwardsSummary[year].secondPlace = 'N/A'; // No distinct 2nd place in a tie for 1st
+          } else {
+              newSeasonAwardsSummary[year].champion = winner;
+              newSeasonAwardsSummary[year].secondPlace = loser;
+          }
+      } else if (match.finalSeedingGame === 3) { // 3rd Place Game
+          if (teamOverallStats[winner]) { // Ensure winner is defined
+              newSeasonAwardsSummary[year].thirdPlace = winner;
+          }
+      }
+    });
+
+    // Medal Calculation Pass (based on yearlyPointsLeaders)
+    Object.keys(teamOverallStats).forEach(teamName => {
+      Object.keys(yearlyPointsLeaders).forEach(year => {
+          // Ensure this year is a completed season
+          if (!completedSeasons.has(parseInt(year))) return;
+
+          const yearLeaders = yearlyPointsLeaders[year];
+          // Filter out empty team names before processing leaders
+          const filteredYearLeaders = yearLeaders.filter(entry => entry.team !== '');
+
+          // Find the current team's points for this year
+          const teamPointsEntry = filteredYearLeaders.find(entry => entry.team === teamName);
+          if (!teamPointsEntry) return;
+
+          const currentTeamYearlyScore = teamPointsEntry.points;
+
+          // Determine the unique scores for 1st, 2nd, and 3rd place
+          const uniqueSortedScores = Array.from(new Set(filteredYearLeaders.map(l => l.points))).sort((a, b) => b - a);
+          const firstPlaceScore = uniqueSortedScores[0];
+          const secondPlaceScore = uniqueSortedScores[1];
+          const thirdPlaceScore = uniqueSortedScores[2];
+
+          // Assign awards based on strict score comparison
+          if (currentTeamYearlyScore === firstPlaceScore) {
+              teamOverallStats[teamName].awards.firstPoints++;
+          }
+          // Only count as second place if score matches secondPlaceScore AND it's strictly less than firstPlaceScore
+          if (secondPlaceScore !== undefined && currentTeamYearlyScore === secondPlaceScore && currentTeamYearlyScore < firstPlaceScore) {
+              teamOverallStats[teamName].awards.secondPoints++;
+          }
+          // Only count as third place if score matches thirdPlaceScore AND it's strictly less than firstPlaceScore and secondPlaceScore
+          if (thirdPlaceScore !== undefined && currentTeamYearlyScore === thirdPlaceScore && currentTeamYearlyScore < firstPlaceScore && currentTeamYearlyScore < secondPlaceScore) {
+              teamOverallStats[teamName].awards.thirdPoints++;
+          }
+      });
+    });
+
+    // Final compilation for All-Time Standings display (SORTED BY WIN PERCENTAGE)
+    const compiledStandings = Object.keys(teamOverallStats).map(teamName => {
+      const stats = teamOverallStats[teamName];
+      // Only include teams that have actually participated in completed seasons
+      if (stats.seasonsPlayed.size === 0) return null;
+
+      const careerDPR = careerDPRData.find(dpr => dpr.team === teamName)?.dpr || 0;
+      const totalGames = stats.totalWins + stats.totalLosses + stats.totalTies;
+      // CORRECTED: Use stats.totalWins and stats.totalTies for overall win percentage
+      const winPercentage = totalGames > 0 ? ((stats.totalWins + (0.5 * stats.totalTies)) / totalGames) : 0;
+
+      // Determine the season display string
+      const sortedYearsArray = Array.from(stats.seasonsPlayed).sort((a, b) => a - b);
+      const minYear = sortedYearsArray.length > 0 ? sortedYearsArray[0] : '';
+      const maxYear = sortedYearsArray.length > 0 ? sortedYearsArray[sortedYearsArray.length - 1] : '';
+      const seasonsCount = stats.seasonsPlayed.size;
+
+      // MODIFIED: Use JSX to style the seasons count within the string
+      let seasonsDisplay = (
+        <>
+          {seasonsCount > 0 ? (
+            minYear === maxYear ? (
+              <>{minYear} <span className="text-xs text-gray-500">({seasonsCount})</span></>
+            ) : (
+              <>{minYear}-{maxYear} <span className="text-xs text-gray-500">({seasonsCount})</span></>
+            )
+          ) : ''}
+        </>
+      );
+
+      return {
+        team: teamName,
+        seasons: seasonsDisplay,
+        record: `${stats.totalWins}-${stats.totalLosses}-${stats.totalTies}`,
+        totalWins: stats.totalWins, // Add totalWins for sorting (if needed as secondary)
+        winPercentage: winPercentage, // This is the numerical value (e.g., 0.46)
+        totalDPR: careerDPR,
+        awards: stats.awards,
+      };
+    }).filter(Boolean).sort((a, b) => b.winPercentage - a.winPercentage); // SORTED BY WIN PERCENTAGE DESCENDING
+
+    setAllTimeStandings(compiledStandings);
+
+
+    // Prepare data for the total DPR progression line graph
+    const chartData = [];
+    const allYears = Array.from(new Set(historicalMatchups.map(m => parseInt(m.year)).filter(y => !isNaN(y)))).sort((a, b) => a - b);
+    const uniqueTeams = Array.from(new Set(
+      historicalMatchups.flatMap(m => [getDisplayTeamName(m.team1), getDisplayTeamName(m.team2)])
+        .filter(name => name !== null && name !== '')
+    )).sort();
+
+    setUniqueTeamsForChart(uniqueTeams);
+
+    // To store the cumulative DPR for each team as we progress through years
+    const cumulativeTeamDPRs = {}; // Stores the actual DPR values
+
+    allYears.forEach(currentYear => {
+        const matchesUpToCurrentYear = historicalMatchups.filter(match => parseInt(match.year) <= currentYear);
+
+        // Recalculate metrics for games up to currentYear to get cumulative career DPR.
+        // This is a computationally intensive step, but ensures correct cumulative DPR.
+        const { careerDPRData: cumulativeCareerDPRData } = calculateAllLeagueMetrics(matchesUpToCurrentYear, getDisplayTeamName);
+
+        // Populate cumulativeTeamDPRs with current cumulative DPRs
+        uniqueTeams.forEach(team => {
+            const teamDPR = cumulativeCareerDPRData.find(dpr => dpr.team === team)?.dpr;
+            if (teamDPR !== undefined) {
+                cumulativeTeamDPRs[team] = teamDPR;
+            }
+        });
+
+        const yearDataPoint = { year: currentYear };
+        // Create an array of teams with their current DPR for ranking purposes
+        const teamsWithDPRForRanking = uniqueTeams.map(team => ({
+          team: team,
+          dpr: cumulativeTeamDPRs[team] || 0 // Use 0 for teams that haven't played yet in a given year
+        }));
+
+        // Sort teams by DPR in descending order to assign ranks (higher DPR is better)
+        teamsWithDPRForRanking.sort((a, b) => b.dpr - a.dpr);
+
+        // Assign ranks, handling ties
+        let currentRank = 1;
+        for (let i = 0; i < teamsWithDPRForRanking.length; i++) {
+          if (i > 0 && teamsWithDPRForRanking[i].dpr < teamsWithDPRForRanking[i - 1].dpr) {
+            currentRank = i + 1;
+          }
+          yearDataPoint[teamsWithDPRForRanking[i].team] = currentRank;
+        }
+
+        chartData.push(yearDataPoint);
+    });
+    setSeasonalDPRChartData(chartData);
+
+
+    // --- Process Season-by-Season Champions & Awards ---
+    const newSeasonAwardsSummary = {};
+
+    completedSeasons.forEach(year => {
+        newSeasonAwardsSummary[year] = {
+            champion: 'N/A',
+            secondPlace: 'N/A',
+            thirdPlace: 'N/A',
+            pointsChamp: 'N/A',
+            pointsSecond: 'N/A',
+            pointsThird: 'N/A',
+        };
+
+        // Find final seeding games for this year
+        const yearFinalGames = historicalMatchups.filter(match =>
+            parseInt(match.year) === year &&
+            (typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0)
+        );
+
+        yearFinalGames.forEach(game => {
+            const team1 = getDisplayTeamName(String(game.team1 || '').trim());
+            const team2 = getDisplayTeamName(String(game.team2 || '').trim());
+            const team1Score = parseFloat(game.team1Score);
+            const team2Score = parseFloat(game.team2Score);
+
+            const isTie = team1Score === team2Score;
+            const team1Won = team1Score > team2Score;
+
+            let winner = '';
+            let loser = '';
+            if (!isTie) {
                 winner = team1Won ? team1 : team2;
                 loser = team1Won ? team2 : team1;
             }
@@ -348,7 +531,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
           <section className="mb-8">
             <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Total DPR Progression Over Seasons</h3>
             {seasonalDPRChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={400}>
+              <ResponsiveContainer width="100%" height={600}> {/* MODIFIED: Increased height from 400 to 600 */}
                 <LineChart
                   data={seasonalDPRChartData}
                   margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
@@ -361,7 +544,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                     reversed={true}
                     tickFormatter={value => value}
                     ticks={yAxisTicks}
-                    interval={0} // ADDED: Force all tick intervals to be shown
+                    interval={0}
                   />
                   <Tooltip content={<CustomTooltip />} />
                   <Legend />
