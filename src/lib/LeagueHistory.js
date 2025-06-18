@@ -77,7 +77,6 @@ const LeagueHistory = ({ historicalMatchups, ...otherProps }) => {
       {historicalMatchups && (
         <>
           {/* Historical Matchup Data Section */}
-          {/* REMOVED: bg-white p-6 rounded-lg shadow-md */}
           <section className="mb-8">
             <h2 className="text-2xl font-bold text-gray-800 mb-4">Historical Matchup Data</h2>
 
@@ -199,7 +198,6 @@ const LeagueHistory = ({ historicalMatchups, ...otherProps }) => {
           </section>
 
           {/* Season-by-Season Awards Section */}
-          {/* REMOVED: bg-white p-6 rounded-lg shadow-md */}
           <section className="mb-8">
             <h2 className="text-2xl font-bold text-gray-800 mb-4">Season-by-Season Awards</h2>
             {seasonAwardsSummary && mostRecentYearsForAwards && mostRecentYearsForAwards.length > 0 ? (
@@ -228,13 +226,14 @@ const LeagueHistory = ({ historicalMatchups, ...otherProps }) => {
                       const awards = seasonAwardsSummary[year];
                       return (
                         <tr key={year} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                          <td className=\"py-2 px-3 text-sm text-gray-800 font-semibold text-center whitespace-nowrap\">{year}</td>
-                          <td className=\"py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap\">{awards.champion}</td>
-                          <td className=\"py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap\">{awards.secondPlace}</td>
-                          <td className=\"py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap\">{awards.thirdPlace}</td>
-                          <td className=\"py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap\">{awards.pointsChamp}</td>
-                          <td className=\"py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap\">{awards.pointsSecond}</td>
-                          <td className=\"py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap\">{awards.pointsThird}</td>
+                          {/* Corrected: Removed backslashes from className attributes */}
+                          <td className="py-2 px-3 text-sm text-gray-800 font-semibold text-center whitespace-nowrap">{year}</td>
+                          <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{awards.champion}</td>
+                          <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{awards.secondPlace}</td>
+                          <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{awards.thirdPlace}</td>
+                          <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{awards.pointsChamp}</td>
+                          <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{awards.pointsSecond}</td>
+                          <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{awards.pointsThird}</td>
                         </tr>
                       );
                     })}
