@@ -545,7 +545,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
           <section className="mb-8">
             <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Total DPR Progression Over Seasons</h3>
             {seasonalDPRChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={400}>
+              <ResponsiveContainer width="100%" height={600}>
                 <LineChart
                   data={seasonalDPRChartData}
                   margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
