@@ -17,7 +17,7 @@ const getFinalSeedingGamePurpose = (value) => {
   if (value === 1) return 'Championship Game';
   if (value === 3) return '3rd Place Game';
   if (value === 5) return '5th Place Game';
-  if (value === 7) return '7th Place Game';
+  if (value === 7) '7th Place Game';
   if (value === 9) return '9th Place Game';
   if (value === 11) return '11th Place Game';
   if (typeof value === 'number' && value > 0 && value % 2 !== 0) {
@@ -552,8 +552,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
           <section className="mb-8">
             <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Season-by-Season Champions & Awards</h3>
             {Object.keys(seasonAwardsSummary).length > 0 ? (
-              {/* Removed card styling from this div */}
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto"> {/* Removed card styling from this div */}
                 <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
                   <thead className="bg-blue-50">
                     <tr>
