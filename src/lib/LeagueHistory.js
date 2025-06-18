@@ -163,38 +163,24 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
       const isTie = team1Score === team2Score;
       const team1Won = team1Score > team2Score;
 
-      let winner = 'Tie';
-      let loser = 'Tie';
-
-      if (team1Won) {
-          winner = team1;
-          loser = team2;
-      } else if (team2Score > team1Score) {
-          winner = team2;
-          loser = team1;
+      let winner = '';
+      let loser = '';
+      if (!isTie) {
+          winner = team1Won ? team1 : team2;
+          loser = team1Won ? team2 : team1;
       }
 
-      // Directly assign trophies based on finalSeedingGame value
-      if (winner !== 'Tie') { // Only assign if there's a clear winner
-          if (match.finalSeedingGame === 1) { // 1st Place Game
-              if (teamOverallStats[winner]) {
-                  teamOverallStats[winner].awards.championships++;
-              }
-              if (loser && teamOverallStats[loser]) { // Loser of 1st place game gets 2nd (Silver Trophy)
-                  teamOverallStats[loser].awards.runnerUps++;
-              }
-          } else if (match.finalSeedingGame === 3) { // 3rd Place Game
-              if (teamOverallStats[winner]) { // Ensure winner is defined
-                  teamOverallStats[winner].awards.thirdPlace++;
-              }
+      if (match.finalSeedingGame === 1) { // 1st Place Game
+          if (isTie) {
+              newSeasonAwardsSummary[year].champion = `${team1} & ${team2} (Tie)`;
+              newSeasonAwardsSummary[year].secondPlace = 'N/A'; // No distinct 2nd place in a tie for 1st
+          } else {
+              newSeasonAwardsSummary[year].champion = winner;
+              newSeasonAwardsSummary[year].secondPlace = loser;
           }
-      } else if (match.finalSeedingGame === 1) { // Special case: Tie in Championship Game
-          // If championship game is a tie, both get a championship (Gold Trophy)
-          if (teamOverallStats[team1]) {
-            teamOverallStats[team1].awards.championships++;
-          }
-          if (teamOverallStats[team2]) {
-            teamOverallStats[team2].awards.championships++;
+      } else if (match.finalSeedingGame === 3) { // 3rd Place Game
+          if (teamOverallStats[winner]) { // Ensure winner is defined
+              newSeasonAwardsSummary[year].thirdPlace = winner;
           }
       }
     });
@@ -324,7 +310,11 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
           if (i > 0 && teamsWithDPRForRanking[i].dpr < teamsWithDPRForRanking[i - 1].dpr) {
             currentRank = i + 1;
           }
-          yearDataPoint[teamsWithDPRForRanking[i].team] = currentRank;
+          // MODIFIED: Store an object { rank, dpr } for each team
+          yearDataPoint[teamsWithDPRForRanking[i].team] = {
+              rank: currentRank,
+              dpr: teamsWithDPRForRanking[i].dpr
+          };
         }
 
         chartData.push(yearDataPoint);
@@ -429,18 +419,31 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
   // Custom Tooltip component for Recharts
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
-      // Sort the payload by value (rank) in ascending order (lower rank is better)
+      const year = label;
+      // Access the full year data from the first payload item's payload property
+      // This is necessary because entry.value/name will now be 'TeamName.rank' and 'TeamName' respectively,
+      // but to get DPR, we need to access the original object for 'TeamName'
+      const yearData = payload[0].payload;
+
+      // Sort the payload by rank (entry.value) in ascending order (lower rank is better)
       const sortedPayload = [...payload].sort((a, b) => a.value - b.value);
 
       return (
         <div className="bg-white p-3 border border-gray-300 rounded-md shadow-lg text-sm">
-          <p className="font-bold text-gray-800 mb-1">{`Year: ${label}`}</p>
-          {sortedPayload.map((entry, index) => (
-            <p key={`item-${index}`} style={{ color: entry.color }}>
-              {/* MODIFIED: Display rank with ordinal suffix */}
-              {`${entry.name}: ${entry.value}${getOrdinalSuffix(entry.value)} Place`}
-            </p>
-          ))}
+          <p className="font-bold text-gray-800 mb-1">{`Year: ${year}`}</p>
+          {sortedPayload.map((entry, index) => {
+            const teamName = entry.name; // This will be just the team name, e.g., "Team A"
+            const teamDprData = yearData[teamName]; // Access the stored { rank, dpr } object
+
+            const dprValue = teamDprData ? formatDPR(teamDprData.dpr) : 'N/A';
+            const rankValue = teamDprData ? `${teamDprData.rank}${getOrdinalSuffix(teamDprData.rank)} Place` : 'N/A';
+
+            return (
+              <p key={`item-${index}`} style={{ color: entry.color }}>
+                {`${teamName}: ${dprValue} (Rank: ${rankValue})`}
+              </p>
+            );
+          })}
         </div>
       );
     }
@@ -553,11 +556,12 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="year" label={{ value: "Season Year", position: "insideBottom", offset: 0 }} />
                   <YAxis
-                    label={{ value: "Rank", angle: -90, position: "insideLeft" }} // MODIFIED: Y-axis label changed to "Rank"
-                    domain={[1, uniqueTeamsForChart.length]} // MODIFIED: Y-axis domain now explicitly from 1 to max
-                    reversed={true} // ADDED: Explicitly reverse the axis so 1 is at the top
-                    tickFormatter={value => value} // MODIFIED: Removed DPR formatter, now just display rank number
-                    ticks={yAxisTicks} // ADDED: Force all rank ticks from 1 to max
+                    label={{ value: "Rank", angle: -90, position: "insideLeft" }}
+                    domain={[1, uniqueTeamsForChart.length]}
+                    reversed={true}
+                    tickFormatter={value => value}
+                    ticks={yAxisTicks}
+                    interval={0}
                   />
                   <Tooltip content={<CustomTooltip />} />
                   <Legend />
@@ -565,7 +569,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                     <Line
                       key={team}
                       type="monotone"
-                      dataKey={team}
+                      dataKey={`${team}.rank`} {/* MODIFIED: Use nested dataKey for rank */}
                       stroke={teamColors[index % teamColors.length]}
                       activeDot={{ r: 8 }}
                       dot={{ r: 4 }}
