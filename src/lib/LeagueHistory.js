@@ -310,7 +310,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
           if (i > 0 && teamsWithDPRForRanking[i].dpr < teamsWithDPRForRanking[i - 1].dpr) {
             currentRank = i + 1;
           }
-          // MODIFIED: Store an object { rank, dpr } for each team
+          // Store an object { rank, dpr } for each team
           yearDataPoint[teamsWithDPRForRanking[i].team] = {
               rank: currentRank,
               dpr: teamsWithDPRForRanking[i].dpr
@@ -420,23 +420,22 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       const year = label;
-      // Access the full year data from the first payload item's payload property
-      // This is necessary because entry.value/name will now be 'TeamName.rank' and 'TeamName' respectively,
-      // but to get DPR, we need to access the original object for 'TeamName'
-      const yearData = payload[0].payload;
+      // The payload structure changed slightly. `entry.payload` now contains the full data point.
+      // We can iterate through `payload` directly and access the `value` and `name`.
+      // `value` itself will be the { rank, dpr } object.
 
-      // Sort the payload by rank (entry.value) in ascending order (lower rank is better)
-      const sortedPayload = [...payload].sort((a, b) => a.value - b.value);
+      // Sort the payload by rank (entry.value.rank) in ascending order (lower rank is better)
+      const sortedPayload = [...payload].sort((a, b) => a.payload[a.name].rank - b.payload[b.name].rank);
 
       return (
         <div className="bg-white p-3 border border-gray-300 rounded-md shadow-lg text-sm">
           <p className="font-bold text-gray-800 mb-1">{`Year: ${year}`}</p>
           {sortedPayload.map((entry, index) => {
-            const teamName = entry.name; // This will be just the team name, e.g., "Team A"
-            const teamDprData = yearData[teamName]; // Access the stored { rank, dpr } object
+            const teamName = entry.name;
+            const teamData = entry.payload[teamName]; // Access the stored { rank, dpr } object for this team
 
-            const dprValue = teamDprData ? formatDPR(teamDprData.dpr) : 'N/A';
-            const rankValue = teamDprData ? `${teamDprData.rank}${getOrdinalSuffix(teamDprData.rank)} Place` : 'N/A';
+            const dprValue = teamData ? formatDPR(teamData.dpr) : 'N/A';
+            const rankValue = teamData ? `${teamData.rank}${getOrdinalSuffix(teamData.rank)} Place` : 'N/A';
 
             return (
               <p key={`item-${index}`} style={{ color: entry.color }}>
@@ -572,10 +571,10 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                     <Line
                       key={team}
                       type="monotone"
-                      dataKey={team + '.rank'}
+                      dataKey={team} {/* Changed dataKey to just the team name */}
                       stroke={teamColors[index % teamColors.length]}
-                      activeDot={activeDotProps} {/* MODIFIED: Use variable for activeDot */}
-                      dot={dotProps} {/* MODIFIED: Use variable for dot */}
+                      activeDot={activeDotProps}
+                      dot={dotProps}
                       strokeWidth={2}
                     />
                   ))}
