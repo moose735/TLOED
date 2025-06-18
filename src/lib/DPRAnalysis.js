@@ -17,8 +17,54 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
 
     setLoading(true);
 
-    // Use the centralized calculation logic
+    // Use the centralized calculation logic to get seasonal and career metrics
     const { seasonalMetrics, careerDPRData: calculatedCareerDPRs } = calculateAllLeagueMetrics(historicalMatchups, getDisplayTeamName);
+
+    // Enhance careerDPRData with additional metrics
+    const enhancedCareerDPRs = calculatedCareerDPRs.map(teamData => {
+        const totalGames = teamData.wins + teamData.losses + teamData.ties;
+        const winPercentage = totalGames > 0 ? ((teamData.wins + (0.5 * teamData.ties)) / totalGames) : 0;
+        const pointsPerGame = totalGames > 0 ? (teamData.pointsFor / totalGames) : 0;
+
+        let highestSeasonalPointsAvg = 0;
+        let lowestSeasonalPointsAvg = Infinity;
+        let seasonsPlayedCount = 0;
+
+        // Iterate through seasonal metrics to find highest and lowest seasonal points average for this team
+        Object.keys(seasonalMetrics).forEach(year => {
+            if (seasonalMetrics[year][teamData.team]) {
+                const seasonalPoints = seasonalMetrics[year][teamData.team].pointsFor;
+                const seasonalWins = seasonalMetrics[year][teamData.team].wins;
+                const seasonalLosses = seasonalMetrics[year][teamData.team].losses;
+                const seasonalTies = seasonalMetrics[year][teamData.team].ties;
+                const seasonalGames = seasonalWins + seasonalLosses + seasonalTies;
+
+                if (seasonalGames > 0) {
+                    const seasonalAvg = seasonalPoints / seasonalGames;
+                    if (seasonalAvg > highestSeasonalPointsAvg) {
+                        highestSeasonalPointsAvg = seasonalAvg;
+                    }
+                    if (seasonalAvg < lowestSeasonalPointsAvg) {
+                        lowestSeasonalPointsAvg = seasonalAvg;
+                    }
+                    seasonsPlayedCount++;
+                }
+            }
+        });
+
+        // If no seasons with games played, set lowest average to 0 instead of Infinity
+        if (seasonsPlayedCount === 0) {
+            lowestSeasonalPointsAvg = 0;
+        }
+
+        return {
+            ...teamData,
+            winPercentage: winPercentage,
+            pointsPerGame: pointsPerGame,
+            highestSeasonalPointsAvg: highestSeasonalPointsAvg,
+            lowestSeasonalPointsAvg: lowestSeasonalPointsAvg // Will be 0 if no games played, otherwise actual lowest
+        };
+    });
 
     // Flatten seasonalMetrics into an array for display in the table
     const allSeasonalDPRs = [];
@@ -39,11 +85,25 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
     // Sort the consolidated seasonal DPR data by DPR descending
     allSeasonalDPRs.sort((a, b) => b.dpr - a.dpr);
 
-    setCareerDPRData(calculatedCareerDPRs);
+    setCareerDPRData(enhancedCareerDPRs);
     setSeasonalDPRData(allSeasonalDPRs);
     setLoading(false);
 
   }, [historicalMatchups, getDisplayTeamName]);
+
+  // Formatter for win percentage (consistent with LeagueHistory)
+  const formatPercentage = (value) => {
+    if (typeof value === 'number' && !isNaN(value)) {
+      let formatted = value.toFixed(3);
+      if (formatted.startsWith('0.')) {
+        formatted = formatted.substring(1); // Remove the '0'
+      } else if (formatted.startsWith('-0.')) {
+        formatted = `-${formatted.substring(2)}`; // Remove '-0'
+      }
+      return `${formatted}%`;
+    }
+    return '.000%';
+  };
 
   const formatDPR = (dprValue) => {
     if (typeof dprValue === 'number' && !isNaN(dprValue)) {
@@ -53,6 +113,14 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
   };
 
   const formatPoints = (value) => {
+    if (typeof value === 'number' && !isNaN(value)) {
+        return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    return 'N/A';
+  };
+
+  // New formatter for points average (similar to formatPoints)
+  const formatPointsAvg = (value) => {
     if (typeof value === 'number' && !isNaN(value)) {
         return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
@@ -87,8 +155,12 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                       <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Rank</th>
                       <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Team</th>
                       <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Adjusted DPR</th>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Win %</th> {/* Added Win % header */}
                       <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Record (W-L-T)</th>
                       <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Points For</th>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Points Avg (Career)</th> {/* Added Points Avg header */}
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Highest Points Avg (Seasonal)</th> {/* Added Highest Points Avg header */}
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Lowest Points Avg (Seasonal)</th> {/* Added Lowest Points Avg header */}
                     </tr>
                   </thead>
                   <tbody>
@@ -97,8 +169,12 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                         <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{index + 1}</td>
                         <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.team}</td>
                         <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap">{formatDPR(data.dpr)}</td>
+                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap">{formatPercentage(data.winPercentage)}</td> {/* Added Win % data */}
                         <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap">{renderRecord(data.wins, data.losses, data.ties)}</td>
                         <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap">{formatPoints(data.pointsFor)}</td>
+                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap">{formatPointsAvg(data.pointsPerGame)}</td> {/* Added Points Avg data */}
+                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap">{formatPointsAvg(data.highestSeasonalPointsAvg)}</td> {/* Added Highest Points Avg data */}
+                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap">{formatPointsAvg(data.lowestSeasonalPointsAvg)}</td> {/* Added Lowest Points Avg data */}
                       </tr>
                     ))}
                   </tbody>
