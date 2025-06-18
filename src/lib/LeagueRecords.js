@@ -413,6 +413,17 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
           <td colSpan="2" className="py-2 px-3 text-sm text-gray-500 text-center">N/A</td>
         </>
       );
+    } // Corrected: This should be the closing brace for the 'if' block.
+    return (
+      <>
+        <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{label}</td>
+        <td className="py-2 px-3 text-sm text-gray-800">{formatter(record.value)}</td>
+        <td className="py-2 px-3 text-sm text-gray-700">
+          {record.entries.map((entry, idx) => (
+            <span key={idx} className="block">{entry.team}</span>
+          ))}
+        </td>
+      </>
     );
   };
 
