@@ -424,7 +424,8 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
 
 
   return (
-    <div className="w-full max-w-4xl bg-white p-8 rounded-lg shadow-md mt-8">
+    // Centering the main card: Add mx-auto here
+    <div className="w-full max-w-4xl bg-white p-8 rounded-lg shadow-md mt-8 mx-auto">
       <h2 className="text-2xl font-bold text-blue-700 mb-4 text-center">League History & Awards</h2>
 
       {loading ? (
@@ -456,40 +457,41 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                       <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{team.seasons}</td>
                       <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{team.record}</td>
                       <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{formatPercentage(team.winPercentage)}</td>
-                      <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">
-                        <div className="flex flex-wrap justify-center items-center gap-2">
+                      <td className="py-2 px-3 text-sm text-gray-700 text-center">
+                        {/* Awards: Remove flex-wrap and add whitespace-nowrap to the container div */}
+                        <div className="flex justify-center items-center gap-2 whitespace-nowrap">
                           {team.awards.championships > 0 && (
-                            <span title="Championships (1st Place)" className="flex items-center space-x-1">
+                            <span title="Championships (1st Place)" className="flex items-center space-x-1 whitespace-nowrap">
                               <i className="fas fa-trophy text-yellow-500 text-lg"></i>
                               <span className="text-xs font-medium">{team.awards.championships}x</span>
                             </span>
                           )}
                           {team.awards.runnerUps > 0 && (
-                            <span title="Runner-Up Finishes (2nd Place)" className="flex items-center space-x-1">
+                            <span title="Runner-Up Finishes (2nd Place)" className="flex items-center space-x-1 whitespace-nowrap">
                               <i className="fas fa-trophy text-gray-400 text-lg"></i>
                               <span className="text-xs font-medium">{team.awards.runnerUps}x</span>
                             </span>
                           )}
                           {team.awards.thirdPlace > 0 && (
-                            <span title="Third Place Finishes (3rd Place)" className="flex items-center space-x-1">
+                            <span title="Third Place Finishes (3rd Place)" className="flex items-center space-x-1 whitespace-nowrap">
                               <i className="fas fa-trophy text-amber-800 text-lg"></i>
                               <span className="text-xs font-medium">{team.awards.thirdPlace}x</span>
                             </span>
                           )}
                           {team.awards.firstPoints > 0 && (
-                            <span title="1st Place in Total Points" className="flex items-center space-x-1">
+                            <span title="1st Place in Total Points" className="flex items-center space-x-1 whitespace-nowrap">
                               <i className="fas fa-medal text-yellow-500 text-lg"></i>
                               <span className="text-xs font-medium">{team.awards.firstPoints}x</span>
                             </span>
                           )}
                           {team.awards.secondPoints > 0 && (
-                            <span title="2nd Place in Total Points" className="flex items-center space-x-1">
+                            <span title="2nd Place in Total Points" className="flex items-center space-x-1 whitespace-nowrap">
                               <i className="fas fa-medal text-gray-400 text-lg"></i>
                               <span className="text-xs font-medium">{team.awards.secondPoints}x</span>
                             </span>
                           )}
                           {team.awards.thirdPoints > 0 && (
-                            <span title="3rd Place in Total Points" className="flex items-center space-x-1">
+                            <span title="3rd Place in Total Points" className="flex items-center space-x-1 whitespace-nowrap">
                               <i className="fas fa-medal text-amber-800 text-lg"></i>
                               <span className="text-xs font-medium">{team.awards.thirdPoints}x</span>
                             </span>
