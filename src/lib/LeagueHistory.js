@@ -144,7 +144,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
     });
 
     // Process championship games and final seeding for overall finish awards (Trophies)
-    historicalMatchups.forEach(match => {
+    historicalMatchups.forEach(match => { // Changed 'game' back to 'match' here
       const year = parseInt(match.year);
       // Only process final seeding games that are part of a completed season
       if (!(typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0 && completedSeasons.has(year))) {
@@ -176,19 +176,19 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
 
       // Directly assign trophies based on finalSeedingGame value
       if (winner !== 'Tie') { // Only assign if there's a clear winner
-          if (match.finalSeedingGame === 1) { // 1st Place Game
+          if (match.finalSeedingGame === 1) { // 1st Place Game // Changed 'game' to 'match'
               if (teamOverallStats[winner]) {
                   teamOverallStats[winner].awards.championships++;
               }
               if (loser && teamOverallStats[loser]) { // Loser of 1st place game gets 2nd (Silver Trophy)
                   teamOverallStats[loser].awards.runnerUps++;
               }
-          } else if (match.finalSeedingGame === 3) { // 3rd Place Game
+          } else if (match.finalSeedingGame === 3) { // 3rd Place Game // Changed 'game' to 'match'
               if (teamOverallStats[winner]) { // Ensure winner is defined
                   teamOverallStats[winner].awards.thirdPlace++;
               }
           }
-      } else if (match.finalSeedingGame === 1) { // Special case: Tie in Championship Game
+      } else if (match.finalSeedingGame === 1) { // Special case: Tie in Championship Game // Changed 'game' to 'match'
           // If championship game is a tie, both get a championship (Gold Trophy)
           if (teamOverallStats[team1]) {
             teamOverallStats[team1].awards.championships++;
@@ -347,16 +347,16 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
         };
 
         // Find final seeding games for this year
-        const yearFinalGames = historicalMatchups.filter(match =>
+        const yearFinalGames = historicalMatchups.filter(match => // Changed 'game' back to 'match' here
             parseInt(match.year) === year &&
             (typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0)
         );
 
-        yearFinalGames.forEach(game => {
-            const team1 = getDisplayTeamName(String(game.team1 || '').trim());
-            const team2 = getDisplayTeamName(String(game.team2 || '').trim());
-            const team1Score = parseFloat(game.team1Score);
-            const team2Score = parseFloat(game.team2Score);
+        yearFinalGames.forEach(match => { // Changed 'game' back to 'match' here
+            const team1 = getDisplayTeamName(String(match.team1 || '').trim());
+            const team2 = getDisplayTeamName(String(match.team2 || '').trim());
+            const team1Score = parseFloat(match.team1Score);
+            const team2Score = parseFloat(match.team2Score);
 
             const isTie = team1Score === team2Score;
             const team1Won = team1Score > team2Score;
@@ -368,7 +368,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                 loser = team1Won ? team2 : team1;
             }
 
-            if (game.finalSeedingGame === 1) { // 1st Place Game
+            if (match.finalSeedingGame === 1) { // 1st Place Game // Changed 'game' to 'match'
                 if (isTie) {
                     newSeasonAwardsSummary[year].champion = `${team1} & ${team2} (Tie)`;
                     newSeasonAwardsSummary[year].secondPlace = 'N/A'; // No distinct 2nd place in a tie for 1st
@@ -376,7 +376,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                     newSeasonAwardsSummary[year].champion = winner;
                     newSeasonAwardsSummary[year].secondPlace = loser;
                 }
-            } else if (game.finalSeedingGame === 3) { // 3rd Place Game
+            } else if (match.finalSeedingGame === 3) { // 3rd Place Game // Changed 'game' to 'match'
                 if (teamOverallStats[winner]) { // Ensure winner is defined
                     newSeasonAwardsSummary[year].thirdPlace = winner;
                 }
@@ -456,8 +456,8 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
 
 
   return (
-    // Removed all styling that creates a "card" effect from the main container
-    <div className="w-full max-w-4xl mt-8 mx-auto">
+    // MODIFIED: Changed max-w-4xl to max-w-full to allow more horizontal room
+    <div className="w-full max-w-full mt-8 mx-auto">
       <h2 className="text-2xl font-bold text-blue-700 mb-4 text-center">League History & Awards</h2>
 
       {loading ? (
@@ -549,15 +549,15 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
           <section className="mb-8">
             <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Total DPR Progression Over Seasons</h3>
             {seasonalDPRChartData.length > 0 ? (
-              <ResponsiveContainer width={800} height={600}> {/* MODIFIED: Changed width from "100%" to {800} */}
+              <ResponsiveContainer width="100%" height={600}> {/* Reverted width to "100%" */}
                 <LineChart
                   data={seasonalDPRChartData}
                   margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="year" label={{ value: "Season", position: "insideBottom", offset: -5 }} />
+                  <XAxis dataKey="year" label={{ value: "Season Year", position: "insideBottom", offset: 0 }} />
                   <YAxis
-                    label={{ value: "Rank", angle: -90, position: "insideLeft", offset: 35 }} // Y-axis label is "Rank", moved closer
+                    label={{ value: "Rank", angle: -90, position: "insideLeft", offset: -20 }} // Corrected offset for Y-axis label to -20
                     domain={[1, uniqueTeamsForChart.length]} // Y-axis domain now explicitly from 1 to max rank
                     reversed={true} // Reverse the axis so 1st rank is at the top
                     tickFormatter={value => value} // Display rank number
