@@ -298,7 +298,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
 
         // Recalculate metrics for games up to currentYear to get cumulative career DPR.
         // This is a computationally intensive step, but ensures correct cumulative DPR.
-        const { careerDPRData: cumulativeCareerDPRData } = calculateAllLeagueMetrics(matchesUpToCurrentUpToCurrentYear, getDisplayTeamName);
+        const { careerDPRData: cumulativeCareerDPRData } = calculateAllLeagueMetrics(matchesUpToCurrentYear, getDisplayTeamName);
 
         // Populate cumulativeTeamDPRs with current cumulative DPRs
         uniqueTeams.forEach(team => {
