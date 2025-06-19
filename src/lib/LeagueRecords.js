@@ -13,15 +13,16 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       return;
     }
 
-    const { seasonalMetrics, careerDPRData } = calculateAllLeagueMetrics(historicalMatchups, getDisplayTeamName);
+    // Get seasonal and career metrics from the centralized utility
+    const { seasonalMetrics, careerDPRData: calculatedCareerDPRs } = calculateAllLeagueMetrics(historicalMatchups, getDisplayTeamName);
     console.log("LeagueRecords: Raw seasonalMetrics from calculations.js:", seasonalMetrics);
-    console.log("LeagueRecords: Raw careerDPRData from calculations.js:", careerDPRData);
+    console.log("LeagueRecords: Raw careerDPRData from calculations.js (enhanced):", calculatedCareerDPRs);
 
 
-    // Aggregate records across all seasons for career stats
+    // Aggregate records across all seasons for career stats that are counts or need seasonal averaging
     const aggregatedCareerStats = {};
 
-    // First pass to aggregate basic seasonal data, including pointsFor and pointsAgainst
+    // First pass to aggregate basic seasonal data for counts and seasonal all-play averages
     Object.keys(seasonalMetrics).forEach(year => {
       Object.keys(seasonalMetrics[year]).forEach(team => {
         const seasonData = seasonalMetrics[year][team];
@@ -30,7 +31,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
           aggregatedCareerStats[team] = {
             totalWins: 0, totalLosses: 0, totalTies: 0, totalGames: 0,
             totalPointsFor: 0, totalPointsAgainst: 0,
-            winPercentages: [], allPlayWinPercentages: [], // Ensure these are arrays
+            allPlayWinPercentages: [], // Still needed for averaging for career all-play %
             weeklyHighScores: 0,
             weeklyTop2Scores: 0,
             winningSeasons: 0, losingSeasons: 0,
@@ -46,15 +47,12 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         teamStats.totalGames += seasonData.totalGames;
         teamStats.totalPointsFor += seasonData.pointsFor;
         teamStats.totalPointsAgainst += seasonData.pointsAgainst;
-        if (typeof seasonData.winPercentage === 'number' && !isNaN(seasonData.winPercentage)) { // More robust check
-            teamStats.winPercentages.push(seasonData.winPercentage);
-        } else {
-            console.warn(`LeagueRecords: Skipping invalid winPercentage for ${team} in ${year} (Type: ${typeof seasonData.winPercentage}, Value: ${seasonData.winPercentage}).`);
-        }
-        if (typeof seasonData.allPlayWinPercentage === 'number' && !isNaN(seasonData.allPlayWinPercentage)) { // More robust check
+        
+        // Collect seasonal all-play percentages for later averaging
+        if (typeof seasonData.allPlayWinPercentage === 'number' && !isNaN(seasonData.allPlayWinPercentage)) {
             teamStats.allPlayWinPercentages.push(seasonData.allPlayWinPercentage);
         } else {
-            console.warn(`LeagueRecords: Skipping invalid allPlayWinPercentage for ${team} in ${year} (Type: ${typeof seasonData.allPlayWinPercentage}, Value: ${seasonData.allPlayWinPercentage}).`);
+            // console.warn(`LeagueRecords: Skipping invalid allPlayWinPercentage for ${team} in ${year} (Type: ${typeof seasonData.allPlayWinPercentage}, Value: ${seasonData.allPlayWinPercentage}).`);
         }
 
         if (seasonData.wins > seasonData.losses) {
@@ -64,7 +62,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         }
       });
     });
-    console.log("LeagueRecords: Aggregated Career Stats after first pass (seasonal data):", aggregatedCareerStats);
+    console.log("LeagueRecords: Aggregated Career Stats after first pass (for counts and all-play avg):", aggregatedCareerStats);
 
 
     // Second pass over historicalMatchups to calculate weekly high scores, top 2, and blowout/slim wins/losses
@@ -79,7 +77,6 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         const team2Score = parseFloat(match.team2Score);
 
         if (isNaN(year) || isNaN(week) || !team1 || !team2 || isNaN(team1Score) || isNaN(team2Score)) {
-            // console.warn("LeagueRecords: Skipping malformed match in weekly score aggregation:", match); // Uncomment if you suspect bad data
             return;
         }
 
@@ -157,7 +154,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         }
     });
 
-    console.log("LeagueRecords: Aggregated Career Stats after second pass (weekly scores):", aggregatedCareerStats);
+    console.log("LeagueRecords: Aggregated Career Stats after second pass (weekly scores, counts):", aggregatedCareerStats);
 
     const newCalculatedRecords = {};
 
@@ -166,8 +163,8 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     newCalculatedRecords.lowestDPR = { value: null, entries: [] };
     newCalculatedRecords.mostWins = { value: null, entries: [] };
     newCalculatedRecords.mostLosses = { value: null, entries: [] };
-    newCalculatedRecords.bestWinPct = { value: -Infinity, entries: [] }; // Correctly initialized to -Infinity
-    newCalculatedRecords.bestAllPlayWinPct = { value: -Infinity, entries: [] }; // Correctly initialized to -Infinity
+    newCalculatedRecords.bestWinPct = { value: -Infinity, entries: [] };
+    newCalculatedRecords.bestAllPlayWinPct = { value: -Infinity, entries: [] };
     newCalculatedRecords.mostWeeklyHighScores = { value: null, entries: [] };
     newCalculatedRecords.mostWeeklyTop2Scores = { value: null, entries: [] };
     newCalculatedRecords.mostWinningSeasons = { value: null, entries: [] };
@@ -180,8 +177,8 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     newCalculatedRecords.mostPointsAgainst = { value: -Infinity, entries: [] };
 
 
-    // Highest/Lowest Career DPR
-    const sortedCareerDPR = [...careerDPRData].sort((a, b) => b.dpr - a.dpr);
+    // Highest/Lowest Career DPR (Uses calculatedCareerDPRs directly)
+    const sortedCareerDPR = [...calculatedCareerDPRs].sort((a, b) => b.dpr - a.dpr);
     if (sortedCareerDPR.length > 0) {
       newCalculatedRecords.highestDPR = {
         value: sortedCareerDPR[0].dpr,
@@ -193,13 +190,11 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       };
     }
 
-
     // Variables to find the max/min across all teams, initialized to safe defaults
-    // These variables are used during the loop to find the *overall* best
     let maxWins = { value: -Infinity, entries: [] };
     let maxLosses = { value: -Infinity, entries: [] };
-    let bestWinPct = { value: -Infinity, entries: [] };
-    let bestAllPlayWinPct = { value: -Infinity, entries: [] };
+    let bestWinPct = { value: -Infinity, entries: [] }; // This one will be populated from careerDPRData
+    let bestAllPlayWinPct = { value: -Infinity, entries: [] }; // This one will be populated from aggregatedCareerStats
     let maxWeeklyHighScores = { value: -Infinity, entries: [] };
     let maxWeeklyTop2Scores = { value: -Infinity, entries: [] };
     let maxWinningSeasons = { value: -Infinity, entries: [] };
@@ -211,10 +206,40 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     let maxTotalPoints = { value: -Infinity, entries: [] };
     let maxPointsAgainst = { value: -Infinity, entries: [] };
 
+    // Iterate over calculatedCareerDPRs for Best Win %
+    if (Array.isArray(calculatedCareerDPRs)) {
+      calculatedCareerDPRs.forEach(teamData => {
+        const team = teamData.team;
+        const careerWinPct = teamData.winPercentage; // Directly use the calculated career win percentage
 
+        // Best Win Percentage
+        if (typeof careerWinPct === 'number' && !isNaN(careerWinPct)) {
+            if (careerWinPct > bestWinPct.value) {
+                bestWinPct = { value: careerWinPct, entries: [{ team: team }] };
+            } else if (careerWinPct === bestWinPct.value) {
+                bestWinPct.entries.push({ team: team });
+            }
+        }
+      });
+    }
+
+    // Now, iterate over aggregatedCareerStats for the remaining count-based records
+    // and for Best All-Play Win Percentage
     if (typeof aggregatedCareerStats === 'object' && aggregatedCareerStats !== null) {
       Object.keys(aggregatedCareerStats).forEach(team => {
         const stats = aggregatedCareerStats[team];
+
+        // Best All-Play Win Percentage (Calculated from aggregated seasonal all-play percentages)
+        if (stats && stats.allPlayWinPercentages.length > 0) {
+            const currentCareerAllPlayWinPct = stats.allPlayWinPercentages.reduce((sum, pct) => sum + pct, 0) / stats.allPlayWinPercentages.length;
+            if (typeof currentCareerAllPlayWinPct === 'number' && !isNaN(currentCareerAllPlayWinPct)) {
+                if (currentCareerAllPlayWinPct > bestAllPlayWinPct.value) {
+                    bestAllPlayWinPct = { value: currentCareerAllPlayWinPct, entries: [{ team: team }] };
+                } else if (currentCareerAllPlayWinPct === bestAllPlayWinPct.value) {
+                    bestAllPlayWinPct.entries.push({ team: team });
+                }
+            }
+        }
 
         // Most Wins
         if (stats.totalWins > maxWins.value) {
@@ -229,40 +254,6 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         } else if (stats.totalLosses === maxLosses.value) {
           maxLosses.entries.push({ team: team });
         }
-
-        // Best Win Percentage
-        // Only calculate and consider if the team has played at least one game
-        if (stats.totalGames > 0) {
-            const currentWinPct = (stats.totalWins + 0.5 * stats.ties) / stats.totalGames;
-            console.log(`LeagueRecords: Processing Best Win % for ${team}. totalGames: ${stats.totalGames}, (Wins: ${stats.totalWins}, Ties: ${stats.ties}) currentWinPct: ${currentWinPct} (Type: ${typeof currentWinPct})`);
-
-            if (typeof currentWinPct === 'number' && !isNaN(currentWinPct)) { // Added check for currentWinPct validity
-                if (currentWinPct > bestWinPct.value) {
-                    bestWinPct = { value: currentWinPct, entries: [{ team: team }] };
-                } else if (currentWinPct === bestWinPct.value) {
-                    bestWinPct.entries.push({ team: team });
-                }
-            } else {
-                console.warn(`LeagueRecords: currentWinPct for ${team} is invalid (will not update bestWinPct):`, currentWinPct);
-            }
-        } else {
-            // console.log(`LeagueRecords: Team ${team} has 0 total games, skipping Win % calculation.`);
-        }
-
-
-        // Best All-Play Win Percentage
-        // Only calculate and consider if the team has all-play data
-        if (stats.allPlayWinPercentages.length > 0) {
-            const careerAllPlayWinPct = stats.allPlayWinPercentages.reduce((sum, pct) => sum + pct, 0) / stats.allPlayWinPercentages.length;
-            if (careerAllPlayWinPct > bestAllPlayWinPct.value) {
-                bestAllPlayWinPct = { value: careerAllPlayWinPct, entries: [{ team: team }] };
-            } else if (careerAllPlayWinPct === bestAllPlayWinPct.value) {
-                bestAllPlayWinPct.entries.push({ team: team });
-            }
-        } else {
-            // console.log(`LeagueRecords: Team ${team} has no all-play win percentage data, skipping All-Play Win % calculation.`);
-        }
-
 
         // Most Weekly High Scores
         if (stats.weeklyHighScores > maxWeeklyHighScores.value) {
@@ -367,20 +358,32 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
   // Helper functions for formatting
   const formatDPR = (dpr) => (typeof dpr === 'number' && !isNaN(dpr)) ? dpr.toFixed(3) : 'N/A';
 
-  // Formats as ".xxx"
+  // Formats as ".xxx" (removes leading zero if present)
   const formatWinPct = (pct) => {
     console.log("formatWinPct called with value:", pct, "type:", typeof pct);
     if (typeof pct === 'number' && !isNaN(pct) && pct !== -Infinity) {
-        return String(pct.toFixed(3)); // Explicitly convert to string
+      let formatted = pct.toFixed(3);
+      if (formatted.startsWith('0.')) {
+        formatted = formatted.substring(1); // Remove the '0' if it's "0.XXX" -> ".XXX"
+      } else if (formatted.startsWith('-0.')) {
+        formatted = `-${formatted.substring(2)}`; // Handle negative " -0.XXX" -> "-.XXX"
+      }
+      return formatted;
     }
     return 'N/A';
   };
 
-  // Formats as ".xxx%"
+  // Formats as ".xxx%" (removes leading zero if present)
   const formatAllPlayWinPct = (pct) => {
     console.log("formatAllPlayWinPct called with value:", pct, "type:", typeof pct);
     if (typeof pct === 'number' && !isNaN(pct) && pct !== -Infinity) {
-        return String(pct.toFixed(3)) + '%'; // Appended '%'
+      let formatted = pct.toFixed(3);
+      if (formatted.startsWith('0.')) {
+        formatted = formatted.substring(1); // Remove the '0'
+      } else if (formatted.startsWith('-0.')) {
+        formatted = `-${formatted.substring(2)}`; // Handle negative
+      }
+      return `${formatted}%`; // Appended '%'
     }
     return 'N/A';
   };
@@ -389,11 +392,10 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
   const formatPoints = (points) => {
     console.log("formatPoints called with value:", points, "type:", typeof points);
     if (typeof points === 'number' && !isNaN(points) && points !== -Infinity) {
-        // Use Intl.NumberFormat for robust, locale-aware formatting
         return new Intl.NumberFormat(undefined, {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
-            useGrouping: true // Ensures commas are used
+            useGrouping: true
         }).format(points);
     }
     return 'N/A';
@@ -403,8 +405,6 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
   // Helper function to render a single record entry
   const renderSingleRecordEntry = (record, label, formatter = (value) => value) => {
     // Check if record is valid and has meaningful data
-    // record.value === null can happen if initialized but no valid data found
-    // record.value === -Infinity can happen for numeric records if no max was found
     if (!record || record.entries.length === 0 || record.value === null || record.value === -Infinity) {
       console.log(`renderSingleRecordEntry: Displaying N/A for "${label}". Record state:`, record);
       return (
@@ -413,7 +413,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
           <td colSpan="2" className="py-2 px-3 text-sm text-gray-500 text-center">N/A</td>
         </>
       );
-    } // Corrected: This should be the closing brace for the 'if' block.
+    }
     return (
       <>
         <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{label}</td>
@@ -433,7 +433,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     { key: 'mostWins', label: 'Most Wins' },
     { key: 'mostLosses', label: 'Most Losses' },
     { key: 'bestWinPct', label: 'Best Win %', formatter: formatWinPct },
-    { key: 'bestAllPlayWinPct', label: 'Best All-Play Win %', formatter: formatAllPlayWinPct }, // Updated formatter
+    { key: 'bestAllPlayWinPct', label: 'Best All-Play Win %', formatter: formatAllPlayWinPct },
     { key: 'mostWeeklyHighScores', label: 'Most Weekly High Scores' },
     { key: 'mostWeeklyTop2Scores', label: 'Most Weekly Top 2 Scores' },
     { key: 'mostWinningSeasons', label: 'Most Winning Seasons' },
