@@ -211,7 +211,8 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
   // Determine the number of columns for the colSpan
   const numberOfSeasonalColumns = 9; // Rank, Team, Season, Season DPR, Win %, Record, Points Avg, Highest Points, Lowest Points
 
-  let actualRank = 0; // Initialize a rank counter for seasonal data
+  // Initialize actualRank here, outside the JSX, so it doesn't render a 0
+  let actualRank = 0;
 
   return (
     <div className="w-full">
@@ -285,8 +286,10 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                     </tr>
                   </thead>
                   <tbody>
-                    {/* Reset actualRank for each rendering cycle of the table */}
-                    {(actualRank = 0)}
+                    {/* Move actualRank initialization outside the JSX */}
+                    {
+                      (actualRank = 0) // This line will still execute, but not render directly into the DOM as a child of tbody
+                    }
                     {displayedSeasonalDPRData.map((data) => {
                       if (!data.isAverageRow) {
                         actualRank++; // Increment rank only for non-average rows
