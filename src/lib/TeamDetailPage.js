@@ -44,8 +44,9 @@ const calculateRank = (value, allValues, isHigherBetter = true) => {
 
 // Formatting functions moved outside the component for accessibility
 const formatScore = (score) => {
-  // Ensure score is a number, then format with toLocaleString and specify minimum/maximum fraction digits
-  return typeof score === 'number' ? score.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : 'N/A';
+  // Ensure score is a number, then format by first fixing to 2 decimal places (as a string)
+  // then converting back to a number for toLocaleString to handle thousands separators
+  return typeof score === 'number' ? parseFloat(score.toFixed(2)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : 'N/A';
 };
 
 const formatPercentage = (value) => {
