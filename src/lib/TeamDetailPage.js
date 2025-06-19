@@ -44,8 +44,8 @@ const calculateRank = (value, allValues, isHigherBetter = true) => {
 
 // Formatting functions moved outside the component for accessibility
 const formatScore = (score) => {
-  // Ensure score is a number, then fix to 2 decimal places before formatting with toLocaleString
-  return typeof score === 'number' ? score.toFixed(2).toLocaleString() : 'N/A';
+  // Ensure score is a number, then format with toLocaleString and specify minimum/maximum fraction digits
+  return typeof score === 'number' ? score.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : 'N/A';
 };
 
 const formatPercentage = (value) => {
@@ -374,7 +374,8 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
                 )}
                 {teamOverallStats.totalPointsChampionships > 0 && (
                   <span title={`1st Place - Points (${teamOverallStats.totalPointsChampionships}x)`} className="flex items-center space-x-1 whitespace-nowrap">
-                      <i className="fas fa-medal text-red-500 text-2xl"></i> {/* Made icons larger - used red for points champion as in LeagueHistory */}
+                      {/* Corrected color to yellow-500 for gold medal */}
+                      <i className="fas fa-medal text-yellow-500 text-2xl"></i>
                       <span className="text-xs font-medium">{teamOverallStats.totalPointsChampionships}x</span>
                   </span>
                 )}
@@ -400,7 +401,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6"> {/* Updated grid for desktop */}
           <StatCard title="Total Wins" value={teamOverallStats.totalWins} rank={teamOverallStats.winRank} />
           <StatCard title="Win Percentage" value={formatPercentage((teamOverallStats.totalWins + 0.5 * teamOverallStats.totalTies) / teamOverallStats.totalGamesPlayed)} rank={teamOverallStats.winPercentageRank} />
-          <StatCard title="Total Points For" value={teamOverallStats.totalPointsFor} rank={teamOverallStats.pointsForRank} />
+          <StatCard title="Total Points For" value={formatScore(teamOverallStats.totalPointsFor)} rank={teamOverallStats.pointsForRank} />
           <StatCard
             title="Weekly Top Scores"
             value={
