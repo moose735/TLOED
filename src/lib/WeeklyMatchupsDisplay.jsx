@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 // Import the new betting calculations
 import { calculateMoneylineOdds, calculateOverUnder, getPlayerMetricsForYear } from '../utils/bettingCalculations';
 // Import calculateAllLeagueMetrics to get seasonal DPR and average score
-import { calculateAllLeagueMetrics } from '../utils/calculations'; // Assuming this provides seasonalMetrics
+import { calculateAllLeagueMetrics } => '../utils/calculations'; // Assuming this provides seasonalMetrics
 
 const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => { // Accept props
   const [weeklyData, setWeeklyData] = useState([]);
@@ -151,21 +151,47 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => { /
               <ul className="list-none space-y-4 text-gray-800">
                 {matchups.length > 0 ? (
                   matchups.map((match, matchIndex) => (
-                    <li key={matchIndex} className="flex flex-col bg-white rounded-md shadow-sm border border-gray-100 overflow-hidden">
-                      {/* Player Row 1 */}
-                      <div className="flex justify-between items-center p-3 border-b border-gray-200">
-                        <span className="font-semibold text-gray-900 text-lg">{match.player1}</span>
-                        <span className="font-bold text-xl text-purple-700">{match.moneylineOdds.player1Odds}</span>
+                    <li key={matchIndex} className="flex flex-col bg-gray-900 rounded-md shadow-lg border border-gray-700 overflow-hidden">
+                      {/* Matchup Header: Player Names */}
+                      <div className="flex justify-between items-center px-4 py-3 bg-gray-800 text-white text-xl font-semibold border-b border-gray-700">
+                        <span>{match.player1}</span>
+                        <span>vs</span>
+                        <span>{match.player2}</span>
                       </div>
-                      {/* Player Row 2 */}
-                      <div className="flex justify-between items-center p-3">
-                        <span className="font-semibold text-gray-900 text-lg">{match.player2}</span>
-                        <span className="font-bold text-xl text-green-700">{match.moneylineOdds.player2Odds}</span>
-                      </div>
-                      {/* Over/Under Row */}
-                      <div className="flex justify-center items-center py-2 px-3 bg-gray-50 border-t border-gray-200">
-                        <span className="text-sm font-semibold text-gray-600 mr-2">Total</span>
-                        <span className="font-bold text-lg text-blue-700">{match.overUnder}</span>
+
+                      <div className="grid grid-cols-2 gap-px bg-gray-700"> {/* Grid for ML and O/U */}
+                        {/* Moneyline for Player 1 */}
+                        <div className="flex flex-col items-center justify-center p-3 bg-gray-800 text-white">
+                          <span className="text-lg font-medium">Moneyline</span>
+                          <span className="text-2xl font-bold text-purple-400 mt-1 cursor-pointer hover:bg-gray-700 transition-colors duration-200 py-1 px-3 rounded-md">
+                            {match.moneylineOdds.player1Odds}
+                          </span>
+                        </div>
+                        {/* Moneyline for Player 2 */}
+                        <div className="flex flex-col items-center justify-center p-3 bg-gray-800 text-white">
+                          <span className="text-lg font-medium">Moneyline</span>
+                          <span className="text-2xl font-bold text-green-400 mt-1 cursor-pointer hover:bg-gray-700 transition-colors duration-200 py-1 px-3 rounded-md">
+                            {match.moneylineOdds.player2Odds}
+                          </span>
+                        </div>
+
+                        {/* Over/Under Section */}
+                        {/* Over */}
+                        <div className="flex flex-col items-center justify-center p-3 bg-gray-800 text-white border-t border-gray-700">
+                          <span className="text-lg font-medium">Total</span>
+                          <div className="flex flex-col items-center mt-1 cursor-pointer hover:bg-gray-700 transition-colors duration-200 py-1 px-3 rounded-md">
+                            <span className="text-2xl font-bold text-blue-400">O {match.overUnder}</span>
+                            <span className="text-sm font-normal text-gray-400">-110</span>
+                          </div>
+                        </div>
+                        {/* Under */}
+                        <div className="flex flex-col items-center justify-center p-3 bg-gray-800 text-white border-t border-gray-700">
+                          <span className="text-lg font-medium">Total</span>
+                          <div className="flex flex-col items-center mt-1 cursor-pointer hover:bg-gray-700 transition-colors duration-200 py-1 px-3 rounded-md">
+                            <span className="text-2xl font-bold text-blue-400">U {match.overUnder}</span>
+                            <span className="text-sm font-normal text-gray-400">-110</span>
+                          </div>
+                        </div>
                       </div>
                     </li>
                   ))
