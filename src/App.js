@@ -375,13 +375,12 @@ const App = () => {
               />
             )}
 
-            {/* Render TeamDetailPage when selected */}
-            {activeTab === TABS.TEAM_DETAIL && selectedTeam && (
+            /* Render TeamDetailPage when selected */
+{activeTab === TABS.TEAM_DETAIL && selectedTeam && (
               <TeamDetailPage
                 teamName={selectedTeam}
                 historicalMatchups={historicalMatchups}
                 getMappedTeamName={getMappedTeamName}
-                historicalChampions={historicalChampions}
               />
             )}
           </div>
