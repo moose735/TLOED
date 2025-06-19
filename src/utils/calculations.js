@@ -167,6 +167,39 @@ const calculateAllPlayWinPercentage = (teamName, year, weeklyGameScoresByYearAnd
     return totalAllPlayGamesSeason > 0 ? ((allPlayWinsSeason + (0.5 * allPlayTiesSeason)) / totalAllPlayGamesSeason) : 0;
 };
 
+/**
+ * Calculates the count of weeks where a team had the absolute highest score in a given year or across their career.
+ * Handles ties: if multiple teams tie for the highest score, all of them count for that week.
+ *
+ * @param {string} teamName - The name of the team.
+ * @param {Object} weeklyGameScoresByYearAndWeek - Object containing all weekly scores, structured as {year: {week: [{team: score}]}}.
+ * @param {number|null} year - The specific year to calculate for, or null for career total.
+ * @returns {number} The count of weeks where the team had the top score.
+ */
+const calculateTopScoreWeeksCount = (teamName, weeklyGameScoresByYearAndWeek, year = null) => {
+    let topScoreWeeks = 0;
+    const yearsToProcess = year ? [year] : Object.keys(weeklyGameScoresByYearAndWeek);
+
+    yearsToProcess.forEach(yr => {
+        if (weeklyGameScoresByYearAndWeek[yr]) {
+            Object.keys(weeklyGameScoresByYearAndWeek[yr]).forEach(week => {
+                const allScoresInWeek = weeklyGameScoresByYearAndWeek[yr][week];
+
+                // Find the maximum score in the current week
+                const maxScore = Math.max(...allScoresInWeek.map(entry => entry.score).filter(score => typeof score === 'number' && !isNaN(score)));
+
+                // Check if the current team's score is equal to the maximum score
+                const teamScoreEntry = allScoresInWeek.find(entry => entry.team === teamName);
+
+                if (teamScoreEntry && teamScoreEntry.score === maxScore && typeof teamScoreEntry.score === 'number' && !isNaN(teamScoreEntry.score)) {
+                    topScoreWeeks++;
+                }
+            });
+        }
+    });
+    return topScoreWeeks;
+};
+
 
 /**
  * Calculates all league-wide and team-specific metrics (DPR, Luck Rating, All-Play)
@@ -174,8 +207,8 @@ const calculateAllPlayWinPercentage = (teamName, year, weeklyGameScoresByYearAnd
  * @param {Array<Object>} historicalMatchups - The raw historical matchup data.
  * @param {Function} getMappedTeamName - Function to get mapped team names.
  * @returns {{seasonalMetrics: Object, careerDPRData: Array, weeklyGameScoresByYearAndWeek: Object}}
- * seasonalMetrics: { year: { teamName: { wins, losses, ties, pointsFor, pointsAgainst, averageScore, adjustedDPR, luckRating, allPlayWinPercentage, rank } } } // Added rank to doc
- * careerDPRData: Array of { team, dpr, wins, losses, ties, pointsFor, pointsAgainst, averageScore }
+ * seasonalMetrics: { year: { teamName: { wins, losses, ties, pointsFor, pointsAgainst, averageScore, adjustedDPR, luckRating, allPlayWinPercentage, rank, topScoreWeeksCount } } } // Added rank and topScoreWeeksCount to doc
+ * careerDPRData: Array of { team, dpr, wins, losses, ties, pointsFor, pointsAgainst, averageScore, topScoreWeeksCount } // Added topScoreWeeksCount to doc
  */
 export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName) => {
     console.log("--- Starting calculateAllLeagueMetrics ---");
@@ -344,13 +377,14 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
             const rawDPR = calculateRawDPR(
                 averageScore,
                 stats.highScore !== -Infinity ? stats.highScore : 0, // Handle initial -Infinity
-                stats.lowScore !== Infinity ? stats.lowScore : 0,   // Handle initial Infinity
+                stats.lowScore !== Infinity ? stats.lowScore : 0,    // Handle initial Infinity
                 winPercentage
             );
 
             // Calculate Luck Rating and All-Play Win Percentage
             const luckRating = calculateLuckRating(historicalMatchups, team, parseInt(year), weeklyGameScoresByYearAndWeek, getMappedTeamName);
             const allPlayWinPercentage = calculateAllPlayWinPercentage(team, parseInt(year), weeklyGameScoresByYearAndWeek);
+            const topScoreWeeksCount = calculateTopScoreWeeksCount(team, weeklyGameScoresByYearAndWeek, parseInt(year));
 
             seasonalMetrics[year][team] = {
                 wins: stats.wins,
@@ -363,6 +397,7 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
                 rawDPR: rawDPR, // Store raw DPR for potential league-wide average calculation
                 luckRating: luckRating,
                 allPlayWinPercentage: allPlayWinPercentage,
+                topScoreWeeksCount: topScoreWeeksCount, // Add top score weeks count
                 adjustedDPR: 0, // Will be calculated after all raw DPRs are known for the season
                 totalGames: stats.totalGames,
                 highScore: stats.highScore, // Include these in seasonalMetrics
@@ -436,7 +471,6 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
         const careerHighScore = stats.careerWeeklyScores.length > 0 ? Math.max(...stats.careerWeeklyScores) : 0;
         const careerLowScore = stats.careerWeeklyScores.length > 0 ? Math.min(...stats.careerWeeklyScores) : 0;
 
-
         const rawDPRCareer = calculateRawDPR(
             averageScoreOverall,
             careerHighScore,
@@ -444,6 +478,9 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
             careerWinPercentage
         );
         allCareerRawDPRs.push(rawDPRCareer);
+
+        const careerTopScoreWeeksCount = calculateTopScoreWeeksCount(team, weeklyGameScoresByYearAndWeek, null);
+
 
         // This block handles cases where teams might have 0 games/points, ensuring they still appear
         if (rawDPRCareer === 0 && stats.totalGames === 0) {
@@ -458,6 +495,7 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
                 averageScore: 0,
                 winPercentage: 0, // Include winPercentage here
                 totalGames: stats.totalGames, // Include totalGames
+                topScoreWeeksCount: careerTopScoreWeeksCount, // Add top score weeks count to career data
             });
             return;
         }
@@ -473,6 +511,7 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
             averageScore: averageScoreOverall,
             winPercentage: careerWinPercentage, // Include winPercentage here
             totalGames: stats.totalGames, // Include totalGames
+            topScoreWeeksCount: careerTopScoreWeeksCount, // Add top score weeks count to career data
         });
     });
 
