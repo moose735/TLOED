@@ -368,7 +368,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       } else if (formatted.startsWith('-0.')) {
         formatted = `-${formatted.substring(2)}`; // Handle negative " -0.XXX" -> "-.XXX"
       }
-      return formatted;
+      return `${formatted}%`;
     }
     return 'N/A';
   };
