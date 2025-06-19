@@ -29,23 +29,19 @@ const erf = (x) => {
 };
 
 /**
- * Converts a decimal probability (e.g., 0.75) to American odds (+/-).
- * @param {number} probability - The probability (between 0 and 1).
- * @returns {string} American odds string (e.g., "+300", "-150"). Returns 'N/A' for invalid probabilities.
+ * Converts decimal odds to American odds (+/-).
+ * @param {number} decimalOdds - The decimal odds (e.g., 2.0 for +100, 1.5 for -200).
+ * @returns {string} American odds string (e.g., "+100", "-200"). Returns 'N/A' for invalid input.
  */
-const probToAmericanOdds = (probability) => {
-  if (typeof probability !== 'number' || isNaN(probability) || probability <= 0 || probability >= 1) {
+const decimalToAmericanOdds = (decimalOdds) => {
+  if (typeof decimalOdds !== 'number' || isNaN(decimalOdds) || decimalOdds < 1) {
     return 'N/A';
   }
 
-  if (probability > 0.5) {
-    // Favorite: -ve odds (e.g., -150)
-    const odds = (probability / (1 - probability)) * -100;
-    return Math.round(odds).toString();
-  } else {
-    // Underdog: +ve odds (e.g., +200)
-    const odds = ((1 - probability) / probability) * 100;
-    return "+" + Math.round(odds).toString();
+  if (decimalOdds >= 2.0) { // Underdog (+ve odds) including +100
+    return "+" + Math.round((decimalOdds - 1) * 100).toString();
+  } else { // Favorite (-ve odds)
+    return Math.round(-100 / (decimalOdds - 1)).toString();
   }
 };
 
@@ -55,38 +51,39 @@ const probToAmericanOdds = (probability) => {
  *
  * @param {number} player1WinProb - Calculated win probability of Player 1 (between 0 and 1).
  * @param {number} player2WinProb - Calculated win probability of Player 2 (between 0 and 1).
- * @param {number} [overround=0.20] - The bookmaker's profit margin (e.g., 0.20 for 20% overround).
+ * @param {number} [overround=0.045] - The bookmaker's profit margin (e.g., 0.045 for ~4.5% overround, aiming for -120/+100).
  * @returns {{player1Odds: string, player2Odds: string}} Object with American moneyline odds for both players.
  */
-export const calculateMoneylineOdds = (player1WinProb, player2WinProb, overround = 0.20) => {
+export const calculateMoneylineOdds = (player1WinProb, player2WinProb, overround = 0.045) => {
+  // Validate input probabilities
   if (typeof player1WinProb !== 'number' || isNaN(player1WinProb) || player1WinProb < 0 || player1WinProb > 1 ||
       typeof player2WinProb !== 'number' || isNaN(player2WinProb) || player2WinProb < 0 || player2WinProb > 1) {
     return { player1Odds: 'N/A', player2Odds: 'N/A' };
   }
 
-  // Normalize true probabilities first (in case they don't sum exactly to 1 due to source data)
+  // Ensure probabilities sum to 1 for fair odds calculation
   const totalProb = player1WinProb + player2WinProb;
   let normalizedProb1 = totalProb > 0 ? player1WinProb / totalProb : 0.5;
   let normalizedProb2 = totalProb > 0 ? player2WinProb / totalProb : 0.5;
 
-  // Apply the overround by increasing the denominators of the implied odds.
-  // This effectively reduces the payout for the bettor.
-  const vigFactor = 1 + overround;
-  const viggedProb1 = normalizedProb1 * vigFactor;
-  const viggedProb2 = normalizedProb2 * vigFactor;
+  // Calculate fair decimal odds
+  const fairDecimalOdds1 = normalizedProb1 > 0 ? (1 / normalizedProb1) : Infinity;
+  const fairDecimalOdds2 = normalizedProb2 > 0 ? (1 / normalizedProb2) : Infinity;
 
-  // Re-normalize these vigged probabilities to sum up to 1 for conversion to American odds,
-  // but the *relative* difference incorporates the vig.
-  const finalNormFactor = viggedProb1 + viggedProb2;
-  const finalPlayer1Prob = viggedProb1 / finalNormFactor;
-  const finalPlayer2Prob = viggedProb2 / finalNormFactor;
+  // Apply overround: Multiply fair decimal odds by (1 + overround)
+  // This increases the odds for the bettor (worse payout), creating the book's edge.
+  const viggedDecimalOdds1 = fairDecimalOdds1 * (1 + overround);
+  const viggedDecimalOdds2 = fairDecimalOdds2 * (1 + overround);
+
+  // Convert vigged decimal odds to American odds
+  const americanOdds1 = decimalToAmericanOdds(viggedDecimalOdds1);
+  const americanOdds2 = decimalToAmericanOdds(viggedDecimalOdds2);
 
   return {
-    player1Odds: probToAmericanOdds(finalPlayer1Prob),
-    player2Odds: probToAmericanOdds(finalPlayer2Prob),
+    player1Odds: americanOdds1,
+    player2Odds: americanOdds2,
   };
 };
-
 
 /**
  * Calculates the Over/Under (O/U) total for a matchup based on the average scores of two players.
@@ -169,7 +166,7 @@ export const calculateTeamAverageDifferenceVsOpponent = (teamName, year, current
 
 
 /**
- * Calculates Sigma Squared over Count (Variance), representing the spread of a team's weekly scores
+ * Calculates Sigma Squared over Count, representing the variance of a team's weekly scores
  * relative to its own seasonal average score, up to a given week.
  * Formula: Sum((WeeklyScore - SeasonalAverage)^2) / NumberOfWeeksPlayed
  *
@@ -274,8 +271,8 @@ export const calculateFutureOpponentAverageScoringDifference = (team1Name, team2
  * @returns {number} The calculated error function coefficient (IR215).
  */
 export const calculateErrorFunctionCoefficient = (avgDiffVsOpponent, sigmaSquaredOverCount) => {
-  if (sigmaSquaredOverCount === 0 || isNaN(sigmaSquaredOverCount)) {
-    return 0; // Avoid division by zero or NaN
+  if (sigmaSquaredOverCount === 0 || isNaN(sigmaSquaredOverCount) || typeof sigmaSquaredOverCount !== 'number') {
+    return 0; // Avoid division by zero or NaN, or if not a number
   }
   // Ensure avgDiffVsOpponent is a valid number before division
   if (typeof avgDiffVsOpponent !== 'number' || isNaN(avgDiffVsOpponent)) {
@@ -301,7 +298,7 @@ export const calculateErrorFunctionCoefficient = (avgDiffVsOpponent, sigmaSquare
  * IR215 = Player's Error Function Coefficient for the current week/season
  * @param {number} avgDiffVsOpponentForPlayer - The player's average point differential (HZ215).
  * @param {number} errorCoeffForPlayer - The player's error function coefficient (IR215).
- * @returns {number} The calculated win percentage projection (between 0 and 1).
+ * @returns {number} The calculated win percentage projection (between 0 and 1). Returns 0.5 for invalid inputs.
  */
 export const calculateWeeklyWinPercentageProjection = (avgDiffVsOpponentForPlayer, errorCoeffForPlayer) => {
   if (typeof avgDiffVsOpponentForPlayer !== 'number' || isNaN(avgDiffVsOpponentForPlayer) ||
