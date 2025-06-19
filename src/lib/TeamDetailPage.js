@@ -393,19 +393,20 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
                 )}
             </div>
         </span>
-      </h2>
+      <h2>
 
       {/* Overall Stats */}
       <section className="mb-8">
+        <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Overall Career Stats</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6"> {/* Updated grid for desktop */}
           <StatCard title="Total Wins" value={teamOverallStats.totalWins} rank={teamOverallStats.winRank} />
-          <StatCard title="Win %" value={formatPercentage((teamOverallStats.totalWins + 0.5 * teamOverallStats.totalTies) / teamOverallStats.totalGamesPlayed)} rank={teamOverallStats.winPercentageRank} />
-          <StatCard title="Total Points" value={formatScore(teamOverallStats.totalPointsFor)} rank={teamOverallStats.pointsForRank} />
+          <StatCard title="Win Percentage" value={formatPercentage((teamOverallStats.totalWins + 0.5 * teamOverallStats.totalTies) / teamOverallStats.totalGamesPlayed)} rank={teamOverallStats.winPercentageRank} />
+          <StatCard title="Total Points For" value={formatScore(teamOverallStats.totalPointsFor)} rank={teamOverallStats.pointsForRank} />
           <StatCard
             title="Weekly Top Scores"
             value={
               teamOverallStats.overallTopScoreWeeksCount !== undefined
-                ? `${teamOverallStats.overallTopScoreWeeksCount}`
+                ? `${teamOverallStats.overallTopScoreWeeksCount} week${teamOverallStats.overallTopScoreWeeksCount === 1 ? '' : 's'}`
                 : 'N/A'
             }
             rank={teamOverallStats.topScoreWeeksRank}
@@ -418,6 +419,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
 
       {/* Season by Season History Table */}
       <section className="mb-8">
+        <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Season-by-Season History</h3>
         {teamSeasonHistory.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
@@ -464,7 +466,7 @@ const StatCard = ({ title, value, rank }) => ( // Added rank prop
   <div className="bg-blue-50 p-2 rounded-lg shadow-sm flex flex-col items-center justify-center text-center border border-blue-200">
     {rank && rank !== 'N/A' && <p className="text-2xl font-bold text-blue-700">{rank}</p>} {/* Larger font for rank */}
     <p className="text-sm font-semibold text-blue-800"> {/* Set to text-sm */}
-      {title} (<span className="font-semibold text-blue-800">{value}</span>) {/* Value in parenthesis, same font weight and color */}
+      {title} (<span className="font-semibold text-gray-600">{value}</span>) {/* Value in parenthesis, same font weight and color */}
     </p>
   </div>
 );
