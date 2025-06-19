@@ -44,11 +44,11 @@ const calculateRank = (value, allValues, isHigherBetter = true) => {
 
 // Formatting functions moved outside the component for accessibility
 const formatScore = (score) => {
-  return typeof score === 'number' ? score.toFixed(2) : 'N/A';
+  return typeof score === 'number' ? score.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : 'N/A';
 };
 
 const formatPercentage = (value) => {
-  return typeof value === 'number' ? `${(value * 100).toFixed(1)}%` : 'N/A';
+  return typeof value === 'number' ? `${(value).toFixed(3).substring(1)}%` : 'N/A';
 };
 
 const formatLuckRating = (value) => {
@@ -411,7 +411,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
           />
           <StatCard title="Playoff Appearances" value={teamOverallStats.playoffAppearancesCount} rank={teamOverallStats.playoffRank} />
           <StatCard title="Championships" value={teamOverallStats.totalChampionships} rank={teamOverallStats.championshipRank} />
-          <StatCard title="Total Luck Rating" value={formatLuckRating(teamOverallStats.totalLuckRating)} rank={teamOverallStats.luckRank} />
+          {/* Removed the 'Total Luck Rating' StatCard */}
         </div>
       </section>
 
