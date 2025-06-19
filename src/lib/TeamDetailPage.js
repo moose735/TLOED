@@ -47,7 +47,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
       totalTies: 0,
       totalPointsFor: 0,
       totalGamesPlayed: 0,
-      weeklyTopScores: [], // Changed to array for multiple top scores
+      overallTopScoreWeeksCount: 0, // New: Total count of weekly top scores
       playoffAppearances: new Set(),
       championships: 0,
       avgDPR: 0, // Career average DPR
@@ -56,7 +56,9 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
     };
 
     const seasonalData = {}; // { year: { wins, losses, ties, pointsFor, pointsAgainst, luckRating, adjustedDPR, allPlayWinPercentage, weeklyScores: [] } }
-    const allTeamScores = []; // Collect all scores for top scores calculation
+    
+    // No longer need allTeamScores for the overall top 3, now we sum counts from seasonalMetrics
+    // const allTeamScores = []; 
 
     const completedSeasons = new Set();
     historicalMatchups.forEach(match => {
@@ -97,13 +99,13 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
       const opponentScore = teamIsTeam1 ? team2Score : team1Score;
       const isTie = team1Score === team2Score;
 
-      // Accumulate all scores for weekly top scores calculation
-      allTeamScores.push({
-        value: currentTeamScore,
-        matchup: `${displayTeam1} vs ${displayTeam2}`,
-        year: year,
-        week: week,
-      });
+      // No longer accumulating allTeamScores here for the overall top 3 list
+      // allTeamScores.push({
+      //   value: currentTeamScore,
+      //   matchup: `${displayTeam1} vs ${displayTeam2}`,
+      //   year: year,
+      //   week: week,
+      // });
 
       if (!(match.pointsOnlyBye === true || match.pointsOnlyBye === 'true')) {
           overallStats.totalGamesPlayed++;
@@ -134,9 +136,9 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
       }
     });
 
-    // Calculate top 3 weekly scores
-    allTeamScores.sort((a, b) => b.value - a.value);
-    overallStats.weeklyTopScores = allTeamScores.slice(0, 3);
+    // Remove top 3 weekly scores calculation as it's replaced by overallTopScoreWeeksCount
+    // allTeamScores.sort((a, b) => b.value - a.value);
+    // overallStats.weeklyTopScores = allTeamScores.slice(0, 3);
 
 
     const { seasonalMetrics } = calculateAllLeagueMetrics(historicalMatchups, getMappedTeamName);
@@ -171,10 +173,15 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
           luckRating: metricsForSeason.luckRating,
           adjustedDPR: metricsForSeason.adjustedDPR,
           allPlayWinPercentage: metricsForSeason.allPlayWinPercentage,
-          topScores: metricsForSeason.topScoreWeeksCount !== undefined ? metricsForSeason.topScoreWeeksCount : 'N/A',
+          // Removed topScores from here as per user request to not have it per year
           winPercentage: seasonWinPercentage,
           finish: metricsForSeason.rank ? `${metricsForSeason.rank}${getOrdinalSuffix(metricsForSeason.rank)}` : 'N/A', // Use rank from seasonalMetrics
         });
+
+        // Sum up topScoreWeeksCount for overall total
+        if (typeof metricsForSeason.topScoreWeeksCount === 'number') {
+            overallStats.overallTopScoreWeeksCount += metricsForSeason.topScoreWeeksCount;
+        }
 
         if (metricsForSeason.adjustedDPR !== 0) {
             overallStats.totalDPRSum += metricsForSeason.adjustedDPR;
@@ -237,15 +244,12 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
           <StatCard title="Total Wins" value={teamOverallStats.totalWins} />
           <StatCard title="Win Percentage" value={formatPercentage((teamOverallStats.totalWins + 0.5 * teamOverallStats.totalTies) / teamOverallStats.totalGamesPlayed)} />
           <StatCard title="Total Points For" value={formatScore(teamOverallStats.totalPointsFor)} />
+          {/* Modified StatCard for Weekly Top Scores to show count */}
           <StatCard
             title="Weekly Top Scores"
             value={
-              teamOverallStats.weeklyTopScores.length > 0
-                ? teamOverallStats.weeklyTopScores.map((score, index) => (
-                    <span key={index} className="block text-base">
-                      {formatScore(score.value)} (Wk {score.week}, {score.year})
-                    </span>
-                  ))
+              teamOverallStats.overallTopScoreWeeksCount !== undefined
+                ? `${teamOverallStats.overallTopScoreWeeksCount} week${teamOverallStats.overallTopScoreWeeksCount === 1 ? '' : 's'}`
                 : 'N/A'
             }
           />
@@ -271,7 +275,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
                   <th className="py-2 px-3 text-left text-xs font-semibold text-purple-700 uppercase tracking-wider border-b border-gray-200">Finish</th>
                   <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Adjusted DPR</th>
                   <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">All-Play Win %</th>
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Top Scores</th> {/* New column for top scores */}
+                  {/* Removed Top Scores column as per user request */}
                 </tr>
               </thead>
               <tbody>
@@ -286,7 +290,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
                     <td className="py-2 px-3 text-sm text-gray-700">{season.finish}</td>
                     <td className="py-2 px-3 text-sm text-gray-700">{formatDPR(season.adjustedDPR)}</td>
                     <td className="py-2 px-3 text-sm text-gray-700">{formatPercentage(season.allPlayWinPercentage)}</td>
-                    <td className="py-2 px-3 text-sm text-gray-700">{season.topScores} week{season.topScores === 1 ? '' : 's'}</td> {/* Display top scores count */}
+                    {/* Removed Top Scores display as per user request */}
                   </tr>
                 ))}
               </tbody>
