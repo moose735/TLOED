@@ -211,6 +211,8 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
   // Determine the number of columns for the colSpan
   const numberOfSeasonalColumns = 9; // Rank, Team, Season, Season DPR, Win %, Record, Points Avg, Highest Points, Lowest Points
 
+  let actualRank = 0; // Initialize a rank counter for seasonal data
+
   return (
     <div className="w-full">
       <h2 className="text-2xl font-bold text-gray-800 mb-4 border-b pb-2 text-center">
@@ -283,27 +285,34 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                     </tr>
                   </thead>
                   <tbody>
-                    {displayedSeasonalDPRData.map((data, index) => (
-                      <tr key={`${data.team}-${data.year}-${index}`} className={data.isAverageRow ? 'bg-yellow-100 font-bold' : (index % 2 === 0 ? 'bg-gray-50' : 'bg-white')}>
-                        {data.isAverageRow ? (
-                          <td colSpan={numberOfSeasonalColumns} className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap text-center">
-                            {data.team}
-                          </td>
-                        ) : (
-                          <>
-                            <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{index + 1}</td>
-                            <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.team}</td>
-                            <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.year}</td>
-                            <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatDPR(data.dpr)}</td>
-                            <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPercentage(data.winPercentage)}</td>
-                            <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{renderRecord(data.wins, data.losses, data.ties)}</td>
-                            <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.pointsPerGame)}</td>
-                            <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.highestPointsGame)}</td>
-                            <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.lowestPointsGame)}</td>
-                          </>
-                        )}
-                      </tr>
-                    ))}
+                    {/* Reset actualRank for each rendering cycle of the table */}
+                    {(actualRank = 0)}
+                    {displayedSeasonalDPRData.map((data) => {
+                      if (!data.isAverageRow) {
+                        actualRank++; // Increment rank only for non-average rows
+                      }
+                      return (
+                        <tr key={`${data.team}-${data.year}-${data.dpr}`} className={data.isAverageRow ? 'bg-yellow-100 font-bold' : (actualRank % 2 === 0 ? 'bg-gray-50' : 'bg-white')}>
+                          {data.isAverageRow ? (
+                            <td colSpan={numberOfSeasonalColumns} className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap text-center">
+                              {data.team}
+                            </td>
+                          ) : (
+                            <>
+                              <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{actualRank}</td>
+                              <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.team}</td>
+                              <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.year}</td>
+                              <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatDPR(data.dpr)}</td>
+                              <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPercentage(data.winPercentage)}</td>
+                              <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{renderRecord(data.wins, data.losses, data.ties)}</td>
+                              <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.pointsPerGame)}</td>
+                              <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.highestPointsGame)}</td>
+                              <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.lowestPointsGame)}</td>
+                            </>
+                          )}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
