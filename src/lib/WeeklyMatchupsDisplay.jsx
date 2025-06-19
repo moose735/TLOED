@@ -151,46 +151,39 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => { /
               <ul className="list-none space-y-4 text-gray-800">
                 {matchups.length > 0 ? (
                   matchups.map((match, matchIndex) => (
-                    <li key={matchIndex} className="flex bg-gray-900 rounded-md shadow-lg border border-gray-700 overflow-hidden">
-                      {/* Left Column: Player Names */}
-                      <div className="flex flex-col flex-1 text-white">
-                        <div className="px-4 py-3 text-lg font-semibold text-left border-b border-gray-700">
+                    <li key={matchIndex} className="flex flex-col sm:flex-row bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
+                      {/* Left Section: Player Names & Moneyline Odds */}
+                      <div className="flex-1 grid grid-cols-2 gap-x-2 py-3 px-4 items-center border-b sm:border-b-0 sm:border-r border-gray-200">
+                        {/* Player 1 Name */}
+                        <div className="text-lg font-semibold text-gray-900 text-left">
                           {match.player1}
                         </div>
-                        <div className="px-4 py-3 text-lg font-semibold text-left">
+                        {/* Player 1 ML Odds */}
+                        <div className="flex items-center justify-center p-2 bg-gray-100 rounded-md cursor-pointer hover:bg-gray-200 transition-colors duration-200">
+                          <span className="text-xl font-bold text-purple-700">{match.moneylineOdds.player1Odds}</span>
+                        </div>
+
+                        {/* Player 2 Name */}
+                        <div className="text-lg font-semibold text-gray-900 text-left pt-2">
                           {match.player2}
                         </div>
-                      </div>
-
-                      {/* Middle Column: Moneyline Odds */}
-                      <div className="flex flex-col flex-none w-1/4 text-white divide-y divide-gray-700">
-                        <div className="flex items-center justify-center p-3 h-full">
-                          <span className="text-2xl font-bold text-purple-400 cursor-pointer hover:bg-gray-700 transition-colors duration-200 py-1 px-3 rounded-md">
-                            {match.moneylineOdds.player1Odds}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-center p-3 h-full">
-                          <span className="text-2xl font-bold text-green-400 cursor-pointer hover:bg-gray-700 transition-colors duration-200 py-1 px-3 rounded-md">
-                            {match.moneylineOdds.player2Odds}
-                          </span>
+                        {/* Player 2 ML Odds */}
+                        <div className="flex items-center justify-center p-2 bg-gray-100 rounded-md cursor-pointer hover:bg-gray-200 transition-colors duration-200 pt-2">
+                          <span className="text-xl font-bold text-green-700">{match.moneylineOdds.player2Odds}</span>
                         </div>
                       </div>
 
-                      {/* Right Column: Over/Under */}
-                      <div className="flex flex-col flex-none w-1/4 text-white divide-y divide-gray-700 border-l border-gray-700">
+                      {/* Right Section: Over/Under */}
+                      <div className="flex-none w-full sm:w-1/3 grid grid-rows-2 gap-y-2 py-3 px-4 bg-gray-50">
                         {/* Over */}
-                        <div className="flex flex-col items-center justify-center p-3 h-full">
-                          <span className="text-2xl font-bold text-blue-400 cursor-pointer hover:bg-gray-700 transition-colors duration-200 py-1 px-3 rounded-md">
-                            O {match.overUnder}
-                          </span>
-                          <span className="text-sm font-normal text-gray-400">-110</span>
+                        <div className="flex flex-col items-center justify-center p-2 bg-gray-100 rounded-md cursor-pointer hover:bg-gray-200 transition-colors duration-200">
+                          <span className="text-xl font-bold text-blue-700">O {match.overUnder}</span>
+                          <span className="text-sm font-normal text-gray-600">-110</span>
                         </div>
                         {/* Under */}
-                        <div className="flex flex-col items-center justify-center p-3 h-full">
-                          <span className="text-2xl font-bold text-blue-400 cursor-pointer hover:bg-gray-700 transition-colors duration-200 py-1 px-3 rounded-md">
-                            U {match.overUnder}
-                          </span>
-                          <span className="text-sm font-normal text-gray-400">-110</span>
+                        <div className="flex flex-col items-center justify-center p-2 bg-gray-100 rounded-md cursor-pointer hover:bg-gray-200 transition-colors duration-200">
+                          <span className="text-xl font-bold text-blue-700">U {match.overUnder}</span>
+                          <span className="text-sm font-normal text-gray-600">-110</span>
                         </div>
                       </div>
                     </li>
