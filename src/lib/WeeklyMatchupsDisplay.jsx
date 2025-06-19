@@ -1,7 +1,16 @@
 // TLOED/src/lib/WeeklyMatchupsDisplay.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 // Import the new betting calculations
-import { calculateMoneylineOdds, calculateOverUnder, getPlayerMetricsForYear } from '../utils/bettingCalculations';
+import {
+  calculateMoneylineOdds,
+  calculateOverUnder,
+  getPlayerMetricsForYear,
+  calculateTeamAverageDifferenceVsOpponent,
+  calculateSigmaSquaredOverCount,
+  calculateFutureOpponentAverageScoringDifference,
+  calculateErrorFunctionCoefficient,
+  calculateWeeklyWinPercentageProjection
+} from '../utils/bettingCalculations';
 // Import calculateAllLeagueMetrics to get seasonal DPR and average score
 import { calculateAllLeagueMetrics } from '../utils/calculations'; // Assuming this provides seasonalMetrics
 
@@ -50,7 +59,7 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => { /
     const weekHeaders = Object.keys(weeklyData[0] || {}).filter(key => key.startsWith('Week_'));
 
     weekHeaders.forEach(weekKey => {
-      const weekNumber = weekKey.replace('Week_', '');
+      const weekNumber = parseInt(weekKey.replace('Week_', ''));
       matchupsByWeek[`Week ${weekNumber}`] = [];
       const seenPairs = new Set(); // To avoid duplicate matchups (e.g., A vs B and B vs A)
 
@@ -62,11 +71,8 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => { /
           const canonicalPair = [player1Name, player2Name].sort().join('-');
 
           if (!seenPairs.has(canonicalPair)) {
-            // Determine the current year (assuming the schedule data is for the latest year in historicalMatchups)
-            // A more robust solution might pass the year from App.js if your schedule is annual.
-            // For now, let's pick the latest year from seasonalMetrics for player stats.
             const years = Object.keys(seasonalMetrics).map(Number).sort((a,b) => b-a);
-            const currentYear = years.length > 0 ? years[0] : new Date().getFullYear();
+            const currentYear = years.length > 0 ? years[0] : new Date().getFullYear(); // Use latest year from seasonalMetrics
 
             const player1Metrics = getPlayerMetricsForYear(seasonalMetrics, player1Name, currentYear);
             const player2Metrics = getPlayerMetricsForYear(seasonalMetrics, player2Name, currentYear);
@@ -75,8 +81,35 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => { /
             let overUnder = 'N/A';
 
             if (player1Metrics && player2Metrics) {
-              moneylineOdds = calculateMoneylineOdds(player1Metrics.adjustedDPR, player2Metrics.adjustedDPR);
+              // Calculate O/U regardless of week, using average scores
               overUnder = calculateOverUnder(player1Metrics.averageScore, player2Metrics.averageScore);
+
+              // Moneyline Odds Logic: DPR for Weeks 1-3, new calculation for later weeks
+              if (weekNumber <= 3) {
+                // Use DPR for early weeks
+                moneylineOdds = calculateMoneylineOdds(player1Metrics.adjustedDPR, player2Metrics.adjustedDPR);
+              } else {
+                // For later weeks, apply the more complex calculation
+                const p1AvgDiffVsOpponent = calculateTeamAverageDifferenceVsOpponent(player1Name, currentYear, seasonalMetrics);
+                const p1SigmaSquaredOverCount = calculateSigmaSquaredOverCount(player1Name, currentYear, seasonalMetrics);
+                const p1ErrorCoeff = calculateErrorFunctionCoefficient(p1AvgDiffVsOpponent, p1SigmaSquaredOverCount);
+
+                const p2AvgDiffVsOpponent = calculateTeamAverageDifferenceVsOpponent(player2Name, currentYear, seasonalMetrics);
+                const p2SigmaSquaredOverCount = calculateSigmaSquaredOverCount(player2Name, currentYear, seasonalMetrics);
+                const p2ErrorCoeff = calculateErrorFunctionCoefficient(p2AvgDiffVsOpponent, p2SigmaSquaredOverCount);
+
+                // Calculate the average scoring difference between the two teams for win probability
+                const p1FutureOpponentAvgScoringDiff = calculateFutureOpponentAverageScoringDifference(player1Name, player2Name, currentYear, seasonalMetrics);
+                const p2FutureOpponentAvgScoringDiff = calculateFutureOpponentAverageScoringDifference(player2Name, player1Name, currentYear, seasonalMetrics); // This will be the negative of p1's diff if symmetric
+
+                // Use the new formula for win percentage projection
+                const p1WinProb = calculateWeeklyWinPercentageProjection(p1FutureOpponentAvgScoringDiff, p1ErrorCoeff);
+                // Ensure p2WinProb is (1 - p1WinProb) to represent a two-outcome event for moneyline
+                const p2WinProb = 1 - p1WinProb; // Or calculate it symmetrically: calculateWeeklyWinPercentageProjection(p2FutureOpponentAvgScoringDiff, p2ErrorCoeff);
+
+                // Use the calculated win probabilities for moneyline odds
+                moneylineOdds = calculateMoneylineOdds(p1WinProb, p2WinProb);
+              }
             }
 
             matchupsByWeek[`Week ${weekNumber}`].push({
@@ -152,30 +185,28 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => { /
                 {matchups.length > 0 ? (
                   matchups.map((match, matchIndex) => (
                     <li key={matchIndex} className="flex bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
-                      {/* Left Column: Player Names */}
-                      <div className="flex flex-col flex-1">
-                        <div className="flex items-center px-4 py-3 h-1/2 text-lg font-semibold text-gray-900 border-b border-gray-200">
-                          {match.player1}
+                      {/* Player Names and ML Odds Column */}
+                      <div className="flex flex-col flex-1 divide-y divide-gray-200">
+                        {/* Player 1 Row */}
+                        <div className="flex items-center justify-between px-4 py-3">
+                          <span className="text-lg font-semibold text-gray-900">{match.player1}</span>
+                          <div className="flex items-center justify-center w-24 h-10 bg-gray-100 rounded-md cursor-pointer hover:bg-gray-200 transition-colors duration-200">
+                            <span className="text-xl font-bold text-blue-700">{match.moneylineOdds.player1Odds}</span>
+                          </div>
                         </div>
-                        <div className="flex items-center px-4 py-3 h-1/2 text-lg font-semibold text-gray-900">
-                          {match.player2}
-                        </div>
-                      </div>
-
-                      {/* Middle Column: Moneyline Odds */}
-                      <div className="flex flex-col flex-none w-[100px] border-l border-r border-gray-200">
-                        <div className="flex items-center justify-center p-2 h-1/2 bg-gray-100 rounded-md cursor-pointer hover:bg-gray-200 transition-colors duration-200">
-                          <span className="text-xl font-bold text-blue-700">{match.moneylineOdds.player1Odds}</span>
-                        </div>
-                        <div className="flex items-center justify-center p-2 h-1/2 bg-gray-100 rounded-md cursor-pointer hover:bg-gray-200 transition-colors duration-200">
-                          <span className="text-xl font-bold text-blue-700">{match.moneylineOdds.player2Odds}</span>
+                        {/* Player 2 Row */}
+                        <div className="flex items-center justify-between px-4 py-3">
+                          <span className="text-lg font-semibold text-gray-900">{match.player2}</span>
+                          <div className="flex items-center justify-center w-24 h-10 bg-gray-100 rounded-md cursor-pointer hover:bg-gray-200 transition-colors duration-200">
+                            <span className="text-xl font-bold text-blue-700">{match.moneylineOdds.player2Odds}</span>
+                          </div>
                         </div>
                       </div>
 
-                      {/* Right Column: Over/Under */}
-                      <div className="flex flex-col flex-none w-[100px]">
+                      {/* Over/Under Column */}
+                      <div className="flex flex-col flex-none w-[100px] border-l border-gray-200 divide-y divide-gray-200">
                         {/* Over */}
-                        <div className="flex flex-col items-center justify-center p-2 h-1/2 bg-gray-100 rounded-md cursor-pointer hover:bg-gray-200 transition-colors duration-200 border-b border-gray-200">
+                        <div className="flex flex-col items-center justify-center p-2 h-1/2 bg-gray-100 rounded-md cursor-pointer hover:bg-gray-200 transition-colors duration-200">
                           <span className="text-xl font-bold text-blue-700">O {match.overUnder}</span>
                           <span className="text-sm font-normal text-gray-600">-110</span>
                         </div>
