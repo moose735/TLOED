@@ -31,8 +31,9 @@ const calculateRank = (value, allValues, isHigherBetter = true) => {
     return rank > 0 ? `${rank}${getOrdinalSuffix(rank)}` : 'N/A';
 };
 
-// Head2HeadGrid now accepts onRivalryCellClick prop
-const Head2HeadGrid = ({ historicalMatchups, getDisplayTeamName, setSelectedRivalryKey, onRivalryCellClick }) => {
+
+// Head2HeadGrid now accepts onRivalryCellClick prop directly from App.js
+const Head2HeadGrid = ({ historicalMatchups, getDisplayTeamName, onRivalryCellClick }) => { // Removed setSelectedRivalryKey as it's not used externally now
   const [rivalryData, setRivalryData] = useState({});
   const [teamNames, setTeamNames] = useState([]);
 
@@ -46,47 +47,50 @@ const Head2HeadGrid = ({ historicalMatchups, getDisplayTeamName, setSelectedRiva
     const compiledRivalryData = {};
     const uniqueTeamNames = new Set();
 
+    // Iterate through seasons and then their matchups
     historicalMatchups.forEach(season => {
-      season.matchups.forEach(matchup => {
-        const team1 = matchup.team1;
-        const team2 = matchup.team2;
+      if (season.matchups) { // Ensure matchups array exists
+        season.matchups.forEach(matchup => {
+          const team1 = matchup.team1;
+          const team2 = matchup.team2;
 
-        uniqueTeamNames.add(team1);
-        uniqueTeamNames.add(team2);
+          uniqueTeamNames.add(team1);
+          uniqueTeamNames.add(team2);
 
-        // Ensure both directions of the rivalry exist
-        const key1 = `${team1}-${team2}`;
-        const key2 = `${team2}-${team1}`;
+          // Ensure both directions of the rivalry exist
+          const key1 = `${team1}-${team2}`;
+          const key2 = `${team2}-${team1}`;
 
-        if (!compiledRivalryData[key1]) {
-          compiledRivalryData[key1] = { wins: 0, losses: 0, ties: 0, pointsFor: 0, pointsAgainst: 0, games: [] };
-        }
-        if (!compiledRivalryData[key2]) {
-          compiledRivalryData[key2] = { wins: 0, losses: 0, ties: 0, pointsFor: 0, pointsAgainst: 0, games: [] };
-        }
+          if (!compiledRivalryData[key1]) {
+            compiledRivalryData[key1] = { wins: 0, losses: 0, ties: 0, pointsFor: 0, pointsAgainst: 0, games: [] };
+          }
+          if (!compiledRivalryData[key2]) {
+            compiledRivalryData[key2] = { wins: 0, losses: 0, ties: 0, pointsFor: 0, pointsAgainst: 0, games: [] };
+          }
 
-        // Update stats for team1 vs team2
-        if (matchup.winner === team1) {
-          compiledRivalryData[key1].wins += 1;
-          compiledRivalryData[key2].losses += 1;
-        } else if (matchup.winner === team2) {
-          compiledRivalryData[key1].losses += 1;
-          compiledRivalryData[key2].wins += 1;
-        } else { // Tie
-          compiledRivalryData[key1].ties += 1;
-          compiledRivalryData[key2].ties += 1;
-        }
+          // Update stats for team1 vs team2
+          if (matchup.winner === team1) {
+            compiledRivalryData[key1].wins += 1;
+            compiledRivalryData[key2].losses += 1;
+          } else if (matchup.winner === team2) {
+            compiledRivalryData[key1].losses += 1;
+            compiledRivalryData[key2].wins += 1;
+          } else { // Tie
+            compiledRivalryData[key1].ties += 1;
+            compiledRivalryData[key2].ties += 1;
+          }
 
-        // Points (from team1's perspective for key1)
-        compiledRivalryData[key1].pointsFor += matchup.team1Score;
-        compiledRivalryData[key1].pointsAgainst += matchup.team2Score;
-        compiledRivalryData[key2].pointsFor += matchup.team2Score;
-        compiledRivalryData[key2].pointsAgainst += matchup.team1Score;
+          // Points (from team1's perspective for key1)
+          compiledRivalryData[key1].pointsFor += matchup.team1Score;
+          compiledRivalryData[key1].pointsAgainst += matchup.team2Score;
+          compiledRivalryData[key2].pointsFor += matchup.team2Score;
+          compiledRivalryData[key2].pointsAgainst += matchup.team1Score;
 
-        // Store game details (optional, but useful for drilling down)
-        compiledRivalryData[key1].games.push({ year: season.year, ...matchup });
-        compiledRivalryData[key2].games.push({ year: season.year, ...matchup });
-      });
+          // Store game details (optional, but useful for drilling down)
+          compiledRivalryData[key1].games.push({ year: season.year, ...matchup });
+          compiledRivalryData[key2].games.push({ year: season.year, ...matchup });
+        });
+      }
     });
 
     setRivalryData(compiledRivalryData);
@@ -104,7 +108,7 @@ const Head2HeadGrid = ({ historicalMatchups, getDisplayTeamName, setSelectedRiva
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-50 z-10"></th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-50 z-10"></th> {/* Empty corner for alignment */}
                   {teamNames.map(team => (
                     <th key={team} className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                       {getDisplayTeamName(team)}
@@ -146,7 +150,7 @@ const Head2HeadGrid = ({ historicalMatchups, getDisplayTeamName, setSelectedRiva
                         <td
                           key={`${rowTeam}-${colTeam}`}
                           className={cellClassName}
-                          // NEW onClick: Pass both rowTeam and colTeam to the handler
+                          // NEW onClick: Pass both rowTeam and colTeam to the handler from App.js
                           onClick={() => rivalry && rowTeam !== colTeam && onRivalryCellClick(rowTeam, colTeam)}
                         >
                           {recordForDisplay}
