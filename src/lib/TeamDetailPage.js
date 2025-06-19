@@ -155,7 +155,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
 
         compiledSeasonHistory.push({
           year: year,
-          // Removed individual season award icons from here
+          // Removed individual season award icons from here as per user request
           team: seasonTeamStats.teamName,
           wins: seasonTeamStats.wins,
           losses: seasonTeamStats.losses,
@@ -237,32 +237,32 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
         <span className="block text-lg font-medium text-gray-600 mt-2">
           Record: {teamOverallStats.totalWins}-{teamOverallStats.totalLosses}-{teamOverallStats.totalTies} | Career DPR: {formatDPR(teamOverallStats.avgDPR)}
           {teamOverallStats.totalChampionships > 0 && (
-            <span title={`${teamOverallStats.totalChampionships} Championship${teamOverallStats.totalChampionships === 1 ? '' : 's'}`} className="ml-3 text-yellow-500">
+            <span title={`${teamOverallStats.totalChampionships} Championship${teamOverallStats.totalChampionships === 1 ? '' : 's'}`} style={{ marginLeft: '5px', color: 'gold' }}>
               🏆 {teamOverallStats.totalChampionships}
             </span>
           )}
           {teamOverallStats.totalRunnerUps > 0 && (
-            <span title={`${teamOverallStats.totalRunnerUps} Runner-Up${teamOverallStats.totalRunnerUps === 1 ? '' : 's'}`} className="ml-2 text-gray-500">
+            <span title={`${teamOverallStats.totalRunnerUps} Runner-Up${teamOverallStats.totalRunnerUps === 1 ? '' : 's'}`} style={{ marginLeft: '5px', color: 'silver' }}>
               🥈 {teamOverallStats.totalRunnerUps}
             </span>
           )}
           {teamOverallStats.totalThirdPlaces > 0 && (
-            <span title={`${teamOverallStats.totalThirdPlaces} Third Place${teamOverallStats.totalThirdPlaces === 1 ? '' : 's'}`} className="ml-2 text-amber-700">
+            <span title={`${teamOverallStats.totalThirdPlaces} Third Place${teamOverallStats.totalThirdPlaces === 1 ? '' : 's'}`} style={{ marginLeft: '5px', color: '#cd7f32' }}>
               🥉 {teamOverallStats.totalThirdPlaces}
             </span>
           )}
           {teamOverallStats.totalPointsChampionships > 0 && (
-            <span title={`${teamOverallStats.totalPointsChampionships} Points Champion${teamOverallStats.totalPointsChampionships === 1 ? '' : 's'}`} className="ml-2 text-yellow-600">
-              � {teamOverallStats.totalPointsChampionships}
+            <span title={`${teamOverallStats.totalPointsChampionships} Points Champion${teamOverallStats.totalPointsChampionships === 1 ? '' : 's'}`} style={{ marginLeft: '5px', color: 'red' }}>
+              ⭐ {teamOverallStats.totalPointsChampionships}
             </span>
           )}
           {teamOverallStats.totalPointsRunnerUps > 0 && (
-            <span title={`${teamOverallStats.totalPointsRunnerUps} 2nd Place Total Points`} className="ml-2 text-gray-500">
+            <span title={`${teamOverallStats.totalPointsRunnerUps} 2nd Place Total Points`} style={{ marginLeft: '5px', color: 'silver' }}>
               🥈 {teamOverallStats.totalPointsRunnerUps}
             </span>
           )}
           {teamOverallStats.totalThirdPlacePoints > 0 && (
-            <span title={`${teamOverallStats.totalThirdPlacePoints} 3rd Place Total Points`} className="ml-2 text-amber-700">
+            <span title={`${teamOverallStats.totalThirdPlacePoints} 3rd Place Total Points`} style={{ marginLeft: '5px', color: '#cd7f32' }}>
               🥉 {teamOverallStats.totalThirdPlacePoints}
             </span>
           )}
@@ -275,7 +275,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
           <StatCard title="Total Wins" value={teamOverallStats.totalWins} />
           <StatCard title="Win Percentage" value={formatPercentage((teamOverallStats.totalWins + 0.5 * teamOverallStats.totalTies) / teamOverallStats.totalGamesPlayed)} />
-          <StatCard title="Total Points For" value={formatScore(teamOverallStats.totalPointsFor)} />
+          <StatCard title="Total Points For" value={teamOverallStats.totalPointsFor)} />
           <StatCard
             title="Weekly Top Scores"
             value={
