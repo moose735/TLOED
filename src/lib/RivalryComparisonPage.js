@@ -117,7 +117,7 @@ const RivalryComparisonPage = ({ team1Name, team2Name, historicalMatchups, getMa
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {historicalMatchups.map(season =>
-              season.matchups
+              season.matchups // Filter matchups within each season
                 .filter(matchup =>
                   (matchup.team1 === team1Name && matchup.team2 === team2Name) ||
                   (matchup.team1 === team2Name && matchup.team2 === team1Name)
