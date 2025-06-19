@@ -240,8 +240,8 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                   <thead className="bg-green-100">
                     <tr>
                       <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Rank</th>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Season</th>
                       <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Team</th>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Season</th>
                       <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Season DPR</th>
                       <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Win %</th> {/* Added Win % header */}
                       <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Record (W-L-T)</th>
@@ -254,8 +254,8 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                     {seasonalDPRData.map((data, index) => (
                       <tr key={`${data.team}-${data.year}`} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                         <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{index + 1}</td>
-                        <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.year}</td>
                         <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.team}</td>
+                        <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.year}</td>
                         <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatDPR(data.dpr)}</td>
                         <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPercentage(data.winPercentage)}</td> {/* Added Win % data */}
                         <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{renderRecord(data.wins, data.losses, data.ties)}</td>
