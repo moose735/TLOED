@@ -497,37 +497,37 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
                       <td className="py-2 px-3 text-sm text-gray-700 text-center">
                         <div className="flex justify-center items-center gap-2 whitespace-nowrap">
                           {team.awards.championships > 0 && (
-                            <span title="Championships (1st Place Bowl)" className="flex items-center space-x-1 whitespace-nowrap">
+                            <span title="Sween Bowl Championship" className="flex items-center space-x-1 whitespace-nowrap">
                               <i className="fas fa-trophy text-yellow-500 text-lg"></i>
                               <span className="text-xs font-medium">{team.awards.championships}x</span>
                             </span>
                           )}
                           {team.awards.runnerUps > 0 && (
-                            <span title="Runner-Up Finishes (2nd Place Bowl)" className="flex items-center space-x-1 whitespace-nowrap">
+                            <span title="Sween Bowl Runner-Up" className="flex items-center space-x-1 whitespace-nowrap">
                               <i className="fas fa-trophy text-gray-400 text-lg"></i>
                               <span className="text-xs font-medium">{team.awards.runnerUps}x</span>
                             </span>
                           )}
                           {team.awards.thirdPlace > 0 && (
-                            <span title="Third Place Finishes (3rd Place Bowl)" className="flex items-center space-x-1 whitespace-nowrap">
+                            <span title="3rd Place Finish" className="flex items-center space-x-1 whitespace-nowrap">
                               <i className="fas fa-trophy text-amber-800 text-lg"></i> {/* Using amber-800 for bronze-like color */}
                               <span className="text-xs font-medium">{team.awards.thirdPlace}x</span>
                             </span>
                           )}
                           {team.awards.firstPoints > 0 && (
-                            <span title="1st Place in Total Points" className="flex items-center space-x-1 whitespace-nowrap">
+                            <span title="1st Place - Points" className="flex items-center space-x-1 whitespace-nowrap">
                               <i className="fas fa-medal text-yellow-500 text-lg"></i>
                               <span className="text-xs font-medium">{team.awards.firstPoints}x</span>
                             </span>
                           )}
                           {team.awards.secondPoints > 0 && (
-                            <span title="2nd Place in Total Points" className="flex items-center space-x-1 whitespace-nowrap">
+                            <span title="2nd Place - Points" className="flex items-center space-x-1 whitespace-nowrap">
                               <i className="fas fa-medal text-gray-400 text-lg"></i>
                               <span className="text-xs font-medium">{team.awards.secondPoints}x</span>
                             </span>
                           )}
                           {team.awards.thirdPoints > 0 && (
-                            <span title="3rd Place in Total Points" className="flex items-center space-x-1 whitespace-nowrap">
+                            <span title="3rd Place - Points" className="flex items-center space-x-1 whitespace-nowrap">
                               <i className="fas fa-medal text-amber-800 text-lg"></i> {/* Using amber-800 for bronze-like color */}
                               <span className="text-xs font-medium">{team.awards.thirdPoints}x</span>
                             </span>
