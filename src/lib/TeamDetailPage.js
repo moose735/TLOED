@@ -400,13 +400,13 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
         <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Overall Career Stats</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6"> {/* Updated grid for desktop */}
           <StatCard title="Total Wins" value={teamOverallStats.totalWins} rank={teamOverallStats.winRank} />
-          <StatCard title="Win Percentage" value={formatPercentage((teamOverallStats.totalWins + 0.5 * teamOverallStats.totalTies) / teamOverallStats.totalGamesPlayed)} rank={teamOverallStats.winPercentageRank} />
+          <StatCard title="Win %" value={formatPercentage((teamOverallStats.totalWins + 0.5 * teamOverallStats.totalTies) / teamOverallStats.totalGamesPlayed)} rank={teamOverallStats.winPercentageRank} />
           <StatCard title="Total Points For" value={formatScore(teamOverallStats.totalPointsFor)} rank={teamOverallStats.pointsForRank} />
           <StatCard
             title="Weekly Top Scores"
             value={
               teamOverallStats.overallTopScoreWeeksCount !== undefined
-                ? `${teamOverallStats.overallTopScoreWeeksCount} week${teamOverallStats.overallTopScoreWeeksCount === 1 ? '' : 's'}`
+                ? `${teamOverallStats.overallTopScoreWeeksCount}`
                 : 'N/A'
             }
             rank={teamOverallStats.topScoreWeeksRank}
