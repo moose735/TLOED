@@ -14,6 +14,9 @@ import LuckRatingAnalysis from './lib/LuckRatingAnalysis';
 import TeamDetailPage from './lib/TeamDetailPage';
 // Import the new component for rivalry comparison
 import RivalryComparisonPage from './lib/RivalryComparisonPage';
+// Ensure Head2HeadGrid is imported, it will pass clicks to RivalryComparisonPage
+import MatchupHistory from './lib/MatchupHistory';
+
 
 // Define the available tabs and their categories for the dropdown
 const NAV_CATEGORIES = {
@@ -54,7 +57,6 @@ const App = () => {
   const [selectedTeam, setSelectedTeam] = useState(null);
   const [historicalChampions, setHistoricalChampions] = useState([]);
   const [allTeamNames, setAllTeamNames] = useState([]);
-  // NEW STATE: to hold the two team names for comparison
   const [teamsToCompare, setTeamsToCompare] = useState(null); // Will be an array: [team1, team2]
 
 
@@ -68,21 +70,61 @@ const App = () => {
   useEffect(() => {
     const fetchHistoricalData = async () => {
       setLoading(true);
+      setError(null); // Clear previous errors
       try {
-        const response = await fetch(HISTORICAL_MATCHUPS_API_URL);
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+        if (HISTORICAL_MATCHUPS_API_URL === 'YOUR_GOOGLE_SHEET_HISTORICAL_MATCHUPS_API_URL') {
+          throw new Error("HISTORICAL_MATCHUPS_API_URL not configured in config.js. Please update it.");
         }
-        const data = await response.json();
-        setHistoricalMatchups(data.historicalMatchups);
-        setHistoricalChampions(data.historicalChampions);
+
+        const response = await fetch(HISTORICAL_MATCHUPS_API_URL, { mode: 'cors' });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status} - Could not load historical matchup data.`);
+        }
+        const textResponse = await response.text(); // Get raw text to inspect
+
+        let parsedData;
+        try {
+          parsedData = JSON.parse(textResponse);
+        } catch (jsonError) {
+          console.error("Error parsing historical matchup data JSON. Raw response:", textResponse, jsonError);
+          throw new Error(`Failed to load historical matchup data: The API response was not valid JSON. Please ensure your Google Apps Script for HISTORICAL_MATCHUPS_API_URL is correctly deployed as a Web App and returns JSON (e.g., using ContentService.MimeType.JSON). Raw response snippet: ${textResponse.substring(0, 200)}...`);
+        }
+
+        let fetchedHistoricalMatchups = [];
+        let fetchedHistoricalChampions = [];
+
+        // Expecting the API to return an object with historicalMatchups and historicalChampions properties
+        if (parsedData && typeof parsedData === 'object') {
+          if (Array.isArray(parsedData.historicalMatchups)) {
+            fetchedHistoricalMatchups = parsedData.historicalMatchups;
+          } else {
+            console.warn("API response 'historicalMatchups' is not an array or is missing.", parsedData);
+          }
+
+          if (Array.isArray(parsedData.historicalChampions)) {
+            fetchedHistoricalChampions = parsedData.historicalChampions;
+          } else {
+            console.warn("API response 'historicalChampions' is not an array or is missing.", parsedData);
+          }
+        } else {
+          console.error("API response is not a valid object or is empty:", parsedData);
+          throw new Error("Historical data is not in the expected object format. Raw response: " + textResponse);
+        }
+
+        setHistoricalMatchups(fetchedHistoricalMatchups);
+        setHistoricalChampions(fetchedHistoricalChampions);
 
         // Extract all unique team names for the Teams dropdown
         const uniqueTeamNames = new Set();
-        data.historicalMatchups.forEach(season => {
-          Object.values(season.teams).forEach(team => {
-            uniqueTeamNames.add(team.name);
-          });
+        fetchedHistoricalMatchups.forEach(season => {
+          // Ensure season.teams exists and is an object before trying to get its values
+          if (season && typeof season.teams === 'object' && season.teams !== null) {
+            Object.values(season.teams).forEach(team => {
+              if (team && team.name) { // Ensure team and team.name exist
+                uniqueTeamNames.add(team.name);
+              }
+            });
+          }
         });
         setAllTeamNames(Array.from(uniqueTeamNames).sort());
 
@@ -95,7 +137,7 @@ const App = () => {
     };
 
     fetchHistoricalData();
-  }, []);
+  }, [getMappedTeamName]); // Add getMappedTeamName to dependencies if it's used inside and can change
 
   // Effect to update NAV_CATEGORIES.TEAMS.subTabs when allTeamNames changes
   useEffect(() => {
@@ -188,20 +230,20 @@ const App = () => {
             {activeTab === TABS.POWER_RANKINGS && (
               <PowerRankings
                 historicalMatchups={historicalMatchups}
-                getMappedTeamName={getMappedTeamName}
+                getDisplayTeamName={getMappedTeamName} // Corrected prop name
                 historicalChampions={historicalChampions}
               />
             )}
             {activeTab === TABS.LEAGUE_HISTORY && (
               <LeagueHistory
                 historicalMatchups={historicalMatchups}
-                getMappedTeamName={getMappedTeamName}
+                getDisplayTeamName={getMappedTeamName} // Corrected prop name
               />
             )}
             {activeTab === TABS.RECORD_BOOK && (
               <RecordBook
                 historicalMatchups={historicalMatchups}
-                getMappedTeamName={getMappedTeamName}
+                getDisplayTeamName={getMappedTeamName} // Corrected prop name
               />
             )}
             {activeTab === TABS.HEAD_TO_HEAD && (
