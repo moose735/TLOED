@@ -396,7 +396,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
       {/* Overall Stats */}
       <section className="mb-8">
         <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Overall Career Stats</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6"> {/* Updated grid for desktop */}
           <StatCard title="Total Wins" value={teamOverallStats.totalWins} rank={teamOverallStats.winRank} />
           <StatCard title="Win Percentage" value={formatPercentage((teamOverallStats.totalWins + 0.5 * teamOverallStats.totalTies) / teamOverallStats.totalGamesPlayed)} rank={teamOverallStats.winPercentageRank} />
           <StatCard title="Total Points For" value={formatScore(teamOverallStats.totalPointsFor)} rank={teamOverallStats.pointsForRank} />
@@ -463,8 +463,8 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
 const StatCard = ({ title, value, rank }) => ( // Added rank prop
   <div className="bg-blue-50 p-2 rounded-lg shadow-sm flex flex-col items-center justify-center text-center border border-blue-200">
     {rank && rank !== 'N/A' && <p className="text-2xl font-bold text-blue-700">{rank}</p>} {/* Larger font for rank */}
-    <p className="text-sm font-semibold text-blue-800">
-      {title} (<span className="text-base font-bold text-gray-800">{value}</span>) {/* Value in parenthesis, next to title */}
+    <p className="text-sm font-semibold text-blue-800"> {/* Set to text-sm */}
+      {title} (<span className="font-bold text-gray-800">{value}</span>) {/* Removed text-base here for consistency */}
     </p>
   </div>
 );
