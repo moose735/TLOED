@@ -211,7 +211,7 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
   // Determine the number of columns for the colSpan
   const numberOfSeasonalColumns = 9; // Rank, Team, Season, Season DPR, Win %, Record, Points Avg, Highest Points, Lowest Points
 
-  // Initialize actualRank here, outside the JSX, so it doesn't render a 0
+  // Initialize actualRank here, within the component's render function, but outside JSX
   let actualRank = 0;
 
   return (
@@ -286,11 +286,10 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                     </tr>
                   </thead>
                   <tbody>
-                    {/* Move actualRank initialization outside the JSX */}
-                    {
-                      (actualRank = 0) // This line will still execute, but not render directly into the DOM as a child of tbody
-                    }
+                    {/* The initialization of actualRank needs to be here, but not rendered directly */}
                     {displayedSeasonalDPRData.map((data) => {
+                      // This conditional block is crucial. It's executed for each item in the map.
+                      // `actualRank` is outside the map, so its value persists across iterations.
                       if (!data.isAverageRow) {
                         actualRank++; // Increment rank only for non-average rows
                       }
