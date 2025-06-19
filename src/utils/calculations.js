@@ -129,7 +129,7 @@ const calculateLuckRating = (historicalMatchups, teamName, year, weeklyGameScore
  * @param {number} year - The year.
  * @param {Object} weeklyGameScoresByYearAndWeek - Object containing all weekly scores.
  * @returns {number} The all-play win percentage.
-*/
+ */
 const calculateAllPlayWinPercentage = (teamName, year, weeklyGameScoresByYearAndWeek) => {
     let allPlayWinsSeason = 0;
     let allPlayLossesSeason = 0;
@@ -412,6 +412,8 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
                 isPointsRunnerUp: false, // Initialize for points runner-up medal
                 isThirdPlacePoints: false, // Initialize for third place points medal
                 isPlayoffTeam: stats.isPlayoffTeam, // Pass the calculated playoff flag
+                rank: 'N/A', // Initialize rank
+                pointsRank: 'N/A', // Initialize points rank
             };
         });
 
@@ -427,7 +429,7 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
             }
         });
 
-        // --- RANK CALCULATION LOGIC ---
+        // --- RANK CALCULATION LOGIC (Overall Finish) ---
         // Prepare all teams for ranking, including those with 0 games
         const allTeamsInSeasonForRanking = Object.keys(seasonalMetrics[year]).map(team => ({
             teamName: team, // Ensure teamName is available here
@@ -486,26 +488,23 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
             .filter(teamStats => typeof teamStats.pointsFor === 'number' && !isNaN(teamStats.pointsFor))
             .sort((a, b) => b.pointsFor - a.pointsFor);
 
+        // Assign points ranks
         if (teamsSortedByPoints.length > 0) {
-            seasonalMetrics[year][teamsSortedByPoints[0].teamName].isPointsChampion = true; // Gold medal
-        }
-        if (teamsSortedByPoints.length > 1) {
-            // Handle ties for 2nd place in points
-            const secondHighestPoints = teamsSortedByPoints[1].pointsFor;
-            teamsSortedByPoints.forEach((teamStats, index) => {
-                if (index === 1 || (index > 1 && teamStats.pointsFor === secondHighestPoints)) {
-                    seasonalMetrics[year][teamStats.teamName].isPointsRunnerUp = true; // Silver medal
+            let currentRank = 1;
+            for (let i = 0; i < teamsSortedByPoints.length; i++) {
+                const teamStats = teamsSortedByPoints[i];
+                if (i > 0 && teamStats.pointsFor < teamsSortedByPoints[i - 1].pointsFor) {
+                    currentRank = i + 1;
                 }
-            });
-        }
-        if (teamsSortedByPoints.length > 2) {
-            // Handle ties for 3rd place in points
-            const thirdHighestPoints = teamsSortedByPoints[2].pointsFor;
-            teamsSortedByPoints.forEach((teamStats, index) => {
-                if (index === 2 || (index > 2 && teamStats.pointsFor === thirdHighestPoints)) {
-                    seasonalMetrics[year][teamStats.teamName].isThirdPlacePoints = true; // Bronze medal
-                }
-            });
+                seasonalMetrics[year][teamStats.teamName].pointsRank = currentRank;
+
+                // Set points trophy flags
+                // These were handled by the medal logic which is already implemented
+                // Leaving for future reference if individual flags are needed.
+                // if (currentRank === 1) seasonalMetrics[year][teamStats.teamName].isPointsChampion = true;
+                // else if (currentRank === 2) seasonalMetrics[year][teamStats.teamName].isPointsRunnerUp = true;
+                // else if (currentRank === 3) seasonalMetrics[year][teamStats.teamName].isThirdPlacePoints = true;
+            }
         }
         // --- END POINTS RANKING LOGIC ---
     });
