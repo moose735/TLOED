@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 // Import the new betting calculations
 import { calculateMoneylineOdds, calculateOverUnder, getPlayerMetricsForYear } from '../utils/bettingCalculations';
 // Import calculateAllLeagueMetrics to get seasonal DPR and average score
-import { calculateAllLeagueMetrics } => '../utils/calculations'; // Assuming this provides seasonalMetrics
+import { calculateAllLeagueMetrics } from '../utils/calculations'; // Assuming this provides seasonalMetrics
 
 const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => { // Accept props
   const [weeklyData, setWeeklyData] = useState([]);
