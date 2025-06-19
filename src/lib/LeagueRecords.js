@@ -25,7 +25,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     // First pass to aggregate basic seasonal data for counts and seasonal all-play averages
     Object.keys(seasonalMetrics).forEach(year => {
       Object.keys(seasonalMetrics[year]).forEach(team => {
-        const seasonData = seasonalMetrics[year][team];
+        const seasonData = seasonalMetrics[year][year][team]; // Corrected: Access team data within the specific year
 
         if (!aggregatedCareerStats[team]) {
           aggregatedCareerStats[team] = {
@@ -417,7 +417,8 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     return (
       <>
         <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{label}</td>
-        <td className="py-2 px-3 text-sm text-gray-800">{formatter(record.value)}</td>
+        {/* Added text-right for numerical values */}
+        <td className="py-2 px-3 text-sm text-gray-800 text-right">{formatter(record.value)}</td>
         <td className="py-2 px-3 text-sm text-gray-700">
           {record.entries.map((entry, idx) => (
             <span key={idx} className="block">{entry.team}</span>
@@ -459,7 +460,8 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
             <thead className="bg-blue-600 text-white">
               <tr>
                 <th className="py-2 px-3 text-left text-xs font-semibold uppercase tracking-wider">Record</th>
-                <th className="py-2 px-3 text-left text-xs font-semibold uppercase tracking-wider">Value</th>
+                {/* Aligned 'Value' header to the right */}
+                <th className="py-2 px-3 text-right text-xs font-semibold uppercase tracking-wider">Value</th>
                 <th className="py-2 px-3 text-left text-xs font-semibold uppercase tracking-wider">Team(s)</th>
               </tr>
             </thead>
