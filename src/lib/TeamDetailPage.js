@@ -28,7 +28,7 @@ const formatDPR = (value) => {
 };
 
 
-const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, historicalChampions }) => {
+const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => { // Removed historicalChampions
   const [teamOverallStats, setTeamOverallStats] = useState(null);
   const [teamSeasonHistory, setTeamSeasonHistory] = useState([]);
   const [loadingStats, setLoadingStats] = useState(true);
@@ -49,17 +49,14 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
       totalGamesPlayed: 0,
       overallTopScoreWeeksCount: 0, // New: Total count of weekly top scores
       playoffAppearances: new Set(),
-      championships: 0,
+      championships: 0, // Now derived from seasonalMetrics
       avgDPR: 0, // Career average DPR
       totalDPRSum: 0, // To calculate average
       seasonsWithDPRData: 0, // To count seasons with valid DPR for average
     };
 
-    const seasonalData = {}; // { year: { wins, losses, ties, pointsFor, pointsAgainst, luckRating, adjustedDPR, allPlayWinPercentage, weeklyScores: [] } }
+    const seasonalData = {};
     
-    // No longer need allTeamScores for the overall top 3, now we sum counts from seasonalMetrics
-    // const allTeamScores = []; 
-
     const completedSeasons = new Set();
     historicalMatchups.forEach(match => {
         if (match.finalSeedingGame === 1 || match.finalSeedingGame === '1') {
@@ -99,14 +96,6 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
       const opponentScore = teamIsTeam1 ? team2Score : team1Score;
       const isTie = team1Score === team2Score;
 
-      // No longer accumulating allTeamScores here for the overall top 3 list
-      // allTeamScores.push({
-      //    value: currentTeamScore,
-      //    matchup: `${displayTeam1} vs ${displayTeam2}`,
-      //    year: year,
-      //    week: week,
-      // });
-
       if (!(match.pointsOnlyBye === true || match.pointsOnlyBye === 'true')) {
           overallStats.totalGamesPlayed++;
           seasonalData[year][teamName].gamesPlayed++;
@@ -136,11 +125,6 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
       }
     });
 
-    // Remove top 3 weekly scores calculation as it's replaced by overallTopScoreWeeksCount
-    // allTeamScores.sort((a, b) => b.value - a.value);
-    // overallStats.weeklyTopScores = allTeamScores.slice(0, 3);
-
-
     const { seasonalMetrics } = calculateAllLeagueMetrics(historicalMatchups, getMappedTeamName);
 
     const compiledSeasonHistory = [];
@@ -155,14 +139,16 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
 
         compiledSeasonHistory.push({
           year: year,
-          // Add icons for achievements
+          // Add icons for achievements based on calculated metrics
           team: (
             <span>
               {seasonTeamStats.teamName}
-              {metricsForSeason.isChampion && <span title="Champion" style={{ marginLeft: '5px', color: 'gold' }}>🏆</span>}
-              {metricsForSeason.isRunnerUp && <span title="Runner-Up" style={{ marginLeft: '5px', color: 'silver' }}>🥈</span>}
-              {metricsForSeason.isThirdPlace && <span title="Third Place" style={{ marginLeft: '5px', color: '#cd7f32' }}>🥉</span>}
-              {metricsForSeason.isPointsChampion && <span title="Points Champion" style={{ marginLeft: '5px', color: 'red' }}>⭐</span>}
+              {metricsForSeason.isChampion && <span title="League Champion" style={{ marginLeft: '5px', color: 'gold' }}>🏆</span>}
+              {metricsForSeason.isRunnerUp && <span title="League Runner-Up" style={{ marginLeft: '5px', color: 'silver' }}>🥈</span>}
+              {metricsForSeason.isThirdPlace && <span title="League Third Place" style={{ marginLeft: '5px', color: '#cd7f32' }}>🥉</span>}
+              {metricsForSeason.isPointsChampion && <span title="Points Champion" style={{ marginLeft: '5px', color: 'gold' }}>🥇</span>}
+              {metricsForSeason.isPointsRunnerUp && <span title="2nd Place Total Points" style={{ marginLeft: '5px', color: 'silver' }}>🥈</span>}
+              {metricsForSeason.isThirdPlacePoints && <span title="3rd Place Total Points" style={{ marginLeft: '5px', color: '#cd7f32' }}>🥉</span>}
             </span>
           ),
           wins: seasonTeamStats.wins,
@@ -173,7 +159,6 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
           luckRating: metricsForSeason.luckRating,
           adjustedDPR: metricsForSeason.adjustedDPR,
           allPlayWinPercentage: metricsForSeason.allPlayWinPercentage,
-          // Removed topScores from here as per user request to not have it per year
           winPercentage: seasonWinPercentage,
           finish: metricsForSeason.rank ? `${metricsForSeason.rank}${getOrdinalSuffix(metricsForSeason.rank)}` : 'N/A', // Use rank from seasonalMetrics
         });
@@ -187,6 +172,11 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
             overallStats.totalDPRSum += metricsForSeason.adjustedDPR;
             overallStats.seasonsWithDPRData++;
         }
+
+        // Sum up championships based on seasonalMetrics.isChampion
+        if (metricsForSeason.isChampion) {
+            overallStats.championships++;
+        }
       }
     });
 
@@ -196,15 +186,10 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
         overallStats.avgDPR = 0;
     }
 
-    overallStats.championships = historicalChampions.filter(champ =>
-      getMappedTeamName(String(champ.champion || '').trim()) === teamName &&
-      completedSeasons.has(parseInt(champ.year))
-    ).length;
-
     setTeamOverallStats(overallStats);
     setTeamSeasonHistory(compiledSeasonHistory.sort((a, b) => b.year - a.year)); // Sort by year descending
     setLoadingStats(false);
-  }, [teamName, historicalMatchups, getMappedTeamName, historicalChampions]);
+  }, [teamName, historicalMatchups, getMappedTeamName]); // Removed historicalChampions from dependency array
 
 
   if (loadingStats) {
