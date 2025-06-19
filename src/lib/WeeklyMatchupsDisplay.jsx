@@ -1,6 +1,6 @@
 // TLOED/src/lib/WeeklyMatchupsDisplay.jsx
 import React, { useState, useEffect, useMemo } from 'react';
-// Import the new betting calculations
+// Import the new betting calculation
 import {
   calculateMoneylineOdds,
   calculateOverUnder,
