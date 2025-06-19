@@ -51,10 +51,10 @@ const decimalToAmericanOdds = (decimalOdds) => {
  *
  * @param {number} player1WinProb - Calculated win probability of Player 1 (between 0 and 1).
  * @param {number} player2WinProb - Calculated win probability of Player 2 (between 0 and 1).
- * @param {number} [overround=0.045] - The bookmaker's profit margin (e.g., 0.045 for ~4.5% overround, aiming for -120/+100).
+ * @param {number} [overround=0.0909] - The bookmaker's profit margin (e.g., 0.0909 for ~9.09% overround, resulting in -120/-120 for 50/50).
  * @returns {{player1Odds: string, player2Odds: string}} Object with American moneyline odds for both players.
  */
-export const calculateMoneylineOdds = (player1WinProb, player2WinProb, overround = 0.045) => {
+export const calculateMoneylineOdds = (player1WinProb, player2WinProb, overround = 0.0909) => {
   // Validate input probabilities
   if (typeof player1WinProb !== 'number' || isNaN(player1WinProb) || player1WinProb < 0 || player1WinProb > 1 ||
       typeof player2WinProb !== 'number' || isNaN(player2WinProb) || player2WinProb < 0 || player2WinProb > 1) {
@@ -66,12 +66,12 @@ export const calculateMoneylineOdds = (player1WinProb, player2WinProb, overround
   let normalizedProb1 = totalProb > 0 ? player1WinProb / totalProb : 0.5;
   let normalizedProb2 = totalProb > 0 ? player2WinProb / totalProb : 0.5;
 
-  // Calculate fair decimal odds
+  // Apply the overround by adjusting the fair decimal odds.
+  // Fair Decimal Odds = 1 / Probability
+  // Vigged Decimal Odds = Fair Decimal Odds * (1 + Overround)
   const fairDecimalOdds1 = normalizedProb1 > 0 ? (1 / normalizedProb1) : Infinity;
   const fairDecimalOdds2 = normalizedProb2 > 0 ? (1 / normalizedProb2) : Infinity;
 
-  // Apply overround: Multiply fair decimal odds by (1 + overround)
-  // This increases the odds for the bettor (worse payout), creating the book's edge.
   const viggedDecimalOdds1 = fairDecimalOdds1 * (1 + overround);
   const viggedDecimalOdds2 = fairDecimalOdds2 * (1 + overround);
 
