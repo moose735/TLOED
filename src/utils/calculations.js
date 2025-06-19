@@ -488,7 +488,7 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
             .filter(teamStats => typeof teamStats.pointsFor === 'number' && !isNaN(teamStats.pointsFor))
             .sort((a, b) => b.pointsFor - a.pointsFor);
 
-        // Assign points ranks
+        // Assign points ranks and set medal flags
         if (teamsSortedByPoints.length > 0) {
             let currentRank = 1;
             for (let i = 0; i < teamsSortedByPoints.length; i++) {
@@ -499,11 +499,13 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
                 seasonalMetrics[year][teamStats.teamName].pointsRank = currentRank;
 
                 // Set points trophy flags
-                // These were handled by the medal logic which is already implemented
-                // Leaving for future reference if individual flags are needed.
-                // if (currentRank === 1) seasonalMetrics[year][teamStats.teamName].isPointsChampion = true;
-                // else if (currentRank === 2) seasonalMetrics[year][teamStats.teamName].isPointsRunnerUp = true;
-                // else if (currentRank === 3) seasonalMetrics[year][teamStats.teamName].isThirdPlacePoints = true;
+                if (currentRank === 1) {
+                    seasonalMetrics[year][teamStats.teamName].isPointsChampion = true;
+                } else if (currentRank === 2) {
+                    seasonalMetrics[year][teamStats.teamName].isPointsRunnerUp = true;
+                } else if (currentRank === 3) {
+                    seasonalMetrics[year][teamStats.teamName].isThirdPlacePoints = true;
+                }
             }
         }
         // --- END POINTS RANKING LOGIC ---
