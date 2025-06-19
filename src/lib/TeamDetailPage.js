@@ -101,10 +101,10 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
 
       // No longer accumulating allTeamScores here for the overall top 3 list
       // allTeamScores.push({
-      //   value: currentTeamScore,
-      //   matchup: `${displayTeam1} vs ${displayTeam2}`,
-      //   year: year,
-      //   week: week,
+      //    value: currentTeamScore,
+      //    matchup: `${displayTeam1} vs ${displayTeam2}`,
+      //    year: year,
+      //    week: week,
       // });
 
       if (!(match.pointsOnlyBye === true || match.pointsOnlyBye === 'true')) {
