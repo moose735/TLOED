@@ -10,6 +10,24 @@ const getOrdinalSuffix = (n) => {
   return (s[v - 20] || s[v] || s[0]);
 };
 
+// Formatting functions moved outside the component for accessibility
+const formatScore = (score) => {
+  return typeof score === 'number' ? score.toFixed(2) : 'N/A';
+};
+
+const formatPercentage = (value) => {
+  return typeof value === 'number' ? `${(value * 100).toFixed(1)}%` : 'N/A';
+};
+
+const formatLuckRating = (value) => {
+  return typeof value === 'number' ? value.toFixed(2) : 'N/A';
+};
+
+const formatDPR = (value) => {
+  return typeof value === 'number' ? value.toFixed(3) : 'N/A';
+};
+
+
 const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, historicalChampions }) => {
   const [teamOverallStats, setTeamOverallStats] = useState(null);
   const [teamSeasonHistory, setTeamSeasonHistory] = useState([]);
@@ -169,19 +187,6 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
     setTeamSeasonHistory(compiledSeasonHistory.sort((a, b) => b.year - a.year)); // Sort by year descending
     setLoadingStats(false);
   }, [teamName, historicalMatchups, getMappedTeamName, historicalChampions]);
-
-
-  const formatScore = (score) => {
-    return typeof score === 'number' ? score.toFixed(2) : 'N/A';
-  };
-
-  const formatPercentage = (value) => {
-    return typeof value === 'number' ? `${(value * 100).toFixed(1)}%` : 'N/A';
-  };
-
-  const formatDPR = (value) => {
-    return typeof value === 'number' ? value.toFixed(3) : 'N/A';
-  };
 
 
   if (loadingStats) {
