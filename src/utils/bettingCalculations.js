@@ -32,10 +32,10 @@ const probToAmericanOdds = (probability) => {
  *
  * @param {number} player1DPR - Adjusted DPR of Player 1.
  * @param {number} player2DPR - Adjusted DPR of Player 2.
- * @param {number} [overround=0.05] - The bookmaker's profit margin (e.g., 0.05 for 5% overround).
+ * @param {number} [overround=0.20] - The bookmaker's profit margin (e.g., 0.20 for 20% overround).
  * @returns {{player1Odds: string, player2Odds: string}} Object with American moneyline odds for both players.
  */
-export const calculateMoneylineOdds = (player1DPR, player2DPR, overround = 0.05) => {
+export const calculateMoneylineOdds = (player1DPR, player2DPR, overround = 0.20) => {
   if (player1DPR <= 0 && player2DPR <= 0) {
     // Handle cases where both DPRs are zero or negative, indicating no data or invalid data.
     // In such a scenario, we can't reliably calculate odds, so return a default or error indicator.
@@ -48,7 +48,7 @@ export const calculateMoneylineOdds = (player1DPR, player2DPR, overround = 0.05)
   let prob2 = totalDPR > 0 ? player2DPR / totalDPR : 0.5;
 
   // Apply overround (vig) to the probabilities
-  // The sum of implied probabilities will be > 1.0 (e.g., 1.05 for 5% overround)
+  // The sum of implied probabilities will be > 1.0 (e.g., 1.20 for 20% overround)
   const adjustedProb1 = prob1 * (1 + overround);
   const adjustedProb2 = prob2 * (1 + overround);
 
