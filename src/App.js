@@ -13,6 +13,7 @@ import DPRAnalysis from './lib/DPRAnalysis';
 import LuckRatingAnalysis from './lib/LuckRatingAnalysis';
 import TeamDetailPage from './lib/TeamDetailPage';
 import Head2HeadGrid from './lib/Head2HeadGrid'; // Stays for its own tab
+import WeeklyMatchupsDisplay from './lib/WeeklyMatchupsDisplay'; // Import the new component
 
 
 // Define the available tabs and their categories for the dropdown
@@ -24,6 +25,7 @@ const NAV_CATEGORIES = {
       { label: 'League History', tab: 'leagueHistory' }, // Now points to LeagueHistory
       { label: 'Record Book', tab: 'recordBook' },
       { label: 'Head-to-Head', tab: 'headToHead' }, // Separate tab for Head2HeadGrid
+      { label: 'Weekly Matchups', tab: 'weeklyMatchups' }, // New: Weekly Matchups tab
       { label: 'DPR Analysis', tab: 'dprAnalysis' },
       { label: 'Luck Rating', tab: 'luckRating' },
     ]
@@ -40,6 +42,7 @@ const TABS = {
   LEAGUE_HISTORY: 'leagueHistory', // Constant updated for LeagueHistory
   RECORD_BOOK: 'recordBook',
   HEAD_TO_HEAD: 'headToHead',
+  WEEKLY_MATCHUPS: 'weeklyMatchups', // New: Weekly Matchups constant
   DPR_ANALYSIS: 'dprAnalysis',
   LUCK_RATING: 'luckRating',
   TEAM_DETAIL: 'teamDetail',
@@ -124,7 +127,7 @@ const App = () => {
         NAV_CATEGORIES.TEAMS.subTabs = uniqueTeams.map(team => ({
           label: team,
           tab: TABS.TEAM_DETAIL, // All team links go to the team detail tab
-          teamName: team,        // Pass the team name for rendering
+          teamName: team,         // Pass the team name for rendering
         }));
 
       } catch (error) {
@@ -174,7 +177,7 @@ const App = () => {
           <div className="relative group">
             <button className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none flex items-center transition-colors duration-200">
               {NAV_CATEGORIES.LEAGUE_DATA.label}
-              <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)">
+              <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
               </svg>
             </button>
@@ -196,7 +199,7 @@ const App = () => {
             <div className="relative group">
               <button className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none flex items-center transition-colors duration-200">
                 {NAV_CATEGORIES.TEAMS.label}
-                <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)">
+                <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
                 </svg>
               </button>
@@ -222,7 +225,7 @@ const App = () => {
             className="text-gray-800 focus:outline-none p-2 rounded-md hover:bg-gray-100 transition-colors duration-200"
             aria-label="Toggle mobile menu"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7"></path>
             </svg>
           </button>
@@ -239,7 +242,7 @@ const App = () => {
               className="text-gray-800 focus:outline-none p-2 rounded-md hover:bg-gray-100 transition-colors duration-200"
               aria-label="Close mobile menu"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
               </svg>
             </button>
@@ -260,7 +263,7 @@ const App = () => {
                 onClick={() => toggleSubMenu('LEAGUE_DATA')}
               >
                 {NAV_CATEGORIES.LEAGUE_DATA.label}
-                <svg className={`w-5 h-5 transition-transform duration-200 ${openSubMenu === 'LEAGUE_DATA' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)">
+                <svg className={`w-5 h-5 transition-transform duration-200 ${openSubMenu === 'LEAGUE_DATA' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
                 </svg>
               </button>
@@ -288,7 +291,7 @@ const App = () => {
                   onClick={() => toggleSubMenu('TEAMS')}
                 >
                   {NAV_CATEGORIES.TEAMS.label}
-                  <svg className={`w-5 h-5 transition-transform duration-200 ${openSubMenu === 'TEAMS' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)">
+                  <svg className={`w-5 h-5 transition-transform duration-200 ${openSubMenu === 'TEAMS' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
                   </svg>
                 </button>
@@ -315,9 +318,9 @@ const App = () => {
 
       <main className="flex-grow w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8 mt-4"> {/* Adjusted for centering and max-width */}
         {loadingHistoricalData ? (
-          // Enhanced Loading Spinner
+          {/* Enhanced Loading Spinner */}
           <div className="flex flex-col items-center justify-center min-h-[200px] text-blue-600">
-            <svg className="animate-spin h-10 w-10 text-blue-500 mb-3" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" fill="none" viewBox="0 0 24 24">
+            <svg className="animate-spin h-10 w-10 text-blue-500 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
@@ -362,6 +365,9 @@ const App = () => {
                 getDisplayTeamName={getMappedTeamName}
               />
             )}
+            {activeTab === TABS.WEEKLY_MATCHUPS && ( // New: Render WeeklyMatchupsDisplay
+              <WeeklyMatchupsDisplay />
+            )}
             {activeTab === TABS.DPR_ANALYSIS && (
               <DPRAnalysis
                 historicalMatchups={historicalMatchups}
@@ -375,8 +381,8 @@ const App = () => {
               />
             )}
 
-         {/* Render TeamDetailPage when selected */}
-{activeTab === TABS.TEAM_DETAIL && selectedTeam && (
+           {/* Render TeamDetailPage when selected */}
+           {activeTab === TABS.TEAM_DETAIL && selectedTeam && (
               <TeamDetailPage
                 teamName={selectedTeam}
                 historicalMatchups={historicalMatchups}
@@ -391,7 +397,7 @@ const App = () => {
         <p>This site displays league data powered by Google Apps Script.</p>
         <p className="mt-2">
           For Apps Script deployment instructions, visit:{" "}
-          <a href="[https://developers.google.com/apps-script/guides/web](https://developers.google.com/apps-script/guides/web)" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+          <a href="https://developers.google.com/apps-script/guides/web" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
             Google Apps Script Web Apps Guide
           </a>
         </p>
