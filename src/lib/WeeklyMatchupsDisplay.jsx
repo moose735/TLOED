@@ -21,6 +21,16 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => { /
 
   const JSON_DATA_URL = 'https://script.google.com/macros/s/AKfycbzCdSKv-pJSyewZWljTIlyacgb3hBqwthsKGQjCRD6-zJaqX5lbFvMRFckEG-Kb_cMf/exec';
 
+  // --- DEBUGGING LOGS START ---
+  useEffect(() => {
+    console.log("WeeklyMatchupsDisplay: historicalMatchups prop changed:", historicalMatchups);
+    if (!historicalMatchups || historicalMatchups.length === 0) {
+      console.warn("WeeklyMatchupsDisplay: historicalMatchups is empty or null.");
+    }
+  }, [historicalMatchups]);
+  // --- DEBUGGING LOGS END ---
+
+
   useEffect(() => {
     const fetchWeeklyData = async () => {
       try {
@@ -30,6 +40,7 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => { /
         }
         const data = await response.json();
         setWeeklyData(data);
+        console.log("WeeklyMatchupsDisplay: Fetched weekly schedule data:", data); // Log fetched schedule
       } catch (e) {
         console.error("Error fetching weekly data:", e);
         setError(e.message);
@@ -46,14 +57,20 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => { /
   const { seasonalMetrics } = useMemo(() => {
     // Only calculate if historicalMatchups is available
     if (historicalMatchups && historicalMatchups.length > 0) {
-      return calculateAllLeagueMetrics(historicalMatchups, getMappedTeamName);
+      const metrics = calculateAllLeagueMetrics(historicalMatchups, getMappedTeamName);
+      console.log("WeeklyMatchupsDisplay: Calculated seasonalMetrics:", metrics.seasonalMetrics); // Log calculated seasonal metrics
+      return metrics;
     }
+    console.warn("WeeklyMatchupsDisplay: seasonalMetrics not calculated because historicalMatchups is empty.");
     return { seasonalMetrics: {} }; // Default empty if no historical matchups
   }, [historicalMatchups, getMappedTeamName]);
 
 
   const processedWeeklyMatchups = useMemo(() => {
-    if (!weeklyData || weeklyData.length === 0 || Object.keys(seasonalMetrics).length === 0) return {};
+    if (!weeklyData || weeklyData.length === 0 || Object.keys(seasonalMetrics).length === 0) {
+      console.warn("WeeklyMatchupsDisplay: Skipping matchup processing due to missing weeklyData or seasonalMetrics.");
+      return {};
+    }
 
     const matchupsByWeek = {};
     const weekHeaders = Object.keys(weeklyData[0] || {}).filter(key => key.startsWith('Week_'));
@@ -100,16 +117,19 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => { /
 
                 // Calculate the average scoring difference between the two teams for win probability
                 const p1FutureOpponentAvgScoringDiff = calculateFutureOpponentAverageScoringDifference(player1Name, player2Name, currentYear, seasonalMetrics);
-                const p2FutureOpponentAvgScoringDiff = calculateFutureOpponentAverageScoringDifference(player2Name, player1Name, currentYear, seasonalMetrics); // This will be the negative of p1's diff if symmetric
+                // The opponent's diff should be the negative of the player's diff for symmetric opposition
+                const p2FutureOpponentAvgScoringDiff = -p1FutureOpponentAvgScoringDiff;
 
                 // Use the new formula for win percentage projection
                 const p1WinProb = calculateWeeklyWinPercentageProjection(p1FutureOpponentAvgScoringDiff, p1ErrorCoeff);
                 // Ensure p2WinProb is (1 - p1WinProb) to represent a two-outcome event for moneyline
-                const p2WinProb = 1 - p1WinProb; // Or calculate it symmetrically: calculateWeeklyWinPercentageProjection(p2FutureOpponentAvgScoringDiff, p2ErrorCoeff);
+                const p2WinProb = 1 - p1WinProb;
 
                 // Use the calculated win probabilities for moneyline odds
                 moneylineOdds = calculateMoneylineOdds(p1WinProb, p2WinProb);
               }
+            } else {
+                console.warn(`WeeklyMatchupsDisplay: Missing metrics for ${player1Name} or ${player2Name} in Week ${weekNumber} for year ${currentYear}. Cannot calculate odds/O/U.`);
             }
 
             matchupsByWeek[`Week ${weekNumber}`].push({
@@ -123,6 +143,7 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => { /
         }
       });
     });
+    console.log("WeeklyMatchupsDisplay: Processed weekly matchups with odds:", matchupsByWeek); // Log final processed data
     return matchupsByWeek;
   }, [weeklyData, seasonalMetrics, getMappedTeamName]);
 
