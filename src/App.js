@@ -375,7 +375,7 @@ const App = () => {
               />
             )}
 
-            /* Render TeamDetailPage when selected */
+         {/* Render TeamDetailPage when selected */}
 {activeTab === TABS.TEAM_DETAIL && selectedTeam && (
               <TeamDetailPage
                 teamName={selectedTeam}
