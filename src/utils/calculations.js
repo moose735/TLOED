@@ -199,7 +199,7 @@ const calculateTopScoreWeeksCount = (teamName, weeklyGameScoresByYearAndWeek, ye
  * @param {Array<Object>} historicalMatchups - The raw historical matchup data.
  * @param {Function} getMappedTeamName - Function to get mapped team names.
  * @returns {{seasonalMetrics: Object, careerDPRData: Array, weeklyGameScoresByYearAndWeek: Object}}
- * seasonalMetrics: { year: { teamName: { wins, losses, ties, pointsFor, pointsAgainst, averageScore, adjustedDPR, luckRating, allPlayWinPercentage, rank, topScoreWeeksCount, isChampion, isRunnerUp, isThirdPlace, isPointsChampion, isPointsRunnerUp, isThirdPlacePoints } } }
+ * seasonalMetrics: { year: { teamName: { wins, losses, ties, pointsFor, pointsAgainst, averageScore, adjustedDPR, luckRating, allPlayWinPercentage, rank, topScoreWeeksCount, isChampion, isRunnerUp, isThirdPlace, isPointsChampion, isPointsRunnerUp, isThirdPlacePoints, isPlayoffTeam } } }
  * careerDPRData: Array of { team, dpr, wins, losses, ties, pointsFor, pointsAgainst, averageScore, topScoreWeeksCount }
  */
 export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName) => {
@@ -262,7 +262,8 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
                     totalPointsFor: 0, pointsAgainst: 0,
                     wins: 0, losses: 0, ties: 0, totalGames: 0,
                     highScore: -Infinity, lowScore: Infinity,
-                    weeklyScores: []
+                    weeklyScores: [],
+                    isPlayoffTeam: false, // Initialize playoff status for the season
                 };
             }
             seasonalTeamStatsRaw[year][displayTeam1].totalPointsFor += team1Score;
@@ -301,6 +302,10 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
             seasonalTeamStatsRaw[year][displayTeam1].highScore = Math.max(seasonalTeamStatsRaw[year][displayTeam1].highScore, team1Score);
             seasonalTeamStatsRaw[year][displayTeam1].lowScore = Math.min(seasonalTeamStatsRaw[year][displayTeam1].lowScore, team1Score);
             seasonalTeamStatsRaw[year][displayTeam1].weeklyScores.push(team1Score);
+            // Mark as playoff team if it's a playoff match and not a bye
+            if ((match.playoffs === true || match.playoffs === 'true') && !(match.pointsOnlyBye === true || match.pointsOnlyBye === 'true')) {
+                seasonalTeamStatsRaw[year][displayTeam1].isPlayoffTeam = true;
+            }
         }
 
         // Initialize seasonal and career stats for team2 if not present
@@ -311,7 +316,8 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
                     totalPointsFor: 0, pointsAgainst: 0,
                     wins: 0, losses: 0, ties: 0, totalGames: 0,
                     highScore: -Infinity, lowScore: Infinity,
-                    weeklyScores: []
+                    weeklyScores: [],
+                    isPlayoffTeam: false, // Initialize playoff status for the season
                 };
             }
             seasonalTeamStatsRaw[year][displayTeam2].totalPointsFor += team2Score;
@@ -352,6 +358,10 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
             seasonalTeamStatsRaw[year][displayTeam2].highScore = Math.max(seasonalTeamStatsRaw[year][displayTeam2].highScore, team2Score);
             seasonalTeamStatsRaw[year][displayTeam2].lowScore = Math.min(seasonalTeamStatsRaw[year][displayTeam2].lowScore, team2Score);
             seasonalTeamStatsRaw[year][displayTeam2].weeklyScores.push(team2Score);
+            // Mark as playoff team if it's a playoff match and not a bye
+            if ((match.playoffs === true || match.playoffs === 'true') && !(match.pointsOnlyBye === true || match.pointsOnlyBye === 'true')) {
+                seasonalTeamStatsRaw[year][displayTeam2].isPlayoffTeam = true;
+            }
         }
     });
 
@@ -401,6 +411,7 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
                 isPointsChampion: false, // Initialize for points champion medal
                 isPointsRunnerUp: false, // Initialize for points runner-up medal
                 isThirdPlacePoints: false, // Initialize for third place points medal
+                isPlayoffTeam: stats.isPlayoffTeam, // Pass the calculated playoff flag
             };
         });
 
