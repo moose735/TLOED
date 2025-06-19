@@ -351,7 +351,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
   return (
     <div className="w-full bg-white p-8 rounded-lg shadow-md mt-8">
       <h2 className="text-3xl font-bold text-blue-700 mb-6 text-center border-b pb-3">
-        {teamName} - Team Profile
+        {teamName}
         <span className="block text-lg font-medium text-gray-600 mt-2">
           Record: {teamOverallStats.totalWins}-{teamOverallStats.totalLosses}-{teamOverallStats.totalTies} | Career DPR: {formatDPR(teamOverallStats.avgDPR)}
             {/* Display trophy and medal icons based on accumulated totals */}
