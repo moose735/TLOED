@@ -1,8 +1,6 @@
 // src/lib/MatchupHistory.js
 import React, { useState, useEffect, useCallback } from 'react';
-// Removed import of HISTORICAL_MATCHUPS_API_URL, as data is passed from App.js
 import Head2HeadGrid from './Head2HeadGrid';
-// Removed import of RecordBook
 
 // Helper function to get ordinal suffix (1st, 2nd, 3rd, 4th, etc.)
 const getOrdinalSuffix = (n) => {
@@ -27,11 +25,8 @@ const getFinalSeedingGamePurpose = (value) => {
 };
 
 
-// MatchupHistory now receives historicalMatchups, loading, and error as props
-const MatchupHistory = ({ historicalMatchups, loading, error, getMappedTeamName }) => {
-  // Removed internal historicalMatchups, loading, error states, as they are props now
-
-  // Removed seasonRecords state, as its data processing moved to SeasonRecords.js
+// MatchupHistory now receives historicalMatchups, loading, error, and careerDPRData as props
+const MatchupHistory = ({ historicalMatchups, loading, error, getMappedTeamName, careerDPRData }) => { // <--- ADD careerDPRData here
   const [championshipGames, setChampionshipGames] = useState([]);
 
   const getDisplayTeamName = useCallback((originalName) => {
@@ -42,12 +37,10 @@ const MatchupHistory = ({ historicalMatchups, loading, error, getMappedTeamName 
   // --- Data Processing (only for sections remaining in MatchupHistory, like championship games) ---
   useEffect(() => {
     if (!historicalMatchups || historicalMatchups.length === 0) {
-      // Removed setSeasonRecords({});
       setChampionshipGames([]);
       return;
     }
 
-    // Removed newSeasonRecords processing here
     const newChampionshipGames = [];
 
     historicalMatchups.forEach(match => {
@@ -112,14 +105,12 @@ const MatchupHistory = ({ historicalMatchups, loading, error, getMappedTeamName 
       return a.winnerPlace - b.winnerPlace;
     }));
 
-  }, [historicalMatchups, getDisplayTeamName]); // historicalMatchups is a prop now
+  }, [historicalMatchups, getDisplayTeamName]);
 
   const renderRecord = (record) => {
     if (!record) return '0-0-0';
     return `${record.wins || 0}-${record.losses || 0}-${record.ties || 0}`;
   };
-
-  // Removed sortedYears as seasonRecords state is gone
 
   return (
     <div className="w-full max-w-4xl bg-white p-8 rounded-lg shadow-md mt-8">
@@ -167,14 +158,13 @@ const MatchupHistory = ({ historicalMatchups, loading, error, getMappedTeamName 
             )}
           </section>
 
-          {/* Removed Season-by-Season Records from here */}
-
           {/* Head-to-Head Rivalries / Versus History section handled by Head2HeadGrid */}
           <section className="mb-8">
             <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Head-to-Head Rivalries</h3>
             <Head2HeadGrid
               historicalMatchups={historicalMatchups}
               getDisplayTeamName={getDisplayTeamName}
+              careerDPRData={careerDPRData} {/* <--- PASSED THE careerDPRData PROP HERE! */}
             />
           </section>
         </>
