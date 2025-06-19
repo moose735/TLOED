@@ -10,6 +10,14 @@ const getOrdinalSuffix = (n) => {
   return (s[v - 20] || s[v] || s[0]);
 };
 
+// Function to calculate rank for a given value among all values
+const calculateRank = (value, allValues, isHigherBetter = true) => {
+    if (value === null || typeof value === 'undefined' || isNaN(value)) return 'N/A';
+    const sortedValues = [...new Set(allValues.filter(v => v !== null && typeof v !== 'undefined' && !isNaN(v)))].sort((a, b) => isHigherBetter ? b - a : a - b);
+    const rank = sortedValues.indexOf(value) + 1;
+    return rank > 0 ? `${rank}${getOrdinalSuffix(rank)}` : 'N/A';
+};
+
 // Formatting functions moved outside the component for accessibility
 const formatScore = (score) => {
   return typeof score === 'number' ? score.toFixed(2) : 'N/A';
@@ -48,18 +56,24 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
       totalPointsFor: 0,
       totalGamesPlayed: 0,
       overallTopScoreWeeksCount: 0, // Total count of weekly top scores
-      playoffAppearances: new Set(),
-      championships: 0, // Now derived from seasonalMetrics
+      playoffAppearancesCount: 0, // Cumulative count
       avgDPR: 0, // Career average DPR
       totalDPRSum: 0, // To calculate average
       seasonsWithDPRData: 0, // To count seasons with valid DPR for average
-      // New cumulative award counts
+      // Cumulative award counts
       totalChampionships: 0,
       totalRunnerUps: 0,
       totalThirdPlaces: 0,
       totalPointsChampionships: 0,
       totalPointsRunnerUps: 0,
       totalThirdPlacePoints: 0,
+      // Ranks (will be populated later)
+      winRank: 'N/A',
+      winPercentageRank: 'N/A',
+      pointsForRank: 'N/A',
+      topScoreWeeksRank: 'N/A',
+      playoffRank: 'N/A',
+      championshipRank: 'N/A',
     };
 
     const seasonalData = {};
@@ -132,17 +146,119 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
       overallStats.totalPointsFor += currentTeamScore;
       seasonalData[year][teamName].pointsFor += currentTeamScore;
       seasonalData[year][teamName].pointsAgainst += opponentScore;
-
-      // Track playoff appearances
-      if ((match.playoffs === true || match.playoffs === 'true') && !(match.pointsOnlyBye === true || match.pointsOnlyBye === 'true')) {
-        overallStats.playoffAppearances.add(year);
-      }
     });
 
     // Calculate all league metrics including seasonal ranks and awards
     const { seasonalMetrics } = calculateAllLeagueMetrics(historicalMatchups, getMappedTeamName);
 
     const compiledSeasonHistory = [];
+    // Aggregate all teams' career stats for ranking purposes
+    const allTeamsAggregatedStats = {};
+    const allUniqueTeams = new Set();
+    historicalMatchups.forEach(match => {
+        allUniqueTeams.add(getMappedTeamName(String(match.team1 || '').trim()));
+        allUniqueTeams.add(getMappedTeamName(String(match.team2 || '').trim()));
+    });
+
+    allUniqueTeams.forEach(team => {
+        if (team === '') return; // Skip empty team names
+
+        let totalWins = 0;
+        let totalLosses = 0;
+        let totalTies = 0;
+        let totalPointsFor = 0;
+        let totalGamesPlayed = 0;
+        let careerChampionships = 0;
+        let careerPlayoffAppearancesCount = 0; // Sum of seasons with playoff appearances
+        let careerTopScoreWeeks = 0;
+        let careerTotalDPRSum = 0;
+        let careerSeasonsWithDPRData = 0;
+
+        // Iterate through all seasons to gather career data for this 'team'
+        Object.keys(seasonalMetrics).forEach(year => {
+            const teamMetrics = seasonalMetrics[year]?.[team];
+            if (teamMetrics && completedSeasons.has(parseInt(year))) { // Only count completed seasons
+                totalWins += teamMetrics.wins;
+                totalLosses += teamMetrics.losses;
+                totalTies += teamMetrics.ties;
+                totalPointsFor += teamMetrics.pointsFor;
+                totalGamesPlayed += teamMetrics.totalGames;
+
+                if (teamMetrics.isChampion) careerChampionships++;
+                if (teamMetrics.isPlayoffTeam) careerPlayoffAppearancesCount++; // Increment count if team made playoffs this season
+                if (typeof teamMetrics.topScoreWeeksCount === 'number') careerTopScoreWeeks += teamMetrics.topScoreWeeksCount;
+
+                if (teamMetrics.adjustedDPR !== 0) {
+                  careerTotalDPRSum += teamMetrics.adjustedDPR;
+                  careerSeasonsWithDPRData++;
+                }
+            }
+        });
+
+        allTeamsAggregatedStats[team] = {
+            wins: totalWins,
+            losses: totalLosses,
+            ties: totalTies,
+            pointsFor: totalPointsFor,
+            totalGamesPlayed: totalGamesPlayed,
+            winPercentage: totalGamesPlayed > 0 ? ((totalWins + 0.5 * totalTies) / totalGamesPlayed) : 0,
+            championships: careerChampionships,
+            playoffAppearancesCount: careerPlayoffAppearancesCount,
+            topScoreWeeksCount: careerTopScoreWeeks,
+            avgDPR: careerSeasonsWithDPRData > 0 ? careerTotalDPRSum / careerSeasonsWithDPRData : 0,
+        };
+    });
+
+    // Populate the selected team's overall stats and calculate ranks
+    const selectedTeamCareerStats = allTeamsAggregatedStats[teamName];
+    if (selectedTeamCareerStats) {
+        overallStats.totalWins = selectedTeamCareerStats.wins;
+        overallStats.totalLosses = selectedTeamCareerStats.losses;
+        overallStats.totalTies = selectedTeamCareerStats.ties;
+        overallStats.totalPointsFor = selectedTeamCareerStats.pointsFor;
+        overallStats.totalGamesPlayed = selectedTeamCareerStats.totalGamesPlayed;
+        overallStats.overallTopScoreWeeksCount = selectedTeamCareerStats.topScoreWeeksCount;
+        overallStats.avgDPR = selectedTeamCareerStats.avgDPR;
+        overallStats.totalChampionships = selectedTeamCareerStats.championships;
+        overallStats.playoffAppearancesCount = selectedTeamCareerStats.playoffAppearancesCount;
+
+        const allWins = Object.values(allTeamsAggregatedStats).map(t => t.wins);
+        const allWinPercentages = Object.values(allTeamsAggregatedStats).map(t => t.winPercentage);
+        const allPointsFor = Object.values(allTeamsAggregatedStats).map(t => t.pointsFor);
+        const allTopScoreWeeks = Object.values(allTeamsAggregatedStats).map(t => t.topScoreWeeksCount);
+        const allPlayoffAppearances = Object.values(allTeamsAggregatedStats).map(t => t.playoffAppearancesCount);
+        const allChampionships = Object.values(allTeamsAggregatedStats).map(t => t.championships);
+
+        overallStats.winRank = calculateRank(selectedTeamCareerStats.wins, allWins);
+        overallStats.winPercentageRank = calculateRank(selectedTeamCareerStats.winPercentage, allWinPercentages);
+        overallStats.pointsForRank = calculateRank(selectedTeamCareerStats.pointsFor, allPointsFor);
+        overallStats.topScoreWeeksRank = calculateRank(selectedTeamCareerStats.topScoreWeeksCount, allTopScoreWeeks);
+        overallStats.playoffRank = calculateRank(selectedTeamCareerStats.playoffAppearancesCount, allPlayoffAppearances);
+        overallStats.championshipRank = calculateRank(selectedTeamCareerStats.championships, allChampionships);
+
+        // Sum up other awards based on seasonalMetrics flags for the current team
+        Object.keys(seasonalMetrics).forEach(yearStr => {
+            const metricsForSeason = seasonalMetrics[yearStr]?.[teamName];
+            if (metricsForSeason && completedSeasons.has(parseInt(yearStr))) {
+                if (metricsForSeason.isRunnerUp) {
+                    overallStats.totalRunnerUps++;
+                }
+                if (metricsForSeason.isThirdPlace) {
+                    overallStats.totalThirdPlaces++;
+                }
+                if (metricsForSeason.isPointsChampion) {
+                    overallStats.totalPointsChampionships++;
+                }
+                if (metricsForSeason.isPointsRunnerUp) {
+                    overallStats.totalPointsRunnerUps++;
+                }
+                if (metricsForSeason.isThirdPlacePoints) {
+                    overallStats.totalThirdPlacePoints++;
+                }
+            }
+        });
+    }
+
     Object.keys(seasonalData).sort().forEach(yearStr => {
       const year = parseInt(yearStr);
       const seasonTeamStats = seasonalData[year][teamName];
@@ -155,8 +271,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
 
         compiledSeasonHistory.push({
           year: year,
-          // Removed individual season award icons from here as per user request
-          team: seasonTeamStats.teamName,
+          team: seasonTeamStats.teamName, // Keep this as plain team name for table
           wins: seasonTeamStats.wins,
           losses: seasonTeamStats.losses,
           ties: seasonTeamStats.ties,
@@ -168,44 +283,9 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
           winPercentage: seasonWinPercentage,
           finish: metricsForSeason.rank ? `${metricsForSeason.rank}${getOrdinalSuffix(metricsForSeason.rank)}` : 'N/A', // Use rank from seasonalMetrics
         });
-
-        // Sum up topScoreWeeksCount for overall total
-        if (typeof metricsForSeason.topScoreWeeksCount === 'number') {
-            overallStats.overallTopScoreWeeksCount += metricsForSeason.topScoreWeeksCount;
-        }
-
-        if (metricsForSeason.adjustedDPR !== 0) {
-            overallStats.totalDPRSum += metricsForSeason.adjustedDPR;
-            overallStats.seasonsWithDPRData++;
-        }
-
-        // Sum up championships and other awards based on seasonalMetrics flags
-        if (metricsForSeason.isChampion) {
-            overallStats.totalChampionships++;
-        }
-        if (metricsForSeason.isRunnerUp) {
-            overallStats.totalRunnerUps++;
-        }
-        if (metricsForSeason.isThirdPlace) {
-            overallStats.totalThirdPlaces++;
-        }
-        if (metricsForSeason.isPointsChampion) {
-            overallStats.totalPointsChampionships++;
-        }
-        if (metricsForSeason.isPointsRunnerUp) {
-            overallStats.totalPointsRunnerUps++;
-        }
-        if (metricsForSeason.isThirdPlacePoints) {
-            overallStats.totalThirdPlacePoints++;
-        }
       }
     });
 
-    if (overallStats.seasonsWithDPRData > 0) {
-      overallStats.avgDPR = overallStats.totalDPRSum / overallStats.seasonsWithDPRData;
-    } else {
-        overallStats.avgDPR = 0;
-    }
 
     setTeamOverallStats(overallStats); // Set the state variable here
     setTeamSeasonHistory(compiledSeasonHistory.sort((a, b) => b.year - a.year)); // Sort by year descending
@@ -239,38 +319,38 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
             {/* Display trophy and medal icons based on accumulated totals */}
             <div className="flex justify-center items-center gap-2 whitespace-nowrap mt-1">
                 {teamOverallStats.totalChampionships > 0 && (
-                  <span title={`${teamOverallStats.totalChampionships} Championship${teamOverallStats.totalChampionships === 1 ? '' : 's'}`} className="flex items-center space-x-1 whitespace-nowrap">
-                      <i className="fas fa-trophy text-yellow-500 text-lg"></i>
+                  <span title={`Sween Bowl Champion (${teamOverallStats.totalChampionships}x)`} className="flex items-center space-x-1 whitespace-nowrap">
+                      <i className="fas fa-trophy text-yellow-500 text-2xl"></i> {/* Made icons larger */}
                       <span className="text-xs font-medium">{teamOverallStats.totalChampionships}x</span>
                   </span>
                 )}
                 {teamOverallStats.totalRunnerUps > 0 && (
-                  <span title={`${teamOverallStats.totalRunnerUps} Runner-Up${teamOverallStats.totalRunnerUps === 1 ? '' : 's'}`} className="flex items-center space-x-1 whitespace-nowrap">
-                      <i className="fas fa-trophy text-gray-400 text-lg"></i>
+                  <span title={`Sween Bowl Runner-Up (${teamOverallStats.totalRunnerUps}x)`} className="flex items-center space-x-1 whitespace-nowrap">
+                      <i className="fas fa-trophy text-gray-400 text-2xl"></i> {/* Made icons larger */}
                       <span className="text-xs font-medium">{teamOverallStats.totalRunnerUps}x</span>
                   </span>
                 )}
                 {teamOverallStats.totalThirdPlaces > 0 && (
-                  <span title={`${teamOverallStats.totalThirdPlaces} 3rd Place Finish`} className="flex items-center space-x-1 whitespace-nowrap">
-                      <i className="fas fa-trophy text-amber-800 text-lg"></i>
+                  <span title={`3rd Place Finish (${teamOverallStats.totalThirdPlaces}x)`} className="flex items-center space-x-1 whitespace-nowrap">
+                      <i className="fas fa-trophy text-amber-800 text-2xl"></i> {/* Made icons larger */}
                       <span className="text-xs font-medium">{teamOverallStats.totalThirdPlaces}x</span>
                   </span>
                 )}
                 {teamOverallStats.totalPointsChampionships > 0 && (
-                  <span title={`${teamOverallStats.totalPointsChampionships} 1st Place - Points`} className="flex items-center space-x-1 whitespace-nowrap">
-                      <i className="fas fa-medal text-yellow-500 text-lg"></i>
+                  <span title={`1st Place - Points (${teamOverallStats.totalPointsChampionships}x)`} className="flex items-center space-x-1 whitespace-nowrap">
+                      <i className="fas fa-medal text-red-500 text-2xl"></i> {/* Made icons larger - used red for points champion as in LeagueHistory */}
                       <span className="text-xs font-medium">{teamOverallStats.totalPointsChampionships}x</span>
                   </span>
                 )}
                 {teamOverallStats.totalPointsRunnerUps > 0 && (
-                  <span title={`${teamOverallStats.totalPointsRunnerUps} 2nd Place - Points`} className="flex items-center space-x-1 whitespace-nowrap">
-                      <i className="fas fa-medal text-gray-400 text-lg"></i>
+                  <span title={`2nd Place - Points (${teamOverallStats.totalPointsRunnerUps}x)`} className="flex items-center space-x-1 whitespace-nowrap">
+                      <i className="fas fa-medal text-gray-400 text-2xl"></i> {/* Made icons larger */}
                       <span className="text-xs font-medium">{teamOverallStats.totalPointsRunnerUps}x</span>
                   </span>
                 )}
                 {teamOverallStats.totalThirdPlacePoints > 0 && (
-                  <span title={`${teamOverallStats.totalThirdPlacePoints} 3rd Place - Points`} className="flex items-center space-x-1 whitespace-nowrap">
-                      <i className="fas fa-medal text-amber-800 text-lg"></i>
+                  <span title={`3rd Place - Points (${teamOverallStats.totalThirdPlacePoints}x)`} className="flex items-center space-x-1 whitespace-nowrap">
+                      <i className="fas fa-medal text-amber-800 text-2xl"></i> {/* Made icons larger */}
                       <span className="text-xs font-medium">{teamOverallStats.totalThirdPlacePoints}x</span>
                   </span>
                 )}
@@ -282,9 +362,9 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
       <section className="mb-8">
         <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Overall Career Stats</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-          <StatCard title="Total Wins" value={teamOverallStats.totalWins} />
-          <StatCard title="Win Percentage" value={formatPercentage((teamOverallStats.totalWins + 0.5 * teamOverallStats.totalTies) / teamOverallStats.totalGamesPlayed)} />
-          <StatCard title="Total Points For" value={formatScore(teamOverallStats.totalPointsFor)} />
+          <StatCard title="Total Wins" value={teamOverallStats.totalWins} rank={teamOverallStats.winRank} />
+          <StatCard title="Win Percentage" value={formatPercentage((teamOverallStats.totalWins + 0.5 * teamOverallStats.totalTies) / teamOverallStats.totalGamesPlayed)} rank={teamOverallStats.winPercentageRank} />
+          <StatCard title="Total Points For" value={formatScore(teamOverallStats.totalPointsFor)} rank={teamOverallStats.pointsForRank} />
           <StatCard
             title="Weekly Top Scores"
             value={
@@ -292,9 +372,10 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
                 ? `${teamOverallStats.overallTopScoreWeeksCount} week${teamOverallStats.overallTopScoreWeeksCount === 1 ? '' : 's'}`
                 : 'N/A'
             }
+            rank={teamOverallStats.topScoreWeeksRank}
           />
-          <StatCard title="Playoff Appearances" value={teamOverallStats.playoffAppearances.size} />
-          <StatCard title="Championships" value={teamOverallStats.totalChampionships} />
+          <StatCard title="Playoff Appearances" value={teamOverallStats.playoffAppearancesCount} rank={teamOverallStats.playoffRank} />
+          <StatCard title="Championships" value={teamOverallStats.totalChampionships} rank={teamOverallStats.championshipRank} />
         </div>
       </section>
 
@@ -307,7 +388,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
               <thead className="bg-gray-50">
                 <tr>
                   <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Year</th>
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
+                  {/* Removed Team column header */}
                   <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record (W-L-T)</th>
                   <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Points For</th>
                   <th className="py-2 px-3 text-left text-xs font-semibold text-red-700 uppercase tracking-wider border-b border-gray-200">Points Against</th>
@@ -321,7 +402,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
                 {teamSeasonHistory.map((season, index) => (
                   <tr key={season.year} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                     <td className="py-2 px-3 text-sm text-gray-800">{season.year}</td>
-                    <td className="py-2 px-3 text-sm text-gray-800">{season.team}</td>
+                    {/* Removed Team column data */}
                     <td className="py-2 px-3 text-sm text-gray-800">{season.wins}-{season.losses}-{season.ties}</td>
                     <td className="py-2 px-3 text-sm text-gray-700">{formatScore(season.pointsFor)}</td>
                     <td className="py-2 px-3 text-sm text-gray-700">{formatScore(season.pointsAgainst)}</td>
@@ -343,8 +424,9 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
 };
 
 // Simple Stat Card Component (reused from PowerRankings or other places)
-const StatCard = ({ title, value }) => (
+const StatCard = ({ title, value, rank }) => ( // Added rank prop
   <div className="bg-blue-50 p-2 rounded-lg shadow-sm flex flex-col items-center justify-center text-center border border-blue-200">
+    {rank && rank !== 'N/A' && <p className="text-sm font-bold text-blue-700">{rank}</p>} {/* Display rank */}
     <p className="text-sm font-semibold text-blue-800 mb-1">{title}</p>
     <p className="text-lg font-bold text-gray-800">{value}</p>
   </div>
