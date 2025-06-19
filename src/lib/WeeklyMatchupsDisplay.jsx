@@ -1,12 +1,9 @@
 // TLOED/src/lib/WeeklyMatchupsDisplay.jsx
-
 import React, { useState, useEffect, useMemo } from 'react';
 // Import the new betting calculations
 import { calculateMoneylineOdds, calculateOverUnder, getPlayerMetricsForYear } from '../utils/bettingCalculations';
 // Import calculateAllLeagueMetrics to get seasonal DPR and average score
 import { calculateAllLeagueMetrics } from '../utils/calculations'; // Assuming this provides seasonalMetrics
-
-// ... (rest of your existing code in WeeklyMatchupsDisplay.jsx) ...
 
 const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => { // Accept props
   const [weeklyData, setWeeklyData] = useState([]);
@@ -55,7 +52,7 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => { /
     weekHeaders.forEach(weekKey => {
       const weekNumber = weekKey.replace('Week_', '');
       matchupsByWeek[`Week ${weekNumber}`] = [];
-      const seenPairs = new Set();
+      const seenPairs = new Set(); // To avoid duplicate matchups (e.g., A vs B and B vs A)
 
       weeklyData.forEach(playerRow => {
         const player1Name = playerRow.Player;
@@ -94,9 +91,44 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => { /
       });
     });
     return matchupsByWeek;
-  }, [weeklyData, seasonalMetrics]); // Add seasonalMetrics to dependency array
+  }, [weeklyData, seasonalMetrics, getMappedTeamName]); // Added getMappedTeamName to dependency array
 
-  // ... (rest of your JSX return statement) ...
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen bg-gray-100 p-4">
+        <div className="bg-white p-8 rounded-lg shadow-lg text-center">
+          <p className="text-xl font-semibold text-blue-600">Loading weekly matchups...</p>
+          <div className="mt-4 flex justify-center">
+            {/* Simple loading spinner */}
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex justify-center items-center min-h-screen bg-red-100 p-4">
+        <div className="bg-white p-8 rounded-lg shadow-lg text-center border-2 border-red-500">
+          <p className="text-xl font-semibold text-red-700">Error loading data:</p>
+          <p className="text-gray-600 mt-2">{error}</p>
+          <p className="text-sm text-gray-500 mt-4">Please ensure the Google Apps Script is deployed as a web app with "Anyone" access.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Check if processed data is empty after loading
+  if (Object.keys(processedWeeklyMatchups).length === 0) {
+    return (
+      <div className="flex justify-center items-center min-h-screen bg-gray-100 p-4">
+        <div className="bg-white p-8 rounded-lg shadow-lg text-center">
+          <p className="text-xl font-semibold text-gray-700">No weekly matchup data available.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 sm:p-8 font-inter">
@@ -105,8 +137,9 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => { /
           Weekly Matchups
         </h1>
 
-        <div className="space-y-8">
+        <div className="space-y-8"> {/* Container for weekly sections */}
           {Object.entries(processedWeeklyMatchups).sort(([weekA], [weekB]) => {
+            // Sort weeks numerically (e.g., "Week 1" before "Week 10")
             const numA = parseInt(weekA.replace('Week ', ''));
             const numB = parseInt(weekB.replace('Week ', ''));
             return numA - numB;
@@ -115,22 +148,24 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => { /
               <h2 className="text-2xl font-semibold text-blue-700 mb-4 border-b pb-2">
                 {weekTitle} Matchups
               </h2>
-              <ul className="list-none space-y-4 text-gray-800"> {/* Changed to list-none for custom styling */}
+              <ul className="list-none space-y-4 text-gray-800">
                 {matchups.length > 0 ? (
                   matchups.map((match, matchIndex) => (
-                    <li key={matchIndex} className="flex flex-col sm:flex-row justify-between items-center bg-white p-4 rounded-md shadow-sm border border-gray-100">
-                      <div className="flex-1 text-lg font-semibold mb-2 sm:mb-0 text-center sm:text-left">
-                        <span className="text-purple-700">{match.player1}</span> vs <span className="text-green-700">{match.player2}</span>
+                    <li key={matchIndex} className="flex flex-col bg-white rounded-md shadow-sm border border-gray-100 overflow-hidden">
+                      {/* Player Row 1 */}
+                      <div className="flex justify-between items-center p-3 border-b border-gray-200">
+                        <span className="font-semibold text-gray-900 text-lg">{match.player1}</span>
+                        <span className="font-bold text-xl text-purple-700">{match.moneylineOdds.player1Odds}</span>
                       </div>
-                      <div className="flex space-x-4 items-center text-sm font-medium">
-                        <div className="text-center">
-                          <p className="text-gray-500">Moneyline</p>
-                          <p><span className="text-purple-700">{match.moneylineOdds.player1Odds}</span> / <span className="text-green-700">{match.moneylineOdds.player2Odds}</span></p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-gray-500">O/U</p>
-                          <p className="text-blue-700">{match.overUnder}</p>
-                        </div>
+                      {/* Player Row 2 */}
+                      <div className="flex justify-between items-center p-3">
+                        <span className="font-semibold text-gray-900 text-lg">{match.player2}</span>
+                        <span className="font-bold text-xl text-green-700">{match.moneylineOdds.player2Odds}</span>
+                      </div>
+                      {/* Over/Under Row */}
+                      <div className="flex justify-center items-center py-2 px-3 bg-gray-50 border-t border-gray-200">
+                        <span className="text-sm font-semibold text-gray-600 mr-2">Total</span>
+                        <span className="font-bold text-lg text-blue-700">{match.overUnder}</span>
                       </div>
                     </li>
                   ))
