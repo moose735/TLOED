@@ -10,13 +10,50 @@ const getOrdinalSuffix = (n) => {
   return (s[v - 20] || s[v] || s[0]);
 };
 
-// Function to calculate rank for a given value among all values
+// Function to calculate rank for a given value among all values, handling ties
 const calculateRank = (value, allValues, isHigherBetter = true) => {
     if (value === null || typeof value === 'undefined' || isNaN(value)) return 'N/A';
-    const sortedValues = [...new Set(allValues.filter(v => v !== null && typeof v !== 'undefined' && !isNaN(v)))].sort((a, b) => isHigherBetter ? b - a : a - b);
-    const rank = sortedValues.indexOf(value) + 1;
-    return rank > 0 ? `${rank}${getOrdinalSuffix(rank)}` : 'N/A';
+
+    const numericValues = allValues.filter(v => typeof v === 'number' && !isNaN(v));
+    if (numericValues.length === 0) return 'N/A';
+
+    // Sort the full list of numeric values
+    const sortedNumericValues = [...numericValues].sort((a, b) => isHigherBetter ? b - a : a - b);
+
+    let rank = 1;
+    let previousValue = sortedNumericValues[0];
+    let actualRank = -1; // The rank we're looking for for the 'value'
+
+    // Iterate through the sorted values to determine ranks, considering ties
+    for (let i = 0; i < sortedNumericValues.length; i++) {
+        const currentValue = sortedNumericValues[i];
+        if (i > 0 && currentValue !== previousValue) {
+            // If the current value is different from the previous, increment rank by the number of elements processed so far
+            // This correctly skips ranks for tied values
+            rank = i + 1;
+        }
+
+        if (currentValue === value) {
+            actualRank = rank;
+            // Check if there are other values tied with 'value' to decide on 'T-' prefix
+            let tieCount = 0;
+            for (let j = 0; j < sortedNumericValues.length; j++) {
+                if (sortedNumericValues[j] === value) {
+                    tieCount++;
+                }
+            }
+            if (tieCount > 1) {
+                return `T-${actualRank}${getOrdinalSuffix(actualRank)}`;
+            } else {
+                return `${actualRank}${getOrdinalSuffix(actualRank)}`;
+            }
+        }
+        previousValue = currentValue;
+    }
+
+    return 'N/A'; // Should not be reached if value exists in numericValues, but as a safeguard
 };
+
 
 // Formatting functions moved outside the component for accessibility
 const formatScore = (score) => {
@@ -271,6 +308,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
 
         compiledSeasonHistory.push({
           year: year,
+          // Removed individual season award icons from here as per user request
           team: seasonTeamStats.teamName, // Keep this as plain team name for table
           wins: seasonTeamStats.wins,
           losses: seasonTeamStats.losses,
