@@ -379,6 +379,7 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
             const topScoreWeeksCount = calculateTopScoreWeeksCount(team, weeklyGameScoresByYearAndWeek, parseInt(year));
 
             seasonalMetrics[year][team] = {
+                teamName: team, // Crucial: Add teamName to the object itself
                 wins: stats.wins,
                 losses: stats.losses,
                 ties: stats.ties,
@@ -418,7 +419,7 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
         // --- RANK CALCULATION LOGIC ---
         // Prepare all teams for ranking, including those with 0 games
         const allTeamsInSeasonForRanking = Object.keys(seasonalMetrics[year]).map(team => ({
-            team: team,
+            teamName: team, // Ensure teamName is available here
             winPercentage: seasonalMetrics[year][team].winPercentage,
             pointsFor: seasonalMetrics[year][team].pointsFor,
             totalGames: seasonalMetrics[year][team].totalGames // Keep this to differentiate
@@ -440,11 +441,11 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
 
         // Assign preliminary ranks to all teams and set initial trophy flags
         allTeamsInSeasonForRanking.forEach((rankedTeam, index) => {
-            seasonalMetrics[year][rankedTeam.team].rank = index + 1;
+            seasonalMetrics[year][rankedTeam.teamName].rank = index + 1;
             // Set trophy flags based on rank
-            if (index === 0) seasonalMetrics[year][rankedTeam.team].isChampion = true;
-            else if (index === 1) seasonalMetrics[year][rankedTeam.team].isRunnerUp = true;
-            else if (index === 2) seasonalMetrics[year][rankedTeam.team].isThirdPlace = true;
+            if (index === 0) seasonalMetrics[year][rankedTeam.teamName].isChampion = true;
+            else if (index === 1) seasonalMetrics[year][rankedTeam.teamName].isRunnerUp = true;
+            else if (index === 2) seasonalMetrics[year][rankedTeam.teamName].isThirdPlace = true;
         });
 
         // Overlay final seeding game results to determine definitive rank
@@ -475,14 +476,14 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
             .sort((a, b) => b.pointsFor - a.pointsFor);
 
         if (teamsSortedByPoints.length > 0) {
-            seasonalMetrics[year][teamsSortedByPoints[0].team].isPointsChampion = true; // Gold medal
+            seasonalMetrics[year][teamsSortedByPoints[0].teamName].isPointsChampion = true; // Gold medal
         }
         if (teamsSortedByPoints.length > 1) {
             // Handle ties for 2nd place in points
             const secondHighestPoints = teamsSortedByPoints[1].pointsFor;
             teamsSortedByPoints.forEach((teamStats, index) => {
                 if (index === 1 || (index > 1 && teamStats.pointsFor === secondHighestPoints)) {
-                    seasonalMetrics[year][teamStats.team].isPointsRunnerUp = true; // Silver medal
+                    seasonalMetrics[year][teamStats.teamName].isPointsRunnerUp = true; // Silver medal
                 }
             });
         }
@@ -491,7 +492,7 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
             const thirdHighestPoints = teamsSortedByPoints[2].pointsFor;
             teamsSortedByPoints.forEach((teamStats, index) => {
                 if (index === 2 || (index > 2 && teamStats.pointsFor === thirdHighestPoints)) {
-                    seasonalMetrics[year][teamStats.team].isThirdPlacePoints = true; // Bronze medal
+                    seasonalMetrics[year][teamStats.teamName].isThirdPlacePoints = true; // Bronze medal
                 }
             });
         }
