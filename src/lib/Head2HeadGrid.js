@@ -1,7 +1,7 @@
 // src/lib/Head2HeadGrid.js
 import React, { useState, useEffect, useCallback } from 'react';
 
-// Helper function to render record (W-L-T) - can be adapted for W-L if needed
+// Helper function to render record (W-L-T)
 const renderRecord = (record) => {
   if (!record) return '0-0-0';
   return `${record.wins || 0}-${record.losses || 0}-${record.ties || 0}`;
@@ -24,7 +24,8 @@ const getOrdinalSuffix = (i) => {
 };
 
 // Component to render the Head-to-Head Grid and details
-const Head2HeadGrid = ({ historicalMatchups, getDisplayTeamName }) => {
+// Added careerDPRData to props
+const Head2HeadGrid = ({ historicalMatchups, getDisplayTeamName, careerDPRData }) => {
   const [headToHeadRecords, setHeadToHeadRecords] = useState({});
   const [selectedRivalryKey, setSelectedRivalryKey] = useState(null); // Stores the H2H key (e.g., "TeamA vs TeamB")
 
@@ -133,14 +134,13 @@ const Head2HeadGrid = ({ historicalMatchups, getDisplayTeamName }) => {
     const teamARecord = rivalry[teamA];
     const teamBRecord = rivalry[teamB];
 
-    // Calculate rivalry-specific stats
-    // Changed initial values to null for more robust 'N/A' display
-    let teamAHighestScore = null;
-    let teamBHighestScore = null;
-    let teamABiggestWinMargin = null; // Margin by which A beat B
-    let teamBBiggestWinMargin = null; // Margin by which B beat A
-    let teamASlimmestWinMargin = null; // Smallest margin A beat B
-    let teamBSlimmestWinMargin = null; // Smallest margin B beat A
+    // Initialize highlight stats with null values for robust 'N/A' display
+    let teamAHighestScore = { value: null, year: null, week: null };
+    let teamBHighestScore = { value: null, year: null, week: null };
+    let teamABiggestWinMargin = { value: null, year: null, week: null };
+    let teamBBiggestWinMargin = { value: null, year: null, week: null };
+    let teamASlimmestWinMargin = { value: null, year: null, week: null };
+    let teamBSlimmestWinMargin = { value: null, year: null, week: null };
 
     // Streak calculation
     let currentStreakTeam = null;
@@ -153,39 +153,52 @@ const Head2HeadGrid = ({ historicalMatchups, getDisplayTeamName }) => {
     });
 
     sortedMatches.forEach(match => {
-        // Use getDisplayTeamName consistently for current match teams
+        // Consistently get display names for the current match teams
         const currentMatchTeam1Display = getDisplayTeamName(match.team1);
         const currentMatchTeam2Display = getDisplayTeamName(match.team2);
 
         let scoreAValue, scoreBValue;
 
-        // Correctly assign scores based on which team is teamA and teamB in the current match
+        // Assign scores based on whether team1 or team2 in the match is teamA in the rivalry
         if (currentMatchTeam1Display === teamA) {
             scoreAValue = parseFloat(match.team1Score);
             scoreBValue = parseFloat(match.team2Score);
         } else if (currentMatchTeam1Display === teamB) {
-            // This means currentMatchTeam2Display is teamA
+            // If team1 is teamB, then team2 must be teamA
             scoreAValue = parseFloat(match.team2Score);
             scoreBValue = parseFloat(match.team1Score);
         } else {
-            // This case should not typically happen for a valid rivalry match,
-            // but for robustness, we can skip if teams don't align.
+            // Should not happen for matches within the selected rivalry, but as a safeguard
             return;
         }
 
-        // Highest Score - update if null or new score is higher
-        teamAHighestScore = teamAHighestScore === null ? scoreAValue : Math.max(teamAHighestScore, scoreAValue);
-        teamBHighestScore = teamBHighestScore === null ? scoreBValue : Math.max(teamBHighestScore, scoreBValue);
+        // --- Calculate and store highlight stats ---
 
-        // Biggest/Slimmest Win Margin - update if null or new margin is better
+        // Highest Score
+        if (teamAHighestScore.value === null || scoreAValue > teamAHighestScore.value) {
+            teamAHighestScore = { value: scoreAValue, year: match.year, week: match.week };
+        }
+        if (teamBHighestScore.value === null || scoreBValue > teamBHighestScore.value) {
+            teamBHighestScore = { value: scoreBValue, year: match.year, week: match.week };
+        }
+
+        // Biggest/Slimmest Win Margin
         if (scoreAValue > scoreBValue) { // Team A won
             const margin = scoreAValue - scoreBValue;
-            teamABiggestWinMargin = teamABiggestWinMargin === null ? margin : Math.max(teamABiggestWinMargin, margin);
-            teamASlimmestWinMargin = teamASlimmestWinMargin === null ? margin : Math.min(teamASlimmestWinMargin, margin);
+            if (teamABiggestWinMargin.value === null || margin > teamABiggestWinMargin.value) {
+                teamABiggestWinMargin = { value: margin, year: match.year, week: match.week };
+            }
+            if (teamASlimmestWinMargin.value === null || margin < teamASlimmestWinMargin.value) {
+                teamASlimmestWinMargin = { value: margin, year: match.year, week: match.week };
+            }
         } else if (scoreBValue > scoreAValue) { // Team B won
             const margin = scoreBValue - scoreAValue;
-            teamBBiggestWinMargin = teamBBiggestWinMargin === null ? margin : Math.max(teamBBiggestWinMargin, margin);
-            teamBSlimmestWinMargin = teamBSlimmestWinMargin === null ? margin : Math.min(teamBSlimmestWinMargin, margin);
+            if (teamBBiggestWinMargin.value === null || margin > teamBBiggestWinMargin.value) {
+                teamBBiggestWinMargin = { value: margin, year: match.year, week: match.week };
+            }
+            if (teamBSlimmestWinMargin.value === null || margin < teamBSlimmestWinMargin.value) {
+                teamBSlimmestWinMargin = { value: margin, year: match.year, week: match.week };
+            }
         }
 
         // Streak
@@ -205,7 +218,6 @@ const Head2HeadGrid = ({ historicalMatchups, getDisplayTeamName }) => {
 
     const currentStreak = currentStreakTeam ? `${currentStreakTeam} ${currentStreakCount}-game W streak` : 'No current streak';
 
-
     return (
       <div className="p-4 bg-gray-100 rounded-lg shadow-md border border-gray-200">
         <button
@@ -224,14 +236,18 @@ const Head2HeadGrid = ({ historicalMatchups, getDisplayTeamName }) => {
         {/* Main Teams Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           {[teamA, teamB].map(team => {
-            const teamRecord = rivalry[team]; // H2H record against the opponent
-            // These are placeholder stats for now, awaiting more comprehensive data
-            const totalWinsOverall = 'N/A'; // Needs overall league data
-            const winPercentageOverall = 'N/A'; // Needs overall league data
-            const rating = 'N/A'; // Needs external rating system
-            const draftRank = 'N/A'; // Needs external draft data
-            const managerRank = 'N/A'; // Needs external ranking data
-            const medalScore = 'N/A'; // Needs external awards data
+            // Find overall career stats for the current team from careerDPRData
+            const overallTeamStats = careerDPRData?.find(d => d.team === team);
+
+            const totalWinsOverall = overallTeamStats ? overallTeamStats.totalWins : 'N/A';
+            const winPercentageOverall = overallTeamStats && typeof overallTeamStats.winPercentage === 'number'
+                                         ? (overallTeamStats.winPercentage * 100).toFixed(1) + '%' // Format as percentage
+                                         : 'N/A';
+            // Placeholder for other stats not available in careerDPRData
+            const rating = 'N/A';
+            const draftRank = 'N/A';
+            const managerRank = 'N/A';
+            const medalScore = 'N/A';
 
             return (
               <div key={team} className="bg-white p-5 rounded-lg shadow-md border border-gray-200 flex flex-col items-center text-center">
@@ -270,46 +286,32 @@ const Head2HeadGrid = ({ historicalMatchups, getDisplayTeamName }) => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
             <p className="text-md font-semibold text-blue-700">{teamA} Highest Score</p>
-            {/* Display N/A if highest score is null */}
-            <p className="text-xl font-bold text-gray-800">{teamAHighestScore !== null ? teamAHighestScore.toFixed(2) : 'N/A'}</p>
+            <p className="text-xl font-bold text-gray-800">
+              {teamAHighestScore.value !== null ? teamAHighestScore.value.toFixed(2) : 'N/A'}
+            </p>
             <p className="text-xs text-gray-500">
-              {teamAHighestScore !== null && rivalry.allMatches.find(m => {
-                  const currentMatchTeam1Display = getDisplayTeamName(m.team1);
-                  const currentMatchTeam2Display = getDisplayTeamName(m.team2);
-                  let scoreToCheck = 0;
-                  if (currentMatchTeam1Display === teamA) {
-                      scoreToCheck = parseFloat(m.team1Score);
-                  } else if (currentMatchTeam2Display === teamA) {
-                      scoreToCheck = parseFloat(m.team2Score);
-                  }
-                  return scoreToCheck === teamAHighestScore;
-              })?.year} Week{' '}
-              {teamAHighestScore !== null && rivalry.allMatches.find(m => {
-                  const currentMatchTeam1Display = getDisplayTeamName(m.team1);
-                  const currentMatchTeam2Display = getDisplayTeamName(m.team2);
-                  let scoreToCheck = 0;
-                  if (currentMatchTeam1Display === teamA) {
-                      scoreToCheck = parseFloat(m.team1Score);
-                  } else if (currentMatchTeam2Display === teamA) {
-                      scoreToCheck = parseFloat(m.team2Score);
-                  }
-                  return scoreToCheck === teamAHighestScore;
-              })?.week}
+              {teamAHighestScore.value !== null ? `${teamAHighestScore.year} Week ${teamAHighestScore.week}` : ''}
             </p>
           </div>
           <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
             <p className="text-md font-semibold text-blue-700">{teamA} Biggest Win</p>
-            {/* Display N/A if biggest win is null */}
-            <p className="text-xl font-bold text-gray-800">{teamABiggestWinMargin !== null ? teamABiggestWinMargin.toFixed(2) : 'N/A'}</p>
-            <p className="text-xs text-gray-500">Margin</p>
+            <p className="text-xl font-bold text-gray-800">
+              {teamABiggestWinMargin.value !== null ? teamABiggestWinMargin.value.toFixed(2) : 'N/A'}
+            </p>
+            <p className="text-xs text-gray-500">
+              {teamABiggestWinMargin.value !== null ? `Margin (${teamABiggestWinMargin.year} Week ${teamABiggestWinMargin.week})` : 'Margin'}
+            </p>
           </div>
           <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
             <p className="text-md font-semibold text-blue-700">{teamA} Slimmest Win</p>
-            {/* Display N/A if slimmest win is null */}
-            <p className="text-xl font-bold text-gray-800">{teamASlimmestWinMargin !== null ? teamASlimmestWinMargin.toFixed(2) : 'N/A'}</p>
-            <p className="text-xs text-gray-500">Margin</p>
+            <p className="text-xl font-bold text-gray-800">
+              {teamASlimmestWinMargin.value !== null ? teamASlimmestWinMargin.value.toFixed(2) : 'N/A'}
+            </p>
+            <p className="text-xs text-gray-500">
+              {teamASlimmestWinMargin.value !== null ? `Margin (${teamASlimmestWinMargin.year} Week ${teamASlimmestWinMargin.week})` : 'Margin'}
+            </p>
           </div>
-          {/* Add similar sections for teamB's highlights if desired */}
+          {/* Repeat similar sections for Team B's highlights if desired */}
         </div>
 
         {/* Detailed Match History */}
