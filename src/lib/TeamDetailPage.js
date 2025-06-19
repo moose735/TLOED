@@ -195,10 +195,10 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
         overallStats.avgDPR = 0;
     }
 
-    setTeamOverallStats(overallStats);
+    setTeamOverallStats(overallStats); // Set the state variable here
     setTeamSeasonHistory(compiledSeasonHistory.sort((a, b) => b.year - a.year)); // Sort by year descending
     setLoadingStats(false);
-  }, [teamName, historicalMatchups, getMappedTeamName]); // Removed historicalChampions from dependency array
+  }, [teamName, historicalMatchups, getMappedTeamName]);
 
 
   if (loadingStats) {
@@ -209,6 +209,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
     );
   }
 
+  // Handle case where teamOverallStats is null (e.g., initial render or no data found)
   if (!teamOverallStats) {
     return (
       <div className="w-full bg-white p-8 rounded-lg shadow-md mt-8 text-center text-red-500">
@@ -223,9 +224,9 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
         {teamName} - Team Profile
         <span className="block text-lg font-medium text-gray-600 mt-2">
           Record: {teamOverallStats.totalWins}-{teamOverallStats.totalLosses}-{teamOverallStats.totalTies} | Career DPR: {formatDPR(teamOverallStats.avgDPR)}
-          {overallStats.championships > 0 && (
+          {teamOverallStats.championships > 0 && (
             <span className="ml-3 text-yellow-500">
-              🏆 {overallStats.championships} {overallStats.championships === 1 ? 'Championship' : 'Championships'}
+              🏆 {teamOverallStats.championships} {teamOverallStats.championships === 1 ? 'Championship' : 'Championships'}
             </span>
           )}
         </span>
@@ -235,19 +236,19 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
       <section className="mb-8">
         <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Overall Career Stats</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-          <StatCard title="Total Wins" value={overallStats.totalWins} />
-          <StatCard title="Win Percentage" value={formatPercentage((overallStats.totalWins + 0.5 * overallStats.totalTies) / overallStats.totalGamesPlayed)} />
-          <StatCard title="Total Points For" value={formatScore(overallStats.totalPointsFor)} />
+          <StatCard title="Total Wins" value={teamOverallStats.totalWins} />
+          <StatCard title="Win Percentage" value={formatPercentage((teamOverallStats.totalWins + 0.5 * teamOverallStats.totalTies) / teamOverallStats.totalGamesPlayed)} />
+          <StatCard title="Total Points For" value={formatScore(teamOverallStats.totalPointsFor)} />
           <StatCard
             title="Weekly Top Scores"
             value={
-              overallStats.overallTopScoreWeeksCount !== undefined
-                ? `${overallStats.overallTopScoreWeeksCount} week${overallStats.overallTopScoreWeeksCount === 1 ? '' : 's'}`
+              teamOverallStats.overallTopScoreWeeksCount !== undefined
+                ? `${teamOverallStats.overallTopScoreWeeksCount} week${teamOverallStats.overallTopScoreWeeksCount === 1 ? '' : 's'}`
                 : 'N/A'
             }
           />
-          <StatCard title="Playoff Appearances" value={overallStats.playoffAppearances.size} />
-          <StatCard title="Championships" value={overallStats.championships} />
+          <StatCard title="Playoff Appearances" value={teamOverallStats.playoffAppearances.size} />
+          <StatCard title="Championships" value={teamOverallStats.championships} />
         </div>
       </section>
 
