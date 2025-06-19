@@ -65,6 +65,7 @@ const calculateLuckRating = (historicalMatchups, teamName, year, weeklyGameScore
             if (mappedTeam1 === teamName) {
                 currentTeamScoreForWeek = parseFloat(currentTeamMatchEntry?.team1Score || '0');
             } else if (mappedTeam2 === teamName) {
+                // If team1 is teamB, then team2 must be teamA
                 currentTeamScoreForWeek = parseFloat(currentTeamMatchEntry?.team2Score || '0');
             } else {
                 return;
@@ -301,11 +302,11 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
             const stats = seasonalTeamStatsRaw[year][team];
 
             const teamSeasonalScores = weeklyGameScoresByYearAndWeek[year] ?
-                                            Object.values(weeklyGameScoresByYearAndWeek[year])
-                                            .flat()
-                                            .filter(entry => entry.team === team && typeof entry.score === 'number' && !isNaN(entry.score))
-                                            .map(entry => entry.score)
-                                            : [];
+                                                Object.values(weeklyGameScoresByYearAndWeek[year])
+                                                .flat()
+                                                .filter(entry => entry.team === team && typeof entry.score === 'number' && !isNaN(entry.score))
+                                                .map(entry => entry.score)
+                                                : [];
 
             const totalWeeksPlayedForAverage = teamSeasonalScores.length;
             const averageScoreForSeason = totalWeeksPlayedForAverage > 0 ? stats.totalPointsFor / totalWeeksPlayedForAverage : 0;
@@ -334,12 +335,13 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
         teamsInSeason.forEach(team => {
             const stats = seasonalTeamStatsRaw[year][team];
 
-            const totalWeeksPlayedForAverage = (weeklyGameScoresByYearAndWeek[year] ?
-                                            Object.values(weeklyGameScoresByYearAndWeek[year])
-                                            .flat()
-                                            .filter(entry => entry.team === team && typeof entry.score === 'number' && !isNaN(entry.score))
-                                            .map(entry => entry.score)
-                                            : []).length;
+            const teamSeasonalScores = (weeklyGameScoresByYearAndWeek[year] ?
+                                                Object.values(weeklyGameScoresByYearAndWeek[year])
+                                                .flat()
+                                                .filter(entry => entry.team === team && typeof entry.score === 'number' && !isNaN(entry.score))
+                                                .map(entry => entry.score)
+                                                : []);
+            const totalWeeksPlayedForAverage = teamSeasonalScores.length;
 
 
             if (totalWeeksPlayedForAverage === 0 && stats.totalGames === 0) {
@@ -371,6 +373,8 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
                 losses: stats.losses,
                 ties: stats.ties,
                 pointsFor: stats.totalPointsFor,
+                // Add highestWeeklyScore for the season
+                highestWeeklyScore: teamSeasonalScores.length > 0 ? Math.max(...teamSeasonalScores) : 0,
                 pointsAgainst: stats.pointsAgainst, // Include pointsAgainst here
                 averageScore: averageScoreForSeason,
                 adjustedDPR: adjustedDPR,
@@ -453,6 +457,7 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
                 averageScore: 0,
                 winPercentage: 0, // Include winPercentage here
                 totalGames: stats.totalGames, // Include totalGames
+                highestWeeklyScore: 0, // Default to 0 if no scores
             });
             return;
         }
@@ -460,6 +465,8 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
         const adjustedDPR = avgRawDPROverall > 0 ? stats.rawDPR / avgRawDPROverall : 0;
         const careerWinPercentage = (stats.totalGames > 0) ? ((stats.wins + 0.5 * stats.ties) / stats.totalGames) : 0; // Recalculate or use existing
 
+        // Calculate highest weekly score from all careerWeeklyScores
+        const careerHighestWeeklyScore = stats.careerWeeklyScores.length > 0 ? Math.max(...stats.careerWeeklyScores) : 0;
 
         careerDPRData.push({
             team,
@@ -472,6 +479,7 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
             averageScore: averageScoreOverall,
             winPercentage: careerWinPercentage, // Include winPercentage here
             totalGames: stats.totalGames, // Include totalGames
+            highestWeeklyScore: careerHighestWeeklyScore, // <--- ADDED THIS LINE!
         });
     });
 
