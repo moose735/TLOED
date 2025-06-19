@@ -162,7 +162,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
           adjustedDPR: metricsForSeason.adjustedDPR,
           allPlayWinPercentage: metricsForSeason.allPlayWinPercentage,
           winPercentage: seasonWinPercentage,
-          finish: 'N/A', // Placeholder for actual league finish
+          finish: metricsForSeason.rank ? `${metricsForSeason.rank}${getOrdinalSuffix(metricsForSeason.rank)}` : 'N/A', // Use rank from seasonalMetrics
         });
 
         if (metricsForSeason.adjustedDPR !== 0) {
