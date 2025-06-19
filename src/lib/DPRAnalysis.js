@@ -6,6 +6,7 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
   const [careerDPRData, setCareerDPRData] = useState([]);
   const [seasonalDPRData, setSeasonalDPRData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showAllSeasonal, setShowAllSeasonal] = useState(false); // New state for "Show More"
 
   useEffect(() => {
     if (!historicalMatchups || historicalMatchups.length === 0) {
@@ -67,7 +68,7 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
     });
 
     // Flatten seasonalMetrics into an array for display in the table
-    const allSeasonalDPRs = [];
+    let allSeasonalDPRs = []; // Changed to 'let' because we'll modify it
     Object.keys(seasonalMetrics).forEach(year => {
       Object.keys(seasonalMetrics[year]).forEach(team => {
         const teamSeasonalData = seasonalMetrics[year][team];
@@ -133,6 +134,31 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
     // Sort the consolidated seasonal DPR data by DPR descending
     allSeasonalDPRs.sort((a, b) => b.dpr - a.dpr);
 
+    // Insert the "AVERAGE SEASON" row
+    const averageDPRValue = 1.000;
+    const averageSeasonRow = {
+      year: 'N/A',
+      team: 'AVERAGE SEASON',
+      dpr: averageDPRValue,
+      wins: 'N/A',
+      losses: 'N/A',
+      ties: 'N/A',
+      winPercentage: 0.500, // Assuming an average season would have a .500 win percentage
+      pointsPerGame: 'N/A',
+      highestPointsGame: 'N/A',
+      lowestPointsGame: 'N/A',
+      isAverageRow: true // A flag to identify this special row
+    };
+
+    // Find the correct position to insert the average season row
+    let insertIndex = allSeasonalDPRs.findIndex(data => data.dpr < averageDPRValue);
+    if (insertIndex === -1) {
+      // If no DPR is less than average, insert at the end
+      allSeasonalDPRs.push(averageSeasonRow);
+    } else {
+      allSeasonalDPRs.splice(insertIndex, 0, averageSeasonRow);
+    }
+
     setCareerDPRData(enhancedCareerDPRs);
     setSeasonalDPRData(allSeasonalDPRs);
     setLoading(false);
@@ -150,6 +176,8 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
       }
       return `${formatted}%`;
     }
+    // Handle the 'N/A' case for the average row
+    if (value === 'N/A') return 'N/A';
     return '.000%';
   };
 
@@ -176,8 +204,12 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
   };
 
   const renderRecord = (wins, losses, ties) => {
+    // Handle 'N/A' for the average row
+    if (wins === 'N/A') return 'N/A';
     return `${wins || 0}-${losses || 0}-${ties || 0}`;
   };
+
+  const displayedSeasonalDPRData = showAllSeasonal ? seasonalDPRData : seasonalDPRData.slice(0, 20);
 
   return (
     <div className="w-full">
@@ -243,25 +275,25 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                       <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Team</th>
                       <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Season</th>
                       <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Season DPR</th>
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Win %</th> {/* Added Win % header */}
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Win %</th>
                       <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Record (W-L-T)</th>
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Points Avg</th> {/* Added Points Avg header */}
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Highest Points</th> {/* Added Highest Points Game header */}
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Lowest Points</th> {/* Added Lowest Points Game header */}
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Points Avg</th>
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Highest Points</th>
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Lowest Points</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {seasonalDPRData.map((data, index) => (
-                      <tr key={`${data.team}-${data.year}`} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                        <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{index + 1}</td>
+                    {displayedSeasonalDPRData.map((data, index) => (
+                      <tr key={`${data.team}-${data.year}`} className={data.isAverageRow ? 'bg-yellow-100 font-bold' : (index % 2 === 0 ? 'bg-gray-50' : 'bg-white')}>
+                        <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.isAverageRow ? '' : index + 1}</td>
                         <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.team}</td>
                         <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.year}</td>
                         <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatDPR(data.dpr)}</td>
-                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPercentage(data.winPercentage)}</td> {/* Added Win % data */}
+                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPercentage(data.winPercentage)}</td>
                         <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{renderRecord(data.wins, data.losses, data.ties)}</td>
-                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.pointsPerGame)}</td> {/* Added Points Avg data */}
-                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.highestPointsGame)}</td> {/* Added Highest Points Game data */}
-                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.lowestPointsGame)}</td> {/* Added Lowest Points Game data */}
+                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.pointsPerGame)}</td>
+                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.highestPointsGame)}</td>
+                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.lowestPointsGame)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -269,6 +301,17 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
               </div>
             ) : (
               <p className="text-center text-gray-600">No seasonal DPR data available.</p>
+            )}
+
+            {seasonalDPRData.length > 20 && (
+              <div className="text-center mt-4">
+                <button
+                  onClick={() => setShowAllSeasonal(!showAllSeasonal)}
+                  className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                >
+                  {showAllSeasonal ? 'Show Less' : 'Show All Seasons'}
+                </button>
+              </div>
             )}
           </section>
         </>
