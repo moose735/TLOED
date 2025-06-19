@@ -25,122 +25,42 @@ const getFinalSeedingGamePurpose = (value) => {
 };
 
 
-// MatchupHistory now receives historicalMatchups, loading, error, and careerDPRData as props
-const MatchupHistory = ({ historicalMatchups, loading, error, getMappedTeamName, careerDPRData }) => { // <--- ADD careerDPRData here
-  const [championshipGames, setChampionshipGames] = useState([]);
+// MatchupHistory now receives onRivalryCellClick as the new prop
+const MatchupHistory = ({ historicalMatchups, getMappedTeamName, onRivalryCellClick }) => { // <-- Updated prop name
+  const [selectedRivalryKey, setSelectedRivalryKey] = useState(null);
 
-  const getDisplayTeamName = useCallback((originalName) => {
-    return getMappedTeamName ? getMappedTeamName(originalName) : originalName;
+  useEffect(() => {
+    if (selectedRivalryKey) {
+      console.log("Rivalry selected:", selectedRivalryKey);
+    }
+  }, [selectedRivalryKey]);
+
+  const getDisplayTeamName = useCallback((teamName) => {
+    return getMappedTeamName(teamName);
   }, [getMappedTeamName]);
 
-
-  // --- Data Processing (only for sections remaining in MatchupHistory, like championship games) ---
-  useEffect(() => {
-    if (!historicalMatchups || historicalMatchups.length === 0) {
-      setChampionshipGames([]);
-      return;
-    }
-
-    const newChampionshipGames = [];
-
-    historicalMatchups.forEach(match => {
-      const team1 = getDisplayTeamName(String(match.team1 || '').trim());
-      const team2 = getDisplayTeamName(String(match.team2 || '').trim());
-      const year = match.year;
-      const team1Score = parseFloat(match.team1Score);
-      const team2Score = parseFloat(match.team2Score);
-
-      if (!team1 || !team2 || isNaN(team1Score) || isNaN(team2Score)) {
-        console.warn('Skipping invalid matchup data in MatchupHistory for championship games:', match);
-        return;
-      }
-
-      const isTie = team1Score === team2Score;
-      const team1Won = team1Score > team2Score;
-      const team2Won = team2Score > team1Score;
-
-      if (typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0) {
-          let winner = 'Tie';
-          let loser = 'Tie';
-          let winnerScore = team1Score;
-          let loserScore = team2Score;
-
-          if (team1Won) {
-              winner = team1;
-              loser = team2;
-              winnerScore = team1Score;
-              loserScore = team2Score;
-          } else if (team2Won) {
-              winner = team2;
-              loser = team1;
-              winnerScore = team2Score;
-              loserScore = team1Score;
-          }
-
-          const winningPlace = match.finalSeedingGame;
-          const losingPlace = match.finalSeedingGame + 1;
-
-          newChampionshipGames.push({
-              year: year,
-              week: match.week,
-              team1: team1,
-              team2: team2,
-              team1Score: team1Score,
-              team2Score: team2Score,
-              purpose: getFinalSeedingGamePurpose(match.finalSeedingGame),
-              winner: winner,
-              loser: loser,
-              winnerScore: winnerScore,
-              loserScore: loserScore,
-              winnerPlace: winningPlace,
-              loserPlace: losingPlace
-          });
-      }
-    });
-
-    setChampionshipGames(newChampionshipGames.sort((a, b) => {
-      if (b.year !== a.year) {
-        return b.year - a.year;
-      }
-      return a.winnerPlace - b.winnerPlace;
-    }));
-
-  }, [historicalMatchups, getDisplayTeamName]);
-
-  const renderRecord = (record) => {
-    if (!record) return '0-0-0';
-    return `${record.wins || 0}-${record.losses || 0}-${record.ties || 0}`;
-  };
+  const finalSeedingGames = historicalMatchups.flatMap(season =>
+    season.matchups.filter(matchup => matchup.finalSeedingGamePurpose)
+  );
 
   return (
-    <div className="w-full max-w-4xl bg-white p-8 rounded-lg shadow-md mt-8">
-      <h2 className="text-2xl font-bold text-blue-700 mb-4 text-center">League History & Stats</h2>
-
-      {loading ? (
-        <p className="text-center text-gray-600">Loading league history data...</p>
-      ) : error ? (
-        <p className="text-center text-red-500 font-semibold">{error}</p>
-      ) : historicalMatchups.length === 0 ? (
-        <p className="text-center text-gray-600">No historical matchup data found. Ensure your Apps Script is correctly deployed and Google Sheet has data.</p>
+    <div className="p-4 bg-white rounded-lg shadow">
+      {historicalMatchups.length === 0 ? (
+        <p className="text-gray-600">No historical matchup data available.</p>
       ) : (
         <>
-          {/* Championship and Final Seeding Games */}
           <section className="mb-8">
-            <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Championship & Seeding Games</h3>
-            {championshipGames.length > 0 ? (
+            <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Championship and Final Seeding Games History</h3>
+            {finalSeedingGames.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {championshipGames.map((game, index) => (
-                        <div key={index} className="bg-blue-50 p-4 rounded-lg shadow-sm border border-blue-200">
-                            <h4 className="font-bold text-blue-800 text-lg mb-2">{game.year} {game.purpose}</h4>
-                            <p className="text-sm text-gray-700">Week {game.week}</p>
-                            <p className="text-sm text-gray-700">
-                                <strong>{game.team1}</strong> ({game.team1Score}) vs <strong>{game.team2}</strong> ({game.team2Score})
+                    {finalSeedingGames.map((game, index) => (
+                        <div key={index} className="border p-4 rounded-lg bg-blue-50 shadow-sm">
+                            <p className="text-lg font-semibold text-blue-800 mb-2">{game.year} - {getFinalSeedingGamePurpose(game.finalSeedingGamePurpose)}</p>
+                            <p className="text-sm text-green-700 font-semibold">
+                                Winner: {game.winner} ({game.winnerScore}) - Finished {game.winnerPlace}{getOrdinalSuffix(game.winnerPlace)} Place
                             </p>
-                            {game.winner !== 'Tie' ? (
+                            {game.loser ? (
                                 <>
-                                    <p className="text-sm text-blue-700 font-semibold mt-1">
-                                        Winner: {game.winner} ({game.winnerScore}) - Finished {game.winnerPlace}{getOrdinalSuffix(game.winnerPlace)} Place
-                                    </p>
                                     <p className="text-sm text-red-700 font-semibold">
                                         Loser: {game.loser} ({game.loserScore}) - Finished {game.loserPlace}{getOrdinalSuffix(game.loserPlace)} Place
                                     </p>
@@ -158,13 +78,13 @@ const MatchupHistory = ({ historicalMatchups, loading, error, getMappedTeamName,
             )}
           </section>
 
-          {/* Head-to-Head Rivalries / Versus History section handled by Head2HeadGrid */}
           <section className="mb-8">
             <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Head-to-Head Rivalries</h3>
             <Head2HeadGrid
               historicalMatchups={historicalMatchups}
               getDisplayTeamName={getDisplayTeamName}
-              careerDPRData={careerDPRData} {/* <--- PASSED THE careerDPRData PROP HERE! */}
+              setSelectedRivalryKey={setSelectedRivalryKey}
+              onRivalryCellClick={onRivalryCellClick} // <-- Pass the new handler from App.js
             />
           </section>
         </>
