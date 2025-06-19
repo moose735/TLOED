@@ -342,4 +342,3 @@ const StatCard = ({ title, value }) => (
 );
 
 export default TeamDetailPage;
-�
