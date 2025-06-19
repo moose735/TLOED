@@ -23,6 +23,14 @@ const getOrdinalSuffix = (i) => {
   return "th";
 };
 
+// Function to calculate rank for a given value among all values
+const calculateRank = (value, allValues, isHigherBetter = true) => {
+    if (value === null || typeof value === 'undefined' || isNaN(value)) return 'N/A';
+    const sortedValues = [...new Set(allValues.filter(v => v !== null && typeof v !== 'undefined' && !isNaN(v)))].sort((a, b) => isHigherBetter ? b - a : a - b);
+    const rank = sortedValues.indexOf(value) + 1;
+    return rank > 0 ? `${rank}${getOrdinalSuffix(rank)}` : 'N/A';
+};
+
 // Component to render the Head-to-Head Grid and details
 // Added careerDPRData to props
 const Head2HeadGrid = ({ historicalMatchups, getDisplayTeamName, careerDPRData }) => {
@@ -142,6 +150,10 @@ const Head2HeadGrid = ({ historicalMatchups, getDisplayTeamName, careerDPRData }
     let teamASlimmestWinMargin = { value: null, year: null, week: null };
     let teamBSlimmestWinMargin = { value: null, year: null, week: null };
 
+    // Initialize total points for each team in the rivalry
+    let teamATotalPointsScored = 0;
+    let teamBTotalPointsScored = 0;
+
     // Streak calculation
     let currentStreakTeam = null;
     let currentStreakCount = 0;
@@ -173,6 +185,10 @@ const Head2HeadGrid = ({ historicalMatchups, getDisplayTeamName, careerDPRData }
         }
 
         // --- Calculate and store highlight stats ---
+
+        // Total Points Scored
+        teamATotalPointsScored += scoreAValue;
+        teamBTotalPointsScored += scoreBValue;
 
         // Highest Score
         if (teamAHighestScore.value === null || scoreAValue > teamAHighestScore.value) {
@@ -218,6 +234,16 @@ const Head2HeadGrid = ({ historicalMatchups, getDisplayTeamName, careerDPRData }
 
     const currentStreak = currentStreakTeam ? `${currentStreakTeam} ${currentStreakCount}-game W streak` : 'No current streak';
 
+    // Prepare data for ranking and comparison
+    const allLeagueTeamNames = careerDPRData ? careerDPRData.map(d => d.team) : [];
+
+    const allTotalWins = careerDPRData ? careerDPRData.map(d => d.totalWins) : [];
+    const allWinPercentages = careerDPRData ? careerDPRData.map(d => d.winPercentage) : [];
+    const allCareerDPRs = careerDPRData ? careerDPRData.map(d => d.dpr) : [];
+    const allTotalPointsScored = careerDPRData ? careerDPRData.map(d => d.pointsFor) : [];
+    const allWeeklyHighScores = careerDPRData ? careerDPRData.map(d => d.highestWeeklyScore) : []; // Assuming 'highestWeeklyScore' exists in careerDPRData
+
+
     return (
       <div className="p-4 bg-gray-100 rounded-lg shadow-md border border-gray-200">
         <button
@@ -236,18 +262,45 @@ const Head2HeadGrid = ({ historicalMatchups, getDisplayTeamName, careerDPRData }
         {/* Main Teams Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           {[teamA, teamB].map(team => {
-            // Find overall career stats for the current team from careerDPRData
             const overallTeamStats = careerDPRData?.find(d => d.team === team);
+            const opponentTeamStats = careerDPRData?.find(d => d.team === (team === teamA ? teamB : teamA));
 
-            const totalWinsOverall = overallTeamStats ? overallTeamStats.totalWins : 'N/A';
-            const winPercentageOverall = overallTeamStats && typeof overallTeamStats.winPercentage === 'number'
-                                         ? (overallTeamStats.winPercentage * 100).toFixed(1) + '%' // Format as percentage
-                                         : 'N/A';
-            // Placeholder for other stats not available in careerDPRData
-            const rating = 'N/A';
-            const draftRank = 'N/A';
-            const managerRank = 'N/A';
-            const medalScore = 'N/A';
+            // Individual Stats values
+            const totalWins = overallTeamStats ? overallTeamStats.totalWins : null;
+            const winPercentage = overallTeamStats && typeof overallTeamStats.winPercentage === 'number'
+                                         ? overallTeamStats.winPercentage // Keep as raw number for comparison, format later
+                                         : null;
+            const careerDPR = overallTeamStats ? overallTeamStats.dpr : null;
+            const weeklyHighScore = overallTeamStats ? overallTeamStats.highestWeeklyScore : null; // Assuming this field exists
+            const totalPointsScored = overallTeamStats ? overallTeamStats.pointsFor : null;
+
+            // Opponent's Individual Stats values for comparison
+            const oppTotalWins = opponentTeamStats ? opponentTeamStats.totalWins : null;
+            const oppWinPercentage = opponentTeamStats ? opponentTeamStats.winPercentage : null;
+            const oppCareerDPR = opponentTeamStats ? opponentTeamStats.dpr : null;
+            const oppWeeklyHighScore = opponentTeamStats ? opponentTeamStats.highestWeeklyScore : null;
+            const oppTotalPointsScored = opponentTeamStats ? opponentTeamStats.pointsFor : null;
+
+            // Function to determine cell background class
+            const getComparisonClass = (teamValue, opponentValue, isHigherBetter = true) => {
+                if (teamValue === null || opponentValue === null || typeof teamValue === 'undefined' || typeof opponentValue === 'undefined') {
+                    return 'bg-blue-50'; // Default if data is missing
+                }
+                if (teamValue === opponentValue) return 'bg-yellow-100 text-yellow-800'; // Tie
+                if (isHigherBetter) {
+                    return teamValue > opponentValue ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+                } else { // Lower is better (e.g., lower rank)
+                    return teamValue < opponentValue ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+                }
+            };
+
+            // Rank calculations
+            const totalWinsRank = calculateRank(totalWins, allTotalWins, true);
+            const winPercentageRank = calculateRank(winPercentage, allWinPercentages, true);
+            const careerDPRRank = calculateRank(careerDPR, allCareerDPRs, true);
+            const weeklyHighScoreRank = calculateRank(weeklyHighScore, allWeeklyHighScores, true);
+            const totalPointsScoredRank = calculateRank(totalPointsScored, allTotalPointsScored, true);
+
 
             return (
               <div key={team} className="bg-white p-5 rounded-lg shadow-md border border-gray-200 flex flex-col items-center text-center">
@@ -256,12 +309,25 @@ const Head2HeadGrid = ({ historicalMatchups, getDisplayTeamName, careerDPRData }
                 </div>
                 <h4 className="text-xl font-bold text-gray-800 mb-2">{team}</h4>
                 <div className="grid grid-cols-2 gap-2 w-full text-xs font-medium text-gray-700">
-                    <div className="bg-blue-50 p-2 rounded-md">Total Wins: {totalWinsOverall}</div>
-                    <div className="bg-blue-50 p-2 rounded-md">Win %: {winPercentageOverall}</div>
-                    <div className="bg-blue-50 p-2 rounded-md">Rating: {rating}</div>
-                    <div className="bg-blue-50 p-2 rounded-md">Draft Rank: {draftRank}</div>
-                    <div className="bg-blue-50 p-2 rounded-md">Manager Rank: {managerRank}</div>
-                    <div className="bg-blue-50 p-2 rounded-md">Medal Score: {medalScore}</div>
+                    <div className={`${getComparisonClass(totalWins, oppTotalWins)} p-2 rounded-md`}>
+                        Total Wins: {totalWins !== null ? totalWins : 'N/A'} (Rank: {totalWinsRank})
+                    </div>
+                    <div className={`${getComparisonClass(winPercentage, oppWinPercentage)} p-2 rounded-md`}>
+                        Win %: {winPercentage !== null ? (winPercentage * 100).toFixed(1) + '%' : 'N/A'} (Rank: {winPercentageRank})
+                    </div>
+                    <div className={`${getComparisonClass(careerDPR, oppCareerDPR)} p-2 rounded-md`}>
+                        Career DPR: {careerDPR !== null ? careerDPR.toFixed(2) : 'N/A'} (Rank: {careerDPRRank})
+                    </div>
+                    <div className={`${getComparisonClass(weeklyHighScore, oppWeeklyHighScore)} p-2 rounded-md`}>
+                        Weekly High Score: {weeklyHighScore !== null ? weeklyHighScore.toFixed(2) : 'N/A'} (Rank: {weeklyHighScoreRank})
+                    </div>
+                    <div className={`${getComparisonClass(totalPointsScored, oppTotalPointsScored)} p-2 rounded-md`}>
+                        Total Points Scored: {totalPointsScored !== null ? totalPointsScored.toFixed(2) : 'N/A'} (Rank: {totalPointsScoredRank})
+                    </div>
+                    {/* Add other stats if needed from overallTeamStats that are not directly compared */}
+                    <div className="bg-blue-50 p-2 rounded-md">Draft Rank: N/A</div>
+                    <div className="bg-blue-50 p-2 rounded-md">Manager Rank: N/A</div>
+                    <div className="bg-blue-50 p-2 rounded-md">Medal Score: N/A</div>
                 </div>
               </div>
             );
@@ -311,7 +377,34 @@ const Head2HeadGrid = ({ historicalMatchups, getDisplayTeamName, careerDPRData }
               {teamASlimmestWinMargin.value !== null ? `Margin (${teamASlimmestWinMargin.year} Week ${teamASlimmestWinMargin.week})` : 'Margin'}
             </p>
           </div>
-          {/* Repeat similar sections for Team B's highlights if desired */}
+          {/* Repeat similar sections for Team B's highlights */}
+            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
+                <p className="text-md font-semibold text-red-700">{teamB} Highest Score</p>
+                <p className="text-xl font-bold text-gray-800">
+                {teamBHighestScore.value !== null ? teamBHighestScore.value.toFixed(2) : 'N/A'}
+                </p>
+                <p className="text-xs text-gray-500">
+                {teamBHighestScore.value !== null ? `${teamBHighestScore.year} Week ${teamBHighestScore.week}` : ''}
+                </p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
+                <p className="text-md font-semibold text-red-700">{teamB} Biggest Win</p>
+                <p className="text-xl font-bold text-gray-800">
+                {teamBBiggestWinMargin.value !== null ? teamBBiggestWinMargin.value.toFixed(2) : 'N/A'}
+                </p>
+                <p className="text-xs text-gray-500">
+                {teamBBiggestWinMargin.value !== null ? `Margin (${teamBBiggestWinMargin.year} Week ${teamBBiggestWinMargin.week})` : 'Margin'}
+                </p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
+                <p className="text-md font-semibold text-red-700">{teamB} Slimmest Win</p>
+                <p className="text-xl font-bold text-gray-800">
+                {teamBSlimmestWinMargin.value !== null ? teamBSlimmestWinMargin.value.toFixed(2) : 'N/A'}
+                </p>
+                <p className="text-xs text-gray-500">
+                {teamBSlimmestWinMargin.value !== null ? `Margin (${teamBSlimmestWinMargin.year} Week ${teamBSlimmestWinMargin.week})` : 'Margin'}
+                </p>
+            </div>
         </div>
 
         {/* Detailed Match History */}
