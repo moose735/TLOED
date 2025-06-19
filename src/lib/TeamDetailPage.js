@@ -17,38 +17,25 @@ const calculateRank = (value, allValues, isHigherBetter = true) => {
     const numericValues = allValues.filter(v => typeof v === 'number' && !isNaN(v));
     if (numericValues.length === 0) return 'N/A';
 
-    // Sort the full list of numeric values
-    const sortedNumericValues = [...numericValues].sort((a, b) => isHigherBetter ? b - a : a - b);
+    // Create a sorted list of unique values to determine rank positions
+    const uniqueSortedValues = [...new Set(numericValues)].sort((a, b) => isHigherBetter ? b - a : a - b);
 
     let rank = 1;
-    let previousValue = sortedNumericValues[0];
-    let actualRank = -1; // The rank we're looking for for the 'value'
-
-    // Iterate through the sorted values to determine ranks, considering ties
-    for (let i = 0; i < sortedNumericValues.length; i++) {
-        const currentValue = sortedNumericValues[i];
-        if (i > 0 && currentValue !== previousValue) {
-            // If the current value is different from the previous, increment rank by the number of elements processed so far
-            // This correctly skips ranks for tied values
-            rank = i + 1;
-        }
-
-        if (currentValue === value) {
-            actualRank = rank;
-            // Check if there are other values tied with 'value' to decide on 'T-' prefix
-            let tieCount = 0;
-            for (let j = 0; j < sortedNumericValues.length; j++) {
-                if (sortedNumericValues[j] === value) {
-                    tieCount++;
-                }
-            }
+    for (let i = 0; i < uniqueSortedValues.length; i++) {
+        const currentUniqueValue = uniqueSortedValues[i];
+        if (currentUniqueValue === value) {
+            const tieCount = numericValues.filter(v => v === value).length;
             if (tieCount > 1) {
-                return `T-${actualRank}${getOrdinalSuffix(actualRank)}`;
+                return `T-${rank}${getOrdinalSuffix(rank)}`;
             } else {
-                return `${actualRank}${getOrdinalSuffix(actualRank)}`;
+                return `${rank}${getOrdinalSuffix(rank)}`;
             }
         }
-        previousValue = currentValue;
+        // Increment rank by the number of values tied at the current unique position
+        const countAtCurrentRank = numericValues.filter(v => v === currentUniqueValue).length;
+        if (i < uniqueSortedValues.length - 1 && value !== currentUniqueValue) {
+             rank += countAtCurrentRank;
+        }
     }
 
     return 'N/A'; // Should not be reached if value exists in numericValues, but as a safeguard
@@ -65,7 +52,7 @@ const formatPercentage = (value) => {
 };
 
 const formatLuckRating = (value) => {
-  return typeof value === 'number' ? value.toFixed(2) : 'N/A';
+  return typeof value === 'number' ? value.toFixed(3) : 'N/A'; // Changed to toFixed(3)
 };
 
 const formatDPR = (value) => {
@@ -97,6 +84,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
       avgDPR: 0, // Career average DPR
       totalDPRSum: 0, // To calculate average
       seasonsWithDPRData: 0, // To count seasons with valid DPR for average
+      totalLuckRating: 0, // New: Cumulative luck rating
       // Cumulative award counts
       totalChampionships: 0,
       totalRunnerUps: 0,
@@ -111,6 +99,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
       topScoreWeeksRank: 'N/A',
       playoffRank: 'N/A',
       championshipRank: 'N/A',
+      luckRank: 'N/A', // New: Luck rating rank
     };
 
     const seasonalData = {};
@@ -210,6 +199,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
         let careerTopScoreWeeks = 0;
         let careerTotalDPRSum = 0;
         let careerSeasonsWithDPRData = 0;
+        let careerTotalLuckRating = 0; // New: Sum of luck ratings
 
         // Iterate through all seasons to gather career data for this 'team'
         Object.keys(seasonalMetrics).forEach(year => {
@@ -224,6 +214,9 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
                 if (teamMetrics.isChampion) careerChampionships++;
                 if (teamMetrics.isPlayoffTeam) careerPlayoffAppearancesCount++; // Increment count if team made playoffs this season
                 if (typeof teamMetrics.topScoreWeeksCount === 'number') careerTopScoreWeeks += teamMetrics.topScoreWeeksCount;
+                if (typeof teamMetrics.luckRating === 'number' && !isNaN(teamMetrics.luckRating)) {
+                    careerTotalLuckRating += teamMetrics.luckRating;
+                }
 
                 if (teamMetrics.adjustedDPR !== 0) {
                   careerTotalDPRSum += teamMetrics.adjustedDPR;
@@ -243,6 +236,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
             playoffAppearancesCount: careerPlayoffAppearancesCount,
             topScoreWeeksCount: careerTopScoreWeeks,
             avgDPR: careerSeasonsWithDPRData > 0 ? careerTotalDPRSum / careerSeasonsWithDPRData : 0,
+            totalLuckRating: careerTotalLuckRating, // Add total luck rating here
         };
     });
 
@@ -258,6 +252,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
         overallStats.avgDPR = selectedTeamCareerStats.avgDPR;
         overallStats.totalChampionships = selectedTeamCareerStats.championships;
         overallStats.playoffAppearancesCount = selectedTeamCareerStats.playoffAppearancesCount;
+        overallStats.totalLuckRating = selectedTeamCareerStats.totalLuckRating; // Set total luck rating
 
         const allWins = Object.values(allTeamsAggregatedStats).map(t => t.wins);
         const allWinPercentages = Object.values(allTeamsAggregatedStats).map(t => t.winPercentage);
@@ -265,6 +260,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
         const allTopScoreWeeks = Object.values(allTeamsAggregatedStats).map(t => t.topScoreWeeksCount);
         const allPlayoffAppearances = Object.values(allTeamsAggregatedStats).map(t => t.playoffAppearancesCount);
         const allChampionships = Object.values(allTeamsAggregatedStats).map(t => t.championships);
+        const allTotalLuckRatings = Object.values(allTeamsAggregatedStats).map(t => t.totalLuckRating); // Get all luck ratings
 
         overallStats.winRank = calculateRank(selectedTeamCareerStats.wins, allWins);
         overallStats.winPercentageRank = calculateRank(selectedTeamCareerStats.winPercentage, allWinPercentages);
@@ -272,6 +268,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
         overallStats.topScoreWeeksRank = calculateRank(selectedTeamCareerStats.topScoreWeeksCount, allTopScoreWeeks);
         overallStats.playoffRank = calculateRank(selectedTeamCareerStats.playoffAppearancesCount, allPlayoffAppearances);
         overallStats.championshipRank = calculateRank(selectedTeamCareerStats.championships, allChampionships);
+        overallStats.luckRank = calculateRank(selectedTeamCareerStats.totalLuckRating, allTotalLuckRatings); // Calculate luck rank
 
         // Sum up other awards based on seasonalMetrics flags for the current team
         Object.keys(seasonalMetrics).forEach(yearStr => {
@@ -414,6 +411,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
           />
           <StatCard title="Playoff Appearances" value={teamOverallStats.playoffAppearancesCount} rank={teamOverallStats.playoffRank} />
           <StatCard title="Championships" value={teamOverallStats.totalChampionships} rank={teamOverallStats.championshipRank} />
+          <StatCard title="Total Luck Rating" value={formatLuckRating(teamOverallStats.totalLuckRating)} rank={teamOverallStats.luckRank} />
         </div>
       </section>
 
