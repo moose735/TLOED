@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   calculateMoneylineOdds,
   calculateOverUnder,
-  getPlayerMetricsForYear, // Still useful for general player stats
+  getPlayerMetricsForYear,
   calculateTeamAverageDifferenceVsOpponent,
   calculateSigmaSquaredOverCount,
   calculateFutureOpponentAverageScoringDifference,
@@ -34,7 +34,7 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
         }
         const data = await response.json();
         setWeeklyScheduleData(data);
-        console.log("WeeklyMatchupsDisplay: Fetched weekly schedule data:", data);
+        // console.log("WeeklyMatchupsDisplay: Fetched weekly schedule data:", data); // Debugging log
       } catch (e) {
         console.error("Error fetching weekly schedule data:", e);
         setError(e.message);
@@ -52,17 +52,17 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
   const { seasonalMetrics } = useMemo(() => {
     if (historicalMatchups && historicalMatchups.length > 0) {
       const metrics = calculateAllLeagueMetrics(historicalMatchups, getMappedTeamName);
-      console.log("WeeklyMatchupsDisplay: Calculated seasonalMetrics from historicalMatchups:", metrics.seasonalMetrics);
+      // console.log("WeeklyMatchupsDisplay: Calculated seasonalMetrics from historicalMatchups:", metrics.seasonalMetrics); // Debugging log
       return metrics;
     }
-    console.warn("WeeklyMatchupsDisplay: seasonalMetrics not calculated because historicalMatchups is empty.");
+    // console.warn("WeeklyMatchupsDisplay: seasonalMetrics not calculated because historicalMatchups is empty."); // Debugging warning
     return { seasonalMetrics: {} }; // Default empty if no historical matchups
   }, [historicalMatchups, getMappedTeamName]);
 
 
   const processedWeeklyMatchups = useMemo(() => {
     if (!weeklyScheduleData || weeklyScheduleData.length === 0 || Object.keys(seasonalMetrics).length === 0) {
-      console.warn("WeeklyMatchupsDisplay: Skipping matchup processing due to missing weeklyScheduleData or seasonalMetrics.");
+      // console.warn("WeeklyMatchupsDisplay: Skipping matchup processing due to missing weeklyScheduleData or seasonalMetrics."); // Debugging warning
       return {};
     }
 
@@ -100,31 +100,51 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
               // --- Moneyline Odds Logic: DPR for Weeks 1-3, new calculation for later weeks ---
               if (weekNumber <= 3) {
                 // Use DPR for early weeks
-                moneylineOdds = calculateMoneylineOdds(player1Metrics.adjustedDPR, player2Metrics.adjustedDPR);
+                // Handle case where DPR might be 0 (e.g., no games played yet)
+                const p1DPR = player1Metrics.adjustedDPR;
+                const p2DPR = player2Metrics.adjustedDPR;
+
+                let p1WinProbFromDPR;
+                let p2WinProbFromDPR;
+
+                if (p1DPR === 0 && p2DPR === 0) {
+                    p1WinProbFromDPR = 0.5;
+                    p2WinProbFromDPR = 0.5;
+                } else if (p1DPR === 0) { // If one is 0, the other is 100% (or very high) if not 0
+                    p1WinProbFromDPR = 0.001; // Effectively 0
+                    p2WinProbFromDPR = 0.999; // Effectively 1
+                } else if (p2DPR === 0) {
+                    p1WinProbFromDPR = 0.999;
+                    p2WinProbFromDPR = 0.001;
+                } else {
+                    const totalDPR = p1DPR + p2DPR;
+                    p1WinProbFromDPR = p1DPR / totalDPR;
+                    p2WinProbFromDPR = p2DPR / totalDPR;
+                }
+                moneylineOdds = calculateMoneylineOdds(p1WinProbFromDPR, p2WinProbFromDPR);
+
               } else {
                 // For later weeks, use the complex calculation chain
-                // Calculation 1: Average Difference vs Opponent for Player 1
+                // Calculation 1: Average Difference vs Opponent for Player 1 (up to current week)
                 const p1AvgDiffVsOpponent = calculateTeamAverageDifferenceVsOpponent(player1Name, currentYear, weekNumber, historicalMatchups, getMappedTeamName);
-                // Calculation 2: Sigma Squared Over Count for Player 1
+                // Calculation 2: Sigma Squared Over Count for Player 1 (up to current week)
                 const p1SigmaSquaredOverCount = calculateSigmaSquaredOverCount(player1Name, currentYear, weekNumber, historicalMatchups, getMappedTeamName);
                 // Calculation 3: Error Function Coefficient for Player 1
                 const p1ErrorCoeff = calculateErrorFunctionCoefficient(p1AvgDiffVsOpponent, p1SigmaSquaredOverCount);
 
-                // Calculation 1: Average Difference vs Opponent for Player 2
+                // For Player 2 (opponent)
                 const p2AvgDiffVsOpponent = calculateTeamAverageDifferenceVsOpponent(player2Name, currentYear, weekNumber, historicalMatchups, getMappedTeamName);
-                // Calculation 2: Sigma Squared Over Count for Player 2
                 const p2SigmaSquaredOverCount = calculateSigmaSquaredOverCount(player2Name, currentYear, weekNumber, historicalMatchups, getMappedTeamName);
-                // Calculation 3: Error Function Coefficient for Player 2
                 const p2ErrorCoeff = calculateErrorFunctionCoefficient(p2AvgDiffVsOpponent, p2SigmaSquaredOverCount);
 
 
-                // Calculation for win percentage projection for Player 1 against Player 2
-                // We need the average scoring difference *between* them for this specific context
+                // Calculate the average scoring difference *between the two players* for win probability
                 const matchupAvgScoringDiff = calculateFutureOpponentAverageScoringDifference(player1Name, player2Name, currentYear, weekNumber, historicalMatchups, getMappedTeamName);
 
                 // Calculate win probabilities using the complex formula
                 const p1WinProb = calculateWeeklyWinPercentageProjection(matchupAvgScoringDiff, p1ErrorCoeff);
-                const p2WinProb = 1 - p1WinProb; // Assume binary outcome for ML purposes
+                // The opponent's probability is just 1 minus the player's probability for a two-outcome system
+                const p2WinProb = 1 - p1WinProb;
 
                 moneylineOdds = calculateMoneylineOdds(p1WinProb, p2WinProb);
               }
@@ -143,7 +163,7 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
         }
       });
     });
-    console.log("WeeklyMatchupsDisplay: Processed weekly matchups with odds:", matchupsByWeek);
+    // console.log("WeeklyMatchupsDisplay: Processed weekly matchups with odds:", matchupsByWeek); // Debugging log
     return matchupsByWeek;
   }, [weeklyScheduleData, seasonalMetrics, historicalMatchups, getMappedTeamName]);
 
