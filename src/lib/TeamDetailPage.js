@@ -44,9 +44,8 @@ const calculateRank = (value, allValues, isHigherBetter = true) => {
 
 // Formatting functions moved outside the component for accessibility
 const formatScore = (score) => {
-  // Ensure score is a number, then format by first fixing to 2 decimal places (as a string)
-  // then converting back to a number for toLocaleString to handle thousands separators
-  return typeof score === 'number' ? parseFloat(score.toFixed(2)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : 'N/A';
+  // Directly use toLocaleString with minimumFractionDigits and maximumFractionDigits
+  return typeof score === 'number' ? score.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : 'N/A';
 };
 
 const formatPercentage = (value) => {
@@ -402,7 +401,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6"> {/* Updated grid for desktop */}
           <StatCard title="Total Wins" value={teamOverallStats.totalWins} rank={teamOverallStats.winRank} />
           <StatCard title="Win %" value={formatPercentage((teamOverallStats.totalWins + 0.5 * teamOverallStats.totalTies) / teamOverallStats.totalGamesPlayed)} rank={teamOverallStats.winPercentageRank} />
-          <StatCard title="Total Points" value={teamOverallStats.totalPointsFor} rank={teamOverallStats.pointsForRank} />
+          <StatCard title="Total Points" value={formatScore(teamOverallStats.totalPointsFor)} rank={teamOverallStats.pointsForRank} />
           <StatCard
             title="Weekly Top Scores"
             value={
