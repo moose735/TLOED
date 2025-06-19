@@ -397,7 +397,6 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
 
       {/* Overall Stats */}
       <section className="mb-8">
-        <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Overall Career Stats</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6"> {/* Updated grid for desktop */}
           <StatCard title="Total Wins" value={teamOverallStats.totalWins} rank={teamOverallStats.winRank} />
           <StatCard title="Win %" value={formatPercentage((teamOverallStats.totalWins + 0.5 * teamOverallStats.totalTies) / teamOverallStats.totalGamesPlayed)} rank={teamOverallStats.winPercentageRank} />
@@ -419,7 +418,6 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
 
       {/* Season by Season History Table */}
       <section className="mb-8">
-        <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Season-by-Season History</h3>
         {teamSeasonHistory.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
