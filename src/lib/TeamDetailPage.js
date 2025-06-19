@@ -464,9 +464,10 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
 // Simple Stat Card Component (reused from PowerRankings or other places)
 const StatCard = ({ title, value, rank }) => ( // Added rank prop
   <div className="bg-blue-50 p-2 rounded-lg shadow-sm flex flex-col items-center justify-center text-center border border-blue-200">
-    {rank && rank !== 'N/A' && <p className="text-sm font-bold text-blue-700">{rank}</p>} {/* Display rank */}
-    <p className="text-sm font-semibold text-blue-800 mb-1">{title}</p>
-    <p className="text-lg font-bold text-gray-800">{value}</p>
+    {rank && rank !== 'N/A' && <p className="text-2xl font-bold text-blue-700">{rank}</p>} {/* Larger font for rank */}
+    <p className="text-sm font-semibold text-blue-800">
+      {title} (<span className="text-base font-bold text-gray-800">{value}</span>) {/* Value in parenthesis, next to title */}
+    </p>
   </div>
 );
 
