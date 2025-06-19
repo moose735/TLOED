@@ -30,6 +30,7 @@ const erf = (x) => {
 
 /**
  * Converts decimal odds to American odds (+/-).
+ * ADJUSTED: Inverts the sign of the traditional American odds display.
  * @param {number} decimalOdds - The decimal odds (e.g., 2.0 for +100, 1.5 for -200).
  * @returns {string} American odds string (e.g., "+100", "-200"). Returns 'N/A' for invalid input.
  */
@@ -38,10 +39,20 @@ const decimalToAmericanOdds = (decimalOdds) => {
     return 'N/A';
   }
 
-  if (decimalOdds >= 2.0) { // Underdog (+ve odds) including +100
-    return "+" + Math.round((decimalOdds - 1) * 100).toString();
-  } else { // Favorite (-ve odds)
-    return Math.round(-100 / (decimalOdds - 1)).toString();
+  // Original Logic:
+  // if (decimalOdds >= 2.0) { // Underdog (+ve odds) including +100
+  //   return "+" + Math.round((decimalOdds - 1) * 100).toString();
+  // } else { // Favorite (-ve odds)
+  //   return Math.round(-100 / (decimalOdds - 1)).toString();
+  // }
+
+  // Modified Logic: Invert the sign of the result
+  if (decimalOdds >= 2.0) { // Currently results in +ve American odds (e.g., +100). We will make it -ve.
+    return "-" + Math.round((decimalOdds - 1) * 100).toString();
+  } else { // Currently results in -ve American odds (e.g., -200). We will make it +ve.
+    // Need to ensure the calculated value is positive, then prepend "+"
+    const calculatedOdds = Math.round(-100 / (decimalOdds - 1));
+    return "+" + Math.abs(calculatedOdds).toString();
   }
 };
 
@@ -284,15 +295,15 @@ export const calculateErrorFunctionCoefficient = (avgDiffVsOpponent, sigmaSquare
 /**
  * Calculates the weekly win percentage projection using the provided ERF-based formula.
  * Formula: =IFERROR(
- *   IF(
- *     HZ215 = 0,
- *     0.5,
- *     IF(
- *       HZ215 > 0,
- *       ERF((IR215 / HZ215) / 2^0.5) / 2 + 0.5,
- *       1 - (ERF((IR215 / ABS(HZ215)) / 2^0.5) / 2 + 0.5)
- *     )
- *   ),
+ * IF(
+ * HZ215 = 0,
+ * 0.5,
+ * IF(
+ * HZ215 > 0,
+ * ERF((IR215 / HZ215) / 2^0.5) / 2 + 0.5,
+ * 1 - (ERF((IR215 / ABS(HZ215)) / 2^0.5) / 2 + 0.5)
+ * )
+ * ),
  * "")
  * HZ215 = Player's Average difference vs opponent for the current week/season
  * IR215 = Player's Error Function Coefficient for the current week/season
