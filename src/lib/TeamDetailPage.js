@@ -28,7 +28,7 @@ const formatDPR = (value) => {
 };
 
 
-const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => { // Removed historicalChampions prop
+const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => {
   const [teamOverallStats, setTeamOverallStats] = useState(null);
   const [teamSeasonHistory, setTeamSeasonHistory] = useState([]);
   const [loadingStats, setLoadingStats] = useState(true);
@@ -53,6 +53,13 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
       avgDPR: 0, // Career average DPR
       totalDPRSum: 0, // To calculate average
       seasonsWithDPRData: 0, // To count seasons with valid DPR for average
+      // New cumulative award counts
+      totalChampionships: 0,
+      totalRunnerUps: 0,
+      totalThirdPlaces: 0,
+      totalPointsChampionships: 0,
+      totalPointsRunnerUps: 0,
+      totalThirdPlacePoints: 0,
     };
 
     const seasonalData = {};
@@ -148,18 +155,8 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
 
         compiledSeasonHistory.push({
           year: year,
-          // Render team name with award icons based on seasonal metrics
-          team: (
-            <span>
-              {seasonTeamStats.teamName}
-              {metricsForSeason.isChampion && <span title="League Champion" style={{ marginLeft: '5px', color: 'gold' }}>🏆</span>}
-              {metricsForSeason.isRunnerUp && <span title="League Runner-Up" style={{ marginLeft: '5px', color: 'silver' }}>🥈</span>}
-              {metricsForSeason.isThirdPlace && <span title="League Third Place" style={{ marginLeft: '5px', color: '#cd7f32' }}>🥉</span>}
-              {metricsForSeason.isPointsChampion && <span title="Points Champion" style={{ marginLeft: '5px', color: 'gold' }}>🥇</span>}
-              {metricsForSeason.isPointsRunnerUp && <span title="2nd Place Total Points" style={{ marginLeft: '5px', color: 'silver' }}>🥈</span>}
-              {metricsForSeason.isThirdPlacePoints && <span title="3rd Place Total Points" style={{ marginLeft: '5px', color: '#cd7f32' }}>🥉</span>}
-            </span>
-          ),
+          // Removed individual season award icons from here
+          team: seasonTeamStats.teamName,
           wins: seasonTeamStats.wins,
           losses: seasonTeamStats.losses,
           ties: seasonTeamStats.ties,
@@ -182,9 +179,24 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
             overallStats.seasonsWithDPRData++;
         }
 
-        // Sum up championships based on seasonalMetrics.isChampion flag
+        // Sum up championships and other awards based on seasonalMetrics flags
         if (metricsForSeason.isChampion) {
-            overallStats.championships++;
+            overallStats.totalChampionships++;
+        }
+        if (metricsForSeason.isRunnerUp) {
+            overallStats.totalRunnerUps++;
+        }
+        if (metricsForSeason.isThirdPlace) {
+            overallStats.totalThirdPlaces++;
+        }
+        if (metricsForSeason.isPointsChampion) {
+            overallStats.totalPointsChampionships++;
+        }
+        if (metricsForSeason.isPointsRunnerUp) {
+            overallStats.totalPointsRunnerUps++;
+        }
+        if (metricsForSeason.isThirdPlacePoints) {
+            overallStats.totalThirdPlacePoints++;
         }
       }
     });
@@ -224,9 +236,34 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
         {teamName} - Team Profile
         <span className="block text-lg font-medium text-gray-600 mt-2">
           Record: {teamOverallStats.totalWins}-{teamOverallStats.totalLosses}-{teamOverallStats.totalTies} | Career DPR: {formatDPR(teamOverallStats.avgDPR)}
-          {teamOverallStats.championships > 0 && (
-            <span className="ml-3 text-yellow-500">
-              🏆 {teamOverallStats.championships} {teamOverallStats.championships === 1 ? 'Championship' : 'Championships'}
+          {teamOverallStats.totalChampionships > 0 && (
+            <span title={`${teamOverallStats.totalChampionships} Championship${teamOverallStats.totalChampionships === 1 ? '' : 's'}`} className="ml-3 text-yellow-500">
+              🏆 {teamOverallStats.totalChampionships}
+            </span>
+          )}
+          {teamOverallStats.totalRunnerUps > 0 && (
+            <span title={`${teamOverallStats.totalRunnerUps} Runner-Up${teamOverallStats.totalRunnerUps === 1 ? '' : 's'}`} className="ml-2 text-gray-500">
+              🥈 {teamOverallStats.totalRunnerUps}
+            </span>
+          )}
+          {teamOverallStats.totalThirdPlaces > 0 && (
+            <span title={`${teamOverallStats.totalThirdPlaces} Third Place${teamOverallStats.totalThirdPlaces === 1 ? '' : 's'}`} className="ml-2 text-amber-700">
+              🥉 {teamOverallStats.totalThirdPlaces}
+            </span>
+          )}
+          {teamOverallStats.totalPointsChampionships > 0 && (
+            <span title={`${teamOverallStats.totalPointsChampionships} Points Champion${teamOverallStats.totalPointsChampionships === 1 ? '' : 's'}`} className="ml-2 text-yellow-600">
+              � {teamOverallStats.totalPointsChampionships}
+            </span>
+          )}
+          {teamOverallStats.totalPointsRunnerUps > 0 && (
+            <span title={`${teamOverallStats.totalPointsRunnerUps} 2nd Place Total Points`} className="ml-2 text-gray-500">
+              🥈 {teamOverallStats.totalPointsRunnerUps}
+            </span>
+          )}
+          {teamOverallStats.totalThirdPlacePoints > 0 && (
+            <span title={`${teamOverallStats.totalThirdPlacePoints} 3rd Place Total Points`} className="ml-2 text-amber-700">
+              🥉 {teamOverallStats.totalThirdPlacePoints}
             </span>
           )}
         </span>
@@ -248,7 +285,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
             }
           />
           <StatCard title="Playoff Appearances" value={teamOverallStats.playoffAppearances.size} />
-          <StatCard title="Championships" value={teamOverallStats.championships} />
+          <StatCard title="Championships" value={teamOverallStats.totalChampionships} />
         </div>
       </section>
 
@@ -305,3 +342,4 @@ const StatCard = ({ title, value }) => (
 );
 
 export default TeamDetailPage;
+�
