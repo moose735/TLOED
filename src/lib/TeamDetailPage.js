@@ -153,6 +153,16 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
 
         compiledSeasonHistory.push({
           year: year,
+          // Add icons for achievements
+          team: (
+            <span>
+              {seasonTeamStats.teamName}
+              {metricsForSeason.isChampion && <span title="Champion" style={{ marginLeft: '5px', color: 'gold' }}>🏆</span>}
+              {metricsForSeason.isRunnerUp && <span title="Runner-Up" style={{ marginLeft: '5px', color: 'silver' }}>🥈</span>}
+              {metricsForSeason.isThirdPlace && <span title="Third Place" style={{ marginLeft: '5px', color: '#cd7f32' }}>🥉</span>}
+              {metricsForSeason.isPointsChampion && <span title="Points Champion" style={{ marginLeft: '5px', color: 'red' }}>⭐</span>}
+            </span>
+          ),
           wins: seasonTeamStats.wins,
           losses: seasonTeamStats.losses,
           ties: seasonTeamStats.ties,
@@ -161,6 +171,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
           luckRating: metricsForSeason.luckRating,
           adjustedDPR: metricsForSeason.adjustedDPR,
           allPlayWinPercentage: metricsForSeason.allPlayWinPercentage,
+          topScores: metricsForSeason.topScoreWeeksCount !== undefined ? metricsForSeason.topScoreWeeksCount : 'N/A',
           winPercentage: seasonWinPercentage,
           finish: metricsForSeason.rank ? `${metricsForSeason.rank}${getOrdinalSuffix(metricsForSeason.rank)}` : 'N/A', // Use rank from seasonalMetrics
         });
@@ -252,6 +263,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
               <thead className="bg-gray-50">
                 <tr>
                   <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Year</th>
+                  <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th> {/* Updated header for icons */}
                   <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record (W-L-T)</th>
                   <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Points For</th>
                   <th className="py-2 px-3 text-left text-xs font-semibold text-red-700 uppercase tracking-wider border-b border-gray-200">Points Against</th>
@@ -259,12 +271,14 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
                   <th className="py-2 px-3 text-left text-xs font-semibold text-purple-700 uppercase tracking-wider border-b border-gray-200">Finish</th>
                   <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Adjusted DPR</th>
                   <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">All-Play Win %</th>
+                  <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Top Scores</th> {/* New column for top scores */}
                 </tr>
               </thead>
               <tbody>
                 {teamSeasonHistory.map((season, index) => (
                   <tr key={season.year} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                     <td className="py-2 px-3 text-sm text-gray-800">{season.year}</td>
+                    <td className="py-2 px-3 text-sm text-gray-800">{season.team}</td> {/* Render team with icons */}
                     <td className="py-2 px-3 text-sm text-gray-800">{season.wins}-{season.losses}-{season.ties}</td>
                     <td className="py-2 px-3 text-sm text-gray-700">{formatScore(season.pointsFor)}</td>
                     <td className="py-2 px-3 text-sm text-gray-700">{formatScore(season.pointsAgainst)}</td>
@@ -272,6 +286,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, histo
                     <td className="py-2 px-3 text-sm text-gray-700">{season.finish}</td>
                     <td className="py-2 px-3 text-sm text-gray-700">{formatDPR(season.adjustedDPR)}</td>
                     <td className="py-2 px-3 text-sm text-gray-700">{formatPercentage(season.allPlayWinPercentage)}</td>
+                    <td className="py-2 px-3 text-sm text-gray-700">{season.topScores} week{season.topScores === 1 ? '' : 's'}</td> {/* Display top scores count */}
                   </tr>
                 ))}
               </tbody>
