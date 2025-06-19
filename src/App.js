@@ -364,9 +364,12 @@ const App = () => {
                 getDisplayTeamName={getMappedTeamName}
               />
             )}
-            {activeTab === TABS.WEEKLY_MATCHUPS && ( // New: Render WeeklyMatchupsDisplay
-              <WeeklyMatchupsDisplay />
-            )}
+            {activeTab === TABS.WEEKLY_MATCHUPS && (
+  <WeeklyMatchupsDisplay
+    historicalMatchups={historicalMatchups} // Pass the data
+    getMappedTeamName={getMappedTeamName} // Pass the helper function
+  />
+)}
             {activeTab === TABS.DPR_ANALYSIS && (
               <DPRAnalysis
                 historicalMatchups={historicalMatchups}
