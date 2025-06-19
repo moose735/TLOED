@@ -1,5 +1,5 @@
 // src/lib/TeamDetailPage.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { calculateAllLeagueMetrics } from '../utils/calculations'; // Import for consistency
 
 // Helper function to get ordinal suffix (1st, 2nd, 3rd, 4th, etc.)
@@ -65,6 +65,10 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
   const [teamOverallStats, setTeamOverallStats] = useState(null);
   const [teamSeasonHistory, setTeamSeasonHistory] = useState([]);
   const [loadingStats, setLoadingStats] = useState(true);
+
+  // State for sorting
+  const [sortBy, setSortBy] = useState('year');
+  const [sortOrder, setSortOrder] = useState('desc');
 
   useEffect(() => {
     if (!teamName || !historicalMatchups || historicalMatchups.length === 0) {
@@ -325,9 +329,76 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
 
 
     setTeamOverallStats(overallStats); // Set the state variable here
-    setTeamSeasonHistory(compiledSeasonHistory.sort((a, b) => b.year - a.year)); // Sort by year descending
+    setTeamSeasonHistory(compiledSeasonHistory); // Do not sort here, use useMemo below
     setLoadingStats(false);
   }, [teamName, historicalMatchups, getMappedTeamName]);
+
+  // Handle sorting logic for season history
+  const sortedSeasonHistory = useMemo(() => {
+    if (!teamSeasonHistory.length) return [];
+
+    const sortableHistory = [...teamSeasonHistory]; // Create a mutable copy
+
+    // Helper to convert ordinal/tie ranks to numbers for sorting
+    const parseRankForSort = (rankString) => {
+        if (rankString === 'N/A') return Infinity; // Put N/A at the end
+        if (rankString.startsWith('T-')) {
+            return parseInt(rankString.substring(2));
+        }
+        const match = rankString.match(/^(\d+)/);
+        return match ? parseInt(match[1]) : Infinity;
+    };
+
+    return sortableHistory.sort((a, b) => {
+        let valA, valB;
+
+        switch (sortBy) {
+            case 'year':
+            case 'pointsFor':
+            case 'pointsAgainst':
+            case 'luckRating':
+            case 'adjustedDPR':
+            case 'allPlayWinPercentage':
+                valA = a[sortBy];
+                valB = b[sortBy];
+                break;
+            case 'record': // Sort by win percentage for record
+                valA = (a.wins + 0.5 * a.ties) / (a.wins + a.losses + a.ties);
+                valB = (b.wins + 0.5 * b.ties) / (b.wins + b.losses + b.ties);
+                // Handle division by zero for games played
+                valA = isNaN(valA) ? -Infinity : valA;
+                valB = isNaN(valB) ? -Infinity : valB;
+                break;
+            case 'finish':
+            case 'pointsFinish':
+                valA = parseRankForSort(a[sortBy]);
+                valB = parseRankForSort(b[sortBy]);
+                break;
+            default:
+                // Fallback to year if sortBy is unrecognized
+                valA = a.year;
+                valB = b.year;
+        }
+
+        if (valA < valB) {
+            return sortOrder === 'asc' ? -1 : 1;
+        }
+        if (valA > valB) {
+            return sortOrder === 'asc' ? 1 : -1;
+        }
+        return 0;
+    });
+  }, [teamSeasonHistory, sortBy, sortOrder]);
+
+  // Function to handle sort column click
+  const handleSort = (column) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(column);
+      setSortOrder('asc'); // Default to ascending for new sort column
+    }
+  };
 
 
   if (loadingStats) {
@@ -398,7 +469,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
 
       {/* Overall Stats */}
       <section className="mb-8">
-        <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Overall Career Stats</h3>
+        <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">League Ranks</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6"> {/* Updated grid for desktop */}
           <StatCard title="Total Wins" value={teamOverallStats.totalWins} rank={teamOverallStats.winRank} />
           <StatCard title="Win %" value={formatPercentage((teamOverallStats.totalWins + 0.5 * teamOverallStats.totalTies) / teamOverallStats.totalGamesPlayed)} rank={teamOverallStats.winPercentageRank} />
@@ -420,35 +491,51 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
 
       {/* Season by Season History Table */}
       <section className="mb-8">
-        <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Season-by-Season History</h3>
+        <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Season History</h3>
         {teamSeasonHistory.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-center">Year</th>
-                  {/* Removed Team column header */}
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-center">Record (W-L-T)</th>
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200 text-center">Points For</th>
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-red-700 uppercase tracking-wider border-b border-gray-200 text-center">Points Against</th>
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-yellow-700 uppercase tracking-wider border-b border-gray-200 text-center">Luck Rating</th>
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-purple-700 uppercase tracking-wider border-b border-gray-200 text-center">Finish</th>
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-center">Points Finish</th>{/* New Column Header */}
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200 text-center">Adjusted DPR</th>
-                  <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200 text-center">All-Play Win %</th>
+                  <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-center cursor-pointer" onClick={() => handleSort('year')}>
+                    Year {sortBy === 'year' && (sortOrder === 'asc' ? '▲' : '▼')}
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-center cursor-pointer" onClick={() => handleSort('record')}>
+                    Record (W-L-T) {sortBy === 'record' && (sortOrder === 'asc' ? '▲' : '▼')}
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200 text-center cursor-pointer" onClick={() => handleSort('pointsFor')}>
+                    Points For {sortBy === 'pointsFor' && (sortOrder === 'asc' ? '▲' : '▼')}
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-red-700 uppercase tracking-wider border-b border-gray-200 text-center cursor-pointer" onClick={() => handleSort('pointsAgainst')}>
+                    Points Against {sortBy === 'pointsAgainst' && (sortOrder === 'asc' ? '▲' : '▼')}
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-yellow-700 uppercase tracking-wider border-b border-gray-200 text-center cursor-pointer" onClick={() => handleSort('luckRating')}>
+                    Luck Rating {sortBy === 'luckRating' && (sortOrder === 'asc' ? '▲' : '▼')}
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-purple-700 uppercase tracking-wider border-b border-gray-200 text-center cursor-pointer" onClick={() => handleSort('finish')}>
+                    Finish {sortBy === 'finish' && (sortOrder === 'asc' ? '▲' : '▼')}
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-center cursor-pointer" onClick={() => handleSort('pointsFinish')}>
+                    Points Finish {sortBy === 'pointsFinish' && (sortOrder === 'asc' ? '▲' : '▼')}
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200 text-center cursor-pointer" onClick={() => handleSort('adjustedDPR')}>
+                    Adjusted DPR {sortBy === 'adjustedDPR' && (sortOrder === 'asc' ? '▲' : '▼')}
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200 text-center cursor-pointer" onClick={() => handleSort('allPlayWinPercentage')}>
+                    All-Play Win % {sortBy === 'allPlayWinPercentage' && (sortOrder === 'asc' ? '▲' : '▼')}
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {teamSeasonHistory.map((season, index) => (
+                {sortedSeasonHistory.map((season, index) => (
                   <tr key={season.year} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                     <td className="py-2 px-3 text-sm text-gray-800 text-center">{season.year}</td>
-                    {/* Removed Team column data */}
                     <td className="py-2 px-3 text-sm text-gray-800 text-center">{season.wins}-{season.losses}-{season.ties}</td>
                     <td className="py-2 px-3 text-sm text-gray-700 text-center">{formatScore(season.pointsFor)}</td>
                     <td className="py-2 px-3 text-sm text-gray-700 text-center">{formatScore(season.pointsAgainst)}</td>
                     <td className="py-2 px-3 text-sm text-gray-700 text-center">{formatLuckRating(season.luckRating)}</td>
                     <td className="py-2 px-3 text-sm text-gray-700 text-center">{season.finish}</td>
-                    <td className="py-2 px-3 text-sm text-gray-700 text-center">{season.pointsFinish}</td> {/* New Column Data */}
+                    <td className="py-2 px-3 text-sm text-gray-700 text-center">{season.pointsFinish}</td>
                     <td className="py-2 px-3 text-sm text-gray-700 text-center">{formatDPR(season.adjustedDPR)}</td>
                     <td className="py-2 px-3 text-sm text-gray-700 text-center">{formatPercentage(season.allPlayWinPercentage)}</td>
                   </tr>
