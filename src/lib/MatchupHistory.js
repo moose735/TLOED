@@ -1,6 +1,8 @@
 // src/lib/MatchupHistory.js
 import React, { useState, useEffect, useCallback } from 'react';
+// Removed import of HISTORICAL_MATCHUPS_API_URL, as data is passed from App.js
 import Head2HeadGrid from './Head2HeadGrid';
+// Removed import of RecordBook
 
 // Helper function to get ordinal suffix (1st, 2nd, 3rd, 4th, etc.)
 const getOrdinalSuffix = (n) => {
@@ -25,42 +27,129 @@ const getFinalSeedingGamePurpose = (value) => {
 };
 
 
-// MatchupHistory now receives onRivalryCellClick as the new prop
-const MatchupHistory = ({ historicalMatchups, getMappedTeamName, onRivalryCellClick }) => { // <-- Updated prop name
-  const [selectedRivalryKey, setSelectedRivalryKey] = useState(null);
+// MatchupHistory now receives historicalMatchups, loading, and error as props
+const MatchupHistory = ({ historicalMatchups, loading, error, getMappedTeamName }) => {
+  // Removed internal historicalMatchups, loading, error states, as they are props now
 
-  useEffect(() => {
-    if (selectedRivalryKey) {
-      console.log("Rivalry selected:", selectedRivalryKey);
-    }
-  }, [selectedRivalryKey]);
+  // Removed seasonRecords state, as its data processing moved to SeasonRecords.js
+  const [championshipGames, setChampionshipGames] = useState([]);
 
-  const getDisplayTeamName = useCallback((teamName) => {
-    return getMappedTeamName(teamName);
+  const getDisplayTeamName = useCallback((originalName) => {
+    return getMappedTeamName ? getMappedTeamName(originalName) : originalName;
   }, [getMappedTeamName]);
 
-  const finalSeedingGames = historicalMatchups.flatMap(season =>
-    season.matchups.filter(matchup => matchup.finalSeedingGamePurpose)
-  );
+
+  // --- Data Processing (only for sections remaining in MatchupHistory, like championship games) ---
+  useEffect(() => {
+    if (!historicalMatchups || historicalMatchups.length === 0) {
+      // Removed setSeasonRecords({});
+      setChampionshipGames([]);
+      return;
+    }
+
+    // Removed newSeasonRecords processing here
+    const newChampionshipGames = [];
+
+    historicalMatchups.forEach(match => {
+      const team1 = getDisplayTeamName(String(match.team1 || '').trim());
+      const team2 = getDisplayTeamName(String(match.team2 || '').trim());
+      const year = match.year;
+      const team1Score = parseFloat(match.team1Score);
+      const team2Score = parseFloat(match.team2Score);
+
+      if (!team1 || !team2 || isNaN(team1Score) || isNaN(team2Score)) {
+        console.warn('Skipping invalid matchup data in MatchupHistory for championship games:', match);
+        return;
+      }
+
+      const isTie = team1Score === team2Score;
+      const team1Won = team1Score > team2Score;
+      const team2Won = team2Score > team1Score;
+
+      if (typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0) {
+          let winner = 'Tie';
+          let loser = 'Tie';
+          let winnerScore = team1Score;
+          let loserScore = team2Score;
+
+          if (team1Won) {
+              winner = team1;
+              loser = team2;
+              winnerScore = team1Score;
+              loserScore = team2Score;
+          } else if (team2Won) {
+              winner = team2;
+              loser = team1;
+              winnerScore = team2Score;
+              loserScore = team1Score;
+          }
+
+          const winningPlace = match.finalSeedingGame;
+          const losingPlace = match.finalSeedingGame + 1;
+
+          newChampionshipGames.push({
+              year: year,
+              week: match.week,
+              team1: team1,
+              team2: team2,
+              team1Score: team1Score,
+              team2Score: team2Score,
+              purpose: getFinalSeedingGamePurpose(match.finalSeedingGame),
+              winner: winner,
+              loser: loser,
+              winnerScore: winnerScore,
+              loserScore: loserScore,
+              winnerPlace: winningPlace,
+              loserPlace: losingPlace
+          });
+      }
+    });
+
+    setChampionshipGames(newChampionshipGames.sort((a, b) => {
+      if (b.year !== a.year) {
+        return b.year - a.year;
+      }
+      return a.winnerPlace - b.winnerPlace;
+    }));
+
+  }, [historicalMatchups, getDisplayTeamName]); // historicalMatchups is a prop now
+
+  const renderRecord = (record) => {
+    if (!record) return '0-0-0';
+    return `${record.wins || 0}-${record.losses || 0}-${record.ties || 0}`;
+  };
+
+  // Removed sortedYears as seasonRecords state is gone
 
   return (
-    <div className="p-4 bg-white rounded-lg shadow">
-      {historicalMatchups.length === 0 ? (
-        <p className="text-gray-600">No historical matchup data available.</p>
+    <div className="w-full max-w-4xl bg-white p-8 rounded-lg shadow-md mt-8">
+      <h2 className="text-2xl font-bold text-blue-700 mb-4 text-center">League History & Stats</h2>
+
+      {loading ? (
+        <p className="text-center text-gray-600">Loading league history data...</p>
+      ) : error ? (
+        <p className="text-center text-red-500 font-semibold">{error}</p>
+      ) : historicalMatchups.length === 0 ? (
+        <p className="text-center text-gray-600">No historical matchup data found. Ensure your Apps Script is correctly deployed and Google Sheet has data.</p>
       ) : (
         <>
+          {/* Championship and Final Seeding Games */}
           <section className="mb-8">
-            <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Championship and Final Seeding Games History</h3>
-            {finalSeedingGames.length > 0 ? (
+            <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Championship & Seeding Games</h3>
+            {championshipGames.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {finalSeedingGames.map((game, index) => (
-                        <div key={index} className="border p-4 rounded-lg bg-blue-50 shadow-sm">
-                            <p className="text-lg font-semibold text-blue-800 mb-2">{game.year} - {getFinalSeedingGamePurpose(game.finalSeedingGamePurpose)}</p>
-                            <p className="text-sm text-green-700 font-semibold">
-                                Winner: {game.winner} ({game.winnerScore}) - Finished {game.winnerPlace}{getOrdinalSuffix(game.winnerPlace)} Place
+                    {championshipGames.map((game, index) => (
+                        <div key={index} className="bg-blue-50 p-4 rounded-lg shadow-sm border border-blue-200">
+                            <h4 className="font-bold text-blue-800 text-lg mb-2">{game.year} {game.purpose}</h4>
+                            <p className="text-sm text-gray-700">Week {game.week}</p>
+                            <p className="text-sm text-gray-700">
+                                <strong>{game.team1}</strong> ({game.team1Score}) vs <strong>{game.team2}</strong> ({game.team2Score})
                             </p>
-                            {game.loser ? (
+                            {game.winner !== 'Tie' ? (
                                 <>
+                                    <p className="text-sm text-blue-700 font-semibold mt-1">
+                                        Winner: {game.winner} ({game.winnerScore}) - Finished {game.winnerPlace}{getOrdinalSuffix(game.winnerPlace)} Place
+                                    </p>
                                     <p className="text-sm text-red-700 font-semibold">
                                         Loser: {game.loser} ({game.loserScore}) - Finished {game.loserPlace}{getOrdinalSuffix(game.loserPlace)} Place
                                     </p>
@@ -78,13 +167,14 @@ const MatchupHistory = ({ historicalMatchups, getMappedTeamName, onRivalryCellCl
             )}
           </section>
 
+          {/* Removed Season-by-Season Records from here */}
+
+          {/* Head-to-Head Rivalries / Versus History section handled by Head2HeadGrid */}
           <section className="mb-8">
             <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Head-to-Head Rivalries</h3>
             <Head2HeadGrid
               historicalMatchups={historicalMatchups}
               getDisplayTeamName={getDisplayTeamName}
-              setSelectedRivalryKey={setSelectedRivalryKey}
-              onRivalryCellClick={onRivalryCellClick} // <-- Pass the new handler from App.js
             />
           </section>
         </>
