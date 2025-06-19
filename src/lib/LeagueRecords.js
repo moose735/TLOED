@@ -25,7 +25,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     // First pass to aggregate basic seasonal data for counts and seasonal all-play averages
     Object.keys(seasonalMetrics).forEach(year => {
       Object.keys(seasonalMetrics[year]).forEach(team => {
-        const seasonData = seasonalMetrics[year][year][team]; // Corrected: Access team data within the specific year
+        const seasonData = seasonalMetrics[year][team]; // Corrected: Access team data within the specific year
 
         if (!aggregatedCareerStats[team]) {
           aggregatedCareerStats[team] = {
