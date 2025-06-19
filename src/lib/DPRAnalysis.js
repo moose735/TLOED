@@ -137,16 +137,16 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
     // Insert the "AVERAGE SEASON" row
     const averageDPRValue = 1.000;
     const averageSeasonRow = {
-      year: 'N/A',
-      team: 'AVERAGE SEASON',
-      dpr: averageDPRValue,
-      wins: 'N/A',
-      losses: 'N/A',
-      ties: 'N/A',
-      winPercentage: 0.500, // Assuming an average season would have a .500 win percentage
-      pointsPerGame: 'N/A',
-      highestPointsGame: 'N/A',
-      lowestPointsGame: 'N/A',
+      year: null, // Set to null so formatters can ignore it
+      team: '----------------Average Season 1.000 DPR----------------',
+      dpr: averageDPRValue, // Keep DPR for sorting purposes
+      wins: null,
+      losses: null,
+      ties: null,
+      winPercentage: null,
+      pointsPerGame: null,
+      highestPointsGame: null,
+      lowestPointsGame: null,
       isAverageRow: true // A flag to identify this special row
     };
 
@@ -176,23 +176,21 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
       }
       return `${formatted}%`;
     }
-    // Handle the 'N/A' case for the average row
-    if (value === 'N/A') return 'N/A';
-    return '.000%';
+    return ''; // Return empty string for non-numeric or null values
   };
 
   const formatDPR = (dprValue) => {
     if (typeof dprValue === 'number' && !isNaN(dprValue)) {
       return dprValue.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
     }
-    return 'N/A';
+    return ''; // Return empty string for non-numeric or null values
   };
 
   const formatPoints = (value) => {
     if (typeof value === 'number' && !isNaN(value)) {
         return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
-    return 'N/A';
+    return ''; // Return empty string for non-numeric or null values
   };
 
   // New formatter for points average (similar to formatPoints)
@@ -200,16 +198,18 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
     if (typeof value === 'number' && !isNaN(value)) {
         return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
-    return 'N/A';
+    return ''; // Return empty string for non-numeric or null values
   };
 
   const renderRecord = (wins, losses, ties) => {
-    // Handle 'N/A' for the average row
-    if (wins === 'N/A') return 'N/A';
+    if (wins === null) return ''; // Check for null to handle the average row
     return `${wins || 0}-${losses || 0}-${ties || 0}`;
   };
 
   const displayedSeasonalDPRData = showAllSeasonal ? seasonalDPRData : seasonalDPRData.slice(0, 20);
+
+  // Determine the number of columns for the colSpan
+  const numberOfSeasonalColumns = 9; // Rank, Team, Season, Season DPR, Win %, Record, Points Avg, Highest Points, Lowest Points
 
   return (
     <div className="w-full">
@@ -284,16 +284,24 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                   </thead>
                   <tbody>
                     {displayedSeasonalDPRData.map((data, index) => (
-                      <tr key={`${data.team}-${data.year}`} className={data.isAverageRow ? 'bg-yellow-100 font-bold' : (index % 2 === 0 ? 'bg-gray-50' : 'bg-white')}>
-                        <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.isAverageRow ? '' : index + 1}</td>
-                        <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.team}</td>
-                        <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.year}</td>
-                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatDPR(data.dpr)}</td>
-                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPercentage(data.winPercentage)}</td>
-                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{renderRecord(data.wins, data.losses, data.ties)}</td>
-                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.pointsPerGame)}</td>
-                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.highestPointsGame)}</td>
-                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.lowestPointsGame)}</td>
+                      <tr key={`${data.team}-${data.year}-${index}`} className={data.isAverageRow ? 'bg-yellow-100 font-bold' : (index % 2 === 0 ? 'bg-gray-50' : 'bg-white')}>
+                        {data.isAverageRow ? (
+                          <td colSpan={numberOfSeasonalColumns} className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap text-center">
+                            {data.team}
+                          </td>
+                        ) : (
+                          <>
+                            <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{index + 1}</td>
+                            <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.team}</td>
+                            <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.year}</td>
+                            <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatDPR(data.dpr)}</td>
+                            <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPercentage(data.winPercentage)}</td>
+                            <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{renderRecord(data.wins, data.losses, data.ties)}</td>
+                            <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.pointsPerGame)}</td>
+                            <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.highestPointsGame)}</td>
+                            <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.lowestPointsGame)}</td>
+                          </>
+                        )}
                       </tr>
                     ))}
                   </tbody>
