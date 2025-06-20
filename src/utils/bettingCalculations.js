@@ -2,7 +2,7 @@
 
 /**
  * Approximates the error function (erf(x)).
- * Used for calculating probabilities in a normal distribution.
+ * Used for calculating probabilities in a normal distribution
  * This is a common approximation for erf(x) for x >= 0.
  * For x < 0, erf(x) = -erf(-x).
  * Source: https://en.wikipedia.org/wiki/Error_function#Approximation_with_elementary_functions
