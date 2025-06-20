@@ -10,9 +10,9 @@ import {
   calculateFutureOpponentAverageScoringDifference,
   calculateErrorFunctionCoefficient,
   calculateWeeklyWinPercentageProjection
-} from '../utils/bettingCalculations';
+} from '../utils/bettingCalculations.js'; // Added .js extension
 // Import calculateAllLeagueMetrics to get seasonal DPR and average score
-import { calculateAllLeagueMetrics } from '../utils/calculations';
+import { calculateAllLeagueMetrics } from '../utils/calculations.js'; // Added .js extension
 
 const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
   const [weeklyScheduleData, setWeeklyScheduleData] = useState([]); // Your original schedule data
