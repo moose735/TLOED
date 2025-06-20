@@ -140,16 +140,55 @@ export const getPlayerMetricsForYear = (seasonalMetrics, playerName, year) => {
   if (seasonalMetrics && seasonalMetrics[year] && seasonalMetrics[year][playerName]) {
     const playerStats = seasonalMetrics[year][playerName];
     return {
-      adjustedDPR: playerStats.adjustedDPR || 0,
+      adjustedDPR: playerStats.adjustedDPR || 0, // Using adjustedDPR for win probability
       averageScore: playerStats.averageScore || 0,
       totalPointsFor: playerStats.pointsFor || 0,
-      pointsAgainst: playerStats.pointsAgainst || 0, // This is total points against this player
+      pointsAgainst: playerStats.pointsAgainst || 0,
       totalGames: playerStats.totalGames || 0,
-      weeklyScores: playerStats.weeklyScores || [], // Array of individual weekly scores in season
+      weeklyScores: playerStats.weeklyScores || [],
     };
   }
   return null;
 };
+
+/**
+ * Calculates the weekly win percentage projection purely based on the relative seasonal DPR/average scores of two players.
+ * A higher DPR/average score implies a higher win probability.
+ *
+ * @param {number} player1DPR - Player 1's seasonal Adjusted DPR or average score.
+ * @param {number} player2DPR - Player 2's seasonal Adjusted DPR or average score.
+ * @returns {number} The calculated win percentage for Player 1 (between 0 and 1). Returns 0.5 for invalid or equal inputs.
+ */
+export const calculateWeeklyWinPercentageProjection = (player1DPR, player2DPR) => {
+  if (typeof player1DPR !== 'number' || isNaN(player1DPR) ||
+      typeof player2DPR !== 'number' || isNaN(player2DPR)) {
+    return 0.5; // Default to 50% if inputs are invalid
+  }
+
+  // If both DPRs are zero or equal, it's a 50/50
+  if (player1DPR === player2DPR) {
+    return 0.5;
+  }
+
+  // Simple proportional probability:
+  // Prob1 = DPR1 / (DPR1 + DPR2)
+  // This approach makes the player with higher DPR have a higher probability.
+  const totalDPR = player1DPR + player2DPR;
+
+  if (totalDPR === 0) {
+    // If both DPRs are 0 (e.g., very early season before data), treat as 50/50
+    return 0.5;
+  }
+
+  const player1WinProbability = player1DPR / totalDPR;
+
+  // Ensure probability is within [0, 1] range due to potential floating point quirks
+  return Math.max(0, Math.min(1, player1WinProbability));
+};
+
+// The following functions are no longer directly used by the simplified calculateWeeklyWinPercentageProjection
+// but are kept here for reference or if they are used elsewhere in your application.
+// If they are not used anywhere else, you can remove them to reduce code size.
 
 /**
  * Calculates the average difference in points scored by a team vs all of their opponents for a given season up to a certain week.
@@ -175,13 +214,17 @@ export const calculateTeamAverageDifferenceVsOpponent = (teamName, year, current
     const displayTeam2 = getMappedTeamName(String(match.team2 || '').trim());
 
     if (matchYear === year && matchWeek < currentWeek && !(match.pointsOnlyBye === true || match.pointsOnlyBye === 'true')) {
+      let score = 0;
       if (displayTeam1 === teamName) {
-        totalPointsFor += parseFloat(match.team1Score || '0');
+        score = parseFloat(match.team1Score || '0');
         totalPointsAgainst += parseFloat(match.team2Score || '0');
-        gamesCounted++;
       } else if (displayTeam2 === teamName) {
-        totalPointsFor += parseFloat(match.team2Score || '0');
+        score = parseFloat(match.team2Score || '0');
         totalPointsAgainst += parseFloat(match.team1Score || '0');
+      }
+
+      if (score !== 0) { // Only count if a valid score
+        totalPointsFor += score;
         gamesCounted++;
       }
     }
@@ -298,56 +341,13 @@ export const calculateFutureOpponentAverageScoringDifference = (team1Name, team2
  * @returns {number} The calculated error function coefficient (IR215).
  */
 export const calculateErrorFunctionCoefficient = (avgDiffVsOpponent, sigmaSquaredOverCount) => {
-  // Calculate standard deviation from sigmaSquaredOverCount (variance)
   const standardDeviation = Math.sqrt(sigmaSquaredOverCount);
 
   if (standardDeviation === 0 || isNaN(standardDeviation) || typeof standardDeviation !== 'number') {
-    return 0; // Avoid division by zero or NaN, or if not a number
+    return 0;
   }
-  // Ensure avgDiffVsOpponent is a valid number before division
   if (typeof avgDiffVsOpponent !== 'number' || isNaN(avgDiffVsOpponent)) {
     return 0;
   }
-  // Apply the corrected formula: (avgDiffVsOpponent / StandardDeviation) * (avgDiffVsOpponent / 2)
   return (avgDiffVsOpponent / standardDeviation) * (avgDiffVsOpponent / 2);
-};
-
-/**
- * Calculates the weekly win percentage projection using a more standard normal distribution approach.
- * This version assumes `avgDiffVsOpponentForPlayer` is the mean of the score difference (Player's Score - Opponent's Score)
- * and uses the individual variances to determine the standard deviation of this difference.
- *
- * @param {number} avgDiffVsOpponentForPlayer - The player's average point differential (mean of Score_Player - Score_Opponent).
- * @param {number} sigmaSquaredPlayer1 - The variance of Player 1's weekly scores.
- * @param {number} sigmaSquaredPlayer2 - The variance of Player 2's weekly scores.
- * @returns {number} The calculated win percentage projection (between 0 and 1). Returns 0.5 for invalid inputs.
- */
-export const calculateWeeklyWinPercentageProjection = (avgDiffVsOpponentForPlayer, sigmaSquaredPlayer1, sigmaSquaredPlayer2) => {
-  if (typeof avgDiffVsOpponentForPlayer !== 'number' || isNaN(avgDiffVsOpponentForPlayer) ||
-      typeof sigmaSquaredPlayer1 !== 'number' || isNaN(sigmaSquaredPlayer1) || sigmaSquaredPlayer1 < 0 ||
-      typeof sigmaSquaredPlayer2 !== 'number' || isNaN(sigmaSquaredPlayer2) || sigmaSquaredPlayer2 < 0) {
-    return 0.5; // Default to 50% if inputs are invalid
-  }
-
-  // Calculate the combined variance of the difference in scores
-  // Assuming player scores are independent, the variance of the difference is the sum of individual variances.
-  const totalVarianceOfDifference = sigmaSquaredPlayer1 + sigmaSquaredPlayer2;
-  const stdDevOfDifference = Math.sqrt(totalVarianceOfDifference);
-
-  if (stdDevOfDifference === 0) {
-    // If standard deviation is zero, it means scores are perfectly predictable.
-    // If diff > 0, player wins (100%), if diff < 0, player loses (0%), if diff == 0, 50%
-    return avgDiffVsOpponentForPlayer > 0 ? 1 : (avgDiffVsOpponentForPlayer < 0 ? 0 : 0.5);
-  }
-
-  // Z-score for the difference being greater than 0
-  // Probability P(X > 0) where X ~ N(mu, sigma^2) is Phi(mu / sigma)
-  // where Phi is the CDF of the standard normal distribution.
-  const zScore = avgDiffVsOpponentForPlayer / stdDevOfDifference;
-
-  // Phi(z) = 0.5 * (1 + erf(z / sqrt(2)))
-  const probability = 0.5 * (1 + erf(zScore / Math.sqrt(2)));
-
-  // Ensure probability is within [0, 1] range due to approximations or extreme values
-  return Math.max(0, Math.min(1, probability));
 };
