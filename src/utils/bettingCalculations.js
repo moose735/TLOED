@@ -309,119 +309,18 @@ export const calculateErrorFunctionCoefficient = (avgDiffVsOpponent, sigmaSquare
     return 0;
   }
   // Apply the corrected formula: (avgDiffVsOpponent / StandardDeviation) * (avgDiffVsOpponent / 2)
-  // This formula looks a bit unusual for a standard error function argument.
-  // Typically, for a difference X between two normally distributed variables with combined variance S^2,
-  // the probability of X > 0 (or X < 0) involves erf(X / (sqrt(2) * S)).
-  // Let's re-evaluate the intended meaning of this "Error Function Coefficient (IR215)".
-  // Based on the `calculateWeeklyWinPercentageProjection` function's usage, `IR215` appears to be a component of the `arg` for `erf`.
-  // The original formula `(IR215 / HZ215) / 2^0.5` becomes `((avgDiffVsOpponent / StandardDeviation) * (avgDiffVsOpponent / 2)) / avgDiffVsOpponent / sqrt(2)`
-  // which simplifies to `(1 / StandardDeviation) * (avgDiffVsOpponent / 2) / sqrt(2)` = `avgDiffVsOpponent / (2 * sqrt(2) * StandardDeviation)`.
-  // This still seems to imply that `errorCoeffForPlayer` (IR215) itself isn't the direct argument, but rather a factor.
-  // The provided formula `(avgDiffVsOpponent / StandardDeviation) * (avgDiffVsOpponent / 2)` means that IR215 is directly proportional to `avgDiffVsOpponent^2`.
-  // This is a bit non-standard for a direct argument to `erf` in probability calculations, which usually expects a z-score like value.
-  //
-  // For a more standard normal distribution win probability (e.g., assuming point differences are normally distributed):
-  // The probability that Player 1 wins (Score1 - Score2 > 0) given a mean difference `avgDiff` and combined variance `totalVariance`
-  // is $P(Z > -avgDiff / \sqrt{totalVariance})$, where $Z$ is a standard normal variable.
-  // This is $0.5 * (1 + erf(avgDiff / (\sqrt{2} * \sqrt{totalVariance})))$.
-  //
-  // Your `calculateWeeklyWinPercentageProjection` is using:
-  // `erf((IR215 / HZ215) / sqrt2) / 2 + 0.5`
-  // If `HZ215` is `avgDiffVsOpponent` and `IR215` is `errorCoeffForPlayer`.
-  // So, the argument to `erf` is `(errorCoeffForPlayer / avgDiffVsOpponent) / sqrt2`.
-  // If we substitute your `calculateErrorFunctionCoefficient` for `errorCoeffForPlayer`:
-  // `(((avgDiffVsOpponent / standardDeviation) * (avgDiffVsOpponent / 2)) / avgDiffVsOpponent) / sqrt2`
-  // `= (avgDiffVsOpponent / (2 * standardDeviation)) / sqrt2`
-  // `= avgDiffVsOpponent / (2 * sqrt2 * standardDeviation)`
-  //
-  // This `avgDiffVsOpponent / (2 * sqrt2 * standardDeviation)` looks like a scaled version of a Z-score.
-  //
-  // Given the existing structure, we will keep the current calculation for `errorCoeffForPlayer` (IR215) as it's defined in the problem,
-  // but it's worth noting that it deviates from a direct Z-score in typical probability calculations.
-  // The formula in `calculateWeeklyWinPercentageProjection` effectively uses a transformed Z-score.
-  //
-  // One common method for calculating win probability from a score differential model:
-  // If player 1's average score is $S_1$, player 2's is $S_2$.
-  // If the standard deviation of game score differences is $\sigma_D$.
-  // Then the probability Player 1 wins is $P(S_1 - S_2 > 0)$.
-  // Assuming $S_1 - S_2$ is normally distributed with mean $S_1 - S_2$ and variance $\sigma_D^2$.
-  // The standard score (Z-score) is $Z = (0 - (S_1 - S_2)) / \sigma_D = -(S_1 - S_2) / \sigma_D$.
-  // The probability is $P(S_1 - S_2 > 0) = P(Z > - (S_1 - S_2) / \sigma_D) = 1 - \Phi(- (S_1 - S_2) / \sigma_D) = \Phi((S_1 - S_2) / \sigma_D)$.
-  // Where $\Phi$ is the CDF of the standard normal distribution, and $\Phi(x) = 0.5 * (1 + erf(x / \sqrt{2}))$.
-  // So, win probability $= 0.5 * (1 + erf((S_1 - S_2) / (\sqrt{2} * \sigma_D)))$.
-  // In your terms: $S_1 - S_2$ is `avgDiffVsOpponent`.
-  // And `sigmaSquaredOverCount` is variance of one team's scores.
-  // The variance of the *difference* in scores is likely a sum of the variances, i.e. $\sigma_D^2 = \sigma_1^2 + \sigma_2^2$.
-  // If `sigmaSquaredOverCount` is meant to approximate the variance for one team, we should consider how it relates to the variance of the *difference* in scores.
-  // For a more accurate model, you'd want the variance of the *difference* in scores between the two teams.
-  // Assuming the `sigmaSquaredOverCount` you are calculating is a proxy for the variance of the difference.
-  //
-  // Let's stick to the current formula's structure for `IR215` and `HZ215` as given, and adjust the `calculateWeeklyWinPercentageProjection`
-  // to be more aligned with a standard normal CDF given these values, if that's the intent.
-  // Given that `calculateWeeklyWinPercentageProjection` is already defined using IR215 and HZ215 in a specific way,
-  // preserving the definition of `calculateErrorFunctionCoefficient` as provided is critical to maintaining consistency
-  // with the original spreadsheet formula logic.
-  // The current formula for IR215 seems to be: $IR215 = (HZ215 / \sigma_{player}) * (HZ215 / 2)$.
-  // This is $IR215 = HZ215^2 / (2 * \sigma_{player})$.
-  // The value fed to erf is $(IR215 / HZ215) / \sqrt{2} = (HZ215^2 / (2 * \sigma_{player})) / HZ215 / \sqrt{2} = HZ215 / (2 * \sqrt{2} * \sigma_{player})$.
-  // This indeed looks like a scaled version of a Z-score. It appears the $\sigma_{player}$ here is used as the standard deviation for the *difference* in scores.
-  // If `sigmaSquaredOverCount` is indeed $\sigma_{player}^2$, then $\sigma_{player} = \text{standardDeviation}$.
-  // So the argument to erf is `avgDiffVsOpponent / (2 * sqrt(2) * standardDeviation)`.
-  // This is an unusual scaling factor ($1/(2\sqrt{2})$) for a standard normal CDF.
-  // A common approach for win probability using point differential would be to use the standard deviation of point differentials.
-
   return (avgDiffVsOpponent / standardDeviation) * (avgDiffVsOpponent / 2);
 };
 
 /**
  * Calculates the weekly win percentage projection using a more standard normal distribution approach.
  * This version assumes `avgDiffVsOpponentForPlayer` is the mean of the score difference (Player's Score - Opponent's Score)
- * and `errorCoeffForPlayer` (IR215) is used to derive the standard deviation of this difference.
+ * and uses the individual variances to determine the standard deviation of this difference.
  *
- * It seems from the original formula that:
- * Arg to erf = (IR215 / HZ215) / sqrt(2)
- * If HZ215 is `avgDiffVsOpponentForPlayer` and IR215 is `errorCoeffForPlayer`.
- * And if `errorCoeffForPlayer = (avgDiffVsOpponentForPlayer / stdDev) * (avgDiffVsOpponentForPlayer / 2)`
- * Then `(IR215 / HZ215) = (avgDiffVsOpponentForPlayer / stdDev) * (avgDiffVsOpponentForPlayer / 2) / avgDiffVsOpponentForPlayer`
- * `= avgDiffVsOpponentForPlayer / (2 * stdDev)`
- * So, `Arg to erf = (avgDiffVsOpponentForPlayer / (2 * stdDev)) / sqrt(2)`
- * `= avgDiffVsOpponentForPlayer / (2 * sqrt(2) * stdDev)`
- *
- * This still looks like a very specific, scaled Z-score.
- * Let's assume the intent is for `stdDev` within `calculateErrorFunctionCoefficient` to be the standard deviation of the *difference* in scores.
- *
- * A more standard and common calculation for win probability given a mean difference and standard deviation of differences,
- * assuming the difference is normally distributed around the mean, is:
- * $P(\text{Player 1 wins}) = P(\text{Score_diff} > 0)$
- * If $\text{Score_diff} \sim N(\mu, \sigma^2)$, where $\mu = \text{avgDiffVsOpponentForPlayer}$ and $\sigma = \text{stdDevOfDifference}$.
- * Then $P(\text{Score_diff} > 0) = P(Z > (0 - \mu) / \sigma) = P(Z > -\mu / \sigma) = 1 - \Phi(-\mu / \sigma) = \Phi(\mu / \sigma)$
- * Using $\Phi(x) = 0.5 * (1 + erf(x / \sqrt{2}))$,
- * $P(\text{Player 1 wins}) = 0.5 * (1 + erf(\mu / (\sigma * \sqrt{2})))$.
- *
- * The original formula looks like it's trying to achieve something similar but with the `IR215` and `HZ215` components.
- * To strictly follow your provided formula structure:
- * `HZ215` is `avgDiffVsOpponentForPlayer`
- * `IR215` is `errorCoeffForPlayer`
- * `erf((IR215 / HZ215) / sqrt2) / 2 + 0.5` if `HZ215 > 0`
- * `1 - (erf((IR215 / ABS(HZ215)) / sqrt2) / 2 + 0.5)` if `HZ215 < 0`
- *
- * Let's analyze the argument `arg = (errorCoeffForPlayer / avgDiffVsOpponentForPlayer) / sqrt2`.
- * If `errorCoeffForPlayer = avgDiffVsOpponentForPlayer * (avgDiffVsOpponentForPlayer / (2 * stdDev))`,
- * then `(errorCoeffForPlayer / avgDiffVsOpponentForPlayer) = avgDiffVsOpponentForPlayer / (2 * stdDev)`.
- * So `arg = (avgDiffVsOpponentForPlayer / (2 * stdDev)) / sqrt2 = avgDiffVsOpponentForPlayer / (2 * sqrt2 * stdDev)`.
- *
- * This implies that `stdDev` is the critical standard deviation value.
- * To make the probability calculation more standard, we should aim for `arg = avgDiffVsOpponentForPlayer / (stdDevOfDifference * sqrt(2))`.
- *
- * **Proposed Improvement:** Instead of relying on `errorCoeffForPlayer` derived in a somewhat complex way, directly calculate the `stdDevOfDifference` and use that.
- *
- * For two independent random variables (scores) $X_1$ and $X_2$ with variances $\sigma_1^2$ and $\sigma_2^2$,
- * the variance of their difference $D = X_1 - X_2$ is $\sigma_D^2 = \sigma_1^2 + \sigma_2^2$.
- *
- * So, we need the variance of Player 1's scores (`sigmaSquaredOverCountPlayer1`) and Player 2's scores (`sigmaSquaredOverCountPlayer2`).
- *
- * Let's redefine `calculateWeeklyWinPercentageProjection` to take `avgDiffVsOpponentForPlayer` and the individual variances.
- * This will make the calculation more aligned with statistical best practices for normally distributed differences.
+ * @param {number} avgDiffVsOpponentForPlayer - The player's average point differential (mean of Score_Player - Score_Opponent).
+ * @param {number} sigmaSquaredPlayer1 - The variance of Player 1's weekly scores.
+ * @param {number} sigmaSquaredPlayer2 - The variance of Player 2's weekly scores.
+ * @returns {number} The calculated win percentage projection (between 0 and 1). Returns 0.5 for invalid inputs.
  */
 export const calculateWeeklyWinPercentageProjection = (avgDiffVsOpponentForPlayer, sigmaSquaredPlayer1, sigmaSquaredPlayer2) => {
   if (typeof avgDiffVsOpponentForPlayer !== 'number' || isNaN(avgDiffVsOpponentForPlayer) ||
@@ -436,46 +335,19 @@ export const calculateWeeklyWinPercentageProjection = (avgDiffVsOpponentForPlaye
   const stdDevOfDifference = Math.sqrt(totalVarianceOfDifference);
 
   if (stdDevOfDifference === 0) {
+    // If standard deviation is zero, it means scores are perfectly predictable.
+    // If diff > 0, player wins (100%), if diff < 0, player loses (0%), if diff == 0, 50%
     return avgDiffVsOpponentForPlayer > 0 ? 1 : (avgDiffVsOpponentForPlayer < 0 ? 0 : 0.5);
   }
 
   // Z-score for the difference being greater than 0
+  // Probability P(X > 0) where X ~ N(mu, sigma^2) is Phi(mu / sigma)
+  // where Phi is the CDF of the standard normal distribution.
   const zScore = avgDiffVsOpponentForPlayer / stdDevOfDifference;
 
-  // Using the cumulative distribution function (CDF) for a normal distribution:
-  // P(X > 0) where X ~ N(mu, sigma^2) is 1 - Phi( (0 - mu) / sigma ) = Phi( mu / sigma )
-  // And Phi(z) = 0.5 * (1 + erf(z / sqrt(2)))
+  // Phi(z) = 0.5 * (1 + erf(z / sqrt(2)))
   const probability = 0.5 * (1 + erf(zScore / Math.sqrt(2)));
 
   // Ensure probability is within [0, 1] range due to approximations or extreme values
   return Math.max(0, Math.min(1, probability));
-};
-
-// **Note on `calculateErrorFunctionCoefficient`:**
-// Given the redefinition of `calculateWeeklyWinPercentageProjection`, the `calculateErrorFunctionCoefficient`
-// function, as it was originally defined, might become redundant if its sole purpose was to derive `IR215` for the old formula.
-// However, if `IR215` and `HZ215` are used elsewhere in a strict adherence to a specific external model (e.g., a spreadsheet),
-// then it should be kept as is. For a more direct and statistically intuitive approach to win probability,
-// the revised `calculateWeeklyWinPercentageProjection` is preferred.
-// I will keep `calculateErrorFunctionCoefficient` as is, but it's important to understand its
-// new relationship to `calculateWeeklyWinPercentageProjection` (it's no longer a direct input).
-
-/**
- * Calculates an error function coefficient based on average difference vs opponent and standard deviation.
- * Formula: (avgDiffVsOpponent / StandardDeviation) * (avgDiffVsOpponent / 2)
- * StandardDeviation is derived from sigmaSquaredOverCount (variance).
- * @param {number} avgDiffVsOpponent - The average difference in points scored vs opponents (HZ215).
- * @param {number} sigmaSquaredOverCount - The sigma squared over count value (variance).
- * @returns {number} The calculated error function coefficient (IR215).
- */
-export const calculateErrorFunctionCoefficient = (avgDiffVsOpponent, sigmaSquaredOverCount) => {
-  const standardDeviation = Math.sqrt(sigmaSquaredOverCount);
-
-  if (standardDeviation === 0 || isNaN(standardDeviation) || typeof standardDeviation !== 'number') {
-    return 0;
-  }
-  if (typeof avgDiffVsOpponent !== 'number' || isNaN(avgDiffVsOpponent)) {
-    return 0;
-  }
-  return (avgDiffVsOpponent / standardDeviation) * (avgDiffVsOpponent / 2);
 };
