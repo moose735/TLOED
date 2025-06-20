@@ -6,7 +6,7 @@
  * This is a common approximation for erf(x) for x >= 0.
  * For x < 0, erf(x) = -erf(-x).
  * Source: https://en.wikipedia.org/wiki/Error_function#Approximation_with_elementary_functions
- * @param {number} x - The value for which to calculate erf.
+ * @param {number} x - The value for which to calculate erf
  * @returns {number} The approximate erf(x) value.
  */
 const erf = (x) => {
