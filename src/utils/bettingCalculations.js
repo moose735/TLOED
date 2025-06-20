@@ -290,21 +290,26 @@ export const calculateFutureOpponentAverageScoringDifference = (team1Name, team2
 
 
 /**
- * Calculates an error function coefficient based on average difference vs opponent and sigma squared over count.
- * Formula: (avgDiffVsOpponent / sigmaSquaredOverCount) * (avgDiffVsOpponent / 2)
+ * Calculates an error function coefficient based on average difference vs opponent and standard deviation.
+ * Formula: (avgDiffVsOpponent / StandardDeviation) * (avgDiffVsOpponent / 2)
+ * StandardDeviation is derived from sigmaSquaredOverCount (variance).
  * @param {number} avgDiffVsOpponent - The average difference in points scored vs opponents (HZ215).
  * @param {number} sigmaSquaredOverCount - The sigma squared over count value (variance).
  * @returns {number} The calculated error function coefficient (IR215).
  */
 export const calculateErrorFunctionCoefficient = (avgDiffVsOpponent, sigmaSquaredOverCount) => {
-  if (sigmaSquaredOverCount === 0 || isNaN(sigmaSquaredOverCount) || typeof sigmaSquaredOverCount !== 'number') {
+  // Calculate standard deviation from sigmaSquaredOverCount (variance)
+  const standardDeviation = Math.sqrt(sigmaSquaredOverCount); //
+
+  if (standardDeviation === 0 || isNaN(standardDeviation) || typeof standardDeviation !== 'number') {
     return 0; // Avoid division by zero or NaN, or if not a number
   }
   // Ensure avgDiffVsOpponent is a valid number before division
   if (typeof avgDiffVsOpponent !== 'number' || isNaN(avgDiffVsOpponent)) {
     return 0;
   }
-  return (avgDiffVsOpponent / sigmaSquaredOverCount) * (avgDiffVsOpponent / 2);
+  // Apply the corrected formula: (avgDiffVsOpponent / StandardDeviation) * (avgDiffVsOpponent / 2)
+  return (avgDiffVsOpponent / standardDeviation) * (avgDiffVsOpponent / 2); //
 };
 
 /**
