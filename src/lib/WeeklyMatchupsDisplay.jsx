@@ -9,10 +9,11 @@ import {
   calculateSigmaSquaredOverCount,
   calculateFutureOpponentAverageScoringDifference,
   calculateErrorFunctionCoefficient,
-  calculateWeeklyWinPercentageProjection
-} from '../utils/bettingCalculations.js'; // Added .js extension
+  calculateWeeklyWinPercentageProjection,
+  americanOddsToImpliedProbability // Import the new function
+} from '../utils/bettingCalculations.js'; // Adjusted path to '../utils/'
 // Import calculateAllLeagueMetrics to get seasonal DPR and average score
-import { calculateAllLeagueMetrics } from '../utils/calculations.js'; // Added .js extension
+import { calculateAllLeagueMetrics } from '../utils/calculations.js'; // Adjusted path to '../utils/'
 
 const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
   const [weeklyScheduleData, setWeeklyScheduleData] = useState([]); // Your original schedule data
@@ -90,6 +91,7 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
             let overUnder = 'N/A';
             let p1WinProbForDisplay = 'N/A'; // For debugging
             let p2WinProbForDisplay = 'N/A'; // For debugging
+            let bookHoldForDisplay = 'N/A'; // For debugging hold
 
             // Retrieve basic player metrics for the current year
             const player1Metrics = getPlayerMetricsForYear(seasonalMetrics, player1Name, currentYear);
@@ -159,12 +161,20 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
                 p2WinProbForDisplay = p2WinProb.toFixed(4); // For debugging
               }
 
-              // Debugging log for win probabilities
+              // Calculate Book Hold
+              const p1ImpliedProb = americanOddsToImpliedProbability(moneylineOdds.player1Odds);
+              const p2ImpliedProb = americanOddsToImpliedProbability(moneylineOdds.player2Odds);
+              const totalImpliedProb = p1ImpliedProb + p2ImpliedProb;
+              bookHoldForDisplay = ((totalImpliedProb - 1) * 100).toFixed(2) + '%';
+
+
+              // Debugging log for win probabilities and hold
               console.log(`DEBUG: Week ${weekNumber} - ${player1Name} vs ${player2Name}`);
               console.log(`DEBUG:   ${player1Name} Win Prob: ${p1WinProbForDisplay}`);
               console.log(`DEBUG:   ${player2Name} Win Prob: ${p2WinProbForDisplay}`);
               console.log(`DEBUG:   Calculated Moneyline: ${player1Name} ${moneylineOdds.player1Odds}, ${player2Name} ${moneylineOdds.player2Odds}`);
               console.log(`DEBUG:   Calculated Over/Under: ${overUnder}`);
+              console.log(`DEBUG:   Book Hold: ${bookHoldForDisplay}`);
 
             } else {
                 console.warn(`WeeklyMatchupsDisplay: Missing basic metrics for ${player1Name} or ${player2Name} for year ${currentYear}. Cannot calculate odds/O/U.`);
