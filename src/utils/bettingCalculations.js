@@ -48,6 +48,30 @@ const decimalToAmericanOdds = (decimalOdds) => {
 };
 
 /**
+ * Converts American odds string to implied probability.
+ * @param {string} americanOdds - American odds string (e.g., "+100", "-200").
+ * @returns {number} Implied probability (between 0 and 1). Returns 0 for invalid input.
+ */
+export const americanOddsToImpliedProbability = (americanOdds) => {
+  if (typeof americanOdds !== 'string' || americanOdds === 'N/A') {
+    return 0; // Return 0 for invalid or N/A odds
+  }
+
+  const oddsNum = parseFloat(americanOdds);
+
+  if (isNaN(oddsNum)) {
+    return 0;
+  }
+
+  if (oddsNum >= 0) { // Positive American odds (e.g., +100)
+    return 100 / (oddsNum + 100);
+  } else { // Negative American odds (e.g., -200)
+    return Math.abs(oddsNum) / (Math.abs(oddsNum) + 100);
+  }
+};
+
+
+/**
  * Calculates moneyline odds for a matchup based on the win probabilities of two players.
  * Includes a configurable overround (vig) to simulate bookmaker profit margin.
  *
