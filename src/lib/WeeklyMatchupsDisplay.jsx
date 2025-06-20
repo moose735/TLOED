@@ -88,6 +88,8 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
 
             let moneylineOdds = { player1Odds: 'N/A', player2Odds: 'N/A' };
             let overUnder = 'N/A';
+            let p1WinProbForDisplay = 'N/A'; // For debugging
+            let p2WinProbForDisplay = 'N/A'; // For debugging
 
             // Retrieve basic player metrics for the current year
             const player1Metrics = getPlayerMetricsForYear(seasonalMetrics, player1Name, currentYear);
@@ -122,6 +124,8 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
                     p2WinProbFromDPR = p2DPR / totalDPR;
                 }
                 moneylineOdds = calculateMoneylineOdds(p1WinProbFromDPR, p2WinProbFromDPR);
+                p1WinProbForDisplay = p1WinProbFromDPR.toFixed(4); // For debugging
+                p2WinProbForDisplay = p2WinProbFromDPR.toFixed(4); // For debugging
 
               } else {
                 // For later weeks, use the complex calculation chain
@@ -151,7 +155,17 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
                 const p2WinProb = 1 - p1WinProb;
 
                 moneylineOdds = calculateMoneylineOdds(p1WinProb, p2WinProb);
+                p1WinProbForDisplay = p1WinProb.toFixed(4); // For debugging
+                p2WinProbForDisplay = p2WinProb.toFixed(4); // For debugging
               }
+
+              // Debugging log for win probabilities
+              console.log(`DEBUG: Week ${weekNumber} - ${player1Name} vs ${player2Name}`);
+              console.log(`DEBUG:   ${player1Name} Win Prob: ${p1WinProbForDisplay}`);
+              console.log(`DEBUG:   ${player2Name} Win Prob: ${p2WinProbForDisplay}`);
+              console.log(`DEBUG:   Calculated Moneyline: ${player1Name} ${moneylineOdds.player1Odds}, ${player2Name} ${moneylineOdds.player2Odds}`);
+              console.log(`DEBUG:   Calculated Over/Under: ${overUnder}`);
+
             } else {
                 console.warn(`WeeklyMatchupsDisplay: Missing basic metrics for ${player1Name} or ${player2Name} for year ${currentYear}. Cannot calculate odds/O/U.`);
             }
@@ -161,6 +175,9 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
               player2: player2Name,
               moneylineOdds: moneylineOdds,
               overUnder: overUnder,
+              // Optionally add win probabilities to the matchup object if you want to display them directly
+              // p1WinProb: p1WinProbForDisplay,
+              // p2WinProb: p2WinProbForDisplay,
             });
             seenPairs.add(canonicalPair);
           }
