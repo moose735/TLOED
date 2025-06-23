@@ -2,23 +2,13 @@
 import React from "react";
 import { calculateMatchupOdds } from "../utils/bettingCalculations";
 
-export default function WeeklyMatchupsDisplay({ schedule, historicalData }) {
-  // Build a map of matchups per week (team -> opponent)
-  // schedule is array of players with Weeks as keys, e.g. Week_1, Week_2, etc.
-
+export default function WeeklyMatchupsDisplay({ schedule }) {
   if (!schedule || schedule.length === 0) return <div>No matchups to display.</div>;
 
-  // Extract weeks from keys (assume Week_1, Week_2... format)
   const weeks = Object.keys(schedule[0])
     .filter((k) => k.startsWith("Week_"))
-    .sort((a, b) => {
-      const nA = parseInt(a.replace("Week_", ""), 10);
-      const nB = parseInt(b.replace("Week_", ""), 10);
-      return nA - nB;
-    });
+    .sort((a, b) => parseInt(a.replace("Week_", ""), 10) - parseInt(b.replace("Week_", ""), 10));
 
-  // Build matchups per week in this format:
-  // { weekNumber: [ { teamA: "Boilard", teamB: "Randall" }, ... ] }
   const weeklyMatchups = {};
 
   weeks.forEach((weekKey) => {
@@ -29,7 +19,6 @@ export default function WeeklyMatchupsDisplay({ schedule, historicalData }) {
       const teamB = schedule.find((row) => row.Player === teamA)[weekKey];
       if (!teamB) return;
 
-      // Prevent duplicates: only add if teamA < teamB alphabetically
       if (teamA < teamB) {
         pairs.push({ teamA, teamB });
       }
@@ -48,8 +37,7 @@ export default function WeeklyMatchupsDisplay({ schedule, historicalData }) {
           ) : (
             <ul>
               {matchups.map(({ teamA, teamB }, i) => {
-                // Calculate odds from bettingCalculations.js
-                const odds = calculateMatchupOdds(teamA, teamB, parseInt(week, 10), historicalData);
+                const odds = calculateMatchupOdds(teamA, teamB);
                 return (
                   <li key={i}>
                     {teamA} vs {teamB} &nbsp; | ML: {odds.mlTeam} / {odds.mlOpponent} &nbsp; | O/U: {odds.overUnder.toFixed(2)}
