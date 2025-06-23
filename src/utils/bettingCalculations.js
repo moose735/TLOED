@@ -1,30 +1,12 @@
 // bettingCalculations.js
 
-// Defensive average function
-function average(arr) {
-  if (!Array.isArray(arr) || arr.length === 0) return null;
-  return arr.reduce((a, b) => a + b, 0) / arr.length;
-}
+// Existing imports and functions assumed here...
 
-// Defensive variance function (sigma squared)
-function variance(arr) {
-  if (!Array.isArray(arr) || arr.length === 0) return null;
-  const avg = average(arr);
-  if (avg === null) return null;
-  const varSum = arr.reduce((sum, val) => sum + (val - avg) ** 2, 0);
-  return varSum / arr.length;
-}
+// --- Begin Added functions for your exact calculation ---
 
-// Defensive standard deviation
-function standardDeviation(arr) {
-  const varr = variance(arr);
-  return varr === null ? null : Math.sqrt(varr);
-}
-
-// Helper: Error function approximation (erf)
-function erf(x) {
-  // Abramowitz and Stegun formula 7.1.26 approximation
-  const sign = x < 0 ? -1 : 1;
+// Approximate error function (erf)
+export function erf(x) {
+  const sign = (x >= 0) ? 1 : -1;
   x = Math.abs(x);
 
   const a1 =  0.254829592;
@@ -34,150 +16,91 @@ function erf(x) {
   const a5 =  1.061405429;
   const p  =  0.3275911;
 
-  const t = 1 / (1 + p * x);
-  const y = 1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+  const t = 1.0/(1.0 + p*x);
+  const y = 1.0 - (((((a5*t + a4)*t) + a3)*t + a2)*t + a1)*t*Math.exp(-x*x);
 
   return sign * y;
 }
 
-// Exported functions
+// Get weekly scores for a team in a year before currentWeek
+export function getWeeklyScores(teamName, year, currentWeek, historicalMatchups, getMappedTeamName) {
+  const scores = [];
+  for (const match of historicalMatchups) {
+    const matchYear = parseInt(match.year);
+    const matchWeek = parseInt(match.week);
+    if (matchYear === year && matchWeek < currentWeek) {
+      const t1 = getMappedTeamName(match.team1?.trim());
+      const t2 = getMappedTeamName(match.team2?.trim());
+      if (t1 === teamName) {
+        scores.push(parseFloat(match.team1Score) || 0);
+      } else if (t2 === teamName) {
+        scores.push(parseFloat(match.team2Score) || 0);
+      }
+    }
+  }
+  return scores;
+}
 
-export function calculateMoneylineOdds(teamADiff, teamBDiff) {
-  // Simple example: positive diff means team favored
-  if (teamADiff == null || teamBDiff == null) return null;
+// Calculate average weekly score
+export function calculateWeeklyAverage(teamName, year, currentWeek, historicalMatchups, getMappedTeamName) {
+  const scores = getWeeklyScores(teamName, year, currentWeek, historicalMatchups, getMappedTeamName);
+  if (scores.length === 0) return 0;
+  const total = scores.reduce((a, b) => a + b, 0);
+  return total / scores.length;
+}
 
-  const diff = teamADiff - teamBDiff;
-  // Example formula: convert difference to moneyline odds
-  if (diff === 0) return 100; // pick'em
-  if (diff > 0) {
-    return Math.round(100 / diff);
+// Calculate variance (sigma squared over count)
+export function calculateVariance(teamName, year, currentWeek, historicalMatchups, getMappedTeamName) {
+  const scores = getWeeklyScores(teamName, year, currentWeek, historicalMatchups, getMappedTeamName);
+  const average = calculateWeeklyAverage(teamName, year, currentWeek, historicalMatchups, getMappedTeamName);
+  if (scores.length === 0) return 0;
+  const squaredDiffs = scores.map(score => Math.pow(score - average, 2));
+  const sumSquaredDiffs = squaredDiffs.reduce((a, b) => a + b, 0);
+  return sumSquaredDiffs / scores.length;
+}
+
+// Calculate standard deviation = sqrt(variance)
+export function calculateStdDev(teamName, year, currentWeek, historicalMatchups, getMappedTeamName) {
+  const variance = calculateVariance(teamName, year, currentWeek, historicalMatchups, getMappedTeamName);
+  return Math.sqrt(variance);
+}
+
+// Calculate average difference vs opponent
+export function calculateAvgDiffVsOpponent(teamName, opponentName, year, currentWeek, historicalMatchups, getMappedTeamName) {
+  const teamAvg = calculateWeeklyAverage(teamName, year, currentWeek, historicalMatchups, getMappedTeamName);
+  const oppAvg = calculateWeeklyAverage(opponentName, year, currentWeek, historicalMatchups, getMappedTeamName);
+  return teamAvg - oppAvg;
+}
+
+// Calculate error function coefficient
+export function calculateErrorCoeff(avgDiffVsOpponent, opponentName, year, currentWeek, historicalMatchups, getMappedTeamName) {
+  const opponentStdDev = calculateStdDev(opponentName, year, currentWeek, historicalMatchups, getMappedTeamName);
+  if (opponentStdDev === 0) return 0;
+  return (avgDiffVsOpponent / opponentStdDev) * (avgDiffVsOpponent / 2);
+}
+
+// Calculate weekly win % projection using erf
+export function calculateWeeklyWinPercentage(avgDiffVsOpponent, errorCoeff) {
+  if (avgDiffVsOpponent === 0) return 0.5;
+  const sqrt2 = Math.sqrt(2);
+  if (avgDiffVsOpponent > 0) {
+    return erf(errorCoeff / avgDiffVsOpponent / sqrt2) / 2 + 0.5;
   } else {
-    return Math.round(-100 * diff);
+    return 1 - (erf(errorCoeff / Math.abs(avgDiffVsOpponent) / sqrt2) / 2 + 0.5);
   }
 }
 
-export function calculateOverUnder(teamAScores, teamBScores) {
-  if (!Array.isArray(teamAScores) || !Array.isArray(teamBScores)) return null;
-  const avgA = average(teamAScores);
-  const avgB = average(teamBScores);
-  if (avgA === null || avgB === null) return null;
-  return parseFloat((avgA + avgB).toFixed(1));
-}
+// Existing calculateMoneylineOdds function
+export function calculateMoneylineOdds(winPct1, winPct2) {
+  // Simple odds conversion based on probabilities:
+  // American odds formula:
+  // Positive odds: (100 / probability) - 100
+  // Negative odds: - (probability / (1 - probability)) * 100
+  const odds1 = winPct1 > 0.5 ? -Math.round((winPct1 / (1 - winPct1)) * 100) : Math.round(((1 - winPct1) / winPct1) * 100);
+  const odds2 = winPct2 > 0.5 ? -Math.round((winPct2 / (1 - winPct2)) * 100) : Math.round(((1 - winPct2) / winPct2) * 100);
 
-// Pull player/team metrics for a specific year from matchup data
-export function getPlayerMetricsForYear(matchups, year) {
-  if (!Array.isArray(matchups) || !year) return {};
-  // Gather all scores per team for that year (regular season only)
-  const teamScores = {};
-  matchups.forEach(game => {
-    if (game.year === year && game.regSeason) {
-      if (!teamScores[game.team1]) teamScores[game.team1] = [];
-      if (!teamScores[game.team2]) teamScores[game.team2] = [];
-      if (typeof game.team1Score === "number") teamScores[game.team1].push(game.team1Score);
-      if (typeof game.team2Score === "number") teamScores[game.team2].push(game.team2Score);
-    }
-  });
-  return teamScores;
-}
-
-export function calculateTeamAverageDifferenceVsOpponent(teamScores, schedule, year) {
-  // teamScores: { teamName: [scores] }
-  // schedule: array with schedule info for year
-  // returns { team: avgDiffVsOpp }
-  if (!teamScores || !schedule) return {};
-  const avgDiffs = {};
-
-  Object.keys(teamScores).forEach(team => {
-    const scores = teamScores[team];
-    if (!Array.isArray(scores) || scores.length === 0) {
-      avgDiffs[team] = null;
-      return;
-    }
-    // Compute average points scored by team
-    const avgTeamScore = average(scores);
-
-    // Find opponents and their avg scores for this team in this year's schedule
-    let totalDiff = 0;
-    let gamesCounted = 0;
-
-    // For each week, find opponent of 'team' from schedule and subtract averages
-    for (const weekKey in schedule) {
-      // schedule is expected to be an array of player schedule objects, so skip if not an object
-      const playerSchedule = schedule.find(p => p.Player === team);
-      if (!playerSchedule) continue;
-
-      // Go through each week column in playerSchedule for the current year
-      for (let week = 1; week <= 14; week++) {
-        const opp = playerSchedule[`Week_${week}`];
-        if (!opp) continue;
-
-        // Get average opponent score
-        const oppScores = teamScores[opp];
-        if (!Array.isArray(oppScores) || oppScores.length === 0) continue;
-
-        const avgOppScore = average(oppScores);
-        if (avgOppScore === null) continue;
-
-        // Difference for that week is team's average score - opponent's average score
-        const diff = avgTeamScore - avgOppScore;
-        totalDiff += diff;
-        gamesCounted++;
-      }
-      break; // break after first found player schedule to avoid repeated loops
-    }
-
-    avgDiffs[team] = gamesCounted > 0 ? totalDiff / gamesCounted : null;
-  });
-
-  return avgDiffs;
-}
-
-export function calculateSigmaSquaredOverCount(teamScores) {
-  // teamScores is array of numbers (scores for weeks)
-  if (!Array.isArray(teamScores) || teamScores.length === 0) return null;
-  const avg = average(teamScores);
-  if (avg === null) return null;
-  const squaredDiffs = teamScores.map(score => (score - avg) ** 2);
-  const sigmaSquared = average(squaredDiffs);
-  return sigmaSquared;
-}
-
-export function calculateFutureOpponentAverageScoringDifference(teamScores, futureOpponentsScores) {
-  // teamScores: array of numbers (team points)
-  // futureOpponentsScores: array of arrays [[opp1 scores], [opp2 scores], ...]
-  if (!Array.isArray(teamScores) || teamScores.length === 0) return null;
-  if (!Array.isArray(futureOpponentsScores) || futureOpponentsScores.length === 0) return null;
-
-  const avgTeamScore = average(teamScores);
-  if (avgTeamScore === null) return null;
-
-  // Average opponent scores across all future opponents
-  let allOppScores = [];
-  futureOpponentsScores.forEach(oppScores => {
-    if (Array.isArray(oppScores)) {
-      allOppScores = allOppScores.concat(oppScores);
-    }
-  });
-
-  const avgOppScore = average(allOppScores);
-  if (avgOppScore === null) return null;
-
-  return avgTeamScore - avgOppScore;
-}
-
-export function calculateErrorFunctionCoefficient(mx, mf) {
-  // mx and mf are numbers, coefficients in error function calculation
-  if (typeof mx !== 'number' || typeof mf !== 'number' || mf === 0) return null;
-  return mf > 0 ? (mx / mf) / Math.sqrt(2) : (mx / Math.abs(mf)) / Math.sqrt(2);
-}
-
-export function calculateWeeklyWinPercentageProjection(mx, mf) {
-  // mx and mf are numbers, used in erf formula for weekly win %
-  if (typeof mx !== 'number' || typeof mf !== 'number' || mf === 0) return null;
-  const coeff = calculateErrorFunctionCoefficient(mx, mf);
-  if (coeff === null) return null;
-
-  if (mf === 0) return 0.5;
-  if (mf > 0) return erf(coeff) / 2 + 0.5;
-  else return 1 - (erf(coeff) / 2 + 0.5);
+  return {
+    team1Formatted: odds1 > 0 ? `+${odds1}` : odds1.toString(),
+    team2Formatted: odds2 > 0 ? `+${odds2}` : odds2.toString(),
+  };
 }
