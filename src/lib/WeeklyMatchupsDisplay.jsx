@@ -11,7 +11,8 @@ import {
   calculateSigmaSquaredOverCount,
   calculateFutureOpponentAverageScoringDifference,
   calculateErrorFunctionCoefficient,
-  calculateWeeklyWinPercentageProjection
+  calculateWeeklyWinPercentageProjection,
+  calculateStandardDeviation // Import the new standard deviation helper
 } from '../utils/bettingCalculations';
 
 // Import calculateAllLeagueMetrics to get seasonal DPR and average score
@@ -126,31 +127,30 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
               } else {
                 // For later weeks, use the complex calculation chain
                 // Calculate metrics up to the *previous* week for projections of the current week's match
-                const statsUpToWeek = weekNumber; // For calculateTeamAverageDifferenceVsOpponent and calculateSigmaSquaredOverCount, we use matches *before* currentWeek
+                const statsUpToWeek = weekNumber; // This should be (current week - 1) for the lookback
 
-                // Calculation 1: Average Difference vs Opponent for Player 1 (up to current week - 1)
+                // Player 1's calculations
                 const p1AvgDiffVsOpponent = calculateTeamAverageDifferenceVsOpponent(player1Name, currentYear, statsUpToWeek, historicalMatchups, getMappedTeamName);
-                // Calculation 2: Sigma Squared Over Count for Player 1 (up to current week - 1)
-                const p1SigmaSquaredOverCount = calculateSigmaSquaredOverCount(player1Name, currentYear, statsUpToWeek, historicalMatchups, getMappedTeamName);
-                // Calculation 3: Error Function Coefficient for Player 1
-                const p1ErrorCoeff = calculateErrorFunctionCoefficient(p1AvgDiffVsOpponent, p1SigmaSquaredOverCount);
+                const p2SigmaSquaredOverCount = calculateSigmaSquaredOverCount(player2Name, currentYear, statsUpToWeek, historicalMatchups, getMappedTeamName); // Opponent's sigma squared
+                const p1ErrorCoeff = calculateErrorFunctionCoefficient(p1AvgDiffVsOpponent, p2SigmaSquaredOverCount); // Pass opponent's sigma squared
 
-                // For Player 2 (opponent)
+                // Player 2's calculations
                 const p2AvgDiffVsOpponent = calculateTeamAverageDifferenceVsOpponent(player2Name, currentYear, statsUpToWeek, historicalMatchups, getMappedTeamName);
-                const p2SigmaSquaredOverCount = calculateSigmaSquaredOverCount(player2Name, currentYear, statsUpToWeek, historicalMatchups, getMappedTeamName);
-                const p2ErrorCoeff = calculateErrorFunctionCoefficient(p2AvgDiffVsOpponent, p2SigmaSquaredOverCount);
+                const p1SigmaSquaredOverCount = calculateSigmaSquaredOverCount(player1Name, currentYear, statsUpToWeek, historicalMatchups, getMappedTeamName); // Opponent's sigma squared
+                const p2ErrorCoeff = calculateErrorFunctionCoefficient(p2AvgDiffVsOpponent, p1SigmaSquaredOverCount); // Pass opponent's sigma squared
 
-
-                // Calculate the average scoring difference *between the two players* for win probability
-                // This is player1's average score vs player2's average score, based on historical up to this point
-                const matchupAvgScoringDiff = calculateFutureOpponentAverageScoringDifference(player1Name, player2Name, currentYear, statsUpToWeek, historicalMatchups, getMappedTeamName);
 
                 // Calculate win probabilities using the complex formula
-                const p1WinProb = calculateWeeklyWinPercentageProjection(matchupAvgScoringDiff, p1ErrorCoeff);
-                // The opponent's probability is just 1 minus the player's probability for a two-outcome system
-                const p2WinProb = 1 - p1WinProb;
+                // Note: The win probability for Player 1 should use Player 1's average diff and Player 1's error coeff
+                const p1WinProb = calculateWeeklyWinPercentageProjection(p1AvgDiffVsOpponent, p1ErrorCoeff);
+                const p2WinProb = calculateWeeklyWinPercentageProjection(p2AvgDiffVsOpponent, p2ErrorCoeff);
 
-                moneylineOdds = calculateMoneylineOdds(p1WinProb, p2WinProb);
+                // Re-normalize probabilities as they are calculated independently
+                const totalCalculatedProb = p1WinProb + p2WinProb;
+                const normalizedP1WinProb = totalCalculatedProb > 0 ? p1WinProb / totalCalculatedProb : 0.5;
+                const normalizedP2WinProb = totalCalculatedProb > 0 ? p2WinProb / totalCalculatedProb : 0.5;
+
+                moneylineOdds = calculateMoneylineOdds(normalizedP1WinProb, normalizedP2WinProb);
               }
             } else {
                 console.warn(`WeeklyMatchupsDisplay: Missing basic metrics for ${player1Name} or ${player2Name} for year ${currentYear}. Cannot calculate odds/O/U.`);
