@@ -1,9 +1,9 @@
+// src/lib/WeeklyMatchupsDisplay.jsx
+
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  calculateAverageScore,
-  calculateSigmaSquaredOverCount,
-  calculateErrorFunctionCoefficient,
-  calculateWinPercentage,
+  getWeeklyScoresByTeam,
+  getPlayerMetricsForYear,
   calculateMoneylineOdds,
   calculateOverUnder
 } from '../utils/bettingCalculations';
@@ -13,131 +13,94 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const SCHEDULE_API_URL =
-    'https://script.google.com/macros/s/AKfycbzCdSKv-pJSyewZWljTIlyacgb3hBqwthsKGQjCRD6-zJaqX5lbFvMRFckEG-Kb_cMf/exec';
+  const SCHEDULE_API_URL = 'https://script.google.com/macros/s/AKfycbzCdSKv-pJSyewZWljTIlyacgb3hBqwthsKGQjCRD6-zJaqX5lbFvMRFckEG-Kb_cMf/exec';
 
   useEffect(() => {
-    fetch(SCHEDULE_API_URL)
-      .then(res => {
-        if (!res.ok) throw new Error(`Error ${res.status}`);
-        return res.json();
-      })
-      .then(setWeeklyScheduleData)
-      .catch(err => setError(err.message))
-      .finally(() => setLoading(false));
+    const fetchData = async () => {
+      try {
+        const res = await fetch(SCHEDULE_API_URL);
+        const json = await res.json();
+        setWeeklyScheduleData(json);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
   }, []);
 
-  const mapName =
-    typeof getMappedTeamName === 'function'
-      ? getMappedTeamName
-      : name => String(name || '').trim();
+  const processedMatchups = useMemo(() => {
+    if (!historicalMatchups || !weeklyScheduleData.length) return [];
 
-  const allMatchupsByWeek = useMemo(() => {
-    if (!weeklyScheduleData.length || !historicalMatchups?.length) return [];
+    const latestYear = Math.max(...historicalMatchups.map(h => +h.year || 0));
+    const weeklyScores = getWeeklyScoresByTeam(historicalMatchups, getMappedTeamName);
 
-    const year = Math.max(
-      ...historicalMatchups.map(m => parseInt(m.year, 10)).filter(y => !isNaN(y))
-    );
+    const matchupsByWeek = {};
 
-    const weekCols = Object.keys(weeklyScheduleData[0] || {}).filter(k =>
-      k.startsWith('Week_')
-    );
-    const weeks = [...new Set(weekCols.map(k => parseInt(k.split('_')[1], 10)))]
-      .filter(n => !isNaN(n))
-      .sort((a, b) => a - b);
-
-    return weeks.map(weekNum => {
-      const matchups = weeklyScheduleData
-        .map(row => {
-          const t1 = mapName(row.Player);
-          const t2 = mapName(row[`Week_${weekNum}`]);
-          if (!t1 || !t2) return null;
-
-          const avg1 = calculateAverageScore(
-            t1,
-            year,
-            weekNum,
-            historicalMatchups,
-            mapName
-          );
-          const avg2 = calculateAverageScore(
-            t2,
-            year,
-            weekNum,
-            historicalMatchups,
-            mapName
-          );
-          const sigma1 = Math.sqrt(
-            calculateSigmaSquaredOverCount(
-              t1,
-              year,
-              weekNum,
-              historicalMatchups,
-              mapName
-            )
-          );
-          const sigma2 = Math.sqrt(
-            calculateSigmaSquaredOverCount(
-              t2,
-              year,
-              weekNum,
-              historicalMatchups,
-              mapName
-            )
-          );
-
-          const diff1 = avg1 - avg2;
-          const diff2 = -diff1;
-          const err1 = calculateErrorFunctionCoefficient(diff1, sigma2);
-          const err2 = calculateErrorFunctionCoefficient(diff2, sigma1);
-          const winPct1 = calculateWinPercentage(diff1, err1);
-          const winPct2 = calculateWinPercentage(diff2, err2);
-
-          return {
-            team1: t1,
-            team2: t2,
-            avg1,
-            avg2,
-            odds: calculateMoneylineOdds(winPct1, winPct2),
-            overUnder: calculateOverUnder(avg1, avg2)
-          };
-        })
-        .filter(Boolean);
-
-      return { week: weekNum, matchups };
+    weeklyScheduleData.forEach(entry => {
+      const team = entry.Player;
+      Object.entries(entry).forEach(([key, value]) => {
+        if (key.startsWith('Week_') && value && value !== team) {
+          const weekNum = key.split('_')[1];
+          const matchupId = [team, value].sort().join(' vs ');
+          if (!matchupsByWeek[weekNum]) matchupsByWeek[weekNum] = {};
+          matchupsByWeek[weekNum][matchupId] = { team1: team, team2: value };
+        }
+      });
     });
-  }, [weeklyScheduleData, historicalMatchups]);
 
-  if (loading) return <div className="py-4 text-center">Loading...</div>;
-  if (error) return <div className="py-4 text-center text-red-500">{error}</div>;
+    const flattened = [];
+    Object.entries(matchupsByWeek).forEach(([week, matchups]) => {
+      Object.entries(matchups).forEach(([_, { team1, team2 }]) => {
+        const metrics1 = getPlayerMetricsForYear(team1, team2, latestYear, weeklyScores);
+        const metrics2 = getPlayerMetricsForYear(team2, team1, latestYear, weeklyScores);
+        const odds = calculateMoneylineOdds(metrics1.winPct, metrics2.winPct);
+        const ou = calculateOverUnder(metrics1.teamAvg, metrics2.teamAvg);
+
+        flattened.push({
+          week,
+          team1,
+          team2,
+          odds,
+          overUnder: ou
+        });
+      });
+    });
+
+    return flattened;
+  }, [weeklyScheduleData, historicalMatchups, getMappedTeamName]);
+
+  if (loading) return <div>Loading weekly schedule...</div>;
+  if (error) return <div>Error: {error}</div>;
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-center text-3xl font-bold mb-6">
-        Full Season Matchups & Odds
-      </h1>
-
-      {allMatchupsByWeek.map(({ week, matchups }) => (
-        <div key={week} className="mb-8">
-          <h2 className="text-2xl font-semibold mb-4">Week {week}</h2>
-          {matchups.map((m, idx) => (
-            <div
-              key={idx}
-              className="flex flex-col sm:flex-row items-center bg-white shadow rounded p-4 mb-4"
-            >
-              <div className="flex-1 text-center sm:text-left">
-                <span className="text-blue-800 font-bold">{m.team1}</span> vs{' '}
-                <span className="text-green-800 font-bold">{m.team2}</span>
-              </div>
-              <div className="flex-1 text-center">
-                ML: <span className="font-semibold">{m.odds.team1Formatted}</span> /
-                <span className="font-semibold">{m.odds.team2Formatted}</span>
-              </div>
-              <div className="flex-1 text-center">
-                O/U: <span className="font-semibold">{m.overUnder}</span>
-              </div>
-            </div>
-          ))}
+    <div className="p-6">
+      <h1 className="text-2xl font-bold text-center mb-4">Weekly Matchups & Odds</h1>
+      {processedMatchups.length === 0 ? (
+        <div>No matchups found.</div>
+      ) : (
+        processedMatchups.reduce((acc, match) => {
+          if (!acc[match.week]) acc[match.week] = [];
+          acc[match.week].push(match);
+          return acc;
+        }, {})
+      ).map(([week, games]) => (
+        <div key={week} className="mb-6">
+          <h2 className="text-xl font-semibold mb-2">Week {week}</h2>
+          <ul className="space-y-3">
+            {games.map((match, i) => (
+              <li key={i} className="bg-white p-4 rounded shadow flex justify-between items-center">
+                <div className="flex-1 text-blue-700 font-bold">{match.team1}</div>
+                <div className="text-gray-500">vs</div>
+                <div className="flex-1 text-green-700 font-bold text-right">{match.team2}</div>
+                <div className="ml-4 text-center">
+                  <div className="text-sm">ML: {match.odds.team1} / {match.odds.team2}</div>
+                  <div className="text-sm">O/U: {match.overUnder}</div>
+                </div>
+              </li>
+            ))}
+          </ul>
         </div>
       ))}
     </div>
