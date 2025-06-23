@@ -60,27 +60,41 @@ export const getPlayerMetricsForYear = (playerName, year, historicalMatchups, se
     return getDefaultMetrics();
   }
 
-  // MODIFIED: Access the dprData within the seasonalMetrics[year] object
-  const seasonDataForYear = seasonalMetrics[year];
-  if (!seasonDataForYear || !seasonDataForYear.dprData) {
-    console.warn(`getPlayerMetricsForYear: No season data object or dprData found for Year ${year}. Returning default metrics.`);
-    return getDefaultMetrics();
+  let effectiveYear = year;
+  let seasonDataForEffectiveYear = seasonalMetrics[effectiveYear];
+  let playerSeasonalData = seasonDataForEffectiveYear?.dprData?.find(player => getMappedTeamName(player.team) === mappedPlayerName);
+
+  // If no data found for the requested year, try to find the most recent year with data
+  if (!playerSeasonalData) {
+    console.warn(`getPlayerMetricsForYear: No player-specific data found for ${mappedPlayerName} in Year ${year}. Attempting to find data from the latest historical year.`);
+
+    const availableYears = Object.keys(seasonalMetrics)
+                                .map(y => parseInt(y))
+                                .filter(y => seasonalMetrics[y] && seasonalMetrics[y].dprData && seasonalMetrics[y].dprData.length > 0)
+                                .sort((a, b) => b - a); // Sort descending to get latest year first
+
+    if (availableYears.length > 0) {
+      const latestDataYear = availableYears[0];
+      seasonDataForEffectiveYear = seasonalMetrics[latestDataYear];
+      playerSeasonalData = seasonDataForEffectiveYear.dprData?.find(player => getMappedTeamName(player.team) === mappedPlayerName);
+      if (playerSeasonalData) {
+        effectiveYear = latestDataYear; // Use this year for further calculations
+        console.log(`getPlayerMetricsForYear: Found data for ${mappedPlayerName} in Year ${effectiveYear}.`);
+      }
+    }
   }
 
-  // Find the player's specific data within the dprData array for that year
-  const playerSeasonalData = seasonDataForYear.dprData.find(player => getMappedTeamName(player.team) === mappedPlayerName);
-
   if (!playerSeasonalData) {
-    console.warn(`getPlayerMetricsForYear: No player-specific data found for ${mappedPlayerName} in Year ${year}. Returning default metrics.`);
+    console.warn(`getPlayerMetricsForYear: No player-specific data found for ${mappedPlayerName} even in latest historical year. Returning default metrics.`);
     return getDefaultMetrics();
   }
 
   // Calculate the average difference vs opponent for the player
-  // This value is 'avgPointDifferential' from the player's season data
   const averageDifferenceVsOpponent = playerSeasonalData.avgPointDifferential || 0;
 
   // Calculate Sigma Squared Over Count for the player
-  const sigmaSquaredOverCount = calculateSigmaSquaredOverCount(mappedPlayerName, year, historicalMatchups, getMappedTeamName);
+  // Use effectiveYear here
+  const sigmaSquaredOverCount = calculateSigmaSquaredOverCount(mappedPlayerName, effectiveYear, historicalMatchups, getMappedTeamName);
 
   // Calculate Error Function Coefficient for the player
   const errorFunctionCoefficient = calculateErrorFunctionCoefficient(averageDifferenceVsOpponent, sigmaSquaredOverCount);
@@ -89,8 +103,8 @@ export const getPlayerMetricsForYear = (playerName, year, historicalMatchups, se
   const latestYear = historicalMatchups.reduce((maxYear, match) => Math.max(maxYear, parseInt(match.year)), 0);
 
   // Calculate Future Opponent Average Scoring Difference for projected score
+  // Use latestYear (current calendar year or latest data year) here
   const futureOpponentAverageScoringDifference = calculateFutureOpponentAverageScoringDifference(mappedPlayerName, latestYear, weeklyGameScoresByYearAndWeek, getMappedTeamName);
-
 
   const projectedScore = playerSeasonalData.averageScore + (futureOpponentAverageScoringDifference);
 
