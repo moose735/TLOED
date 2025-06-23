@@ -181,7 +181,7 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
                           <span className="block text-lg font-bold text-red-700">{(match.player2WinProb * 100).toFixed(1)}%</span>
                         </div>
                       </div>
-                      <div className="flex justify-around w-full">
+                      <div className="flex justify-around w-full"> {/* This was the div with a missing closing tag */}
                         {/* Moneyline Display for Player 1 */}
                         <div className="flex-1 text-center border-r border-gray-200 pr-2">
                           <span className="block text-xs font-medium text-gray-600">Moneyline P1</span>
@@ -192,7 +192,7 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
                           <span className="block text-xs font-medium text-gray-600">Moneyline P2</span>
                           <span className="block text-lg font-bold text-blue-700">{match.moneylinePlayer2}</span>
                         </div>
-                      </div>
+                      </div> {/* Added missing closing div here */}
                       <div className="flex w-full mt-2 border-t border-gray-200 pt-2">
                         {/* Over */}
                         <div className="flex-1 flex flex-col items-center justify-center p-3 sm:p-2 h-full bg-blue-50 rounded-bl-lg sm:rounded-bl-none sm:rounded-tr-lg cursor-pointer hover:bg-blue-100 transition-colors duration-200">
@@ -207,17 +207,18 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
                           <span className="text-sm font-normal text-gray-600">-110</span>
                         </div>
                       </div>
-                    </li>
-                  ))
-                ) : (
-                  <p className="text-gray-600 italic text-center py-4">No matchups for this week.</p>
-                )}
-              </ul>
-            </div>
-          ))}
-        </div>
+                    </div>
+                  </li>
+                ))
+              ) : (
+                <p className="text-gray-600 italic text-center py-4">No matchups for this week.</p>
+              )}
+            </ul>
+          </div>
+        ))}
       </div>
-    );
+    </div>
+  );
 };
 
 export default WeeklyMatchupsDisplay;
