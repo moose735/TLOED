@@ -30,6 +30,21 @@ function winProbability(diff, combinedStdDev) {
 }
 
 /**
+ * Converts win probability (0 to 1) to American moneyline odds.
+ * @param {number} winProb - Probability of winning (0 to 1)
+ * @returns {number} Moneyline odds (positive or negative integer)
+ */
+export function calculateMoneylineOdds(winProb) {
+  if (winProb <= 0 || winProb >= 1) return null;
+
+  if (winProb >= 0.5) {
+    return Math.round(-100 * (winProb / (1 - winProb)));
+  } else {
+    return Math.round(100 * ((1 - winProb) / winProb));
+  }
+}
+
+/**
  * Calculate the over/under line for two teams based on their average points scored.
  * @param {number[]} teamAScores - Array of historical points scored by team A this season.
  * @param {number[]} teamBScores - Array of historical points scored by team B this season.
@@ -75,6 +90,7 @@ function buildTeamScoresMap(matchups) {
  * - Point spread (line)
  * - Win probability (%)
  * - Over/Under line (total points)
+ * - Moneyline odds (American odds)
  */
 function generateLines(teamScores) {
   const lines = [];
@@ -90,12 +106,18 @@ function generateLines(teamScores) {
       const combinedStd = Math.sqrt(stdA ** 2 + stdB ** 2);
       const winProb = winProbability(avgDiff, combinedStd);
       const overUnder = calculateOverUnder(scoresA, scoresB);
+      const moneylineA = calculateMoneylineOdds(winProb);
+      const moneylineB = calculateMoneylineOdds(1 - winProb);
 
       lines.push({
         matchup: `${teamA} vs ${teamB}`,
         line: avgDiff.toFixed(1),
         winProb: (winProb * 100).toFixed(1) + '%',
-        overUnder: overUnder !== null ? overUnder : 'N/A'
+        overUnder: overUnder !== null ? overUnder : 'N/A',
+        moneyline: {
+          [teamA]: moneylineA !== null ? moneylineA : 'N/A',
+          [teamB]: moneylineB !== null ? moneylineB : 'N/A'
+        }
       });
     }
   }
