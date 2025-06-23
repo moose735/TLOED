@@ -56,8 +56,6 @@ const App = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // State for mobile menu
   const [openSubMenu, setOpenSubMenu] = useState(null); // State for mobile sub-menus
 
-  // New state for all-time standings
-  const [allTimeStandings, setAllTimeStandings] = useState([]);
 
   // Function to toggle sub-menus in mobile view
   const toggleSubMenu = (menuName) => {
@@ -149,63 +147,7 @@ const App = () => {
     fetchHistoricalData();
   }, [getMappedTeamName]);
 
-  // New useEffect to calculate allTimeStandings once historicalMatchups are available
-  useEffect(() => {
-    if (historicalMatchups.length > 0) {
-      const teamOverallStats = {};
-
-      historicalMatchups.forEach(match => {
-        const team1Name = getMappedTeamName(match.team1);
-        const team2Name = getMappedTeamName(match.team2);
-        const team1Score = parseFloat(match.team1Score);
-        const team2Score = parseFloat(match.team2Score);
-
-        if (!teamOverallStats[team1Name]) {
-          teamOverallStats[team1Name] = { totalWins: 0, totalLosses: 0, totalTies: 0, totalPointsFor: 0, totalPointsAgainst: 0 };
-        }
-        if (!teamOverallStats[team2Name]) {
-          teamOverallStats[team2Name] = { totalWins: 0, totalLosses: 0, totalTies: 0, totalPointsFor: 0, totalPointsAgainst: 0 };
-        }
-
-        teamOverallStats[team1Name].totalPointsFor += team1Score;
-        teamOverallStats[team1Name].totalPointsAgainst += team2Score;
-
-        teamOverallStats[team2Name].totalPointsFor += team2Score;
-        teamOverallStats[team2Name].totalPointsAgainst += team1Score;
-
-        if (team1Score > team2Score) {
-          teamOverallStats[team1Name].totalWins++;
-          teamOverallStats[team2Name].totalLosses++;
-        } else if (team2Score > team1Score) {
-          teamOverallStats[team2Name].totalWins++;
-          teamOverallStats[team1Name].totalLosses++;
-        } else {
-          teamOverallStats[team1Name].totalTies++;
-          teamOverallStats[team2Name].totalTies++;
-        }
-      });
-
-      const compiledStandings = Object.keys(teamOverallStats).map(teamName => {
-        const stats = teamOverallStats[teamName];
-        const totalGames = stats.totalWins + stats.totalLosses + stats.totalTies;
-        const winPercentage = totalGames > 0 ? ((stats.totalWins + (0.5 * stats.totalTies)) / totalGames) : 0;
-
-        return {
-          team: teamName,
-          totalWins: stats.totalWins,
-          totalLosses: stats.totalLosses,
-          totalTies: stats.totalTies,
-          winPercentage: winPercentage,
-          totalPointsFor: stats.totalPointsFor,
-          totalPointsAgainst: stats.totalPointsAgainst,
-        };
-      }).filter(Boolean).sort((a, b) => b.winPercentage - a.winPercentage);
-
-      setAllTimeStandings(compiledStandings);
-    }
-  }, [historicalMatchups, getMappedTeamName]); // Recalculate if matchups or team name mapping changes
-
-
+  // Handle tab change, including setting selectedTeam for TEAM_DETAIL tab
   const handleTabChange = (tab, teamName = null) => {
     setActiveTab(tab);
     setSelectedTeam(teamName);
@@ -371,7 +313,7 @@ const App = () => {
       )}
 
 
-      <main className="flex-grow w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8 mt-4">
+      <main className="flex-grow w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8 mt-4"> {/* Adjusted for centering and max-width */}
         {loadingHistoricalData ? (
           <div className="flex flex-col items-center justify-center min-h-[200px] text-blue-600">
             <svg className="animate-spin h-10 w-10 text-blue-500 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -390,7 +332,7 @@ const App = () => {
             3. **Vercel Deployment / Local Server:** Ensure your `index.js` file (and other JavaScript files) are being served with the correct MIME type (`application/javascript`). This usually requires proper build configuration (e.g., using a `build` script that generates optimized JavaScript bundles, which Vercel handles automatically for standard React projects). If developing locally, ensure your development server is configured correctly.
           </p>
         ) : (
-          <div className="w-full">
+          <div className="w-full"> {/* Ensure content area takes full width */}
             {activeTab === TABS.POWER_RANKINGS && (
               <PowerRankings
                 historicalMatchups={historicalMatchups}
@@ -403,7 +345,6 @@ const App = () => {
                 loading={loadingHistoricalData}
                 error={historicalDataError}
                 getDisplayTeamName={getMappedTeamName}
-                allTimeStandings={allTimeStandings}
               />
             )}
             {activeTab === TABS.RECORD_BOOK && (
@@ -418,7 +359,6 @@ const App = () => {
               <Head2HeadGrid
                 historicalMatchups={historicalMatchups}
                 getDisplayTeamName={getMappedTeamName}
-                allLeagueStats={allTimeStandings}
               />
             )}
             {activeTab === TABS.DPR_ANALYSIS && (
@@ -434,6 +374,7 @@ const App = () => {
               />
             )}
 
+           {/* Render TeamDetailPage when selected */}
            {activeTab === TABS.TEAM_DETAIL && selectedTeam && (
               <TeamDetailPage
                 teamName={selectedTeam}
