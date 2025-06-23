@@ -2,42 +2,38 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   HISTORICAL_MATCHUPS_API_URL,
-  GOOGLE_SHEET_POWER_RANKINGS_API_URL, // Still imported, but PowerRankings.js no longer uses it directly
+  GOOGLE_SHEET_POWER_RANKINGS_API_URL,
 } from './config';
 
-// Import existing components from your provided App.js
 import PowerRankings from './lib/PowerRankings';
-import LeagueHistory from './lib/LeagueHistory'; // Corrected import to the LeagueHistory component
+import LeagueHistory from './lib/LeagueHistory';
 import RecordBook from './lib/RecordBook';
 import DPRAnalysis from './lib/DPRAnalysis';
 import LuckRatingAnalysis from './lib/LuckRatingAnalysis';
 import TeamDetailPage from './lib/TeamDetailPage';
-import Head2HeadGrid from './lib/Head2HeadGrid'; // Stays for its own tab
+import Head2HeadGrid from './lib/Head2HeadGrid';
 
-
-// Define the available tabs and their categories for the dropdown
 const NAV_CATEGORIES = {
-  HOME: { label: 'Power Rankings', tab: 'powerRankings' }, // Default home tab
+  HOME: { label: 'Power Rankings', tab: 'powerRankings' },
   LEAGUE_DATA: {
     label: 'League Data',
     subTabs: [
-      { label: 'League History', tab: 'leagueHistory' }, // Now points to LeagueHistory
+      { label: 'League History', tab: 'leagueHistory' },
       { label: 'Record Book', tab: 'recordBook' },
-      { label: 'Head-to-Head', tab: 'headToHead' }, // Separate tab for Head2HeadGrid
+      { label: 'Head-to-Head', tab: 'headToHead' },
       { label: 'DPR Analysis', tab: 'dprAnalysis' },
       { label: 'Luck Rating', tab: 'luckRating' },
     ]
   },
-  TEAMS: { // New category for individual team pages
+  TEAMS: {
     label: 'Teams',
-    subTabs: [], // This will be populated dynamically from historicalMatchups
+    subTabs: [],
   }
 };
 
-// Flattened list of all possible tabs for conditional rendering
 const TABS = {
   POWER_RANKINGS: 'powerRankings',
-  LEAGUE_HISTORY: 'leagueHistory', // Constant updated for LeagueHistory
+  LEAGUE_HISTORY: 'leagueHistory',
   RECORD_BOOK: 'recordBook',
   HEAD_TO_HEAD: 'headToHead',
   DPR_ANALYSIS: 'dprAnalysis',
@@ -48,24 +44,23 @@ const TABS = {
 const App = () => {
   const [activeTab, setActiveTab] = useState(TABS.POWER_RANKINGS);
   const [historicalMatchups, setHistoricalMatchups] = useState([]);
-  const [historicalChampions, setHistoricalChampions] = useState([]); // State for champions
+  const [historicalChampions, setHistoricalChampions] = useState([]);
   const [loadingHistoricalData, setLoadingHistoricalData] = useState(true);
   const [historicalDataError, setHistoricalDataError] = useState(null);
-  const [selectedTeam, setSelectedTeam] = useState(null); // State to hold the selected team name
+  const [selectedTeam, setSelectedTeam] = useState(null);
 
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // State for mobile menu
-  const [openSubMenu, setOpenSubMenu] = useState(null); // State for mobile sub-menus
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [openSubMenu, setOpenSubMenu] = useState(null);
 
+  // New state for all-time standings
+  const [allTimeStandings, setAllTimeStandings] = useState([]); //
 
-  // Function to toggle sub-menus in mobile view
   const toggleSubMenu = (menuName) => {
     setOpenSubMenu(openSubMenu === menuName ? null : menuName);
   };
 
-
-  // Function to get mapped team names (case-insensitive, trim)
   const getMappedTeamName = useCallback((teamName) => {
-    if (typeof teamName !== 'string' || !teamName) return ''; // Ensure it's a string and not empty
+    if (typeof teamName !== 'string' || !teamName) return '';
     const trimmedName = teamName.trim();
     return trimmedName;
   }, []);
@@ -74,9 +69,8 @@ const App = () => {
   useEffect(() => {
     const fetchHistoricalData = async () => {
       setLoadingHistoricalData(true);
-      setHistoricalDataError(null); // Clear previous errors
+      setHistoricalDataError(null);
 
-      // Fetch Historical Matchups
       let fetchedMatchupData = [];
       try {
         if (HISTORICAL_MATCHUPS_API_URL === 'YOUR_GOOGLE_SHEET_HISTORICAL_MATCHUPS_API_URL') {
@@ -87,12 +81,11 @@ const App = () => {
           throw new Error(`HTTP error! status: ${response.status} - Could not load historical matchup data.`);
         }
         
-        const textResponse = await response.text(); // Get raw text to inspect
+        const textResponse = await response.text();
         try {
           const parsedData = JSON.parse(textResponse);
-          // Crucial: Check if the parsed data is an object with a 'data' property that is an array
           if (parsedData && typeof parsedData === 'object' && Array.isArray(parsedData.data)) {
-            fetchedMatchupData = parsedData.data; // Extract the actual array
+            fetchedMatchupData = parsedData.data;
             setHistoricalMatchups(fetchedMatchupData);
           } else {
             console.error("API response for historical matchups is not in the expected format (object with 'data' array):", parsedData);
@@ -101,13 +94,11 @@ const App = () => {
         } catch (jsonError) {
           console.error("Error parsing historical matchup data JSON. Raw response:", textResponse, jsonError);
           setHistoricalDataError(`Failed to load historical matchup data: The API response was not valid JSON. Please ensure your Google Apps Script for HISTORICAL_MATCHUPS_API_URL is correctly deployed as a Web App and returns JSON (e.g., using ContentService.MimeType.JSON). Raw response snippet: ${textResponse.substring(0, 200)}...`);
-          setLoadingHistoricalData(false); // Ensure loading is false on error
-          return; // Stop execution if parsing fails to avoid further issues
+          setLoadingHistoricalData(false);
+          return;
         }
 
-        // Dynamically populate TEAMS subTabs
         const uniqueTeamsSet = new Set();
-        // Check if fetchedMatchupData is actually an array before iterating
         if (Array.isArray(fetchedMatchupData)) {
           fetchedMatchupData.forEach(match => {
             const team1 = getMappedTeamName(match.team1);
@@ -123,21 +114,19 @@ const App = () => {
 
         NAV_CATEGORIES.TEAMS.subTabs = uniqueTeams.map(team => ({
           label: team,
-          tab: TABS.TEAM_DETAIL, // All team links go to the team detail tab
-          teamName: team,         // Pass the team name for rendering
+          tab: TABS.TEAM_DETAIL,
+          teamName: team,
         }));
 
       } catch (error) {
         console.error("Error fetching historical matchup data:", error);
         setHistoricalDataError(`Failed to load historical data: ${error.message}. Please check your HISTORICAL_MATCHUPS_API_URL in config.js and ensure your Google Apps Script is deployed correctly as a Web App (Execute as: Me, Who has access: Anyone).`);
-        setLoadingHistoricalData(false); // Ensure loading is false on error
-        return; // Stop execution if fetching fails
+        setLoadingHistoricalData(false);
+        return;
       } finally {
-        // Ensure loading is false after data fetch (even if it fails, to stop spinner)
         setLoadingHistoricalData(false);
       }
 
-      // Always use mock data for historical champions as per request
       setHistoricalChampions([
         { year: 2023, champion: "Mock Champion 2023" },
         { year: 2022, champion: "Mock Champion 2022" },
@@ -147,11 +136,67 @@ const App = () => {
     fetchHistoricalData();
   }, [getMappedTeamName]);
 
-  // Handle tab change, including setting selectedTeam for TEAM_DETAIL tab
+  // New useEffect to calculate allTimeStandings once historicalMatchups are available
+  useEffect(() => {
+    if (historicalMatchups.length > 0) {
+      const teamOverallStats = {};
+
+      historicalMatchups.forEach(match => {
+        const team1Name = getMappedTeamName(match.team1);
+        const team2Name = getMappedTeamName(match.team2);
+        const team1Score = parseFloat(match.team1Score);
+        const team2Score = parseFloat(match.team2Score);
+
+        if (!teamOverallStats[team1Name]) {
+          teamOverallStats[team1Name] = { totalWins: 0, totalLosses: 0, totalTies: 0, totalPointsFor: 0, totalPointsAgainst: 0 };
+        }
+        if (!teamOverallStats[team2Name]) {
+          teamOverallStats[team2Name] = { totalWins: 0, totalLosses: 0, totalTies: 0, totalPointsFor: 0, totalPointsAgainst: 0 };
+        }
+
+        teamOverallStats[team1Name].totalPointsFor += team1Score;
+        teamOverallStats[team1Name].totalPointsAgainst += team2Score;
+
+        teamOverallStats[team2Name].totalPointsFor += team2Score;
+        teamOverallStats[team2Name].totalPointsAgainst += team1Score;
+
+        if (team1Score > team2Score) {
+          teamOverallStats[team1Name].totalWins++;
+          teamOverallStats[team2Name].totalLosses++;
+        } else if (team2Score > team1Score) {
+          teamOverallStats[team2Name].totalWins++;
+          teamOverallStats[team1Name].totalLosses++;
+        } else {
+          teamOverallStats[team1Name].totalTies++;
+          teamOverallStats[team2Name].totalTies++;
+        }
+      });
+
+      const compiledStandings = Object.keys(teamOverallStats).map(teamName => {
+        const stats = teamOverallStats[teamName];
+        const totalGames = stats.totalWins + stats.totalLosses + stats.totalTies;
+        const winPercentage = totalGames > 0 ? ((stats.totalWins + (0.5 * stats.totalTies)) / totalGames) : 0;
+
+        return {
+          team: teamName,
+          totalWins: stats.totalWins,
+          totalLosses: stats.totalLosses,
+          totalTies: stats.totalTies,
+          winPercentage: winPercentage,
+          totalPointsFor: stats.totalPointsFor,
+          totalPointsAgainst: stats.totalPointsAgainst,
+        };
+      }).filter(Boolean).sort((a, b) => b.winPercentage - a.winPercentage);
+
+      setAllTimeStandings(compiledStandings);
+    }
+  }, [historicalMatchups, getMappedTeamName]); // Recalculate if matchups or team name mapping changes
+
+
   const handleTabChange = (tab, teamName = null) => {
     setActiveTab(tab);
     setSelectedTeam(teamName);
-    setIsMobileMenuOpen(false); // Close mobile menu on tab selection
+    setIsMobileMenuOpen(false);
   };
 
   return (
@@ -203,7 +248,7 @@ const App = () => {
               <div className="absolute left-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 max-h-60 overflow-y-auto z-20">
                 {NAV_CATEGORIES.TEAMS.subTabs.map((item) => (
                   <button
-                    key={item.label} // Use label as key for team buttons
+                    key={item.label}
                     onClick={() => handleTabChange(item.tab, item.teamName)}
                     className={`block w-full text-left px-4 py-2 text-sm transition-colors duration-200 ${selectedTeam === item.teamName && activeTab === TABS.TEAM_DETAIL ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
                   >
@@ -313,7 +358,7 @@ const App = () => {
       )}
 
 
-      <main className="flex-grow w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8 mt-4"> {/* Adjusted for centering and max-width */}
+      <main className="flex-grow w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8 mt-4">
         {loadingHistoricalData ? (
           <div className="flex flex-col items-center justify-center min-h-[200px] text-blue-600">
             <svg className="animate-spin h-10 w-10 text-blue-500 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -332,7 +377,7 @@ const App = () => {
             3. **Vercel Deployment / Local Server:** Ensure your `index.js` file (and other JavaScript files) are being served with the correct MIME type (`application/javascript`). This usually requires proper build configuration (e.g., using a `build` script that generates optimized JavaScript bundles, which Vercel handles automatically for standard React projects). If developing locally, ensure your development server is configured correctly.
           </p>
         ) : (
-          <div className="w-full"> {/* Ensure content area takes full width */}
+          <div className="w-full">
             {activeTab === TABS.POWER_RANKINGS && (
               <PowerRankings
                 historicalMatchups={historicalMatchups}
@@ -345,6 +390,7 @@ const App = () => {
                 loading={loadingHistoricalData}
                 error={historicalDataError}
                 getDisplayTeamName={getMappedTeamName}
+                allTimeStandings={allTimeStandings} {/* Pass allTimeStandings to LeagueHistory */}
               />
             )}
             {activeTab === TABS.RECORD_BOOK && (
@@ -359,6 +405,7 @@ const App = () => {
               <Head2HeadGrid
                 historicalMatchups={historicalMatchups}
                 getDisplayTeamName={getMappedTeamName}
+                allLeagueStats={allTimeStandings} {/* Pass allTimeStandings here */}
               />
             )}
             {activeTab === TABS.DPR_ANALYSIS && (
@@ -374,7 +421,6 @@ const App = () => {
               />
             )}
 
-           {/* Render TeamDetailPage when selected */}
            {activeTab === TABS.TEAM_DETAIL && selectedTeam && (
               <TeamDetailPage
                 teamName={selectedTeam}
