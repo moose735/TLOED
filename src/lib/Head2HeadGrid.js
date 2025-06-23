@@ -32,8 +32,8 @@ const calculateRank = (value, allValues, isHigherBetter = true) => {
 };
 
 // Component to render the Head-to-Head Grid and details
-// Added careerDPRData to props
-const Head2HeadGrid = ({ historicalMatchups, getDisplayTeamName, careerDPRData }) => {
+// Changed careerDPRData to allLeagueStats in props
+const Head2HeadGrid = ({ historicalMatchups, getDisplayTeamName, allLeagueStats }) => { // **MODIFIED PROP NAME**
   const [headToHeadRecords, setHeadToHeadRecords] = useState({});
   const [selectedRivalryKey, setSelectedRivalryKey] = useState(null); // Stores the H2H key (e.g., "TeamA vs TeamB")
 
@@ -235,13 +235,14 @@ const Head2HeadGrid = ({ historicalMatchups, getDisplayTeamName, careerDPRData }
     const currentStreak = currentStreakTeam ? `${currentStreakTeam} ${currentStreakCount}-game W streak` : 'No current streak';
 
     // Prepare data for ranking and comparison
-    const allLeagueTeamNames = careerDPRData ? careerDPRData.map(d => d.team) : [];
+    // Changed careerDPRData to allLeagueStats and updated property names
+    const allLeagueTeamNames = allLeagueStats ? allLeagueStats.map(d => d.team) : [];
 
-    const allTotalWins = careerDPRData ? careerDPRData.map(d => d.totalWins) : [];
-    const allWinPercentages = careerDPRData ? careerDPRData.map(d => d.winPercentage) : [];
-    const allCareerDPRs = careerDPRData ? careerDPRData.map(d => d.dpr) : [];
-    const allTotalPointsScored = careerDPRData ? careerDPRData.map(d => d.pointsFor) : [];
-    const allWeeklyHighScores = careerDPRData ? careerDPRData.map(d => d.highestWeeklyScore) : []; // Assuming 'highestWeeklyScore' exists in careerDPRData
+    const allTotalWins = allLeagueStats ? allLeagueStats.map(d => d.totalWins) : [];
+    const allWinPercentages = allLeagueStats ? allLeagueStats.map(d => d.winPercentage) : [];
+    const allCareerDPRs = allLeagueStats ? allLeagueStats.map(d => d.totalDPR) : []; // **USE totalDPR**
+    const allTotalPointsScored = allLeagueStats ? allLeagueStats.map(d => d.totalPointsFor) : []; // **USE totalPointsFor**
+    const allWeeklyHighScores = allLeagueStats ? allLeagueStats.map(d => d.highestWeeklyScore) : []; // Assuming 'highestWeeklyScore' exists in careerDPRData
 
 
     return (
@@ -262,24 +263,26 @@ const Head2HeadGrid = ({ historicalMatchups, getDisplayTeamName, careerDPRData }
         {/* Main Teams Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           {[teamA, teamB].map(team => {
-            const overallTeamStats = careerDPRData?.find(d => d.team === team);
-            const opponentTeamStats = careerDPRData?.find(d => d.team === (team === teamA ? teamB : teamA));
+            // Changed careerDPRData to allLeagueStats
+            const overallTeamStats = allLeagueStats?.find(d => d.team === team); // **UPDATED**
+            // Changed careerDPRData to allLeagueStats
+            const opponentTeamStats = allLeagueStats?.find(d => d.team === (team === teamA ? teamB : teamA)); // **UPDATED**
 
             // Individual Stats values
             const totalWins = overallTeamStats ? overallTeamStats.totalWins : null;
             const winPercentage = overallTeamStats && typeof overallTeamStats.winPercentage === 'number'
                                          ? overallTeamStats.winPercentage // Keep as raw number for comparison, format later
                                          : null;
-            const careerDPR = overallTeamStats ? overallTeamStats.dpr : null;
+            const careerDPR = overallTeamStats ? overallTeamStats.totalDPR : null; // **USE totalDPR**
             const weeklyHighScore = overallTeamStats ? overallTeamStats.highestWeeklyScore : null; // Assuming this field exists
-            const totalPointsScored = overallTeamStats ? overallTeamStats.pointsFor : null;
+            const totalPointsScored = overallTeamStats ? overallTeamStats.totalPointsFor : null; // **USE totalPointsFor**
 
             // Opponent's Individual Stats values for comparison
             const oppTotalWins = opponentTeamStats ? opponentTeamStats.totalWins : null;
             const oppWinPercentage = opponentTeamStats ? opponentTeamStats.winPercentage : null;
-            const oppCareerDPR = opponentTeamStats ? opponentTeamStats.dpr : null;
+            const oppCareerDPR = opponentTeamStats ? opponentTeamStats.totalDPR : null; // **USE totalDPR**
             const oppWeeklyHighScore = opponentTeamStats ? opponentTeamStats.highestWeeklyScore : null;
-            const oppTotalPointsScored = opponentTeamStats ? opponentTeamStats.pointsFor : null;
+            const oppTotalPointsScored = opponentTeamStats ? opponentTeamStats.totalPointsFor : null; // **USE totalPointsFor**
 
             // Function to determine cell background class
             const getComparisonClass = (teamValue, opponentValue, isHigherBetter = true) => {
