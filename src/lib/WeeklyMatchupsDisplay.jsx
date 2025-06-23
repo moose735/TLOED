@@ -1,88 +1,65 @@
-import React from 'react';
+// src/components/WeeklyMatchupsDisplay.jsx
+import React from "react";
+import { calculateMatchupOdds } from "../utils/bettingCalculations";
 
-// Helper: Calculate money line odds from scores difference
-function calculateMoneyLine(scoreA, scoreB) {
-  const diff = scoreA - scoreB;
-  if (diff === 0) return { teamAML: -110, teamBML: -110 }; // default tie odds
+export default function WeeklyMatchupsDisplay({ schedule, historicalData }) {
+  // Build a map of matchups per week (team -> opponent)
+  // schedule is array of players with Weeks as keys, e.g. Week_1, Week_2, etc.
 
-  // Example formula for ML odds (you should replace with your real formula)
-  // Positive diff => teamA favored
-  if (diff > 0) {
-    const mlA = Math.round(-100 * (1 + diff / 10)); // e.g. -110, -120...
-    const mlB = Math.round(100 * (1 + diff / 20));
-    return { teamAML: mlA, teamBML: mlB };
-  } else {
-    const mlA = Math.round(100 * (1 + -diff / 20));
-    const mlB = Math.round(-100 * (1 + -diff / 10));
-    return { teamAML: mlA, teamBML: mlB };
-  }
-}
+  if (!schedule || schedule.length === 0) return <div>No matchups to display.</div>;
 
-function WeeklyMatchupsDisplay({ weeklyMatchups }) {
-  if (!weeklyMatchups || weeklyMatchups.length === 0) {
-    return <div>No matchups to display</div>;
-  }
+  // Extract weeks from keys (assume Week_1, Week_2... format)
+  const weeks = Object.keys(schedule[0])
+    .filter((k) => k.startsWith("Week_"))
+    .sort((a, b) => {
+      const nA = parseInt(a.replace("Week_", ""), 10);
+      const nB = parseInt(b.replace("Week_", ""), 10);
+      return nA - nB;
+    });
 
-  // 1) Group matchups by week
-  const weeksMap = weeklyMatchups.reduce((acc, matchup) => {
-    if (!acc[matchup.week]) acc[matchup.week] = [];
-    acc[matchup.week].push(matchup);
-    return acc;
-  }, {});
+  // Build matchups per week in this format:
+  // { weekNumber: [ { teamA: "Boilard", teamB: "Randall" }, ... ] }
+  const weeklyMatchups = {};
 
-  // 2) Sort weeks ascending
-  const sortedWeeks = Object.keys(weeksMap)
-    .map(Number)
-    .sort((a, b) => a - b);
+  weeks.forEach((weekKey) => {
+    const weekNum = parseInt(weekKey.replace("Week_", ""), 10);
+    const pairs = [];
+
+    schedule.forEach(({ Player: teamA }) => {
+      const teamB = schedule.find((row) => row.Player === teamA)[weekKey];
+      if (!teamB) return;
+
+      // Prevent duplicates: only add if teamA < teamB alphabetically
+      if (teamA < teamB) {
+        pairs.push({ teamA, teamB });
+      }
+    });
+
+    weeklyMatchups[weekNum] = pairs;
+  });
 
   return (
     <div>
-      {sortedWeeks.map((week) => {
-        // Filter duplicates:
-        // Keep only matchups where teamA < teamB lex to avoid repeats with reversed teams
-        const uniqueMatchups = weeksMap[week].filter((m) =>
-          m.teamA.localeCompare(m.teamB) < 0
-        );
-
-        return (
-          <div key={week} style={{ marginBottom: 30 }}>
-            <h2>Week {week} Matchups</h2>
-            {uniqueMatchups.length === 0 && <p>No matchups this week</p>}
-
-            {uniqueMatchups.map((m, idx) => {
-              const { teamAML, teamBML } = calculateMoneyLine(
-                m.teamAScore,
-                m.teamBScore
-              );
-              const overUnder = m.overUnder || 0;
-
-              return (
-                <div
-                  key={idx}
-                  style={{
-                    border: "1px solid #ccc",
-                    padding: "10px",
-                    marginBottom: "10px",
-                    borderRadius: "5px",
-                  }}
-                >
-                  <div>
-                    <strong>{m.teamA}</strong> vs <strong>{m.teamB}</strong>
-                  </div>
-                  <div>
-                    ML: {teamAML > 0 ? "+" : ""}
-                    {teamAML} / {teamBML > 0 ? "+" : ""}
-                    {teamBML}
-                  </div>
-                  <div>O/U: {overUnder.toFixed(2)}</div>
-                </div>
-              );
-            })}
-          </div>
-        );
-      })}
+      {Object.entries(weeklyMatchups).map(([week, matchups]) => (
+        <div key={week} style={{ marginBottom: "2rem" }}>
+          <h2>Week {week} Matchups</h2>
+          {matchups.length === 0 ? (
+            <p>No matchups for this week</p>
+          ) : (
+            <ul>
+              {matchups.map(({ teamA, teamB }, i) => {
+                // Calculate odds from bettingCalculations.js
+                const odds = calculateMatchupOdds(teamA, teamB, parseInt(week, 10), historicalData);
+                return (
+                  <li key={i}>
+                    {teamA} vs {teamB} &nbsp; | ML: {odds.mlTeam} / {odds.mlOpponent} &nbsp; | O/U: {odds.overUnder.toFixed(2)}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
-
-export default WeeklyMatchupsDisplay;
