@@ -29,11 +29,6 @@ function winProbability(diff, combinedStdDev) {
   return diff > 0 ? (erf(z) / 2 + 0.5) : (1 - (erf(Math.abs(z)) / 2 + 0.5));
 }
 
-/**
- * Converts win probability (0 to 1) to American moneyline odds.
- * @param {number} winProb - Probability of winning (0 to 1)
- * @returns {number} Moneyline odds (positive or negative integer)
- */
 export function calculateMoneylineOdds(winProb) {
   if (winProb <= 0 || winProb >= 1) return null;
 
@@ -44,14 +39,8 @@ export function calculateMoneylineOdds(winProb) {
   }
 }
 
-/**
- * Calculate the over/under line for two teams based on their average points scored.
- * @param {number[]} teamAScores - Array of historical points scored by team A this season.
- * @param {number[]} teamBScores - Array of historical points scored by team B this season.
- * @returns {number|null} Over/Under line rounded to 1 decimal place, or null if no data.
- */
 export function calculateOverUnder(teamAScores, teamBScores) {
-  if (!teamAScores.length || !teamBScores.length) return null; // no data
+  if (!teamAScores.length || !teamBScores.length) return null;
 
   const avgA = average(teamAScores);
   const avgB = average(teamBScores);
@@ -66,9 +55,7 @@ async function getMatchupsData() {
   const json = await res.json();
   const allMatchups = json.data;
 
-  // Find the latest year in the dataset to represent the current season
   const currentYear = Math.max(...allMatchups.map(g => g.year));
-  // Filter only matchups from the current year
   const currentSeason = allMatchups.filter(g => g.year === currentYear);
 
   return { currentSeason, currentYear };
@@ -85,13 +72,23 @@ function buildTeamScoresMap(matchups) {
   return scores;
 }
 
-/**
- * Generate betting lines including:
- * - Point spread (line)
- * - Win probability (%)
- * - Over/Under line (total points)
- * - Moneyline odds (American odds)
- */
+export function calculateTeamAverageDifferenceVsOpponent(teamName, matchups) {
+  const games = matchups.filter(g => g.team1 === teamName || g.team2 === teamName);
+
+  if (games.length === 0) return null;
+
+  let totalDiff = 0;
+  games.forEach(g => {
+    if (g.team1 === teamName) {
+      totalDiff += g.team1Score - g.team2Score;
+    } else {
+      totalDiff += g.team2Score - g.team1Score;
+    }
+  });
+
+  return totalDiff / games.length;
+}
+
 function generateLines(teamScores) {
   const lines = [];
   const teams = Object.keys(teamScores);
@@ -124,14 +121,12 @@ function generateLines(teamScores) {
   return lines;
 }
 
-// Main export: generate betting lines for current season
 export default async function getBettingLines() {
   const { currentSeason } = await getMatchupsData();
   const teamScores = buildTeamScoresMap(currentSeason);
   return generateLines(teamScores);
 }
 
-// Exported function to get per-team player metrics by year (needed for your build)
 export async function getPlayerMetricsForYear(year) {
   const res = await fetch(MATCHUPS_URL);
   const json = await res.json();
