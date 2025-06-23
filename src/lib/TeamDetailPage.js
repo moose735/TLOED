@@ -108,18 +108,15 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
     };
 
     const seasonalData = {};
-
-    // Get the current year to include it in "completed or current seasons"
-    const currentYear = new Date().getFullYear();
-
-    // Modified to include the current season in overall career calculations and display
-    const completedOrCurrentSeasons = new Set();
+    
+    const completedSeasons = new Set();
     historicalMatchups.forEach(match => {
-        const year = parseInt(match.year);
-        if (!isNaN(year)) {
-            // A season is considered "completed or current" if it has a final seeding game OR if it is the current year
-            if ((match.finalSeedingGame === 1 || match.finalSeedingGame === '1') || year === currentYear) {
-                completedOrCurrentSeasons.add(year);
+        // We consider a season "completed" if there's a championship game recorded for it.
+        // This helps in accurately filtering historical data for the team.
+        if (match.finalSeedingGame === 1 || match.finalSeedingGame === '1') {
+            const year = parseInt(match.year);
+            if (!isNaN(year)) {
+                completedSeasons.add(year);
             }
         }
     });
@@ -203,11 +200,6 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
         let totalPointsFor = 0;
         let totalGamesPlayed = 0;
         let careerChampionships = 0;
-        let careerRunnerUps = 0; // Initialize
-        let careerThirdPlaces = 0; // Initialize
-        let careerPointsChampionships = 0; // Initialize
-        let careerPointsRunnerUps = 0; // Initialize
-        let careerThirdPlacePoints = 0; // Initialize
         let careerPlayoffAppearancesCount = 0; // Sum of seasons with playoff appearances
         let careerTopScoreWeeks = 0;
         let careerTotalDPRSum = 0;
@@ -217,7 +209,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
         // Iterate through all seasons to gather career data for this 'team'
         Object.keys(seasonalMetrics).forEach(year => {
             const teamMetrics = seasonalMetrics[year]?.[team];
-            if (teamMetrics && completedOrCurrentSeasons.has(parseInt(year))) { // Use completedOrCurrentSeasons
+            if (teamMetrics && completedSeasons.has(parseInt(year))) { // Only count completed seasons
                 totalWins += teamMetrics.wins;
                 totalLosses += teamMetrics.losses;
                 totalTies += teamMetrics.ties;
@@ -225,12 +217,6 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
                 totalGamesPlayed += teamMetrics.totalGames;
 
                 if (teamMetrics.isChampion) careerChampionships++;
-                if (teamMetrics.isRunnerUp) careerRunnerUps++; // Increment
-                if (teamMetrics.isThirdPlace) careerThirdPlaces++; // Increment
-                if (teamMetrics.isPointsChampion) careerPointsChampionships++; // Increment
-                if (teamMetrics.isPointsRunnerUp) careerPointsRunnerUps++; // Increment
-                if (teamMetrics.isThirdPlacePoints) careerThirdPlacePoints++; // Increment
-
                 if (teamMetrics.isPlayoffTeam) careerPlayoffAppearancesCount++; // Increment count if team made playoffs this season
                 if (typeof teamMetrics.topScoreWeeksCount === 'number') careerTopScoreWeeks += teamMetrics.topScoreWeeksCount;
                 if (typeof teamMetrics.luckRating === 'number' && !isNaN(teamMetrics.luckRating)) {
@@ -252,11 +238,6 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
             totalGamesPlayed: totalGamesPlayed,
             winPercentage: totalGamesPlayed > 0 ? ((totalWins + 0.5 * totalTies) / totalGamesPlayed) : 0,
             championships: careerChampionships,
-            runnerUps: careerRunnerUps,
-            thirdPlaces: careerThirdPlaces,
-            pointsChampionships: careerPointsChampionships,
-            pointsRunnerUps: careerPointsRunnerUps,
-            thirdPlacePoints: careerThirdPlacePoints,
             playoffAppearancesCount: careerPlayoffAppearancesCount,
             topScoreWeeksCount: careerTopScoreWeeks,
             avgDPR: careerSeasonsWithDPRData > 0 ? careerTotalDPRSum / careerSeasonsWithDPRData : 0,
@@ -275,11 +256,6 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
         overallStats.overallTopScoreWeeksCount = selectedTeamCareerStats.topScoreWeeksCount;
         overallStats.avgDPR = selectedTeamCareerStats.avgDPR;
         overallStats.totalChampionships = selectedTeamCareerStats.championships;
-        overallStats.totalRunnerUps = selectedTeamCareerStats.runnerUps; // Set
-        overallStats.totalThirdPlaces = selectedTeamCareerStats.thirdPlaces; // Set
-        overallStats.totalPointsChampionships = selectedTeamCareerStats.pointsChampionships; // Set
-        overallStats.totalPointsRunnerUps = selectedTeamCareerStats.pointsRunnerUps; // Set
-        overallStats.totalThirdPlacePoints = selectedTeamCareerStats.thirdPlacePoints; // Set
         overallStats.playoffAppearancesCount = selectedTeamCareerStats.playoffAppearancesCount;
         overallStats.totalLuckRating = selectedTeamCareerStats.totalLuckRating; // Set total luck rating
 
@@ -289,11 +265,6 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
         const allTopScoreWeeks = Object.values(allTeamsAggregatedStats).map(t => t.topScoreWeeksCount);
         const allPlayoffAppearances = Object.values(allTeamsAggregatedStats).map(t => t.playoffAppearancesCount);
         const allChampionships = Object.values(allTeamsAggregatedStats).map(t => t.championships);
-        const allRunnerUps = Object.values(allTeamsAggregatedStats).map(t => t.runnerUps); // For rank
-        const allThirdPlaces = Object.values(allTeamsAggregatedStats).map(t => t.thirdPlaces); // For rank
-        const allPointsChampionships = Object.values(allTeamsAggregatedStats).map(t => t.pointsChampionships); // For rank
-        const allPointsRunnerUps = Object.values(allTeamsAggregatedStats).map(t => t.pointsRunnerUps); // For rank
-        const allThirdPlacePoints = Object.values(allTeamsAggregatedStats).map(t => t.thirdPlacePoints); // For rank
         const allTotalLuckRatings = Object.values(allTeamsAggregatedStats).map(t => t.totalLuckRating); // Get all luck ratings
 
         overallStats.winRank = calculateRank(selectedTeamCareerStats.wins, allWins);
@@ -302,169 +273,266 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
         overallStats.topScoreWeeksRank = calculateRank(selectedTeamCareerStats.topScoreWeeksCount, allTopScoreWeeks);
         overallStats.playoffRank = calculateRank(selectedTeamCareerStats.playoffAppearancesCount, allPlayoffAppearances);
         overallStats.championshipRank = calculateRank(selectedTeamCareerStats.championships, allChampionships);
-        overallStats.runnerUpRank = calculateRank(selectedTeamCareerStats.runnerUps, allRunnerUps); // Calculate
-        overallStats.thirdPlaceRank = calculateRank(selectedTeamCareerStats.thirdPlaces, allThirdPlaces); // Calculate
-        overallStats.pointsChampionshipRank = calculateRank(selectedTeamCareerStats.pointsChampionships, allPointsChampionships); // Calculate
-        overallStats.pointsRunnerUpRank = calculateRank(selectedTeamCareerStats.pointsRunnerUps, allPointsRunnerUps); // Calculate
-        overallStats.thirdPlacePointsRank = calculateRank(selectedTeamCareerStats.thirdPlacePoints, allThirdPlacePoints); // Calculate
         overallStats.luckRank = calculateRank(selectedTeamCareerStats.totalLuckRating, allTotalLuckRatings); // Calculate luck rank
+
+        // Sum up other awards based on seasonalMetrics flags for the current team
+        Object.keys(seasonalMetrics).forEach(yearStr => {
+            const metricsForSeason = seasonalMetrics[yearStr]?.[teamName];
+            if (metricsForSeason && completedSeasons.has(parseInt(yearStr))) {
+                if (metricsForSeason.isRunnerUp) {
+                    overallStats.totalRunnerUps++;
+                }
+                if (metricsForSeason.isThirdPlace) {
+                    overallStats.totalThirdPlaces++;
+                }
+                if (metricsForSeason.isPointsChampion) {
+                    overallStats.totalPointsChampionships++;
+                }
+                if (metricsForSeason.isPointsRunnerUp) {
+                    overallStats.totalPointsRunnerUps++;
+                }
+                if (metricsForSeason.isThirdPlacePoints) {
+                    overallStats.totalThirdPlacePoints++;
+                }
+            }
+        });
     }
 
-    // Populate compiledSeasonHistory for display
-    Object.keys(seasonalMetrics).sort((a, b) => parseInt(b) - parseInt(a)).forEach(yearStr => {
-        const year = parseInt(yearStr);
-        const teamMetrics = seasonalMetrics[yearStr]?.[teamName];
-        const teamSeasonalData = seasonalData[year]?.[teamName];
+    Object.keys(seasonalData).sort().forEach(yearStr => {
+      const year = parseInt(yearStr);
+      const seasonTeamStats = seasonalData[year][teamName];
+      const metricsForSeason = seasonalMetrics[year]?.[teamName];
 
-        if (teamMetrics && teamSeasonalData && completedOrCurrentSeasons.has(year)) { // Use completedOrCurrentSeasons
-            compiledSeasonHistory.push({
-                year: year,
-                wins: teamMetrics.wins,
-                losses: teamMetrics.losses,
-                ties: teamMetrics.ties,
-                pointsFor: teamMetrics.pointsFor,
-                pointsAgainst: teamMetrics.pointsAgainst,
-                averageScore: teamMetrics.averageScore,
-                winPercentage: teamMetrics.winPercentage,
-                allPlayWinPercentage: teamMetrics.allPlayWinPercentage,
-                topScoreWeeksCount: teamMetrics.topScoreWeeksCount,
-                playoffTeam: teamMetrics.isPlayoffTeam,
-                champion: teamMetrics.isChampion,
-                runnerUp: teamMetrics.isRunnerUp, // Added
-                thirdPlace: teamMetrics.isThirdPlace, // Added
-                pointsChampion: teamMetrics.isPointsChampion, // Added
-                pointsRunnerUp: teamMetrics.isPointsRunnerUp, // Added
-                thirdPlacePoints: teamMetrics.isThirdPlacePoints, // Added
-                luckRating: teamMetrics.luckRating,
-                adjustedDPR: teamMetrics.adjustedDPR,
-                finish: teamMetrics.finish, // Overall league finish
-                pointsFinish: teamMetrics.pointsFinish, // Points-based finish
-            });
-        }
+      // Only include completed seasons with valid metrics for the team
+      if (seasonTeamStats && metricsForSeason && completedSeasons.has(year)) {
+        const seasonTotalGames = seasonTeamStats.wins + seasonTeamStats.losses + seasonTeamStats.ties;
+        const seasonWinPercentage = seasonTotalGames > 0 ? ((seasonTeamStats.wins + (0.5 * seasonTeamStats.ties)) / seasonTotalGames) : 0;
+
+        compiledSeasonHistory.push({
+          year: year,
+          // Removed individual season award icons from here as per user request
+          team: seasonTeamStats.teamName, // Keep this as plain team name for table
+          wins: seasonTeamStats.wins,
+          losses: seasonTeamStats.losses,
+          ties: seasonTeamStats.ties,
+          pointsFor: seasonTeamStats.pointsFor,
+          pointsAgainst: seasonTeamStats.pointsAgainst,
+          luckRating: metricsForSeason.luckRating,
+          adjustedDPR: metricsForSeason.adjustedDPR,
+          allPlayWinPercentage: metricsForSeason.allPlayWinPercentage,
+          winPercentage: seasonWinPercentage,
+          finish: metricsForSeason.rank ? `${metricsForSeason.rank}${getOrdinalSuffix(metricsForSeason.rank)}` : 'N/A', // Use rank from seasonalMetrics
+          pointsFinish: metricsForSeason.pointsRank ? `${metricsForSeason.pointsRank}${getOrdinalSuffix(metricsForSeason.pointsRank)}` : 'N/A', // New: Points finish rank
+        });
+      }
     });
 
-    setTeamOverallStats(overallStats);
-    setTeamSeasonHistory(compiledSeasonHistory);
+
+    setTeamOverallStats(overallStats); // Set the state variable here
+    setTeamSeasonHistory(compiledSeasonHistory); // Do not sort here, use useMemo below
     setLoadingStats(false);
   }, [teamName, historicalMatchups, getMappedTeamName]);
 
-  // Helper for sorting season history
+  // Handle sorting logic for season history
   const sortedSeasonHistory = useMemo(() => {
-    return [...teamSeasonHistory].sort((a, b) => {
-      const aValue = a[sortBy];
-      const bValue = b[sortBy];
+    if (!teamSeasonHistory.length) return [];
 
-      if (typeof aValue === 'string') {
-        return sortOrder === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
-      }
-      return sortOrder === 'asc' ? aValue - bValue : bValue - aValue;
+    const sortableHistory = [...teamSeasonHistory]; // Create a mutable copy
+
+    // Helper to convert ordinal/tie ranks to numbers for sorting
+    const parseRankForSort = (rankString) => {
+        if (rankString === 'N/A') return Infinity; // Put N/A at the end
+        if (rankString.startsWith('T-')) {
+            return parseInt(rankString.substring(2));
+        }
+        const match = rankString.match(/^(\d+)/);
+        return match ? parseInt(match[1]) : Infinity;
+    };
+
+    return sortableHistory.sort((a, b) => {
+        let valA, valB;
+
+        switch (sortBy) {
+            case 'year':
+            case 'pointsFor':
+            case 'pointsAgainst':
+            case 'luckRating':
+            case 'adjustedDPR':
+            case 'allPlayWinPercentage':
+                valA = a[sortBy];
+                valB = b[sortBy];
+                break;
+            case 'record': // Sort by win percentage for record
+                valA = (a.wins + 0.5 * a.ties) / (a.wins + a.losses + a.ties);
+                valB = (b.wins + 0.5 * b.ties) / (b.wins + b.losses + b.ties);
+                // Handle division by zero for games played
+                valA = isNaN(valA) ? -Infinity : valA;
+                valB = isNaN(valB) ? -Infinity : valB;
+                break;
+            case 'finish':
+            case 'pointsFinish':
+                valA = parseRankForSort(a[sortBy]);
+                valB = parseRankForSort(b[sortBy]);
+                break;
+            default:
+                // Fallback to year if sortBy is unrecognized
+                valA = a.year;
+                valB = b.year;
+        }
+
+        if (valA < valB) {
+            return sortOrder === 'asc' ? -1 : 1;
+        }
+        if (valA > valB) {
+            return sortOrder === 'asc' ? 1 : -1;
+        }
+        return 0;
     });
   }, [teamSeasonHistory, sortBy, sortOrder]);
 
+  // Function to handle sort column click
   const handleSort = (column) => {
     if (sortBy === column) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
     } else {
       setSortBy(column);
-      setSortOrder('desc'); // Default to descending for new sort column
+      setSortOrder('asc'); // Default to ascending for new sort column
     }
   };
 
-  const renderSortArrow = (column) => {
-    if (sortBy === column) {
-      return sortOrder === 'asc' ? ' ↑' : ' ↓';
-    }
-    return '';
-  };
 
   if (loadingStats) {
-    return <div className="text-center py-8">Loading team data...</div>;
+    return (
+      <div className="w-full bg-white p-8 rounded-lg shadow-md mt-8 text-center text-gray-600">
+        Loading {teamName}'s historical data...
+      </div>
+    );
   }
 
+  // Handle case where teamOverallStats is null (e.g., initial render or no data found)
   if (!teamOverallStats) {
-    return <div className="text-center py-8 text-gray-600">No data available for {teamName}.</div>;
+    return (
+      <div className="w-full bg-white p-8 rounded-lg shadow-md mt-8 text-center text-red-500">
+        No data found for {teamName}.
+      </div>
+    );
   }
-
-  // Determine if the current season (2025) is included in the history to show "current season" label
-  const isCurrentSeasonPresent = teamSeasonHistory.some(season => season.year === new Date().getFullYear());
-
 
   return (
-    <div className="container mx-auto p-4 max-w-7xl">
-      <h1 className="text-4xl font-extrabold text-blue-800 mb-6 text-center">{teamName}</h1>
+    <div className="w-full bg-white p-8 rounded-lg shadow-md mt-8">
+      <h2 className="text-3xl font-bold text-blue-700 mb-6 text-center border-b pb-3">
+        {teamName}
+        <span className="block text-lg font-medium text-gray-600 mt-2">
+          Record: {teamOverallStats.totalWins}-{teamOverallStats.totalLosses}-{teamOverallStats.totalTies} | Career DPR: {formatDPR(teamOverallStats.avgDPR)}
+            {/* Display trophy and medal icons based on accumulated totals */}
+            <div className="flex justify-center items-center gap-2 whitespace-nowrap mt-1">
+                {teamOverallStats.totalChampionships > 0 && (
+                  <span title={`Sween Bowl Champion (${teamOverallStats.totalChampionships}x)`} className="flex items-center space-x-1 whitespace-nowrap">
+                      <i className="fas fa-trophy text-yellow-500 text-2xl"></i> {/* Made icons larger */}
+                      <span className="text-xs font-medium">{teamOverallStats.totalChampionships}x</span>
+                  </span>
+                )}
+                {teamOverallStats.totalRunnerUps > 0 && (
+                  <span title={`Sween Bowl Runner-Up (${teamOverallStats.totalRunnerUps}x)`} className="flex items-center space-x-1 whitespace-nowrap">
+                      <i className="fas fa-trophy text-gray-400 text-2xl"></i> {/* Made icons larger */}
+                      <span className="text-xs font-medium">{teamOverallStats.totalRunnerUps}x</span>
+                  </span>
+                )}
+                {teamOverallStats.totalThirdPlaces > 0 && (
+                  <span title={`3rd Place Finish (${teamOverallStats.totalThirdPlaces}x)`} className="flex items-center space-x-1 whitespace-nowrap">
+                      <i className="fas fa-trophy text-amber-800 text-2xl"></i> {/* Made icons larger */}
+                      <span className="text-xs font-medium">{teamOverallStats.totalThirdPlaces}x</span>
+                  </span>
+                )}
+                {teamOverallStats.totalPointsChampionships > 0 && (
+                  <span title={`1st Place - Points (${teamOverallStats.totalPointsChampionships}x)`} className="flex items-center space-x-1 whitespace-nowrap">
+                      {/* Corrected color to yellow-500 for gold medal */}
+                      <i className="fas fa-medal text-yellow-500 text-2xl"></i>
+                      <span className="text-xs font-medium">{teamOverallStats.totalPointsChampionships}x</span>
+                  </span>
+                )}
+                {teamOverallStats.totalPointsRunnerUps > 0 && (
+                  <span title={`2nd Place - Points (${teamOverallStats.totalPointsRunnerUps}x)`} className="flex items-center space-x-1 whitespace-nowrap">
+                      <i className="fas fa-medal text-gray-400 text-2xl"></i> {/* Made icons larger */}
+                      <span className="text-xs font-medium">{teamOverallStats.totalPointsRunnerUps}x</span>
+                  </span>
+                )}
+                {teamOverallStats.totalThirdPlacePoints > 0 && (
+                  <span title={`3rd Place - Points (${teamOverallStats.totalThirdPlacePoints}x)`} className="flex items-center space-x-1 whitespace-nowrap">
+                      <i className="fas fa-medal text-amber-800 text-2xl"></i> {/* Made icons larger */}
+                      <span className="text-xs font-medium">{teamOverallStats.totalThirdPlacePoints}x</span>
+                  </span>
+                )}
+            </div>
+        </span>
+      </h2>
 
-      {/* Overall Career Statistics Section */}
-      <section className="mb-8 p-6 bg-white rounded-lg shadow-md border border-blue-200">
-        <h2 className="text-2xl font-bold text-blue-700 mb-4 text-center">Career Overview</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          <StatCard title="Overall Record (W-L-T)" value={`${teamOverallStats.totalWins}-${teamOverallStats.totalLosses}-${teamOverallStats.totalTies}`} />
-          <StatCard title="Win Percentage" value={formatPercentage(teamOverallStats.totalGamesPlayed > 0 ? ((teamOverallStats.totalWins + 0.5 * teamOverallStats.totalTies) / teamOverallStats.totalGamesPlayed) : 0)} rank={teamOverallStats.winPercentageRank} />
-          <StatCard title="Total Points For" value={formatScore(teamOverallStats.totalPointsFor)} rank={teamOverallStats.pointsForRank} />
-          <StatCard title="Average DPR" value={formatDPR(teamOverallStats.avgDPR)} />
-          <StatCard title="Total Top Score Weeks" value={teamOverallStats.overallTopScoreWeeksCount} rank={teamOverallStats.topScoreWeeksRank} />
+      {/* Overall Stats */}
+      <section className="mb-8">
+        <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">League Ranks</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6"> {/* Updated grid for desktop */}
+          <StatCard title="Total Wins" value={teamOverallStats.totalWins} rank={teamOverallStats.winRank} />
+          <StatCard title="Win %" value={formatPercentage((teamOverallStats.totalWins + 0.5 * teamOverallStats.totalTies) / teamOverallStats.totalGamesPlayed)} rank={teamOverallStats.winPercentageRank} />
+          <StatCard title="Total Points" value={formatScore(teamOverallStats.totalPointsFor)} rank={teamOverallStats.pointsForRank} />
+          <StatCard
+            title="Weekly Top Scores"
+            value={
+              teamOverallStats.overallTopScoreWeeksCount !== undefined
+                ? `${teamOverallStats.overallTopScoreWeeksCount}`
+                : 'N/A'
+            }
+            rank={teamOverallStats.topScoreWeeksRank}
+          />
           <StatCard title="Playoff Appearances" value={teamOverallStats.playoffAppearancesCount} rank={teamOverallStats.playoffRank} />
           <StatCard title="Championships" value={teamOverallStats.totalChampionships} rank={teamOverallStats.championshipRank} />
-          <StatCard title="Runner Ups" value={teamOverallStats.totalRunnerUps} rank={teamOverallStats.runnerUpRank} />
-          <StatCard title="Third Place Finishes" value={teamOverallStats.totalThirdPlaces} rank={teamOverallStats.thirdPlaceRank} />
-          <StatCard title="Points Championships" value={teamOverallStats.totalPointsChampionships} rank={teamOverallStats.pointsChampionshipRank} />
-          <StatCard title="Points Runner Ups" value={teamOverallStats.totalPointsRunnerUps} rank={teamOverallStats.pointsRunnerUpRank} />
-          <StatCard title="Third Place (Points)" value={teamOverallStats.totalThirdPlacePoints} rank={teamOverallStats.thirdPlacePointsRank} />
-          <StatCard title="Total Luck Rating" value={formatLuckRating(teamOverallStats.totalLuckRating)} rank={teamOverallStats.luckRank} />
+          {/* Removed the 'Total Luck Rating' StatCard */}
         </div>
       </section>
 
-      {/* Season-by-Season History Section */}
-      <section className="mb-8 p-6 bg-white rounded-lg shadow-md border border-blue-200">
-        <h2 className="text-2xl font-bold text-blue-700 mb-4 text-center">Season-by-Season History</h2>
-        {sortedSeasonHistory.length > 0 ? (
+      {/* Season by Season History Table */}
+      <section className="mb-8">
+        <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Season History</h3>
+        {teamSeasonHistory.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="min-w-full bg-white border border-gray-300 rounded-lg">
-              <thead>
-                <tr className="bg-blue-100 text-blue-800 uppercase text-sm leading-normal">
-                  <th className="py-3 px-3 text-left cursor-pointer" onClick={() => handleSort('year')}>Season{renderSortArrow('year')}</th>
-                  <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('wins')}>W{renderSortArrow('wins')}</th>
-                  <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('losses')}>L{renderSortArrow('losses')}</th>
-                  <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('ties')}>T{renderSortArrow('ties')}</th>
-                  <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('pointsFor')}>PF{renderSortArrow('pointsFor')}</th>
-                  <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('pointsAgainst')}>PA{renderSortArrow('pointsAgainst')}</th>
-                  <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('averageScore')}>Avg Score{renderSortArrow('averageScore')}</th>
-                  <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('winPercentage')}>Win%{renderSortArrow('winPercentage')}</th>
-                  <th className="py-3 px-3 text-center">Playoffs</th>
-                  <th className="py-3 px-3 text-center">Champ</th>
-                  <th className="py-3 px-3 text-center">Runner Up</th>
-                  <th className="py-3 px-3 text-center">3rd Place</th>
-                  <th className="py-3 px-3 text-center">Points Champ</th>
-                  <th className="py-3 px-3 text-center">Points Runner Up</th>
-                  <th className="py-3 px-3 text-center">3rd Place Pts</th>
-                  <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('topScoreWeeksCount')}>Top Score Weeks{renderSortArrow('topScoreWeeksCount')}</th>
-                  <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('luckRating')}>Luck Rating{renderSortArrow('luckRating')}</th>
-                  <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('finish')}>Finish{renderSortArrow('finish')}</th>
-                  <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('pointsFinish')}>Points Finish{renderSortArrow('pointsFinish')}</th>
-                  <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('adjustedDPR')}>Adjusted DPR{renderSortArrow('adjustedDPR')}</th>
-                  <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('allPlayWinPercentage')}>All-Play W%{renderSortArrow('allPlayWinPercentage')}</th>
+            <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-center cursor-pointer" onClick={() => handleSort('year')}>
+                    Year {sortBy === 'year' && (sortOrder === 'asc' ? '▲' : '▼')}
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-center cursor-pointer" onClick={() => handleSort('record')}>
+                    Record (W-L-T) {sortBy === 'record' && (sortOrder === 'asc' ? '▲' : '▼')}
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200 text-center cursor-pointer" onClick={() => handleSort('pointsFor')}>
+                    Points For {sortBy === 'pointsFor' && (sortOrder === 'asc' ? '▲' : '▼')}
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-red-700 uppercase tracking-wider border-b border-gray-200 text-center cursor-pointer" onClick={() => handleSort('pointsAgainst')}>
+                    Points Against {sortBy === 'pointsAgainst' && (sortOrder === 'asc' ? '▲' : '▼')}
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-yellow-700 uppercase tracking-wider border-b border-gray-200 text-center cursor-pointer" onClick={() => handleSort('luckRating')}>
+                    Luck Rating {sortBy === 'luckRating' && (sortOrder === 'asc' ? '▲' : '▼')}
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-purple-700 uppercase tracking-wider border-b border-gray-200 text-center cursor-pointer" onClick={() => handleSort('finish')}>
+                    Finish {sortBy === 'finish' && (sortOrder === 'asc' ? '▲' : '▼')}
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-center cursor-pointer" onClick={() => handleSort('pointsFinish')}>
+                    Points Finish {sortBy === 'pointsFinish' && (sortOrder === 'asc' ? '▲' : '▼')}
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200 text-center cursor-pointer" onClick={() => handleSort('adjustedDPR')}>
+                    Adjusted DPR {sortBy === 'adjustedDPR' && (sortOrder === 'asc' ? '▲' : '▼')}
+                  </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200 text-center cursor-pointer" onClick={() => handleSort('allPlayWinPercentage')}>
+                    All-Play Win % {sortBy === 'allPlayWinPercentage' && (sortOrder === 'asc' ? '▲' : '▼')}
+                  </th>
                 </tr>
               </thead>
-              <tbody className="text-gray-700">
-                {sortedSeasonHistory.map((season) => (
-                  <tr key={season.year} className="border-b border-gray-200 hover:bg-gray-50">
-                    <td className="py-2 px-3 text-sm text-gray-700 font-medium whitespace-nowrap">
-                        {season.year} {season.year === new Date().getFullYear() && isCurrentSeasonPresent && '(Current)'} {/* Label current season */}
-                    </td>
-                    <td className="py-2 px-3 text-sm text-gray-700 text-center">{season.wins}</td>
-                    <td className="py-2 px-3 text-sm text-gray-700 text-center">{season.losses}</td>
-                    <td className="py-2 px-3 text-sm text-gray-700 text-center">{season.ties}</td>
+              <tbody>
+                {sortedSeasonHistory.map((season, index) => (
+                  <tr key={season.year} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                    <td className="py-2 px-3 text-sm text-gray-800 text-center">{season.year}</td>
+                    <td className="py-2 px-3 text-sm text-gray-800 text-center">{season.wins}-{season.losses}-{season.ties}</td>
                     <td className="py-2 px-3 text-sm text-gray-700 text-center">{formatScore(season.pointsFor)}</td>
                     <td className="py-2 px-3 text-sm text-gray-700 text-center">{formatScore(season.pointsAgainst)}</td>
-                    <td className="py-2 px-3 text-sm text-gray-700 text-center">{formatScore(season.averageScore)}</td>
-                    <td className="py-2 px-3 text-sm text-gray-700 text-center">{formatPercentage(season.winPercentage)}</td>
-                    <td className="py-2 px-3 text-sm text-gray-700 text-center">{season.playoffTeam ? 'Yes' : 'No'}</td>
-                    <td className="py-2 px-3 text-sm text-gray-700 text-center">{season.champion ? 'Yes' : 'No'}</td>
-                    <td className="py-2 px-3 text-sm text-gray-700 text-center">{season.runnerUp ? 'Yes' : 'No'}</td>
-                    <td className="py-2 px-3 text-sm text-gray-700 text-center">{season.thirdPlace ? 'Yes' : 'No'}</td>
-                    <td className="py-2 px-3 text-sm text-gray-700 text-center">{season.pointsChampion ? 'Yes' : 'No'}</td>
-                    <td className="py-2 px-3 text-sm text-gray-700 text-center">{season.pointsRunnerUp ? 'Yes' : 'No'}</td>
-                    <td className="py-2 px-3 text-sm text-gray-700 text-center">{season.thirdPlacePoints ? 'Yes' : 'No'}</td>
-                    <td className="py-2 px-3 text-sm text-gray-700 text-center">{season.topScoreWeeksCount}</td>
                     <td className="py-2 px-3 text-sm text-gray-700 text-center">{formatLuckRating(season.luckRating)}</td>
                     <td className="py-2 px-3 text-sm text-gray-700 text-center">{season.finish}</td>
                     <td className="py-2 px-3 text-sm text-gray-700 text-center">{season.pointsFinish}</td>
@@ -487,9 +555,10 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
 const StatCard = ({ title, value, rank }) => ( // Added rank prop
   <div className="bg-blue-50 p-2 rounded-lg shadow-sm flex flex-col items-center justify-center text-center border border-blue-200">
     {rank && rank !== 'N/A' && <p className="text-2xl font-bold text-blue-700">{rank}</p>} {/* Larger font for rank */}
-    {/* Changed text-blue-800 to text-gray-600 because ranks are informational, not primary values */}
-    <p className="text-gray-600 text-sm">{title}</p>
-    {value !== undefined && value !== null && value !== '' && <p className="text-xl font-semibold text-blue-800 mt-1">{value}</p>}
+    {/* Changed text-blue-800 to text-gray-600 for consistency */}
+    <p className="text-sm font-semibold text-gray-600">
+      {title} (<span className="font-semibold text-gray-600">{value}</span>)
+    </p>
   </div>
 );
 
