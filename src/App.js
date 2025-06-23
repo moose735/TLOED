@@ -13,7 +13,6 @@ import DPRAnalysis from './lib/DPRAnalysis';
 import LuckRatingAnalysis from './lib/LuckRatingAnalysis';
 import TeamDetailPage from './lib/TeamDetailPage';
 import Head2HeadGrid from './lib/Head2HeadGrid'; // Stays for its own tab
-import WeeklyMatchupsDisplay from './lib/WeeklyMatchupsDisplay'; // Import the new component
 
 
 // Define the available tabs and their categories for the dropdown
@@ -25,7 +24,6 @@ const NAV_CATEGORIES = {
       { label: 'League History', tab: 'leagueHistory' }, // Now points to LeagueHistory
       { label: 'Record Book', tab: 'recordBook' },
       { label: 'Head-to-Head', tab: 'headToHead' }, // Separate tab for Head2HeadGrid
-      { label: 'Weekly Matchups', tab: 'weeklyMatchups' }, // New: Weekly Matchups tab
       { label: 'DPR Analysis', tab: 'dprAnalysis' },
       { label: 'Luck Rating', tab: 'luckRating' },
     ]
@@ -42,7 +40,6 @@ const TABS = {
   LEAGUE_HISTORY: 'leagueHistory', // Constant updated for LeagueHistory
   RECORD_BOOK: 'recordBook',
   HEAD_TO_HEAD: 'headToHead',
-  WEEKLY_MATCHUPS: 'weeklyMatchups', // New: Weekly Matchups constant
   DPR_ANALYSIS: 'dprAnalysis',
   LUCK_RATING: 'luckRating',
   TEAM_DETAIL: 'teamDetail',
@@ -364,12 +361,6 @@ const App = () => {
                 getDisplayTeamName={getMappedTeamName}
               />
             )}
-            {activeTab === TABS.WEEKLY_MATCHUPS && (
-  <WeeklyMatchupsDisplay
-    historicalMatchups={historicalMatchups} // Pass the data
-    getMappedTeamName={getMappedTeamName} // Pass the helper function
-  />
-)}
             {activeTab === TABS.DPR_ANALYSIS && (
               <DPRAnalysis
                 historicalMatchups={historicalMatchups}
