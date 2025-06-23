@@ -180,13 +180,28 @@ historicalMatchups.forEach(match => {
       if (stats && m && completedSeasons.has(year)) {
         const totalGames = stats.wins + stats.losses + stats.ties;
         const winPct = totalGames > 0 ? ((stats.wins + 0.5 * stats.ties) / totalGames) : 0;
-        compiledSeasonHistory.push({
-          year, team: teamName, wins: stats.wins, losses: stats.losses, ties: stats.ties,
-          pointsFor: stats.pointsFor, pointsAgainst: stats.pointsAgainst, luckRating: m.luckRating,
-          adjustedDPR: m.adjustedDPR, allPlayWinPercentage: m.allPlayWinPercentage, winPercentage: winPct,
-          finish: m.rank ? `${m.rank}${getOrdinalSuffix(m.rank)}` : 'N/A',
-          pointsFinish: m.pointsRank ? `${m.pointsRank}${getOrdinalSuffix(m.pointsRank)}` : 'N/A'
-        });
+const isSeasonFinished = metricsForSeason.isChampion || metricsForSeason.isRunnerUp || metricsForSeason.isThirdPlace;
+
+compiledSeasonHistory.push({
+  year: year,
+  team: seasonTeamStats.teamName,
+  wins: seasonTeamStats.wins,
+  losses: seasonTeamStats.losses,
+  ties: seasonTeamStats.ties,
+  pointsFor: seasonTeamStats.pointsFor,
+  pointsAgainst: seasonTeamStats.pointsAgainst,
+  luckRating: metricsForSeason.luckRating,
+  adjustedDPR: metricsForSeason.adjustedDPR,
+  allPlayWinPercentage: metricsForSeason.allPlayWinPercentage,
+  winPercentage: seasonWinPercentage,
+  finish: isSeasonFinished && metricsForSeason.rank
+    ? `${metricsForSeason.rank}${getOrdinalSuffix(metricsForSeason.rank)}`
+    : 'N/A',
+  pointsFinish: isSeasonFinished && metricsForSeason.pointsRank
+    ? `${metricsForSeason.pointsRank}${getOrdinalSuffix(metricsForSeason.pointsRank)}`
+    : 'N/A',
+});
+
       }
     });
 
