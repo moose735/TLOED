@@ -1,40 +1,37 @@
 // App.js
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react'; // <--- CORRECTED LINE: Added useMemo here
 import {
   HISTORICAL_MATCHUPS_API_URL,
-  GOOGLE_SHEET_POWER_RANKINGS_API_URL, // Still imported, but PowerRankings.js no longer uses it directly
+  GOOGLE_SHEET_POWER_RANKINGS_API_URL,
 } from './config';
 
-// Import existing components from your provided App.js
 import PowerRankings from './lib/PowerRankings';
-import LeagueHistory from './lib/LeagueHistory'; // Corrected import to the LeagueHistory component
+import LeagueHistory from './lib/LeagueHistory';
 import RecordBook from './lib/RecordBook';
 import DPRAnalysis from './lib/DPRAnalysis';
 import LuckRatingAnalysis from './lib/LuckRatingAnalysis';
 import TeamDetailPage from './lib/TeamDetailPage';
-import Head2HeadGrid from './lib/Head2HeadGrid'; // Stays for its own tab
+import Head2HeadGrid from './lib/Head2HeadGrid';
 
 
-// Define the available tabs and their categories for the dropdown
 const NAV_CATEGORIES = {
-  HOME: { label: 'Power Rankings', tab: 'powerRankings' }, // Default home tab
+  HOME: { label: 'Power Rankings', tab: 'powerRankings' },
   LEAGUE_DATA: {
     label: 'League Data',
     subTabs: [
-      { label: 'League History', tab: 'leagueHistory' }, // Now points to LeagueHistory
+      { label: 'League History', tab: 'leagueHistory' },
       { label: 'Record Book', tab: 'recordBook' },
-      { label: 'Head-to-Head', tab: 'headToHead' }, // Separate tab for Head2HeadGrid
+      { label: 'Head-to-Head', tab: 'headToHead' },
       { label: 'DPR Analysis', tab: 'dprAnalysis' },
       { label: 'Luck Rating', tab: 'luckRating' },
     ]
   },
-  TEAMS: { // New category for individual team pages
+  TEAMS: {
     label: 'Teams',
-    subTabs: [], // This will be dynamically populated with team names
+    subTabs: [],
   }
 };
 
-// Define tabs as constants for easier reference
 const TABS = {
   POWER_RANKINGS: 'powerRankings',
   LEAGUE_HISTORY: 'leagueHistory',
@@ -42,7 +39,7 @@ const TABS = {
   HEAD_TO_HEAD: 'headToHead',
   DPR_ANALYSIS: 'dprAnalysis',
   LUCK_RATING: 'luckRating',
-  TEAM_DETAIL: 'teamDetail', // New tab for individual team details
+  TEAM_DETAIL: 'teamDetail',
 };
 
 
@@ -50,12 +47,10 @@ function App() {
   const [activeTab, setActiveTab] = useState(TABS.POWER_RANKINGS);
   const [loadingInitialData, setLoadingInitialData] = useState(true);
   const [error, setError] = useState(null);
-  const [allTeamNames, setAllTeamNames] = useState([]); // To populate the "Teams" dropdown
-  const [selectedTeam, setSelectedTeam] = useState(null); // To store the currently selected team for TeamDetailPage
+  const [allTeamNames, setAllTeamNames] = useState([]);
+  const [selectedTeam, setSelectedTeam] = useState(null);
 
 
-  // Fetch all historical matchups data to get team names for the dropdown
-  // This is a separate fetch from TeamDetailPage's internal fetch
   const fetchAllTeamNames = useCallback(async () => {
     setLoadingInitialData(true);
     setError(null);
@@ -80,7 +75,6 @@ function App() {
         if (match.team1) uniqueTeams.add(match.team1.trim());
         if (match.team2) uniqueTeams.add(match.team2.trim());
       });
-      // Sort team names alphabetically
       const sortedTeamNames = Array.from(uniqueTeams).sort();
       setAllTeamNames(sortedTeamNames);
     } catch (e) {
@@ -96,27 +90,18 @@ function App() {
   }, [fetchAllTeamNames]);
 
 
-  // Placeholder for getMappedTeamName - replace with actual logic if needed
-  // This function should map the raw team name from data to a display name.
-  // Currently, it just returns the original name if no custom mapping is defined.
   const getMappedTeamName = useCallback((rawName) => {
-    // You can integrate NICKNAME_TO_SLEEPER_USER from config.js here if you have it.
-    // For now, it just returns the raw name or NICKNAME_TO_SLEEPER_USER[rawName] if found.
-    // Ensure NICKNAME_TO_SLEEPER_USER is imported and available if you use it.
-    // Example: return NICKNAME_TO_SLEEPER_USER[rawName] || rawName;
-    return rawName; // Default: no mapping
-  }, []); // Add NICKNAME_TO_SLEEPER_USER to dependency array if you use it inside
+    return rawName;
+  }, []);
 
-  // Dynamically create team sub-tabs for the "Teams" category
   const teamSubTabs = useMemo(() => {
     return allTeamNames.map(teamName => ({
       label: getMappedTeamName(teamName),
-      tab: TABS.TEAM_DETAIL, // All team detail links point to the same tab
-      teamName: teamName, // Store the actual team name for selection
+      tab: TABS.TEAM_DETAIL,
+      teamName: teamName,
     }));
   }, [allTeamNames, getMappedTeamName]);
 
-  // Update NAV_CATEGORIES with dynamic team sub-tabs
   useEffect(() => {
     if (NAV_CATEGORIES.TEAMS) {
       NAV_CATEGORIES.TEAMS.subTabs = teamSubTabs;
@@ -126,7 +111,7 @@ function App() {
 
   const handleTabChange = (tab, teamName = null) => {
     setActiveTab(tab);
-    setSelectedTeam(teamName); // Set selectedTeam when a team detail tab is clicked
+    setSelectedTeam(teamName);
   };
 
   if (loadingInitialData) {
@@ -183,7 +168,6 @@ function App() {
           <PowerRankings getMappedTeamName={getMappedTeamName} />
         )}
 
-        {/* Render other components based on activeTab */}
         {!loadingInitialData && !error && (
           <div>
             {activeTab === TABS.LEAGUE_HISTORY && (
@@ -212,7 +196,6 @@ function App() {
               />
             )}
 
-           {/* Render TeamDetailPage when selected */}
            {activeTab === TABS.TEAM_DETAIL && selectedTeam && (
               <TeamDetailPage
                 teamName={selectedTeam}
