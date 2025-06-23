@@ -1,8 +1,6 @@
 // TLOED/src/lib/WeeklyMatchupsDisplay.jsx
-
 import React, { useState, useEffect, useMemo } from 'react';
-
-// Import the new betting calculation
+// Import the new betting calculations
 import {
   calculateMoneylineOdds,
   calculateOverUnder,
@@ -13,7 +11,6 @@ import {
   calculateErrorFunctionCoefficient,
   calculateWeeklyWinPercentageProjection
 } from '../utils/bettingCalculations';
-
 // Import calculateAllLeagueMetrics to get seasonal DPR and average score
 import { calculateAllLeagueMetrics } from '../utils/calculations';
 
@@ -25,25 +22,11 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
   // URL for your original Google Apps Script schedule data
   const SCHEDULE_API_URL = 'https://script.google.com/macros/s/AKfycbzCdSKv-pJSyewZWljTIlyacgb3hBqwthsKGQjCRD6-zJaqX5lbFvMRFckEG-Kb_cMf/exec';
 
-  // --- MODIFIED: Determine currentWeek at component level using useMemo ---
-  const currentWeek = useMemo(() => {
-    if (weeklyScheduleData.length > 0) {
-      const firstEntry = weeklyScheduleData[0];
-      // Find the first key that starts with 'Week_' and extract the number
-      const weekKey = Object.keys(firstEntry).find(key => key.startsWith('Week_') && !isNaN(parseInt(key.split('_')[1])));
-      if (weekKey) {
-        return parseInt(weekKey.split('_')[1]);
-      }
-    }
-    return undefined; // Returns undefined if no week is found, handled by conditional rendering
-  }, [weeklyScheduleData]); // Recalculate when weeklyScheduleData changes
-  // --- END MODIFICATION ---
 
   useEffect(() => {
     const fetchScheduleData = async () => {
-      setLoading(true); // Ensure loading is true at the start of fetch
+      setLoading(true);
       setError(null);
-      console.log("WeeklyMatchupsDisplay: --- STARTING FETCH ---"); // DEBUG
       try {
         const response = await fetch(SCHEDULE_API_URL);
         if (!response.ok) {
@@ -51,170 +34,239 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
         }
         const data = await response.json();
         setWeeklyScheduleData(data);
-        console.log("WeeklyMatchupsDisplay: Fetch response received. Status: " + response.status + " OK: " + response.ok); // DEBUG
-        console.log("WeeklyMatchupsDisplay: Data parsed from JSON. Type: " + typeof data + " Length: " + data.length + " Sample: ", data[0]); // DEBUG
-        console.log("WeeklyMatchupsDisplay: weeklyScheduleData state updated."); // DEBUG
+        // console.log("WeeklyMatchupsDisplay: Fetched weekly schedule data:", data); // Debugging log
       } catch (e) {
-        console.error("WeeklyMatchupsDisplay: Fetch error:", e);
+        console.error("Error fetching weekly schedule data:", e);
         setError(e.message);
       } finally {
         setLoading(false);
-        console.log("WeeklyMatchupsDisplay: --- FETCH OPERATION COMPLETED. Loading set to false. ---"); // DEBUG
       }
     };
 
     fetchScheduleData();
-  }, []); // Empty dependency array means this runs once on mount
+  }, []); // Only run once on mount for the schedule data
+
+
+  // Calculate all league metrics once to get seasonal DPR and average scores
+  // This is crucial for getting player-specific data for all betting calculations
+  const { seasonalMetrics } = useMemo(() => {
+    if (historicalMatchups && historicalMatchups.length > 0) {
+      const metrics = calculateAllLeagueMetrics(historicalMatchups, getMappedTeamName);
+      // console.log("WeeklyMatchupsDisplay: Calculated seasonalMetrics from historicalMatchups:", metrics.seasonalMetrics); // Debugging log
+      return metrics;
+    }
+    // console.warn("WeeklyMatchupsDisplay: seasonalMetrics not calculated because historicalMatchups is empty."); // Debugging warning
+    return { seasonalMetrics: {} }; // Default empty if no historical matchups
+  }, [historicalMatchups, getMappedTeamName]);
+
 
   const processedWeeklyMatchups = useMemo(() => {
-    console.log("WeeklyMatchupsDisplay: Starting processedWeeklyMatchups useMemo.");
-    console.log("WeeklyMatchupsDisplay: weeklyScheduleData status: Length:", weeklyScheduleData.length);
-    console.log("WeeklyMatchupsDisplay: historicalMatchups status: Type:", typeof historicalMatchups, "Length:", historicalMatchups ? historicalMatchups.length : 0);
-
-    // Ensure currentWeek is defined before proceeding with calculations that rely on it
-    if (!weeklyScheduleData || weeklyScheduleData.length === 0 ||
-        !historicalMatchups || historicalMatchups.length === 0 ||
-        typeof currentWeek === 'undefined') { // Added check for currentWeek here
-      console.log("WeeklyMatchupsDisplay: Skipping matchup processing due to missing weeklyScheduleData, historicalMatchups, or undefined currentWeek.");
-      return [];
+    if (!weeklyScheduleData || weeklyScheduleData.length === 0 || Object.keys(seasonalMetrics).length === 0) {
+      // console.warn("WeeklyMatchupsDisplay: Skipping matchup processing due to missing weeklyScheduleData or seasonalMetrics."); // Debugging warning
+      return {};
     }
 
-    // Determine the latest year from historicalMatchups for calculations
-    const currentYearForCalculations = historicalMatchups.reduce((maxYear, match) => {
-        const matchYear = parseInt(match.year);
-        return isNaN(matchYear) ? maxYear : Math.max(maxYear, matchYear);
-    }, 0);
-    // If no years found (e.g., historicalMatchups is empty or malformed),
-    // calculations might be inaccurate, but the initial guard handles empty historicalMatchups.
-    if (currentYearForCalculations === 0) {
-        console.warn("No valid years found in historicalMatchups. Calculations might be inaccurate.");
-        return [];
-    }
+    const matchupsByWeek = {};
+    const weekHeaders = Object.keys(weeklyScheduleData[0] || {}).filter(key => key.startsWith('Week_'));
 
-    // currentWeek is now defined in the outer scope, no need to redefine here.
+    weekHeaders.forEach(weekKey => {
+      const weekNumber = parseInt(weekKey.replace('Week_', ''));
+      matchupsByWeek[`Week ${weekNumber}`] = [];
+      const seenPairs = new Set(); // To avoid duplicate matchups (e.g., A vs B and B vs A)
 
-    console.log("WeeklyMatchupsDisplay: Debugging team names - currentWeek:", currentWeek);
-    if (weeklyScheduleData.length > 0) {
-      console.log("WeeklyMatchupsDisplay: Debugging team names - first schedule data entry:", weeklyScheduleData[0]);
-      console.log("WeeklyMatchupsDisplay: Debugging team names - Player from first entry:", weeklyScheduleData[0]?.Player);
-      console.log(`WeeklyMatchupsDisplay: Debugging team names - Opponent from first entry (Week_${currentWeek}):`, weeklyScheduleData[0]?.[`Week_${currentWeek}`]);
-    }
+      weeklyScheduleData.forEach(playerRow => {
+        const player1Name = playerRow.Player;
+        const player2Name = playerRow[weekKey];
 
-    const safeGetMappedTeamName = typeof getMappedTeamName === 'function' ? getMappedTeamName : (name) => String(name || '').trim();
+        if (player1Name && player2Name && player1Name !== '' && player2Name !== '') {
+          const canonicalPair = [player1Name, player2Name].sort().join('-');
 
-    // calculateAllLeagueMetrics already computes seasonalMetrics for the *latest* year in historicalMatchups
-    const metrics = calculateAllLeagueMetrics(historicalMatchups, safeGetMappedTeamName);
-    const seasonalMetricsForBetting = metrics.seasonalMetrics; // Access seasonalMetrics directly, it's not keyed by year here.
+          if (!seenPairs.has(canonicalPair)) {
+            // Determine the current year for statistics (assuming the latest year from historical data)
+            const years = Object.keys(seasonalMetrics).map(Number).sort((a,b) => b-a);
+            const currentYear = years.length > 0 ? years[0] : new Date().getFullYear();
 
-    console.log("WeeklyMatchupsDisplay: seasonalMetricsForBetting status: Keys:", Object.keys(seasonalMetricsForBetting || {}));
+            let moneylineOdds = { player1Odds: 'N/A', player2Odds: 'N/A' };
+            let overUnder = 'N/A';
 
-    if (!seasonalMetricsForBetting || Object.keys(seasonalMetricsForBetting).length === 0) {
-      console.log(`WeeklyMatchupsDisplay: Skipping matchup processing because seasonalMetricsForBetting is not available or empty.`);
-      return [];
-    }
+            // Retrieve basic player metrics for the current year
+            const player1Metrics = getPlayerMetricsForYear(seasonalMetrics, player1Name, currentYear);
+            const player2Metrics = getPlayerMetricsForYear(seasonalMetrics, player2Name, currentYear);
 
-    // Existing logic for processing matchups
-    return weeklyScheduleData.map(match => {
-        const team1Name = match.Player;
-        const team2Name = match[`Week_${currentWeek}`]; // This will now use the correctly scoped currentWeek
+            if (player1Metrics && player2Metrics) {
+              // --- O/U Calculation (always uses average scores) ---
+              overUnder = calculateOverUnder(player1Metrics.averageScore, player2Metrics.averageScore);
 
-        // Pass the `currentYearForCalculations` and the directly accessed `seasonalMetricsForBetting`
-        const team1Metrics = getPlayerMetricsForYear(team1Name, currentYearForCalculations, historicalMatchups, seasonalMetricsForBetting, metrics.weeklyGameScoresByYearAndWeek, safeGetMappedTeamName);
-        const team2Metrics = getPlayerMetricsForYear(team2Name, currentYearForCalculations, historicalMatchups, seasonalMetricsForBetting, metrics.weeklyGameScoresByYearAndWeek, safeGetMappedTeamName);
+              // --- Moneyline Odds Logic: DPR for Weeks 1-3, new calculation for later weeks ---
+              if (weekNumber <= 3) {
+                // Use DPR for early weeks
+                // Handle case where DPR might be 0 (e.g., no games played yet)
+                const p1DPR = player1Metrics.adjustedDPR;
+                const p2DPR = player2Metrics.adjustedDPR;
 
-        // Calculate moneyline odds and over/under for each matchup
-        const team1WinPercentageProjection = calculateWeeklyWinPercentageProjection(team1Metrics.averageDifferenceVsOpponent, team1Metrics.errorFunctionCoefficient);
-        const team2WinPercentageProjection = calculateWeeklyWinPercentageProjection(team2Metrics.averageDifferenceVsOpponent, team2Metrics.errorFunctionCoefficient);
+                let p1WinProbFromDPR;
+                let p2WinProbFromDPR;
 
-        const moneylineOdds = calculateMoneylineOdds(team1WinPercentageProjection, team2WinPercentageProjection);
-        const overUnder = calculateOverUnder(team1Metrics.projectedScore, team2Metrics.projectedScore);
+                if (p1DPR === 0 && p2DPR === 0) {
+                    p1WinProbFromDPR = 0.5;
+                    p2WinProbFromDPR = 0.5;
+                } else if (p1DPR === 0) { // If one is 0, the other is 100% (or very high) if not 0
+                    p1WinProbFromDPR = 0.001; // Effectively 0
+                    p2WinProbFromDPR = 0.999; // Effectively 1
+                } else if (p2DPR === 0) {
+                    p1WinProbFromDPR = 0.999;
+                    p2WinProbFromDPR = 0.001;
+                } else {
+                    const totalDPR = p1DPR + p2DPR;
+                    p1WinProbFromDPR = p1DPR / totalDPR;
+                    p2WinProbFromDPR = p2DPR / totalDPR;
+                }
+                moneylineOdds = calculateMoneylineOdds(p1WinProbFromDPR, p2WinProbFromDPR);
 
-        // Return the processed matchup data
-        return {
-            ...match, // Keep original matchup data
-            team1Metrics,
-            team2Metrics,
-            moneylineOdds,
-            overUnder
-        };
+              } else {
+                // For later weeks, use the complex calculation chain
+                // Calculation 1: Average Difference vs Opponent for Player 1 (up to current week)
+                const p1AvgDiffVsOpponent = calculateTeamAverageDifferenceVsOpponent(player1Name, currentYear, weekNumber, historicalMatchups, getMappedTeamName);
+                // Calculation 2: Sigma Squared Over Count for Player 1 (up to current week)
+                const p1SigmaSquaredOverCount = calculateSigmaSquaredOverCount(player1Name, currentYear, weekNumber, historicalMatchups, getMappedTeamName);
+                // Calculation 3: Error Function Coefficient for Player 1
+                const p1ErrorCoeff = calculateErrorFunctionCoefficient(p1AvgDiffVsOpponent, p1SigmaSquaredOverCount);
+
+                // For Player 2 (opponent)
+                const p2AvgDiffVsOpponent = calculateTeamAverageDifferenceVsOpponent(player2Name, currentYear, weekNumber, historicalMatchups, getMappedTeamName);
+                const p2SigmaSquaredOverCount = calculateSigmaSquaredOverCount(player2Name, currentYear, weekNumber, historicalMatchups, getMappedTeamName);
+                const p2ErrorCoeff = calculateErrorFunctionCoefficient(p2AvgDiffVsOpponent, p2SigmaSquaredOverCount);
+
+
+                // Calculate the average scoring difference *between the two players* for win probability
+                const matchupAvgScoringDiff = calculateFutureOpponentAverageScoringDifference(player1Name, player2Name, currentYear, weekNumber, historicalMatchups, getMappedTeamName);
+
+                // Calculate win probabilities using the complex formula
+                const p1WinProb = calculateWeeklyWinPercentageProjection(matchupAvgScoringDiff, p1ErrorCoeff);
+                // The opponent's probability is just 1 minus the player's probability for a two-outcome system
+                const p2WinProb = 1 - p1WinProb;
+
+                moneylineOdds = calculateMoneylineOdds(p1WinProb, p2WinProb);
+              }
+            } else {
+                console.warn(`WeeklyMatchupsDisplay: Missing basic metrics for ${player1Name} or ${player2Name} for year ${currentYear}. Cannot calculate odds/O/U.`);
+            }
+
+            matchupsByWeek[`Week ${weekNumber}`].push({
+              player1: player1Name,
+              player2: player2Name,
+              moneylineOdds: moneylineOdds,
+              overUnder: overUnder,
+            });
+            seenPairs.add(canonicalPair);
+          }
+        }
+      });
     });
-  }, [weeklyScheduleData, historicalMatchups, getMappedTeamName, currentWeek]); // Added currentWeek to dependencies
+    // console.log("WeeklyMatchupsDisplay: Processed weekly matchups with odds:", matchupsByWeek); // Debugging log
+    return matchupsByWeek;
+  }, [weeklyScheduleData, seasonalMetrics, historicalMatchups, getMappedTeamName]);
+
 
   if (loading) {
-    return <div className="text-center py-4">Loading weekly schedule...</div>;
+    return (
+      <div className="flex justify-center items-center min-h-screen bg-gray-100 p-4">
+        <div className="bg-white p-8 rounded-lg shadow-lg text-center">
+          <p className="text-xl font-semibold text-blue-600">Loading weekly matchups...</p>
+          <div className="mt-4 flex justify-center">
+            {/* Simple loading spinner */}
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (error) {
-    return <div className="text-center py-4 text-red-500">Error: {error}</div>;
+    return (
+      <div className="flex justify-center items-center min-h-screen bg-red-100 p-4">
+        <div className="bg-white p-8 rounded-lg shadow-lg text-center border-2 border-red-500">
+          <p className="text-xl font-semibold text-red-700">Error loading data:</p>
+          <p className="text-gray-600 mt-2">{error}</p>
+          <p className="text-sm text-gray-500 mt-4">Please ensure the Google Apps Script is deployed as a web app with "Anyone" access and returns valid JSON.</p>
+        </div>
+      </div>
+    );
   }
 
-  // Handle case where currentWeek might still be undefined (e.g., if no data or malformed data)
-  if (typeof currentWeek === 'undefined') {
-    return <div className="text-center py-4 text-yellow-500">Could not determine current week from schedule data.</div>;
+  // Check if processed data is empty after loading
+  if (Object.keys(processedWeeklyMatchups).length === 0) {
+    return (
+      <div className="flex justify-center items-center min-h-screen bg-gray-100 p-4">
+        <div className="bg-white p-8 rounded-lg shadow-lg text-center">
+          <p className="text-xl font-semibold text-gray-700">No weekly matchup data available.</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-3xl font-bold text-center mb-6">Weekly Matchups & Projections</h1>
-      <div className="space-y-8">
-        {processedWeeklyMatchups.length > 0 ? (
-          <div key={currentWeek} className="bg-white shadow-lg rounded-lg p-6">
-            <h2 className="text-2xl font-semibold mb-4 text-gray-800">Week {currentWeek} Matchups</h2>
-            <ul className="space-y-4">
-              {processedWeeklyMatchups.map((match, index) => (
-                <li key={index} className="flex flex-col sm:flex-row items-center bg-gray-50 rounded-lg shadow-sm overflow-hidden">
-                  {/* Team 1 */}
-                  <div className="flex-1 p-4 flex flex-col items-center justify-center border-b sm:border-b-0 sm:border-r border-gray-200 w-full sm:w-auto">
-                    <span className="text-lg font-bold text-blue-800">{match.Player}</span>
-                    <span className="text-sm text-gray-600">DPR: {match.team1Metrics?.currentDPR?.toFixed(2) || 'N/A'}</span>
-                    <span className="text-sm text-gray-600">Proj. Score: {match.team1Metrics?.projectedScore?.toFixed(2) || 'N/A'}</span>
-                  </div>
+    <div className="min-h-screen bg-gray-100 p-4 sm:p-8 font-inter">
+      <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-lg p-4 sm:p-8 overflow-hidden">
+        <h1 className="text-3xl sm:text-4xl font-bold text-center text-blue-800 mb-6 border-b-2 pb-4">
+          Weekly Matchups
+        </h1>
 
-                  {/* Vs. */}
-                  <div className="p-2 text-center text-gray-500 font-semibold">VS</div>
-
-                  {/* Team 2 */}
-                  <div className="flex-1 p-4 flex flex-col items-center justify-center border-t sm:border-t-0 sm:border-l border-gray-200 w-full sm:w-auto">
-                    <span className="text-lg font-bold text-green-800">{match[`Week_${currentWeek}`]}</span>
-                    <span className="text-sm text-gray-600">DPR: {match.team2Metrics?.currentDPR?.toFixed(2) || 'N/A'}</span>
-                    <span className="text-sm text-gray-600">Proj. Score: {match.team2Metrics?.projectedScore?.toFixed(2) || 'N/A'}</span>
-                  </div>
-
-                  {/* Betting Odds */}
-                  <div className="w-full sm:w-auto p-4 bg-gray-100 flex flex-col sm:flex-row justify-around items-center border-t sm:border-t-0 sm:border-l border-gray-200">
-                    {/* Moneyline */}
-                    <div className="flex flex-col items-center justify-center p-3 sm:p-2 bg-purple-50 rounded-lg cursor-pointer hover:bg-purple-100 transition-colors duration-200 mb-2 sm:mb-0 sm:mr-2">
-                      <span className="text-sm font-medium text-gray-600">Moneyline</span>
-                      <span className="text-xl font-bold text-purple-700">{match.moneylineOdds?.team1Formatted || 'N/A'}</span>
-                    </div>
-                    <div className="flex flex-col items-center justify-center p-3 sm:p-2 bg-purple-50 rounded-lg cursor-pointer hover:bg-purple-100 transition-colors duration-200 mb-2 sm:mb-0 sm:mr-2">
-                      <span className="text-sm font-medium text-gray-600">Moneyline</span>
-                      <span className="text-xl font-bold text-purple-700">{match.moneylineOdds?.team2Formatted || 'N/A'}</span>
-                    </div>
-
-                    {/* Over/Under */}
-                    <div className="flex-1 flex w-full sm:w-auto">
-                      {/* Over */}
-                      <div className="flex-1 flex flex-col items-center justify-center p-3 sm:p-2 h-full bg-blue-50 rounded-bl-lg sm:rounded-bl-none sm:rounded-tr-lg cursor-pointer hover:bg-blue-100 transition-colors duration-200">
-                        <span className="text-sm font-medium text-gray-600">O/U</span>
-                        <span className="text-xl font-bold text-blue-700">O {match.overUnder}</span>
-                        <span className="text-sm font-normal text-gray-600">-110</span>
+        <div className="space-y-8"> {/* Container for weekly sections */}
+          {Object.entries(processedWeeklyMatchups).sort(([weekA], [weekB]) => {
+            // Sort weeks numerically (e.g., "Week 1" before "Week 10")
+            const numA = parseInt(weekA.replace('Week ', ''));
+            const numB = parseInt(weekB.replace('Week ', ''));
+            return numA - numB;
+          }).map(([weekTitle, matchups], index) => (
+            <div key={index} className="bg-blue-50 p-6 rounded-lg shadow-md border border-blue-200">
+              <h2 className="text-2xl font-semibold text-blue-700 mb-4 border-b pb-2">
+                {weekTitle} Matchups
+              </h2>
+              <ul className="list-none space-y-4 text-gray-800">
+                {matchups.length > 0 ? (
+                  matchups.map((match, matchIndex) => (
+                    <li key={matchIndex} className="flex bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
+                      {/* Player Names and ML Odds Column */}
+                      <div className="flex flex-col flex-1 divide-y divide-gray-200">
+                        {/* Player 1 Row */}
+                        <div className="flex items-center justify-between px-4 py-3">
+                          <span className="text-lg font-semibold text-gray-900">{match.player1}</span>
+                          <div className="flex items-center justify-center w-24 h-10 bg-gray-100 rounded-md cursor-pointer hover:bg-gray-200 transition-colors duration-200">
+                            <span className="text-xl font-bold text-blue-700">{match.moneylineOdds.player1Odds}</span>
+                          </div>
+                        </div>
+                        {/* Player 2 Row */}
+                        <div className="flex items-center justify-between px-4 py-3">
+                          <span className="text-lg font-semibold text-gray-900">{match.player2}</span>
+                          <div className="flex items-center justify-center w-24 h-10 bg-gray-100 rounded-md cursor-pointer hover:bg-gray-200 transition-colors duration-200">
+                            <span className="text-xl font-bold text-blue-700">{match.moneylineOdds.player2Odds}</span>
+                          </div>
+                        </div>
                       </div>
-                      {/* Under */}
-                      <div className="flex-1 flex flex-col items-center justify-center p-3 sm:p-2 h-full bg-blue-50 rounded-br-lg sm:rounded-br-none sm:rounded-bl-lg cursor-pointer hover:bg-blue-100 transition-colors duration-200">
-                        <span className="text-sm font-medium text-gray-600">O/U</span>
-                        <span className="text-xl font-bold text-blue-700">U {match.overUnder}</span>
-                        <span className="text-sm font-normal text-gray-600">-110</span>
+
+                      {/* Over/Under Column */}
+                      <div className="flex flex-col flex-none w-[100px] border-l border-gray-200 divide-y divide-gray-200">
+                        {/* Over */}
+                        <div className="flex flex-col items-center justify-center p-2 h-1/2 bg-gray-100 rounded-md cursor-pointer hover:bg-gray-200 transition-colors duration-200">
+                          <span className="text-xl font-bold text-blue-700">O {match.overUnder}</span>
+                          <span className="text-sm font-normal text-gray-600">-110</span>
+                        </div>
+                        {/* Under */}
+                        <div className="flex flex-col items-center justify-center p-2 h-1/2 bg-gray-100 rounded-md cursor-pointer hover:bg-gray-200 transition-colors duration-200">
+                          <span className="text-xl font-bold text-blue-700">U {match.overUnder}</span>
+                          <span className="text-sm font-normal text-gray-600">-110</span>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : (
-          <p className="text-gray-600 italic text-center py-4">No matchups for this week.</p>
-        )}
+                    </li>
+                  ))
+                ) : (
+                  <p className="text-gray-600">No matchups for this week.</p>
+                )}
+              </ul>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
