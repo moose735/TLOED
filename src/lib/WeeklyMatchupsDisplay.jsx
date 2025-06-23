@@ -42,7 +42,6 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
     const metrics = calculateAllLeagueMetrics(historicalMatchups, safeGetMappedTeamName);
     const seasonalMetrics = metrics.seasonalMetrics;
 
-    // Detect all unique weeks
     const weekKeys = Object.keys(weeklyScheduleData[0] || {}).filter(k => k.startsWith('Week_'));
     const weekNumbers = weekKeys.map(k => parseInt(k.split('_')[1])).filter(Boolean).sort((a, b) => a - b);
 
@@ -65,16 +64,14 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
           safeGetMappedTeamName, weekNum
         );
 
-        const team1WinPct = team1Metrics && team1Metrics.errorFunctionCoefficient !== undefined
-          ? team1Metrics.averageDifferenceVsOpponent > 0
-            ? erf((team1Metrics.errorFunctionCoefficient / team1Metrics.averageDifferenceVsOpponent) / Math.sqrt(2)) / 2 + 0.5
-            : 1 - (erf((team1Metrics.errorFunctionCoefficient / Math.abs(team1Metrics.averageDifferenceVsOpponent)) / Math.sqrt(2)) / 2 + 0.5)
+        const team1WinPct = team1Metrics?.averageDifferenceVsOpponent !== undefined && team1Metrics?.errorFunctionCoefficient !== undefined
+          ? calculateWinPct(team1Metrics.averageDifferenceVsOpponent, team1Metrics.errorFunctionCoefficient)
           : 0.5;
 
         const team2WinPct = 1 - team1WinPct;
 
         const moneylineOdds = calculateMoneylineOdds(team1WinPct, team2WinPct);
-        const overUnder = calculateOverUnder(team1Metrics.projectedScore, team2Metrics.projectedScore);
+        const overUnder = calculateOverUnder(team1Metrics?.projectedScore, team2Metrics?.projectedScore);
 
         return {
           team1Name,
@@ -105,20 +102,17 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
           <ul className="space-y-4">
             {matchups.map((match, index) => (
               <li key={index} className="flex flex-col sm:flex-row items-center bg-gray-50 rounded-lg shadow-sm overflow-hidden">
-                {/* Team 1 */}
                 <div className="flex-1 p-4 flex flex-col items-center border-b sm:border-b-0 sm:border-r border-gray-200">
                   <span className="text-lg font-bold text-blue-800">{match.team1Name}</span>
                   <span className="text-sm text-gray-600">Avg: {match.team1Metrics?.projectedScore?.toFixed(2) || 'N/A'}</span>
                   <span className="text-sm text-gray-600">ML: {match.moneylineOdds?.team1Formatted || 'N/A'}</span>
                 </div>
                 <div className="p-2 font-semibold text-gray-500">VS</div>
-                {/* Team 2 */}
                 <div className="flex-1 p-4 flex flex-col items-center border-t sm:border-t-0 sm:border-l border-gray-200">
                   <span className="text-lg font-bold text-green-800">{match.team2Name}</span>
                   <span className="text-sm text-gray-600">Avg: {match.team2Metrics?.projectedScore?.toFixed(2) || 'N/A'}</span>
                   <span className="text-sm text-gray-600">ML: {match.moneylineOdds?.team2Formatted || 'N/A'}</span>
                 </div>
-                {/* Over/Under */}
                 <div className="p-4 bg-gray-100 border-t sm:border-t-0 sm:border-l border-gray-200 flex flex-col items-center">
                   <span className="text-sm font-medium text-gray-600">O/U</span>
                   <span className="text-xl font-bold text-blue-700">{match.overUnder?.toFixed(2) || '0.00'}</span>
@@ -133,12 +127,18 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
   );
 };
 
-// Helper function since you use ERF logic
+// Helper function for win probability using error function
+function calculateWinPct(avgDiff, errCoeff) {
+  if (avgDiff === 0) return 0.5;
+  const ratio = (errCoeff / Math.abs(avgDiff)) / Math.sqrt(2);
+  const erfValue = erf(ratio);
+  return avgDiff > 0 ? erfValue / 2 + 0.5 : 1 - (erfValue / 2 + 0.5);
+}
+
 function erf(x) {
-  // Approximation of the Gauss error function
+  // Abramowitz and Stegun approximation
   const sign = x >= 0 ? 1 : -1;
-  x = Math.abs(x);
-  const t = 1 / (1 + 0.5 * x);
+  const t = 1 / (1 + 0.5 * Math.abs(x));
   const tau = t * Math.exp(
     -x * x - 1.26551223 +
     t * (1.00002368 +
