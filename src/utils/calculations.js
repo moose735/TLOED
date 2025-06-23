@@ -45,16 +45,16 @@ const calculateLuckRating = (historicalMatchups, teamName, year, weeklyGameScore
             if (relevantMatchupsForWeek.length === 0) return;
 
             const currentTeamMatchEntry = relevantMatchupsForWeek.find(match => {
-                const matchTeam1 = getMappedTeamName(String(match?.team1 || '').trim());
-                const matchTeam2 = getMappedTeamName(String(match?.team2 || '').trim());
+                const matchTeam1 = typeof getMappedTeamName === 'function' ? getMappedTeamName(String(match?.team1 || '').trim()) : String(match?.team1 || '').trim();
+                const matchTeam2 = typeof getMappedTeamName === 'function' ? getMappedTeamName(String(match?.team2 || '').trim()) : String(match?.team2 || '').trim();
                 return (matchTeam1 === teamName && matchTeam1 !== '') || (matchTeam2 === teamName && matchTeam2 !== '');
             });
 
             if (!currentTeamMatchEntry) return;
 
             let currentTeamScoreForWeek;
-            const mappedTeam1 = getMappedTeamName(String(currentTeamMatchEntry?.team1 || '').trim());
-            const mappedTeam2 = getMappedTeamName(String(currentTeamMatchEntry?.team2 || '').trim());
+            const mappedTeam1 = typeof getMappedTeamName === 'function' ? getMappedTeamName(String(currentTeamMatchEntry?.team1 || '').trim()) : String(currentTeamMatchEntry?.team1 || '').trim();
+            const mappedTeam2 = typeof getMappedTeamName === 'function' ? getMappedTeamName(String(currentTeamMatchEntry?.team2 || '').trim()) : String(currentTeamMatchEntry?.team2 || '').trim();
 
             if (mappedTeam1 === teamName) {
                 currentTeamScoreForWeek = parseFloat(currentTeamMatchEntry?.team1Score || '0');
@@ -98,8 +98,8 @@ const calculateLuckRating = (historicalMatchups, teamName, year, weeklyGameScore
         const isRegSeason = (match?.regSeason === true || match?.regSeason === 'true');
 
         if (yearMatch && isRegSeason && !isPointsOnlyBye) {
-            const displayTeam1 = getMappedTeamName(String(match?.team1 || '').trim());
-            const displayTeam2 = getMappedTeamName(String(match?.team2 || '').trim());
+            const displayTeam1 = typeof getMappedTeamName === 'function' ? getMappedTeamName(String(match?.team1 || '').trim()) : String(match?.team1 || '').trim();
+            const displayTeam2 = typeof getMappedTeamName === 'function' ? getMappedTeamName(String(match?.team2 || '').trim()) : String(match?.team2 || '').trim();
 
             if (displayTeam1 === teamName && displayTeam1 !== '') {
                 const team1Score = parseFloat(match?.team1Score || '0');
@@ -205,6 +205,9 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
     if (historicalMatchups && typeof historicalMatchups === 'object' && 'length' in historicalMatchups) {
         console.log("DEBUG: historicalMatchups length:", historicalMatchups.length);
     }
+    console.log("DEBUG: Type of getMappedTeamName:", typeof getMappedTeamName);
+    console.log("DEBUG: Is getMappedTeamName a function?", typeof getMappedTeamName === 'function');
+
 
     const seasonalTeamStatsRaw = {};
     const weeklyGameScoresByYearAndWeek = {};
@@ -212,8 +215,8 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
     const finalSeedingGameResults = {}; // New object to store final game outcomes
 
     historicalMatchups.forEach((match, index) => {
-        const displayTeam1 = getMappedTeamName(String(match?.team1 || '').trim());
-        const displayTeam2 = getMappedTeamName(String(match?.team2 || '').trim());
+        const displayTeam1 = typeof getMappedTeamName === 'function' ? getMappedTeamName(String(match?.team1 || '').trim()) : String(match?.team1 || '').trim();
+        const displayTeam2 = typeof getMappedTeamName === 'function' ? getMappedTeamName(String(match?.team2 || '').trim()) : String(match?.team2 || '').trim();
         const year = parseInt(match?.year || '0');
         const week = parseInt(match?.week || '0');
         const team1Score = parseFloat(match?.team1Score || '0');
