@@ -75,9 +75,39 @@ function generateLines(teamScores) {
   return lines;
 }
 
+// Main export: generate betting lines for current season
 export default async function getBettingLines() {
-  const { currentSeason, currentYear } = await getMatchupsData();
+  const { currentSeason } = await getMatchupsData();
   const teamScores = buildTeamScoresMap(currentSeason);
-  const lines = generateLines(teamScores);
-  return lines;
+  return generateLines(teamScores);
+}
+
+// Exported function to get per-team player metrics by year (needed to fix build error)
+export async function getPlayerMetricsForYear(year) {
+  const res = await fetch(MATCHUPS_URL);
+  const json = await res.json();
+  const games = json.data.filter(g => g.year === year);
+
+  const stats = {};
+
+  for (const game of games) {
+    const { team1, team2, team1Score, team2Score } = game;
+
+    if (!stats[team1]) stats[team1] = [];
+    if (!stats[team2]) stats[team2] = [];
+
+    stats[team1].push(team1Score);
+    stats[team2].push(team2Score);
+  }
+
+  return Object.entries(stats).map(([team, scores]) => {
+    const avg = average(scores);
+    const std = standardDeviation(scores);
+    return {
+      team,
+      average: parseFloat(avg.toFixed(2)),
+      stdDev: parseFloat(std.toFixed(2)),
+      gamesPlayed: scores.length
+    };
+  });
 }
