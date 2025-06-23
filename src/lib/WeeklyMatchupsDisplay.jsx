@@ -1,13 +1,9 @@
-// TLOED/src/lib/WeeklyMatchupsDisplay.jsx
-
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  calculateAverageScore,
-  calculateSigmaSquaredOverCount,
-  calculateErrorFunctionCoefficient,
-  calculateWinPercentage,
   calculateMoneylineOdds,
-  calculateOverUnder
+  calculateOverUnder,
+  getPlayerMetricsForYear,
+  calculateAllLeagueMetrics,
 } from '../utils/bettingCalculations';
 
 const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
@@ -17,92 +13,145 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
 
   const SCHEDULE_API_URL = 'https://script.google.com/macros/s/AKfycbzCdSKv-pJSyewZWljTIlyacgb3hBqwthsKGQjCRD6-zJaqX5lbFvMRFckEG-Kb_cMf/exec';
 
-  const currentWeek = useMemo(() => {
-    const first = weeklyScheduleData[0];
-    const key = first && Object.keys(first).find(k => k.startsWith('Week_'));
-    return key ? parseInt(key.split('_')[1]) : undefined;
-  }, [weeklyScheduleData]);
-
   useEffect(() => {
-    fetch(SCHEDULE_API_URL)
-      .then(res => res.json())
-      .then(setWeeklyScheduleData)
-      .catch(err => setError(err.message))
-      .finally(() => setLoading(false));
+    const fetchScheduleData = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await fetch(SCHEDULE_API_URL);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+        setWeeklyScheduleData(data);
+      } catch (e) {
+        setError(e.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchScheduleData();
   }, []);
 
-  const processed = useMemo(() => {
-    if (!weeklyScheduleData.length || !historicalMatchups.length || currentWeek === undefined) return [];
+  const safeGetMappedTeamName = typeof getMappedTeamName === 'function'
+    ? getMappedTeamName
+    : name => String(name || '').trim();
 
-    const year = Math.max(...historicalMatchups.map(m => +m.year));
-    const map = typeof getMappedTeamName === 'function' ? getMappedTeamName : x => x;
+  const allMatchupsByWeek = useMemo(() => {
+    if (!weeklyScheduleData.length || !historicalMatchups?.length) return [];
 
-    return weeklyScheduleData.map(row => {
-      const team1 = map(row.Player);
-      const team2 = map(row[`Week_${currentWeek}`]);
+    const currentYear = Math.max(...historicalMatchups.map(m => parseInt(m.year)).filter(y => !isNaN(y)));
+    const metrics = calculateAllLeagueMetrics(historicalMatchups, safeGetMappedTeamName);
+    const seasonalMetrics = metrics.seasonalMetrics;
 
-      const avg1 = calculateAverageScore(team1, year, currentWeek, historicalMatchups, map);
-      const avg2 = calculateAverageScore(team2, year, currentWeek, historicalMatchups, map);
+    // Detect all unique weeks
+    const weekKeys = Object.keys(weeklyScheduleData[0] || {}).filter(k => k.startsWith('Week_'));
+    const weekNumbers = weekKeys.map(k => parseInt(k.split('_')[1])).filter(Boolean).sort((a, b) => a - b);
 
-      const std1 = Math.sqrt(calculateSigmaSquaredOverCount(team1, year, currentWeek, historicalMatchups, map));
-      const std2 = Math.sqrt(calculateSigmaSquaredOverCount(team2, year, currentWeek, historicalMatchups, map));
+    return weekNumbers.map(weekNum => {
+      const weekMatchups = weeklyScheduleData.map(match => {
+        const team1Name = match.Player;
+        const team2Name = match[`Week_${weekNum}`];
 
-      const diff1 = avg1 - avg2;
-      const diff2 = -diff1;
+        if (!team1Name || !team2Name) return null;
 
-      const coeff1 = calculateErrorFunctionCoefficient(diff1, std2);
-      const coeff2 = calculateErrorFunctionCoefficient(diff2, std1);
+        const team1Metrics = getPlayerMetricsForYear(
+          team1Name, currentYear, historicalMatchups,
+          seasonalMetrics, metrics.weeklyGameScoresByYearAndWeek,
+          safeGetMappedTeamName, weekNum
+        );
 
-      const win1 = calculateWinPercentage(diff1, coeff1);
-      const win2 = calculateWinPercentage(diff2, coeff2);
+        const team2Metrics = getPlayerMetricsForYear(
+          team2Name, currentYear, historicalMatchups,
+          seasonalMetrics, metrics.weeklyGameScoresByYearAndWeek,
+          safeGetMappedTeamName, weekNum
+        );
 
-      const moneylineOdds = calculateMoneylineOdds(win1, win2);
-      const overUnder = calculateOverUnder(avg1, avg2);
+        const team1WinPct = team1Metrics && team1Metrics.errorFunctionCoefficient !== undefined
+          ? team1Metrics.averageDifferenceVsOpponent > 0
+            ? erf((team1Metrics.errorFunctionCoefficient / team1Metrics.averageDifferenceVsOpponent) / Math.sqrt(2)) / 2 + 0.5
+            : 1 - (erf((team1Metrics.errorFunctionCoefficient / Math.abs(team1Metrics.averageDifferenceVsOpponent)) / Math.sqrt(2)) / 2 + 0.5)
+          : 0.5;
+
+        const team2WinPct = 1 - team1WinPct;
+
+        const moneylineOdds = calculateMoneylineOdds(team1WinPct, team2WinPct);
+        const overUnder = calculateOverUnder(team1Metrics.projectedScore, team2Metrics.projectedScore);
+
+        return {
+          team1Name,
+          team2Name,
+          team1Metrics,
+          team2Metrics,
+          moneylineOdds,
+          overUnder
+        };
+      }).filter(Boolean);
 
       return {
-        ...row,
-        team1,
-        team2,
-        moneylineOdds,
-        overUnder,
-        avg1,
-        avg2
+        week: weekNum,
+        matchups: weekMatchups
       };
     });
-  }, [weeklyScheduleData, historicalMatchups, currentWeek]);
+  }, [weeklyScheduleData, historicalMatchups, getMappedTeamName]);
 
   if (loading) return <div className="text-center py-4">Loading weekly schedule...</div>;
-  if (error) return <div className="text-red-500 text-center py-4">Error: {error}</div>;
-  if (!currentWeek) return <div className="text-yellow-500 text-center py-4">Could not determine current week.</div>;
+  if (error) return <div className="text-center py-4 text-red-500">Error: {error}</div>;
 
   return (
-    <div className="p-4">
-      <h1 className="text-2xl font-bold text-center mb-4">Week {currentWeek} Matchups</h1>
-      {processed.map((match, i) => (
-        <div key={i} className="bg-white shadow-md rounded p-4 mb-4">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-blue-800 font-bold">{match.team1}</span>
-            <span className="text-gray-500">vs</span>
-            <span className="text-green-800 font-bold">{match.team2}</span>
-          </div>
-          <div className="flex justify-around text-sm">
-            <div className="text-center">
-              <div className="text-purple-700 font-bold">ML: {match.moneylineOdds.team1Formatted}</div>
-              <div className="text-gray-500">Avg: {match.avg1.toFixed(1)}</div>
-            </div>
-            <div className="text-center">
-              <div className="text-purple-700 font-bold">ML: {match.moneylineOdds.team2Formatted}</div>
-              <div className="text-gray-500">Avg: {match.avg2.toFixed(1)}</div>
-            </div>
-            <div className="text-center">
-              <div className="text-blue-700 font-bold">O/U: {match.overUnder}</div>
-              <div className="text-gray-500">-110</div>
-            </div>
-          </div>
+    <div className="container mx-auto p-4">
+      <h1 className="text-3xl font-bold text-center mb-6">Full Season Matchups & Projections</h1>
+      {allMatchupsByWeek.map(({ week, matchups }) => (
+        <div key={week} className="bg-white shadow-lg rounded-lg p-6 mb-8">
+          <h2 className="text-2xl font-semibold mb-4 text-gray-800">Week {week} Matchups</h2>
+          <ul className="space-y-4">
+            {matchups.map((match, index) => (
+              <li key={index} className="flex flex-col sm:flex-row items-center bg-gray-50 rounded-lg shadow-sm overflow-hidden">
+                {/* Team 1 */}
+                <div className="flex-1 p-4 flex flex-col items-center border-b sm:border-b-0 sm:border-r border-gray-200">
+                  <span className="text-lg font-bold text-blue-800">{match.team1Name}</span>
+                  <span className="text-sm text-gray-600">Avg: {match.team1Metrics?.projectedScore?.toFixed(2) || 'N/A'}</span>
+                  <span className="text-sm text-gray-600">ML: {match.moneylineOdds?.team1Formatted || 'N/A'}</span>
+                </div>
+                <div className="p-2 font-semibold text-gray-500">VS</div>
+                {/* Team 2 */}
+                <div className="flex-1 p-4 flex flex-col items-center border-t sm:border-t-0 sm:border-l border-gray-200">
+                  <span className="text-lg font-bold text-green-800">{match.team2Name}</span>
+                  <span className="text-sm text-gray-600">Avg: {match.team2Metrics?.projectedScore?.toFixed(2) || 'N/A'}</span>
+                  <span className="text-sm text-gray-600">ML: {match.moneylineOdds?.team2Formatted || 'N/A'}</span>
+                </div>
+                {/* Over/Under */}
+                <div className="p-4 bg-gray-100 border-t sm:border-t-0 sm:border-l border-gray-200 flex flex-col items-center">
+                  <span className="text-sm font-medium text-gray-600">O/U</span>
+                  <span className="text-xl font-bold text-blue-700">{match.overUnder?.toFixed(2) || '0.00'}</span>
+                  <span className="text-sm text-gray-600">-110</span>
+                </div>
+              </li>
+            ))}
+          </ul>
         </div>
       ))}
     </div>
   );
 };
+
+// Helper function since you use ERF logic
+function erf(x) {
+  // Approximation of the Gauss error function
+  const sign = x >= 0 ? 1 : -1;
+  x = Math.abs(x);
+  const t = 1 / (1 + 0.5 * x);
+  const tau = t * Math.exp(
+    -x * x - 1.26551223 +
+    t * (1.00002368 +
+    t * (0.37409196 +
+    t * (0.09678418 +
+    t * (-0.18628806 +
+    t * (0.27886807 +
+    t * (-1.13520398 +
+    t * (1.48851587 +
+    t * (-0.82215223 +
+    t * 0.17087277)))))))))
+  );
+  return sign * (1 - tau);
+}
 
 export default WeeklyMatchupsDisplay;
