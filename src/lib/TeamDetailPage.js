@@ -322,7 +322,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
                 adjustedDPR: metricsForSeason.adjustedDPR,
                 allPlayWinPercentage: metricsForSeason.allPlayWinPercentage,
                 finish: metricsForSeason.overallFinish, // Positional finish
-                pointsFinish: metricsForSeason.pointsFinish, // Points finish
+                pointsFinish: metricsForSeason.seasonPointsFinish, // Points finish (changed from pointsFinish to seasonPointsFinish to match calculateAllLeagueMetrics output)
                 // Include award flags for potential future use or conditional rendering within the component
                 isChampion: metricsForSeason.isChampion,
                 isRunnerUp: metricsForSeason.isRunnerUp,
