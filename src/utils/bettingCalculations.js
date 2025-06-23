@@ -24,337 +24,291 @@ const erf = (x) => {
 
   // Approximation calculation
   const t = 1.0 / (1.0 + p * x);
-  const y = 1 - (((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t) * Math.exp(-x * x);
-
+  const y = 1 - (((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t * Math.exp(-x * x));
   return sign * y;
 };
 
 /**
- * Helper function to return default zero metrics if data is unavailable.
+ * Converts decimal odds to American odds (+/-).
+ * @param {number} decimalOdds - The decimal odds (e.g., 2.0 for +100, 1.5 for -200).
+ * @returns {string} American odds string (e.g., "+100", "-200"). Returns 'N/A' for invalid input.
  */
-const getDefaultMetrics = () => ({
-  currentDPR: 0,
-  averageScore: 0,
-  projectedScore: 0,
-  averageDifferenceVsOpponent: 0,
-  sigmaSquaredOverCount: 0,
-  errorFunctionCoefficient: 0,
-});
-
-/**
- * Retrieves specific player metrics for a given year from the seasonal metrics.
- * @param {string} playerName - The name of the player.
- * @param {number} year - The year for which to retrieve metrics.
- * @param {Array<Object>} historicalMatchups - All historical matchup data (used to infer latest year).
- * @param {Object} seasonalMetrics - The overall seasonal metrics object, structured as {year: {dprData: [...], weeklyGameScores: {...}}}.
- * @param {Object} weeklyGameScoresByYearAndWeek - Weekly game scores object for calculating future opponent average.
- * @param {Function} getMappedTeamName - Function to get the consistent mapped team name.
- * @returns {Object} Player's metrics for the specified year, or default zeros if not found.
- */
-export const getPlayerMetricsForYear = (playerName, year, historicalMatchups, seasonalMetrics, weeklyGameScoresByYearAndWeek, getMappedTeamName) => {
-  const mappedPlayerName = getMappedTeamName(playerName);
-
-  // Check if historicalMatchups and seasonalMetrics are valid
-  if (!historicalMatchups || historicalMatchups.length === 0 || !seasonalMetrics) {
-    console.warn(`getPlayerMetricsForYear: Invalid input - historicalMatchups or seasonalMetrics missing for ${playerName}, Year ${year}`);
-    return getDefaultMetrics();
+const decimalToAmericanOdds = (decimalOdds) => {
+  if (typeof decimalOdds !== 'number' || isNaN(decimalOdds) || decimalOdds < 1) {
+    return 'N/A';
   }
 
-  let effectiveYear = year;
-  let seasonDataForEffectiveYear = seasonalMetrics[effectiveYear];
-  let playerSeasonalData = seasonDataForEffectiveYear?.dprData?.find(player => getMappedTeamName(player.team) === mappedPlayerName);
+  if (decimalOdds >= 2.0) { // Underdog (+ve odds) including +100
+    return "+" + Math.round((decimalOdds - 1) * 100).toString();
+  } else { // Favorite (-ve odds)
+    return Math.round(-100 / (decimalOdds - 1)).toString();
+  }
+};
 
-  // If no data found for the requested year, try to find the most recent year with data
-  if (!playerSeasonalData) {
-    console.warn(`getPlayerMetricsForYear: No player-specific data found for ${mappedPlayerName} in Year ${year}. Attempting to find data from the latest historical year.`);
+/**
+ * Calculates moneyline odds for a matchup based on the win probabilities of two players.
+ * Includes a configurable overround (vig) to simulate bookmaker profit margin.
+ *
+ * @param {number} player1WinProb - Calculated win probability of Player 1 (between 0 and 1).
+ * @param {number} player2WinProb - Calculated win probability of Player 2 (between 0 and 1).
+ * @param {number} [overround=0.0909] - The bookmaker's profit margin (e.g., 0.0909 for ~9.09% overround, resulting in -120/-120 for 50/50).
+ * @returns {{player1Odds: string, player2Odds: string}} Object with American moneyline odds for both players.
+ */
+export const calculateMoneylineOdds = (player1WinProb, player2WinProb, overround = 0.0909) => {
+  // Validate input probabilities
+  if (typeof player1WinProb !== 'number' || isNaN(player1WinProb) || player1WinProb < 0 || player1WinProb > 1 ||
+      typeof player2WinProb !== 'number' || isNaN(player2WinProb) || player2WinProb < 0 || player2WinProb > 1) {
+    return { player1Odds: 'N/A', player2Odds: 'N/A' };
+  }
 
-    const availableYears = Object.keys(seasonalMetrics)
-                                .map(y => parseInt(y))
-                                .filter(y => seasonalMetrics[y] && seasonalMetrics[y].dprData && seasonalMetrics[y].dprData.length > 0)
-                                .sort((a, b) => b - a); // Sort descending to get latest year first
+  // Ensure probabilities sum to 1 for fair odds calculation
+  const totalProb = player1WinProb + player2WinProb;
+  let normalizedProb1 = totalProb > 0 ? player1WinProb / totalProb : 0.5;
+  let normalizedProb2 = totalProb > 0 ? player2WinProb / totalProb : 0.5;
 
-    if (availableYears.length > 0) {
-      const latestDataYear = availableYears[0];
-      seasonDataForEffectiveYear = seasonalMetrics[latestDataYear];
-      playerSeasonalData = seasonDataForEffectiveYear.dprData?.find(player => getMappedTeamName(player.team) === mappedPlayerName);
-      if (playerSeasonalData) {
-        effectiveYear = latestDataYear; // Use this year for further calculations
-        console.log(`getPlayerMetricsForYear: Found data for ${mappedPlayerName} in Year ${effectiveYear}.`);
+  // Apply the overround by adjusting the fair decimal odds.
+  // Fair Decimal Odds = 1 / Probability
+  // Vigged Decimal Odds = Fair Decimal Odds * (1 + Overround)
+  const fairDecimalOdds1 = normalizedProb1 > 0 ? (1 / normalizedProb1) : Infinity;
+  const fairDecimalOdds2 = normalizedProb2 > 0 ? (1 / normalizedProb2) : Infinity;
+
+  const viggedDecimalOdds1 = fairDecimalOdds1 * (1 + overround);
+  const viggedDecimalOdds2 = fairDecimalOdds2 * (1 + overround);
+
+  // Convert vigged decimal odds to American odds
+  const americanOdds1 = decimalToAmericanOdds(viggedDecimalOdds1);
+  const americanOdds2 = decimalToAmericanOdds(viggedDecimalOdds2);
+
+  return {
+    player1Odds: americanOdds1,
+    player2Odds: americanOdds2,
+  };
+};
+
+/**
+ * Calculates the Over/Under (O/U) total for a matchup based on the average scores of two players.
+ *
+ * @param {number} player1AvgScore - Average score of Player 1.
+ * @param {number} player2AvgScore - Average score of Player 2.
+ * @param {number} [lineAdjustment=0] - Optional adjustment to the total line (e.g., -0.5 for a slightly lower line).
+ * @returns {string} The calculated O/U total formatted to two decimal places. Returns 'N/A' if scores are invalid.
+ */
+export const calculateOverUnder = (player1AvgScore, player2AvgScore, lineAdjustment = 0) => {
+  if (typeof player1AvgScore !== 'number' || isNaN(player1AvgScore) ||
+      typeof player2AvgScore !== 'number' || isNaN(player2AvgScore)) {
+    return 'N/A';
+  }
+  const totalScore = player1AvgScore + player2AvgScore;
+  return (totalScore + lineAdjustment).toFixed(2); // Format to 2 decimal places
+};
+
+/**
+ * Helper function to retrieve a player's all seasonal metrics for a specific year.
+ * Updated to return more details needed for advanced calculations.
+ * @param {Object} seasonalMetrics - The seasonalMetrics object from calculateAllLeagueMetrics.
+ * @param {string} playerName - The name of the player.
+ * @param {number} year - The year for which to get data.
+ * @returns {{adjustedDPR: number, averageScore: number, totalPointsFor: number, pointsAgainst: number, totalGames: number, weeklyScores: Array<number>}|null} Player's metrics for the year, or null if not found.
+ */
+export const getPlayerMetricsForYear = (seasonalMetrics, playerName, year) => {
+  if (seasonalMetrics && seasonalMetrics[year] && seasonalMetrics[year][playerName]) {
+    const playerStats = seasonalMetrics[year][playerName];
+    return {
+      adjustedDPR: playerStats.adjustedDPR || 0,
+      averageScore: playerStats.averageScore || 0,
+      totalPointsFor: playerStats.pointsFor || 0,
+      pointsAgainst: playerStats.pointsAgainst || 0, // This is total points against this player
+      totalGames: playerStats.totalGames || 0,
+      weeklyScores: playerStats.weeklyScores || [], // Array of individual weekly scores in season
+    };
+  }
+  return null;
+};
+
+/**
+ * Calculates the average difference in points scored by a team vs all of their opponents for a given season up to a certain week.
+ * This is interpreted as the team's average point differential (Points For - Points Against) per game.
+ * It uses historical matchups to get *actual* scores up to the given week for a more accurate rolling average.
+ *
+ * @param {string} teamName - The name of the team.
+ * @param {number} year - The year.
+ * @param {number} currentWeek - The current week to calculate stats up to.
+ * @param {Array<Object>} historicalMatchups - The raw historical matchup data.
+ * @param {Function} getMappedTeamName - Helper function to map team names.
+ * @returns {number} The average point differential for the team up to the current week.
+ */
+export const calculateTeamAverageDifferenceVsOpponent = (teamName, year, currentWeek, historicalMatchups, getMappedTeamName) => {
+  let totalPointsFor = 0;
+  let totalPointsAgainst = 0;
+  let gamesCounted = 0;
+
+  historicalMatchups.forEach(match => {
+    const matchYear = parseInt(match.year);
+    const matchWeek = parseInt(match.week);
+    const displayTeam1 = getMappedTeamName(String(match.team1 || '').trim());
+    const displayTeam2 = getMappedTeamName(String(match.team2 || '').trim());
+
+    if (matchYear === year && matchWeek < currentWeek && !(match.pointsOnlyBye === true || match.pointsOnlyBye === 'true')) {
+      if (displayTeam1 === teamName) {
+        totalPointsFor += parseFloat(match.team1Score || '0');
+        totalPointsAgainst += parseFloat(match.team2Score || '0');
+        gamesCounted++;
+      } else if (displayTeam2 === teamName) {
+        totalPointsFor += parseFloat(match.team2Score || '0');
+        totalPointsAgainst += parseFloat(match.team1Score || '0');
+        gamesCounted++;
       }
     }
-  }
-
-  if (!playerSeasonalData) {
-    console.warn(`getPlayerMetricsForYear: No player-specific data found for ${mappedPlayerName} even in latest historical year. Returning default metrics.`);
-    return getDefaultMetrics();
-  }
-
-  // Calculate the average difference vs opponent for the player
-  const averageDifferenceVsOpponent = playerSeasonalData.avgPointDifferential || 0;
-
-  // Calculate Sigma Squared Over Count for the player
-  // Use effectiveYear here
-  const sigmaSquaredOverCount = calculateSigmaSquaredOverCount(mappedPlayerName, effectiveYear, historicalMatchups, getMappedTeamName);
-
-  // Calculate Error Function Coefficient for the player
-  const errorFunctionCoefficient = calculateErrorFunctionCoefficient(averageDifferenceVsOpponent, sigmaSquaredOverCount);
-
-  // Get the latest available year from historical matchups to ensure calculations use current context
-  const latestYear = historicalMatchups.reduce((maxYear, match) => Math.max(maxYear, parseInt(match.year)), 0);
-
-  // Calculate Future Opponent Average Scoring Difference for projected score
-  // Use latestYear (current calendar year or latest data year) here
-  const futureOpponentAverageScoringDifference = calculateFutureOpponentAverageScoringDifference(mappedPlayerName, latestYear, weeklyGameScoresByYearAndWeek, getMappedTeamName);
-
-  const projectedScore = playerSeasonalData.averageScore + (futureOpponentAverageScoringDifference);
-
-
-  return {
-    currentDPR: playerSeasonalData.dpr || 0,
-    averageScore: playerSeasonalData.averageScore || 0,
-    projectedScore: projectedScore || 0,
-    averageDifferenceVsOpponent: averageDifferenceVsOpponent,
-    sigmaSquaredOverCount: sigmaSquaredOverCount,
-    errorFunctionCoefficient: errorFunctionCoefficient,
-  };
-};
-
-
-/**
- * Calculates Moneyline Odds based on win percentages.
- * @param {number} team1WinPercentage - Win percentage of Team 1 (between 0 and 1).
- * @param {number} team2WinPercentage - Win percentage of Team 2 (between 0 and 1).
- * @returns {Object} An object containing moneyline odds for both teams in standard format (+/-).
- */
-export const calculateMoneylineOdds = (team1WinPercentage, team2WinPercentage) => {
-  if (typeof team1WinPercentage !== 'number' || isNaN(team1WinPercentage) ||
-    typeof team2WinPercentage !== 'number' || isNaN(team2WinPercentage) ||
-    team1WinPercentage < 0 || team1WinPercentage > 1 ||
-    team2WinPercentage < 0 || team2WinPercentage > 1) {
-    return { team1Formatted: '+100', team2Formatted: '+100' }; // Default to even odds
-  }
-
-  const calculateOdds = (probability) => {
-    if (probability === 0) return '+EV'; // Effectively infinite odds against
-    if (probability === 1) return '-EV'; // Effectively infinite odds for
-
-    if (probability > 0.5) {
-      // Favorite: (Probability / (1 - Probability)) * -100
-      return -((probability / (1 - probability)) * 100);
-    } else {
-      // Underdog: ((1 - Probability) / Probability) * 100
-      return ((1 - probability) / probability) * 100;
-    }
-  };
-
-  const formatOdds = (odds) => {
-    if (odds >= 100) {
-      return `+${Math.round(odds)}`;
-    } else if (odds <= -100) {
-      return `${Math.round(odds)}`;
-    } else if (odds > 0 && odds < 100) { // Small positive underdogs
-      return `+${Math.round(odds)}`;
-    } else if (odds < 0 && odds > -100) { // Small negative favorites
-      return `${Math.round(odds)}`;
-    } else if (odds === 0) { // Exactly 50/50, typically +100 or -100 in some books
-      return '+100';
-    }
-    return String(Math.round(odds)); // Fallback, shouldn't be hit often
-  };
-
-
-  let odds1 = calculateOdds(team1WinPercentage);
-  let odds2 = calculateOdds(team2WinPercentage);
-
-  // If one team is a heavy favorite, the other's implied odds might be very low (close to 0 or even negative)
-  // We want to ensure fair odds that sum up to roughly 100% implied probability
-  // Re-normalize probabilities if they don't sum to 1 due to independent calculations
-  const totalProbability = team1WinPercentage + team2WinPercentage;
-  let adjustedTeam1WinPercentage = team1WinPercentage;
-  let adjustedTeam2WinPercentage = team2WinPercentage;
-
-  if (totalProbability > 0) { // Avoid division by zero
-    adjustedTeam1WinPercentage = team1WinPercentage / totalProbability;
-    adjustedTeam2WinPercentage = team2WinPercentage / totalProbability;
-  } else {
-    // If both are zero or invalid, default to 50/50
-    adjustedTeam1WinPercentage = 0.5;
-    adjustedTeam2WinPercentage = 0.5;
-  }
-
-  odds1 = calculateOdds(adjustedTeam1WinPercentage);
-  odds2 = calculateOdds(adjustedTeam2WinPercentage);
-
-
-  return {
-    team1Formatted: formatOdds(odds1),
-    team2Formatted: formatOdds(odds2),
-  };
-};
-
-/**
- * Calculates the Over/Under line for a matchup.
- * @param {number} team1ProjectedScore - The projected score for Team 1.
- * @param {number} team2ProjectedScore - The projected score for Team 2.
- * @returns {number} The calculated Over/Under line. Returns 0 if inputs are invalid.
- */
-export const calculateOverUnder = (team1ProjectedScore, team2ProjectedScore) => {
-  if (typeof team1ProjectedScore !== 'number' || isNaN(team1ProjectedScore) ||
-    typeof team2ProjectedScore !== 'number' || isNaN(team2ProjectedScore)) {
-    return 0; // Default to 0 for invalid inputs
-  }
-  return team1ProjectedScore + team2ProjectedScore;
-};
-
-/**
- * Calculates the sum of squared differences from the mean, divided by count (variance-like term).
- * This is used for the standard deviation component in the error function.
- * Formula: SUM((DPR of player in game - Average point differential of player for the year)^2) / Count of games
- * This corresponds to the HZ216 column in the spreadsheet (Sigma^2/N).
- * @param {string} playerName - The name of the player.
- * @param {number} year - The year for which to calculate.
- * @param {Array<Object>} historicalMatchups - All historical matchup data.
- * @param {Function} getMappedTeamName - Function to get the consistent mapped team name.
- * @returns {number} The calculated Sigma Squared Over Count.
- */
-export const calculateSigmaSquaredOverCount = (playerName, year, historicalMatchups, getMappedTeamName) => {
-  const mappedPlayerName = getMappedTeamName(playerName);
-  const playerGamesInYear = historicalMatchups.filter(match =>
-    parseInt(match.year) === year &&
-    (getMappedTeamName(match.team1) === mappedPlayerName || getMappedTeamName(match.team2) === mappedPlayerName)
-  );
-
-  if (playerGamesInYear.length === 0) {
-    return 0;
-  }
-
-  // First, calculate the player's average point differential for the year
-  let totalPointDifferential = 0;
-  playerGamesInYear.forEach(match => {
-    const isTeam1 = getMappedTeamName(match.team1) === mappedPlayerName;
-    const playerPoints = isTeam1 ? match.team1score : match.team2score;
-    const opponentPoints = isTeam1 ? match.team2score : match.team1score;
-    totalPointDifferential += (playerPoints - opponentPoints);
   });
-  const averagePointDifferential = totalPointDifferential / playerGamesInYear.length;
 
-  // Then, calculate the sum of squared differences
+  return gamesCounted > 0 ? (totalPointsFor - totalPointsAgainst) / gamesCounted : 0;
+};
+
+
+/**
+ * Calculates Sigma Squared over Count, representing the variance of a team's weekly scores
+ * relative to its own seasonal average score, up to a given week.
+ * Formula: Sum((WeeklyScore - SeasonalAverage)^2) / NumberOfWeeksPlayed
+ *
+ * @param {string} teamName - The name of the team.
+ * @param {number} year - The year.
+ * @param {number} currentWeek - The current week to calculate stats up to.
+ * @param {Array<Object>} historicalMatchups - The raw historical matchup data.
+ * @param {Function} getMappedTeamName - Helper function to map team names.
+ * @returns {number} The calculated Sigma Squared over Count.
+ */
+export const calculateSigmaSquaredOverCount = (teamName, year, currentWeek, historicalMatchups, getMappedTeamName) => {
+  let weeklyScoresForSeasonUpToWeek = [];
+  let totalScoreUpToWeek = 0;
+  let gamesCounted = 0;
+
+  historicalMatchups.forEach(match => {
+    const matchYear = parseInt(match.year);
+    const matchWeek = parseInt(match.week);
+    const displayTeam1 = getMappedTeamName(String(match.team1 || '').trim());
+    const displayTeam2 = getMappedTeamName(String(match.team2 || '').trim());
+
+    if (matchYear === year && matchWeek < currentWeek && !(match.pointsOnlyBye === true || match.pointsOnlyBye === 'true')) {
+      let score = 0;
+      if (displayTeam1 === teamName) {
+        score = parseFloat(match.team1Score || '0');
+      } else if (displayTeam2 === teamName) {
+        score = parseFloat(match.team2Score || '0');
+      }
+
+      if (score !== 0) { // Only count if a valid score
+        weeklyScoresForSeasonUpToWeek.push(score);
+        totalScoreUpToWeek += score;
+        gamesCounted++;
+      }
+    }
+  });
+
+  if (gamesCounted === 0) {
+    return 0; // Avoid division by zero if no games played yet
+  }
+
+  const averageScoreUpToWeek = totalScoreUpToWeek / gamesCounted;
   let sumOfSquaredDifferences = 0;
-  playerGamesInYear.forEach(match => {
-    const isTeam1 = getMappedTeamName(match.team1) === mappedPlayerName;
-    const playerPoints = isTeam1 ? match.team1score : match.team2score;
-    const opponentPoints = isTeam1 ? match.team2score : match.team1score;
-    const gamePointDifferential = playerPoints - opponentPoints;
-    sumOfSquaredDifferences += Math.pow(gamePointDifferential - averagePointDifferential, 2);
-  });
 
-  return playerGamesInYear.length > 0 ? sumOfSquaredDifferences / playerGamesInYear.length : 0;
-};
-
-/**
- * Calculates the Error Function Coefficient.
- * This corresponds to the IR215 column in the spreadsheet.
- * Formula: ((HZ216 * (HZ215)^2)^0.5) / HZ215)
- * Simplified: (Sigma^2/N)^0.5
- * Note: If avgPointDifferential is 0, this simplifies to 0 to prevent division by zero.
- * @param {number} avgPointDifferential - The player's average point differential for the year (HZ215).
- * @param {number} sigmaSquaredOverCount - The player's Sigma Squared Over Count (HZ216).
- * @returns {number} The calculated Error Function Coefficient.
- */
-export const calculateErrorFunctionCoefficient = (avgPointDifferential, sigmaSquaredOverCount) => {
-  if (typeof sigmaSquaredOverCount !== 'number' || isNaN(sigmaSquaredOverCount) || sigmaSquaredOverCount < 0) {
-    return 0;
+  for (const score of weeklyScoresForSeasonUpToWeek) {
+    sumOfSquaredDifferences += Math.pow(score - averageScoreUpToWeek, 2);
   }
 
-  // In the spreadsheet, IR215 seems to directly correspond to SQRT(HZ216)
-  // If HZ215 (avgPointDifferential) is 0, the formula simplifies or needs special handling.
-  // Based on the spreadsheet formula (SQRT(HZ216)/HZ215) * HZ215, it simplifies to SQRT(HZ216)
-  // if HZ215 != 0, but if HZ215 == 0, it means the result is 0.
-  // The spreadsheet formula might be a bit misleading for the IR215 definition.
-  // Given that IR215 is used in ERF(IR215 / HZ215), it's likely just the standard deviation term.
-  // Re-evaluating the formula based on common probability distributions, the 'errorCoeffForPlayer'
-  // should typically be a standard deviation or a related term.
-  // The formula for standard deviation is SQRT(variance). Here sigmaSquaredOverCount is variance/N.
-  // Let's assume IR215 should effectively be SQRT(HZ216).
-
-  return Math.sqrt(sigmaSquaredOverCount);
+  // Using population variance (N) as implied by "over Count"
+  return sumOfSquaredDifferences / gamesCounted;
 };
 
+
 /**
- * Calculates the future opponent's average scoring difference based on historical data.
- * This is used for the projected score calculation (KZ215).
- * @param {string} playerName - The name of the player.
- * @param {number} year - The current year.
- * @param {Object} weeklyGameScoresByYearAndWeek - Object containing weekly game scores.
- * @param {Function} getMappedTeamName - Function to get the consistent mapped team name.
- * @returns {number} The calculated future opponent average scoring difference.
+ * Finds the average scoring difference for a specific matchup in a given year,
+ * using the average scores *for that week/season* up to the current week.
+ * This is interpreted as (Team's Season Average Score Up To Week) - (Opponent's Season Average Score Up To Week).
+ *
+ * @param {string} team1Name - The name of the first team.
+ * @param {string} team2Name - The name of the second team (opponent).
+ * @param {number} year - The year.
+ * @param {number} currentWeek - The current week to calculate averages up to.
+ * @param {Array<Object>} historicalMatchups - The raw historical matchup data.
+ * @param {Function} getMappedTeamName - Helper function to map team names.
+ * @returns {number} The difference in average scores.
  */
-export const calculateFutureOpponentAverageScoringDifference = (playerName, year, weeklyGameScoresByYearAndWeek, getMappedTeamName) => {
-  const mappedPlayerName = getMappedTeamName(playerName);
-  const relevantYearScores = weeklyGameScoresByYearAndWeek[year];
+export const calculateFutureOpponentAverageScoringDifference = (team1Name, team2Name, year, currentWeek, historicalMatchups, getMappedTeamName) => {
+  const getAverageScoreUpToWeek = (team, year, week, matches, mapper) => {
+    let totalScore = 0;
+    let games = 0;
+    matches.forEach(match => {
+      const matchYear = parseInt(match.year);
+      const matchWeek = parseInt(match.week);
+      const displayTeam1 = mapper(String(match.team1 || '').trim());
+      const displayTeam2 = mapper(String(match.team2 || '').trim());
 
-  if (!relevantYearScores) {
-    return 0;
-  }
-
-  let totalOpponentScoreDifferential = 0;
-  let opponentGamesCount = 0;
-
-  // Iterate through all weeks in the current year
-  for (const week in relevantYearScores) {
-    const gamesInWeek = relevantYearScores[week];
-    gamesInWeek.forEach(game => {
-      const team1Mapped = getMappedTeamName(game.team1);
-      const team2Mapped = getMappedTeamName(game.team2);
-
-      let opponentScore = 0;
-      let playerScore = 0;
-
-      // Find the game where the current player was involved, and get their opponent's score.
-      if (team1Mapped === mappedPlayerName) {
-        playerScore = game.team1score;
-        opponentScore = game.team2score;
-      } else if (team2Mapped === mappedPlayerName) {
-        playerScore = game.team2score;
-        opponentScore = game.team1score;
-      }
-
-      if (playerScore > 0 || opponentScore > 0) { // Ensure it's a valid game with scores
-        totalOpponentScoreDifferential += (opponentScore - playerScore); // Opponent's score minus player's score
-        opponentGamesCount++;
+      if (matchYear === year && matchWeek < week && !(match.pointsOnlyBye === true || match.pointsOnlyBye === 'true')) {
+        if (displayTeam1 === team) {
+          totalScore += parseFloat(match.team1Score || '0');
+          games++;
+        } else if (displayTeam2 === team) {
+          totalScore += parseFloat(match.team2Score || '0');
+          games++;
+        }
       }
     });
-  }
+    return games > 0 ? totalScore / games : 0;
+  };
 
-  return opponentGamesCount > 0 ? totalOpponentScoreDifferential / opponentGamesCount : 0;
+  const player1AvgScore = getAverageScoreUpToWeek(team1Name, year, currentWeek, historicalMatchups, getMappedTeamName);
+  const player2AvgScore = getAverageScoreUpToWeek(team2Name, year, currentWeek, historicalMatchups, getMappedTeamName);
+
+  return player1AvgScore - player2AvgScore;
 };
 
 
 /**
- * Calculates the weekly win percentage projection based on the average differential and error coefficient.
- * This corresponds to column IG215 in the spreadsheet.
- * Formula: ERF((IR215 / HZ215) / SQRT(2)) / 2 + 0.5 if HZ215 > 0
- * 1 - (ERF((IR215 / ABS(HZ215)) / SQRT(2)) / 2 + 0.5) if HZ215 < 0
- * 0.5 if HZ215 = 0
- * Where HZ215 is avgDiffVsOpponentForPlayer, and IR215 is errorCoeffForPlayer
+ * Calculates an error function coefficient based on average difference vs opponent and sigma squared over count.
+ * Formula: (avgDiffVsOpponent / sigmaSquaredOverCount) * (avgDiffVsOpponent / 2)
+ * @param {number} avgDiffVsOpponent - The average difference in points scored vs opponents (HZ215).
+ * @param {number} sigmaSquaredOverCount - The sigma squared over count value (variance).
+ * @returns {number} The calculated error function coefficient (IR215).
+ */
+export const calculateErrorFunctionCoefficient = (avgDiffVsOpponent, sigmaSquaredOverCount) => {
+  if (sigmaSquaredOverCount === 0 || isNaN(sigmaSquaredOverCount) || typeof sigmaSquaredOverCount !== 'number') {
+    return 0; // Avoid division by zero or NaN, or if not a number
+  }
+  // Ensure avgDiffVsOpponent is a valid number before division
+  if (typeof avgDiffVsOpponent !== 'number' || isNaN(avgDiffVsOpponent)) {
+    return 0;
+  }
+  return (avgDiffVsOpponent / sigmaSquaredOverCount) * (avgDiffVsOpponent / 2);
+};
+
+/**
+ * Calculates the weekly win percentage projection using the provided ERF-based formula.
+ * Formula: =IFERROR(
+ *   IF(
+ *     HZ215 = 0,
+ *     0.5,
+ *     IF(
+ *       HZ215 > 0,
+ *       ERF((IR215 / HZ215) / 2^0.5) / 2 + 0.5,
+ *       1 - (ERF((IR215 / ABS(HZ215)) / 2^0.5) / 2 + 0.5)
+ *     )
+ *   ),
+ * "")
+ * HZ215 = Player's Average difference vs opponent for the current week/season
+ * IR215 = Player's Error Function Coefficient for the current week/season
  * @param {number} avgDiffVsOpponentForPlayer - The player's average point differential (HZ215).
  * @param {number} errorCoeffForPlayer - The player's error function coefficient (IR215).
  * @returns {number} The calculated win percentage projection (between 0 and 1). Returns 0.5 for invalid inputs.
  */
 export const calculateWeeklyWinPercentageProjection = (avgDiffVsOpponentForPlayer, errorCoeffForPlayer) => {
   if (typeof avgDiffVsOpponentForPlayer !== 'number' || isNaN(avgDiffVsOpponentForPlayer) ||
-    typeof errorCoeffForPlayer !== 'number' || isNaN(errorCoeffForPlayer)) {
+      typeof errorCoeffForPlayer !== 'number' || isNaN(errorCoeffForPlayer)) {
     return 0.5; // Default to 50% if inputs are invalid
   }
 
-  if (errorCoeffForPlayer === 0) {
-    // If errorCoeffForPlayer is 0, it means there's no variability.
-    // If avgDiffVsOpponentForPlayer > 0, 100% win. If < 0, 0% win. If 0, 50%.
-    if (avgDiffVsOpponentForPlayer > 0) return 1;
-    if (avgDiffVsOpponentForPlayer < 0) return 0;
-    return 0.5; // If difference is 0 and no error, 50% chance
+  if (avgDiffVsOpponentForPlayer === 0) {
+    return 0.5; // If difference is 0, 50% chance
   }
-
 
   let probability;
   const sqrt2 = Math.sqrt(2);
@@ -364,18 +318,16 @@ export const calculateWeeklyWinPercentageProjection = (avgDiffVsOpponentForPlaye
       // ERF((IR215 / HZ215) / 2^0.5) / 2 + 0.5
       const arg = (errorCoeffForPlayer / avgDiffVsOpponentForPlayer) / sqrt2;
       probability = erf(arg) / 2 + 0.5;
-    } else if (avgDiffVsOpponentForPlayer < 0) {
+    } else {
       // 1 - (ERF((IR215 / ABS(HZ215)) / 2^0.5) / 2 + 0.5)
       const arg = (errorCoeffForPlayer / Math.abs(avgDiffVsOpponentForPlayer)) / sqrt2;
       probability = 1 - (erf(arg) / 2 + 0.5);
-    } else {
-      probability = 0.5; // If difference is 0, 50% chance
     }
   } catch (e) {
     console.error("Error in calculateWeeklyWinPercentageProjection:", e);
-    probability = 0.5; // Fallback in case of unexpected errors
+    return 0.5; // Fallback in case of calculation error
   }
 
-  // Ensure probability is within [0, 1] range due to approximation
+  // Ensure probability is within [0, 1] range due to approximations or extreme values
   return Math.max(0, Math.min(1, probability));
 };
