@@ -29,12 +29,31 @@ function winProbability(diff, combinedStdDev) {
   return diff > 0 ? (erf(z) / 2 + 0.5) : (1 - (erf(Math.abs(z)) / 2 + 0.5));
 }
 
+/**
+ * Calculate the over/under line for two teams based on their average points scored.
+ * @param {number[]} teamAScores - Array of historical points scored by team A this season.
+ * @param {number[]} teamBScores - Array of historical points scored by team B this season.
+ * @returns {number|null} Over/Under line rounded to 1 decimal place, or null if no data.
+ */
+export function calculateOverUnder(teamAScores, teamBScores) {
+  if (!teamAScores.length || !teamBScores.length) return null; // no data
+
+  const avgA = average(teamAScores);
+  const avgB = average(teamBScores);
+
+  const overUnder = avgA + avgB;
+
+  return parseFloat(overUnder.toFixed(1));
+}
+
 async function getMatchupsData() {
   const res = await fetch(MATCHUPS_URL);
   const json = await res.json();
   const allMatchups = json.data;
 
+  // Find the latest year in the dataset to represent the current season
   const currentYear = Math.max(...allMatchups.map(g => g.year));
+  // Filter only matchups from the current year
   const currentSeason = allMatchups.filter(g => g.year === currentYear);
 
   return { currentSeason, currentYear };
@@ -51,6 +70,12 @@ function buildTeamScoresMap(matchups) {
   return scores;
 }
 
+/**
+ * Generate betting lines including:
+ * - Point spread (line)
+ * - Win probability (%)
+ * - Over/Under line (total points)
+ */
 function generateLines(teamScores) {
   const lines = [];
   const teams = Object.keys(teamScores);
@@ -64,11 +89,13 @@ function generateLines(teamScores) {
       const avgDiff = avgA - avgB;
       const combinedStd = Math.sqrt(stdA ** 2 + stdB ** 2);
       const winProb = winProbability(avgDiff, combinedStd);
+      const overUnder = calculateOverUnder(scoresA, scoresB);
 
       lines.push({
         matchup: `${teamA} vs ${teamB}`,
         line: avgDiff.toFixed(1),
-        winProb: (winProb * 100).toFixed(1) + '%'
+        winProb: (winProb * 100).toFixed(1) + '%',
+        overUnder: overUnder !== null ? overUnder : 'N/A'
       });
     }
   }
@@ -82,7 +109,7 @@ export default async function getBettingLines() {
   return generateLines(teamScores);
 }
 
-// Exported function to get per-team player metrics by year (needed to fix build error)
+// Exported function to get per-team player metrics by year (needed for your build)
 export async function getPlayerMetricsForYear(year) {
   const res = await fetch(MATCHUPS_URL);
   const json = await res.json();
