@@ -4,37 +4,29 @@ import WeeklyMatchupsDisplay from "./WeeklyMatchupsDisplay";
 
 export default function ScheduleContainer() {
   const [schedule, setSchedule] = useState([]);
-  const [historicalData, setHistoricalData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchData() {
+    async function fetchSchedule() {
       try {
-        // Fetch schedule from your Google Apps Script URL
-        const scheduleRes = await fetch(
+        const res = await fetch(
           "https://script.google.com/macros/s/AKfycbzCdSKv-pJSyewZWljTIlyacgb3hBqwthsKGQjCRD6-zJaqX5lbFvMRFckEG-Kb_cMf/exec"
         );
-        const scheduleJson = await scheduleRes.json();
-
-        // Here you should fetch your historical matchup data (e.g. from your API or sheet)
-        // For now, I'll simulate with an empty object — replace with your real fetch!
-        const historicalRes = await fetch("/api/historicalData"); // Replace with your real URL
-        const historicalJson = await historicalRes.json();
-
-        setSchedule(scheduleJson);
-        setHistoricalData(historicalJson);
-        setLoading(false);
+        const json = await res.json();
+        setSchedule(json);
       } catch (error) {
-        console.error("Failed to load data", error);
+        console.error("Failed to fetch schedule", error);
+      } finally {
         setLoading(false);
       }
     }
 
-    fetchData();
+    fetchSchedule();
   }, []);
 
   if (loading) return <div>Loading schedule...</div>;
   if (!schedule.length) return <div>No schedule data found.</div>;
 
-  return <WeeklyMatchupsDisplay schedule={schedule} historicalData={historicalData} />;
+  // Pass only schedule, no historicalData
+  return <WeeklyMatchupsDisplay schedule={schedule} />;
 }
