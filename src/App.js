@@ -60,16 +60,18 @@ function App() {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const data = await response.json();
-      console.log('Received data from HISTORICAL_MATCHUPS_API_URL:', data); // Added console log
+      console.log('Received data from HISTORICAL_MATCHUPS_API_URL:', data);
 
       let matchupsArray = [];
-      if (data && Array.isArray(data.historicalMatchups)) {
-        matchupsArray = data.historicalMatchups;
+      // CORRECTED: Check for 'data.data' which is the actual array from your API response
+      if (data && Array.isArray(data.data)) {
+        matchupsArray = data.data;
       } else if (Array.isArray(data)) {
+        // Keep this check for backward compatibility or different API responses
         matchupsArray = data;
       } else {
-        // More specific error message
-        throw new Error("API returned an unexpected data format. Expected an array or an object with 'historicalMatchups' array.");
+        // Updated error message to reflect the new expectation
+        throw new Error("API returned an unexpected data format. Expected an array or an object with a 'data' array.");
       }
 
       const uniqueTeams = new Set();
@@ -80,8 +82,7 @@ function App() {
       const sortedTeamNames = Array.from(uniqueTeams).sort();
       setAllTeamNames(sortedTeamNames);
     } catch (e) {
-      console.error("Failed to fetch initial data:", e); // Updated console error message
-      // Updated error message to include more detail
+      console.error("Failed to fetch initial data:", e);
       setError(`Failed to load initial data. Details: ${e.message}. Please check API URL and response format.`);
     } finally {
       setLoadingInitialData(false);
