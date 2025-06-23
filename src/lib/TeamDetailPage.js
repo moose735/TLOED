@@ -50,22 +50,23 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
 
     setLoadingStats(true);
 
-    const overallStats = { /* same as your base object */ totalWins: 0, totalLosses: 0, totalTies: 0, totalPointsFor: 0, totalGamesPlayed: 0, overallTopScoreWeeksCount: 0, playoffAppearancesCount: 0, avgDPR: 0, totalDPRSum: 0, seasonsWithDPRData: 0, totalLuckRating: 0, totalChampionships: 0, totalRunnerUps: 0, totalThirdPlaces: 0, totalPointsChampionships: 0, totalPointsRunnerUps: 0, totalThirdPlacePoints: 0, winRank: 'N/A', winPercentageRank: 'N/A', pointsForRank: 'N/A', topScoreWeeksRank: 'N/A', playoffRank: 'N/A', championshipRank: 'N/A', luckRank: 'N/A' };
+    const overallStats = { totalWins: 0, totalLosses: 0, totalTies: 0, totalPointsFor: 0, totalGamesPlayed: 0, overallTopScoreWeeksCount: 0, playoffAppearancesCount: 0, avgDPR: 0, totalDPRSum: 0, seasonsWithDPRData: 0, totalLuckRating: 0, totalChampionships: 0, totalRunnerUps: 0, totalThirdPlaces: 0, totalPointsChampionships: 0, totalPointsRunnerUps: 0, totalThirdPlacePoints: 0, winRank: 'N/A', winPercentageRank: 'N/A', pointsForRank: 'N/A', topScoreWeeksRank: 'N/A', playoffRank: 'N/A', championshipRank: 'N/A', luckRank: 'N/A' };
 
     const seasonalData = {};
-const completedSeasons = new Set();
-historicalMatchups.forEach(match => {
-  const year = parseInt(match.year);
-  const displayTeam1 = getMappedTeamName(String(match.team1 || '').trim());
-  const displayTeam2 = getMappedTeamName(String(match.team2 || '').trim());
+    const participatedSeasons = new Set(); // Changed from completedSeasons to be more accurate
+    historicalMatchups.forEach(match => {
+      const year = parseInt(match.year);
+      const displayTeam1 = getMappedTeamName(String(match.team1 || '').trim());
+      const displayTeam2 = getMappedTeamName(String(match.team2 || '').trim());
 
-  if (!isNaN(year) && (displayTeam1 === teamName || displayTeam2 === teamName)) {
-    completedSeasons.add(year);
-  }
-});
+      if (!isNaN(year) && (displayTeam1 === teamName || displayTeam2 === teamName)) {
+        participatedSeasons.add(year);
+      }
+    });
 
-
-    const latestSeason = completedSeasons.size > 0 ? Math.max(...completedSeasons) : null;
+    const latestSeason = participatedSeasons.size > 0 ? Math.max(...participatedSeasons) : null;
+    // For award counting, only consider seasons that are NOT the latest (current) one
+    const seasonsForAwardCounting = new Set([...participatedSeasons].filter(year => year !== latestSeason));
 
     historicalMatchups.forEach(match => {
       const displayTeam1 = getMappedTeamName(String(match.team1 || '').trim());
@@ -116,16 +117,16 @@ historicalMatchups.forEach(match => {
       if (!team) return;
       let stats = { wins: 0, losses: 0, ties: 0, pointsFor: 0, totalGamesPlayed: 0, championships: 0, playoffAppearancesCount: 0, topScoreWeeksCount: 0, totalLuckRating: 0, avgDPR: 0, totalDPRSum: 0, seasonsWithDPRData: 0 };
 
+      // Aggregate stats for overall ranks (can include current season data)
       Object.keys(seasonalMetrics).forEach(year => {
         const m = seasonalMetrics[year]?.[team];
-        if (m && completedSeasons.has(parseInt(year))) {
+        if (m && participatedSeasons.has(parseInt(year))) { // Use participatedSeasons here
           stats.wins += m.wins;
           stats.losses += m.losses;
           stats.ties += m.ties;
           stats.pointsFor += m.pointsFor;
           stats.totalGamesPlayed += m.totalGames;
-          if (m.isChampion) stats.championships++;
-          if (m.isPlayoffTeam) stats.playoffAppearancesCount++;
+          // Awards are counted separately below, excluding the current season
           if (typeof m.topScoreWeeksCount === 'number') stats.topScoreWeeksCount += m.topScoreWeeksCount;
           if (typeof m.luckRating === 'number') stats.totalLuckRating += m.luckRating;
           if (m.adjustedDPR !== 0) {
@@ -149,8 +150,10 @@ historicalMatchups.forEach(match => {
         totalGamesPlayed: teamStats.totalGamesPlayed,
         overallTopScoreWeeksCount: teamStats.topScoreWeeksCount,
         avgDPR: teamStats.avgDPR,
-        totalChampionships: teamStats.championships,
-        playoffAppearancesCount: teamStats.playoffAppearancesCount,
+        // Championships and playoff appearances for overall ranks are still calculated here
+        // as they are cumulative totals that include the current year's data for ranking purposes,
+        // but the *display of icons* will only count completed seasons.
+        playoffAppearancesCount: teamStats.playoffAppearancesCount, // This might include current season if m.isPlayoffTeam is true
         totalLuckRating: teamStats.totalLuckRating,
         winRank: calculateRank(teamStats.wins, Object.values(allTeamsAggregatedStats).map(t => t.wins)),
         winPercentageRank: calculateRank((teamStats.wins + 0.5 * teamStats.ties) / teamStats.totalGamesPlayed, Object.values(allTeamsAggregatedStats).map(t => (t.wins + 0.5 * t.ties) / t.totalGamesPlayed)),
@@ -161,9 +164,13 @@ historicalMatchups.forEach(match => {
         luckRank: calculateRank(teamStats.totalLuckRating, Object.values(allTeamsAggregatedStats).map(t => t.totalLuckRating)),
       });
 
+      // Accumulate awards ONLY from completed seasons
       Object.keys(seasonalMetrics).forEach(yearStr => {
         const m = seasonalMetrics[yearStr]?.[teamName];
-        if (m && completedSeasons.has(parseInt(yearStr))) {
+        const currentYear = parseInt(yearStr);
+        // Only count awards if the season is in seasonsForAwardCounting (i.e., not the latest season)
+        if (m && seasonsForAwardCounting.has(currentYear)) {
+          if (m.isChampion) overallStats.totalChampionships++;
           if (m.isRunnerUp) overallStats.totalRunnerUps++;
           if (m.isThirdPlace) overallStats.totalThirdPlaces++;
           if (m.isPointsChampion) overallStats.totalPointsChampionships++;
@@ -177,15 +184,17 @@ historicalMatchups.forEach(match => {
       const year = parseInt(yearStr);
       const stats = seasonalData[year][teamName];
       const m = seasonalMetrics[year]?.[teamName];
-      if (stats && m && completedSeasons.has(year)) {
+      // Only include season in history if team actually participated
+      if (stats && m && participatedSeasons.has(year)) {
         const totalGames = stats.wins + stats.losses + stats.ties;
         const winPct = totalGames > 0 ? ((stats.wins + 0.5 * stats.ties) / totalGames) : 0;
         compiledSeasonHistory.push({
           year, team: teamName, wins: stats.wins, losses: stats.losses, ties: stats.ties,
           pointsFor: stats.pointsFor, pointsAgainst: stats.pointsAgainst, luckRating: m.luckRating,
           adjustedDPR: m.adjustedDPR, allPlayWinPercentage: m.allPlayWinPercentage, winPercentage: winPct,
-          finish: m.rank ? `${m.rank}${getOrdinalSuffix(m.rank)}` : 'N/A',
-          pointsFinish: m.pointsRank ? `${m.pointsRank}${getOrdinalSuffix(m.pointsRank)}` : 'N/A'
+          // Display N/A for finish and points finish if it's the current/latest season
+          finish: (year === latestSeason) ? 'N/A' : (m.rank ? `${m.rank}${getOrdinalSuffix(m.rank)}` : 'N/A'),
+          pointsFinish: (year === latestSeason) ? 'N/A' : (m.pointsRank ? `${m.pointsRank}${getOrdinalSuffix(m.pointsRank)}` : 'N/A')
         });
       }
     });
@@ -218,7 +227,6 @@ historicalMatchups.forEach(match => {
     else { setSortBy(column); setSortOrder('asc'); }
   };
 
-
   if (loadingStats) {
     return (
       <div className="w-full bg-white p-8 rounded-lg shadow-md mt-8 text-center text-gray-600">
@@ -227,7 +235,6 @@ historicalMatchups.forEach(match => {
     );
   }
 
-  // Handle case where teamOverallStats is null (e.g., initial render or no data found)
   if (!teamOverallStats) {
     return (
       <div className="w-full bg-white p-8 rounded-lg shadow-md mt-8 text-center text-red-500">
@@ -242,53 +249,51 @@ historicalMatchups.forEach(match => {
         {teamName}
         <span className="block text-lg font-medium text-gray-600 mt-2">
           Record: {teamOverallStats.totalWins}-{teamOverallStats.totalLosses}-{teamOverallStats.totalTies} | Career DPR: {formatDPR(teamOverallStats.avgDPR)}
-            {/* Display trophy and medal icons based on accumulated totals */}
-            <div className="flex justify-center items-center gap-2 whitespace-nowrap mt-1">
-                {teamOverallStats.totalChampionships > 0 && (
-                  <span title={`Sween Bowl Champion (${teamOverallStats.totalChampionships}x)`} className="flex items-center space-x-1 whitespace-nowrap">
-                      <i className="fas fa-trophy text-yellow-500 text-2xl"></i> {/* Made icons larger */}
-                      <span className="text-xs font-medium">{teamOverallStats.totalChampionships}x</span>
-                  </span>
-                )}
-                {teamOverallStats.totalRunnerUps > 0 && (
-                  <span title={`Sween Bowl Runner-Up (${teamOverallStats.totalRunnerUps}x)`} className="flex items-center space-x-1 whitespace-nowrap">
-                      <i className="fas fa-trophy text-gray-400 text-2xl"></i> {/* Made icons larger */}
-                      <span className="text-xs font-medium">{teamOverallStats.totalRunnerUps}x</span>
-                  </span>
-                )}
-                {teamOverallStats.totalThirdPlaces > 0 && (
-                  <span title={`3rd Place Finish (${teamOverallStats.totalThirdPlaces}x)`} className="flex items-center space-x-1 whitespace-nowrap">
-                      <i className="fas fa-trophy text-amber-800 text-2xl"></i> {/* Made icons larger */}
-                      <span className="text-xs font-medium">{teamOverallStats.totalThirdPlaces}x</span>
-                  </span>
-                )}
-                {teamOverallStats.totalPointsChampionships > 0 && (
-                  <span title={`1st Place - Points (${teamOverallStats.totalPointsChampionships}x)`} className="flex items-center space-x-1 whitespace-nowrap">
-                      {/* Corrected color to yellow-500 for gold medal */}
-                      <i className="fas fa-medal text-yellow-500 text-2xl"></i>
-                      <span className="text-xs font-medium">{teamOverallStats.totalPointsChampionships}x</span>
-                  </span>
-                )}
-                {teamOverallStats.totalPointsRunnerUps > 0 && (
-                  <span title={`2nd Place - Points (${teamOverallStats.totalPointsRunnerUps}x)`} className="flex items-center space-x-1 whitespace-nowrap">
-                      <i className="fas fa-medal text-gray-400 text-2xl"></i> {/* Made icons larger */}
-                      <span className="text-xs font-medium">{teamOverallStats.totalPointsRunnerUps}x</span>
-                  </span>
-                )}
-                {teamOverallStats.totalThirdPlacePoints > 0 && (
-                  <span title={`3rd Place - Points (${teamOverallStats.totalThirdPlacePoints}x)`} className="flex items-center space-x-1 whitespace-nowrap">
-                      <i className="fas fa-medal text-amber-800 text-2xl"></i> {/* Made icons larger */}
-                      <span className="text-xs font-medium">{teamOverallStats.totalThirdPlacePoints}x</span>
-                  </span>
-                )}
-            </div>
+          <div className="flex justify-center items-center gap-2 whitespace-nowrap mt-1">
+            {teamOverallStats.totalChampionships > 0 && (
+              <span title={`Sween Bowl Champion (${teamOverallStats.totalChampionships}x)`} className="flex items-center space-x-1 whitespace-nowrap">
+                <i className="fas fa-trophy text-yellow-500 text-2xl"></i>
+                <span className="text-xs font-medium">{teamOverallStats.totalChampionships}x</span>
+              </span>
+            )}
+            {teamOverallStats.totalRunnerUps > 0 && (
+              <span title={`Sween Bowl Runner-Up (${teamOverallStats.totalRunnerUps}x)`} className="flex items-center space-x-1 whitespace-nowrap">
+                <i className="fas fa-trophy text-gray-400 text-2xl"></i>
+                <span className="text-xs font-medium">{teamOverallStats.totalRunnerUps}x</span>
+              </span>
+            )}
+            {teamOverallStats.totalThirdPlaces > 0 && (
+              <span title={`3rd Place Finish (${teamOverallStats.totalThirdPlaces}x)`} className="flex items-center space-x-1 whitespace-nowrap">
+                <i className="fas fa-trophy text-amber-800 text-2xl"></i>
+                <span className="text-xs font-medium">{teamOverallStats.totalThirdPlaces}x</span>
+              </span>
+            )}
+            {teamOverallStats.totalPointsChampionships > 0 && (
+              <span title={`1st Place - Points (${teamOverallStats.totalPointsChampionships}x)`} className="flex items-center space-x-1 whitespace-nowrap">
+                <i className="fas fa-medal text-yellow-500 text-2xl"></i>
+                <span className="text-xs font-medium">{teamOverallStats.totalPointsChampionships}x</span>
+              </span>
+            )}
+            {teamOverallStats.totalPointsRunnerUps > 0 && (
+              <span title={`2nd Place - Points (${teamOverallStats.totalPointsRunnerUps}x)`} className="flex items-center space-x-1 whitespace-nowrap">
+                <i className="fas fa-medal text-gray-400 text-2xl"></i>
+                <span className="text-xs font-medium">{teamOverallStats.totalPointsRunnerUps}x</span>
+              </span>
+            )}
+            {teamOverallStats.totalThirdPlacePoints > 0 && (
+              <span title={`3rd Place - Points (${teamOverallStats.totalThirdPlacePoints}x)`} className="flex items-center space-x-1 whitespace-nowrap">
+                <i className="fas fa-medal text-amber-800 text-2xl"></i>
+                <span className="text-xs font-medium">{teamOverallStats.totalThirdPlacePoints}x</span>
+              </span>
+            )}
+          </div>
         </span>
       </h2>
 
       {/* Overall Stats */}
       <section className="mb-8">
         <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">League Ranks</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6"> {/* Updated grid for desktop */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
           <StatCard title="Total Wins" value={teamOverallStats.totalWins} rank={teamOverallStats.winRank} />
           <StatCard title="Win %" value={formatPercentage((teamOverallStats.totalWins + 0.5 * teamOverallStats.totalTies) / teamOverallStats.totalGamesPlayed)} rank={teamOverallStats.winPercentageRank} />
           <StatCard title="Total Points" value={formatScore(teamOverallStats.totalPointsFor)} rank={teamOverallStats.pointsForRank} />
@@ -303,7 +308,6 @@ historicalMatchups.forEach(match => {
           />
           <StatCard title="Playoff Appearances" value={teamOverallStats.playoffAppearancesCount} rank={teamOverallStats.playoffRank} />
           <StatCard title="Championships" value={teamOverallStats.totalChampionships} rank={teamOverallStats.championshipRank} />
-          {/* Removed the 'Total Luck Rating' StatCard */}
         </div>
       </section>
 
@@ -369,11 +373,9 @@ historicalMatchups.forEach(match => {
   );
 };
 
-// Simple Stat Card Component (reused from PowerRankings or other places)
-const StatCard = ({ title, value, rank }) => ( // Added rank prop
+const StatCard = ({ title, value, rank }) => (
   <div className="bg-blue-50 p-2 rounded-lg shadow-sm flex flex-col items-center justify-center text-center border border-blue-200">
-    {rank && rank !== 'N/A' && <p className="text-2xl font-bold text-blue-700">{rank}</p>} {/* Larger font for rank */}
-    {/* Changed text-blue-800 to text-gray-600 for consistency */}
+    {rank && rank !== 'N/A' && <p className="text-2xl font-bold text-blue-700">{rank}</p>}
     <p className="text-sm font-semibold text-gray-600">
       {title} (<span className="font-semibold text-gray-600">{value}</span>)
     </p>
