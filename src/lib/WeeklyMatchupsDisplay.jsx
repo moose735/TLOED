@@ -1,26 +1,37 @@
-// src/components/WeeklyMatchupsDisplay.jsx
 import React from "react";
 import { calculateMatchupOdds } from "../utils/bettingCalculations";
 
 export default function WeeklyMatchupsDisplay({ schedule }) {
   if (!schedule || schedule.length === 0) return <div>No matchups to display.</div>;
 
-  const weeks = Object.keys(schedule[0])
+  // Extract all keys starting with "Week_"
+  const weekKeys = Object.keys(schedule[0])
     .filter((k) => k.startsWith("Week_"))
-    .sort((a, b) => parseInt(a.replace("Week_", ""), 10) - parseInt(b.replace("Week_", ""), 10));
+    .sort((a, b) => {
+      const aNum = parseInt(a.replace("Week_", ""), 10);
+      const bNum = parseInt(b.replace("Week_", ""), 10);
+      return aNum - bNum;
+    });
 
+  // Build matchups per week with no duplicates (sorted team names)
   const weeklyMatchups = {};
 
-  weeks.forEach((weekKey) => {
+  weekKeys.forEach((weekKey) => {
     const weekNum = parseInt(weekKey.replace("Week_", ""), 10);
     const pairs = [];
 
     schedule.forEach(({ Player: teamA }) => {
-      const teamB = schedule.find((row) => row.Player === teamA)[weekKey];
+      // Find who teamA plays that week
+      const teamB = schedule.find((r) => r.Player === teamA)?.[weekKey];
       if (!teamB) return;
 
-      if (teamA < teamB) {
-        pairs.push({ teamA, teamB });
+      // Sort names alphabetically to avoid duplicate reversed pairs
+      const [t1, t2] = [teamA, teamB].sort();
+
+      // Check if already added
+      const exists = pairs.some(({ teamA: a, teamB: b }) => a === t1 && b === t2);
+      if (!exists) {
+        pairs.push({ teamA: t1, teamB: t2 });
       }
     });
 
@@ -30,17 +41,18 @@ export default function WeeklyMatchupsDisplay({ schedule }) {
   return (
     <div>
       {Object.entries(weeklyMatchups).map(([week, matchups]) => (
-        <div key={week} style={{ marginBottom: "2rem" }}>
+        <div key={week} style={{ marginBottom: 20 }}>
           <h2>Week {week} Matchups</h2>
           {matchups.length === 0 ? (
-            <p>No matchups for this week</p>
+            <p>No matchups this week</p>
           ) : (
             <ul>
               {matchups.map(({ teamA, teamB }, i) => {
                 const odds = calculateMatchupOdds(teamA, teamB);
                 return (
                   <li key={i}>
-                    {teamA} vs {teamB} &nbsp; | ML: {odds.mlTeam} / {odds.mlOpponent} &nbsp; | O/U: {odds.overUnder.toFixed(2)}
+                    {teamA} vs {teamB} &nbsp;|&nbsp; ML: {odds.mlTeam} / {odds.mlOpponent} &nbsp;|&nbsp; O/U:{" "}
+                    {odds.overUnder.toFixed(2)}
                   </li>
                 );
               })}
