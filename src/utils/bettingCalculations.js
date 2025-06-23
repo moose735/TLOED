@@ -1,95 +1,90 @@
 // src/utils/bettingCalculations.js
 
-// Approximate error function (erf)
-export function erf(x) {
-  const sign = (x >= 0) ? 1 : -1;
+// Approximate error function implementation for ERF, used in formula
+function erf(x) {
+  // Abramowitz and Stegun formula 7.1.26 approximation
+  const sign = x < 0 ? -1 : 1;
   x = Math.abs(x);
+
   const a1 = 0.254829592,
-        a2 = -0.284496736,
-        a3 = 1.421413741,
-        a4 = -1.453152027,
-        a5 = 1.061405429,
-        p = 0.3275911;
+    a2 = -0.284496736,
+    a3 = 1.421413741,
+    a4 = -1.453152027,
+    a5 = 1.061405429,
+    p = 0.3275911;
 
   const t = 1 / (1 + p * x);
-  const y = 1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+  const y =
+    1 -
+    (((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t) * Math.exp(-x * x);
+
   return sign * y;
 }
 
-// ...rest of your code below, unchanged
+/**
+ * Calculate Moneyline odds and Over/Under for matchup.
+ *
+ * @param {string} teamA
+ * @param {string} teamB
+ * @param {number} week
+ * @param {object} historicalData - Your historical matchup / points data
+ * @returns {object} - { mlTeam, mlOpponent, overUnder }
+ */
+export function calculateMatchupOdds(teamA, teamB, week, historicalData) {
+  if (!historicalData) {
+    // fallback dummy odds if no data loaded yet
+    return { mlTeam: "-120", mlOpponent: "+110", overUnder: 220 };
+  }
 
-// Helper: Get weekly scores by team and year
-export function getWeeklyScoresByTeam(historicalMatchups, getMappedTeamName) {
-  const weeklyScores = {};
-  historicalMatchups.forEach(game => {
-    const year = game.year;
-    const week = game.week;
-    const team1 = getMappedTeamName(game.team1);
-    const team2 = getMappedTeamName(game.team2);
-    const score1 = parseFloat(game.score1);
-    const score2 = parseFloat(game.score2);
+  // This example assumes historicalData is a map:
+  // { [teamName]: { pointsByWeek: { [week]: number }, avgPoints: number, stdDev: number } }
 
-    if (!weeklyScores[year]) weeklyScores[year] = {};
-    if (!weeklyScores[year][team1]) weeklyScores[year][team1] = {};
-    if (!weeklyScores[year][team2]) weeklyScores[year][team2] = {};
+  // Get average points and std deviation (sigma) for each team for all weeks up to current
+  const teamAData = historicalData[teamA];
+  const teamBData = historicalData[teamB];
 
-    weeklyScores[year][team1][week] = score1;
-    weeklyScores[year][team2][week] = score2;
-  });
-  return weeklyScores;
-}
+  if (!teamAData || !teamBData) {
+    // If missing data, return neutral odds
+    return { mlTeam: "-110", mlOpponent: "-110", overUnder: 0 };
+  }
 
-function getAverage(scores) {
-  const values = Object.values(scores);
-  return values.reduce((a, b) => a + b, 0) / values.length;
-}
+  // Calculate average difference in points for teamA vs teamB up to this week
+  // Simplified: avgDiff = teamA avg points - teamB avg points
+  const avgDiff = (teamAData.avgPoints || 0) - (teamBData.avgPoints || 0);
 
-function getStandardDeviation(scores) {
-  const avg = getAverage(scores);
-  const values = Object.values(scores);
-  const variance = values.reduce((sum, val) => sum + (val - avg) ** 2, 0) / values.length;
-  return Math.sqrt(variance);
-}
-
-export function getPlayerMetricsForYear(team, opponent, year, weeklyScores) {
-  const teamScores = weeklyScores[year]?.[team] || {};
-  const opponentScores = weeklyScores[year]?.[opponent] || {};
-
-  const teamAvg = getAverage(teamScores);
-  const opponentAvg = getAverage(opponentScores);
-
-  const sigma = getStandardDeviation(opponentScores);
-  const avgDiff = teamAvg - opponentAvg;
-
-  const errorFnCoefficient = sigma === 0 ? 0 : (avgDiff / sigma) * (avgDiff / 2);
-  const winPct = avgDiff === 0 ? 0.5 : (avgDiff > 0
-    ? erf(errorFnCoefficient / Math.sqrt(2)) / 2 + 0.5
-    : 1 - (erf(Math.abs(errorFnCoefficient) / Math.sqrt(2)) / 2 + 0.5)
+  // Standard deviation (sigma) — combine both teams
+  const sigma = Math.sqrt(
+    (teamAData.stdDev ** 2 || 0) + (teamBData.stdDev ** 2 || 0)
   );
 
-  return {
-    teamAvg,
-    opponentAvg,
-    sigma,
-    avgDiff,
-    errorFnCoefficient,
-    winPct
-  };
-}
+  // Calculate "error function coefficient" MX215 from your formula
+  // Approximate coefficient = avgDiff / sigma
+  const coefficient = sigma === 0 ? 0 : avgDiff / sigma;
 
-export function calculateMoneylineOdds(team1Pct, team2Pct) {
-  const pctToOdds = (pct) => {
-    if (pct === 0.5) return '-110';
-    return pct > 0.5
-      ? `-${Math.round((pct / (1 - pct)) * 100)}`
-      : `+${Math.round(((1 - pct) / pct) * 100)}`;
-  };
-  return {
-    team1: pctToOdds(team1Pct),
-    team2: pctToOdds(team2Pct)
-  };
-}
+  // Calculate win probability for teamA using your formula with erf:
+  // winProb = 0.5 + 0.5 * erf(coefficient / sqrt(2))
+  const winProb =
+    0.5 + 0.5 * erf(coefficient / Math.sqrt(2));
 
-export function calculateOverUnder(team1Avg, team2Avg) {
-  return (team1Avg + team2Avg).toFixed(2);
+  // Moneyline conversion:
+  // If winProb > 0.5, ML negative for teamA (favorite), else positive
+  let mlTeam, mlOpponent;
+
+  function probToMoneyline(p) {
+    if (p === 0) return "+10000";
+    if (p === 1) return "-10000";
+    if (p > 0.5) {
+      return Math.round(-100 / (p / (1 - p)));
+    } else {
+      return Math.round(100 * ((1 - p) / p));
+    }
+  }
+
+  mlTeam = probToMoneyline(winProb);
+  mlOpponent = probToMoneyline(1 - winProb);
+
+  // Over/Under — sum of average points plus a margin (simplified)
+  const overUnder = (teamAData.avgPoints || 0) + (teamBData.avgPoints || 0) + 10;
+
+  return { mlTeam, mlOpponent, overUnder };
 }
