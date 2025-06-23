@@ -2,80 +2,62 @@
 
 const MATCHUPS_URL = 'https://script.google.com/macros/s/AKfycbxpo21zzZgNamYShESfqe-SX09miJz2LK7SpdlYrtHXQplneB3bF2xu2byy0HhjM8e-/exec';
 
+// Basic helpers
 function average(arr) {
-  return arr.reduce((a, b) => a + b, 0) / arr.length;
+  return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
 }
 
 function standardDeviation(arr) {
+  if (!arr.length) return null;
   const avg = average(arr);
-  const variance = arr.reduce((sum, score) => sum + (score - avg) ** 2, 0) / arr.length;
+  const variance = arr.reduce((sum, val) => sum + (val - avg) ** 2, 0) / arr.length;
   return Math.sqrt(variance);
 }
 
-function erf(x) {
-  const sign = x < 0 ? -1 : 1;
-  x = Math.abs(x);
-  const a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741,
-        a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
-
-  const t = 1 / (1 + p * x);
-  const y = 1 - (((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t) * Math.exp(-x * x);
-  return sign * y;
-}
-
-function winProbability(diff, combinedStdDev) {
-  if (diff === 0) return 0.5;
-  const z = diff / (Math.sqrt(2) * combinedStdDev);
-  return diff > 0 ? (erf(z) / 2 + 0.5) : (1 - (erf(Math.abs(z)) / 2 + 0.5));
-}
-
-export function calculateMoneylineOdds(winProb) {
-  if (winProb <= 0 || winProb >= 1) return null;
-
-  if (winProb >= 0.5) {
-    return Math.round(-100 * (winProb / (1 - winProb)));
+// 1) calculateMoneylineOdds: converts probability to American odds
+export function calculateMoneylineOdds(prob) {
+  if (prob <= 0 || prob >= 1) return null;
+  if (prob >= 0.5) {
+    return Math.round(-100 * (prob / (1 - prob)));
   } else {
-    return Math.round(100 * ((1 - winProb) / winProb));
+    return Math.round(100 * ((1 - prob) / prob));
   }
 }
 
+// 2) calculateOverUnder: sum of average points for both teams
 export function calculateOverUnder(teamAScores, teamBScores) {
-  if (!teamAScores.length || !teamBScores.length) return null;
-
   const avgA = average(teamAScores);
   const avgB = average(teamBScores);
-
-  const overUnder = avgA + avgB;
-
-  return parseFloat(overUnder.toFixed(1));
+  if (avgA === null || avgB === null) return null;
+  return parseFloat((avgA + avgB).toFixed(1));
 }
 
-async function getMatchupsData() {
+// 3) getPlayerMetricsForYear: averages and std dev for all teams in a given year
+export async function getPlayerMetricsForYear(year) {
   const res = await fetch(MATCHUPS_URL);
   const json = await res.json();
-  const allMatchups = json.data;
+  const games = json.data.filter(g => g.year === year);
+  const stats = {};
 
-  const currentYear = Math.max(...allMatchups.map(g => g.year));
-  const currentSeason = allMatchups.filter(g => g.year === currentYear);
+  for (const game of games) {
+    if (!stats[game.team1]) stats[game.team1] = [];
+    if (!stats[game.team2]) stats[game.team2] = [];
+    stats[game.team1].push(game.team1Score);
+    stats[game.team2].push(game.team2Score);
+  }
 
-  return { currentSeason, currentYear };
+  return Object.entries(stats).map(([team, scores]) => ({
+    team,
+    average: parseFloat(average(scores).toFixed(2)),
+    stdDev: parseFloat(standardDeviation(scores).toFixed(2)),
+    gamesPlayed: scores.length
+  }));
 }
 
-function buildTeamScoresMap(matchups) {
-  const scores = {};
-  matchups.forEach(g => {
-    if (!scores[g.team1]) scores[g.team1] = [];
-    if (!scores[g.team2]) scores[g.team2] = [];
-    scores[g.team1].push(g.team1Score);
-    scores[g.team2].push(g.team2Score);
-  });
-  return scores;
-}
-
+// 4) calculateTeamAverageDifferenceVsOpponent: average (team score - opponent score) for given matchups
 export function calculateTeamAverageDifferenceVsOpponent(teamName, matchups) {
   const games = matchups.filter(g => g.team1 === teamName || g.team2 === teamName);
-
-  if (games.length === 0) return null;
+  if (!games.length) return null;
 
   let totalDiff = 0;
   games.forEach(g => {
@@ -85,73 +67,86 @@ export function calculateTeamAverageDifferenceVsOpponent(teamName, matchups) {
       totalDiff += g.team2Score - g.team1Score;
     }
   });
-
   return totalDiff / games.length;
 }
 
-function generateLines(teamScores) {
-  const lines = [];
-  const teams = Object.keys(teamScores);
-
-  for (let i = 0; i < teams.length; i++) {
-    for (let j = i + 1; j < teams.length; j++) {
-      const teamA = teams[i], teamB = teams[j];
-      const scoresA = teamScores[teamA], scoresB = teamScores[teamB];
-      const avgA = average(scoresA), avgB = average(scoresB);
-      const stdA = standardDeviation(scoresA), stdB = standardDeviation(scoresB);
-      const avgDiff = avgA - avgB;
-      const combinedStd = Math.sqrt(stdA ** 2 + stdB ** 2);
-      const winProb = winProbability(avgDiff, combinedStd);
-      const overUnder = calculateOverUnder(scoresA, scoresB);
-      const moneylineA = calculateMoneylineOdds(winProb);
-      const moneylineB = calculateMoneylineOdds(1 - winProb);
-
-      lines.push({
-        matchup: `${teamA} vs ${teamB}`,
-        line: avgDiff.toFixed(1),
-        winProb: (winProb * 100).toFixed(1) + '%',
-        overUnder: overUnder !== null ? overUnder : 'N/A',
-        moneyline: {
-          [teamA]: moneylineA !== null ? moneylineA : 'N/A',
-          [teamB]: moneylineB !== null ? moneylineB : 'N/A'
-        }
-      });
-    }
-  }
-  return lines;
+// 5) calculateSigmaSquaredOverCount: variance divided by count
+export function calculateSigmaSquaredOverCount(scores) {
+  if (!scores.length) return null;
+  const avg = average(scores);
+  const variance = scores.reduce((sum, val) => sum + (val - avg) ** 2, 0) / scores.length;
+  return variance / scores.length;
 }
 
-export default async function getBettingLines() {
-  const { currentSeason } = await getMatchupsData();
-  const teamScores = buildTeamScoresMap(currentSeason);
-  return generateLines(teamScores);
-}
+// 6) calculateFutureOpponentAverageScoringDifference
+// Given a team, their schedule, and points scored so far, calculate avg scoring difference for future opponents
+export function calculateFutureOpponentAverageScoringDifference(teamName, schedule, playerMetrics) {
+  // Get future opponents from schedule (e.g., weeks after current)
+  // playerMetrics: [{team, average, stdDev}, ...]
+  // For simplicity, just average differences for remaining opponents
 
-export async function getPlayerMetricsForYear(year) {
-  const res = await fetch(MATCHUPS_URL);
-  const json = await res.json();
-  const games = json.data.filter(g => g.year === year);
+  const playerIndex = schedule.findIndex(p => p.Player === teamName);
+  if (playerIndex === -1) return null;
 
-  const stats = {};
+  // Find weeks ahead (for example, weeks with no scores yet)
+  // We'll just average all remaining opponents' average scoring - team average scoring
 
-  for (const game of games) {
-    const { team1, team2, team1Score, team2Score } = game;
+  // Get current week (could be passed or calculated externally)
+  const currentWeek = new Date().getWeekNumber() || 1; // placeholder
 
-    if (!stats[team1]) stats[team1] = [];
-    if (!stats[team2]) stats[team2] = [];
-
-    stats[team1].push(team1Score);
-    stats[team2].push(team2Score);
+  const playerSchedule = schedule[playerIndex];
+  const futureOpponents = [];
+  for (let wk = currentWeek; wk <= 14; wk++) {
+    const wkKey = `Week_${wk}`;
+    if (playerSchedule[wkKey]) futureOpponents.push(playerSchedule[wkKey]);
   }
 
-  return Object.entries(stats).map(([team, scores]) => {
-    const avg = average(scores);
-    const std = standardDeviation(scores);
-    return {
-      team,
-      average: parseFloat(avg.toFixed(2)),
-      stdDev: parseFloat(std.toFixed(2)),
-      gamesPlayed: scores.length
-    };
-  });
+  const teamMetric = playerMetrics.find(m => m.team === teamName);
+  if (!teamMetric) return null;
+
+  const opponentMetrics = futureOpponents
+    .map(opp => playerMetrics.find(m => m.team === opp))
+    .filter(Boolean);
+
+  if (!opponentMetrics.length) return null;
+
+  // average difference = avg(team scoring) - avg(opponent scoring)
+  const differences = opponentMetrics.map(opp => teamMetric.average - opp.average);
+
+  return average(differences);
+}
+
+// 7) calculateErrorFunctionCoefficient
+// Inputs: average difference (MF215), sigma squared over count (MX215), std dev of opponent (lookup)
+// Formula as per your description
+export function calculateErrorFunctionCoefficient(averageDiff, sigmaSquaredOverCount, opponentStdDev) {
+  if (averageDiff === 0) return 0;
+  if (!averageDiff || !sigmaSquaredOverCount || !opponentStdDev) return null;
+
+  return (averageDiff / (opponentStdDev * sigmaSquaredOverCount)) * (averageDiff / 2);
+}
+
+// 8) calculateWeeklyWinPercentageProjection
+// Uses error function (erf) and error function coefficient
+export function calculateWeeklyWinPercentageProjection(averageDiff, errorFuncCoeff) {
+  if (averageDiff === 0) return 0.5;
+  if (!averageDiff || errorFuncCoeff === null) return null;
+
+  // Simple approximation of error function using JavaScript's Math.erf if available (or custom)
+  const erf = x => {
+    // Abramowitz and Stegun formula 7.1.26 approximation:
+    const sign = x >= 0 ? 1 : -1;
+    x = Math.abs(x);
+    const a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741;
+    const a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
+    const t = 1 / (1 + p * x);
+    const y = 1 - ((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+    return sign * y;
+  };
+
+  if (averageDiff > 0) {
+    return erf((errorFuncCoeff / averageDiff) / Math.sqrt(2)) / 2 + 0.5;
+  } else {
+    return 1 - (erf((errorFuncCoeff / Math.abs(averageDiff)) / Math.sqrt(2)) / 2 + 0.5);
+  }
 }
