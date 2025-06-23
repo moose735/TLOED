@@ -2,12 +2,7 @@
 
 /**
  * Helper function to calculate raw DPR (Power Rating) for a team.
- * @param {number} averageScore - The team's average score for the period (season or career).
- * @param {number} teamHighScore - The team's highest single-game score for the period (season or career).
- * @param {number} teamLowScore - The team's lowest single-game score for the period (season or career).
- * @param {number} teamWinPercentage - Win percentage of the team for the period (season or career).
- * @returns {number} The raw DPR value (Power Rating).
- */
+ * @param {number} averageScore - The team's average score for the period (season or career).\n * @param {number} teamHighScore - The team's highest single-game score for the period (season or career).\n * @param {number} teamLowScore - The team's lowest single-game score for the period (season or career).\n * @param {number} teamWinPercentage - Win percentage of the team for the period (season or career).\n * @returns {number} The raw DPR value (Power Rating).\n */
 export const calculateRawDPR = (averageScore, teamHighScore, teamLowScore, teamWinPercentage) => {
     // Formula: ((Average Score * 6) + ((Team High Score + Team Low Score) * 2) + ((Win% * 200) * 2)) / 10
     const pointsComponent = averageScore * 6;
@@ -204,6 +199,12 @@ const calculateTopScoreWeeksCount = (teamName, weeklyGameScoresByYearAndWeek, ye
  */
 export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName) => {
     console.log("--- Starting calculateAllLeagueMetrics ---");
+    console.log("DEBUG: historicalMatchups value:", historicalMatchups);
+    console.log("DEBUG: Type of historicalMatchups:", typeof historicalMatchups);
+    console.log("DEBUG: Is historicalMatchups an array?", Array.isArray(historicalMatchups));
+    if (historicalMatchups && typeof historicalMatchups === 'object' && 'length' in historicalMatchups) {
+        console.log("DEBUG: historicalMatchups length:", historicalMatchups.length);
+    }
 
     const seasonalTeamStatsRaw = {};
     const weeklyGameScoresByYearAndWeek = {};
