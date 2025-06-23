@@ -1,5 +1,5 @@
 // App.js
-import React, { useState, useEffect, useCallback, useMemo } from 'react'; // <--- CORRECTED LINE: Added useMemo here
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   HISTORICAL_MATCHUPS_API_URL,
   GOOGLE_SHEET_POWER_RANKINGS_API_URL,
@@ -60,6 +60,7 @@ function App() {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const data = await response.json();
+      console.log('Received data from HISTORICAL_MATCHUPS_API_URL:', data); // Added console log
 
       let matchupsArray = [];
       if (data && Array.isArray(data.historicalMatchups)) {
@@ -67,7 +68,8 @@ function App() {
       } else if (Array.isArray(data)) {
         matchupsArray = data;
       } else {
-        throw new Error("Unexpected data format for historical matchups from API.");
+        // More specific error message
+        throw new Error("API returned an unexpected data format. Expected an array or an object with 'historicalMatchups' array.");
       }
 
       const uniqueTeams = new Set();
@@ -78,8 +80,9 @@ function App() {
       const sortedTeamNames = Array.from(uniqueTeams).sort();
       setAllTeamNames(sortedTeamNames);
     } catch (e) {
-      console.error("Failed to fetch team names:", e);
-      setError("Failed to load initial data. Please check network connection and API URLs.");
+      console.error("Failed to fetch initial data:", e); // Updated console error message
+      // Updated error message to include more detail
+      setError(`Failed to load initial data. Details: ${e.message}. Please check API URL and response format.`);
     } finally {
       setLoadingInitialData(false);
     }
