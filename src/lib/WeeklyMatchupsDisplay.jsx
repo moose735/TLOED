@@ -25,6 +25,20 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
   // URL for your original Google Apps Script schedule data
   const SCHEDULE_API_URL = 'https://script.google.com/macros/s/AKfycbzCdSKv-pJSyewZWljTIlyacgb3hBqwthsKGQjCRD6-zJaqX5lbFvMRFckEG-Kb_cMf/exec';
 
+  // --- MODIFIED: Determine currentWeek at component level using useMemo ---
+  const currentWeek = useMemo(() => {
+    if (weeklyScheduleData.length > 0) {
+      const firstEntry = weeklyScheduleData[0];
+      // Find the first key that starts with 'Week_' and extract the number
+      const weekKey = Object.keys(firstEntry).find(key => key.startsWith('Week_') && !isNaN(parseInt(key.split('_')[1])));
+      if (weekKey) {
+        return parseInt(weekKey.split('_')[1]);
+      }
+    }
+    return undefined; // Returns undefined if no week is found, handled by conditional rendering
+  }, [weeklyScheduleData]); // Recalculate when weeklyScheduleData changes
+  // --- END MODIFICATION ---
+
   useEffect(() => {
     const fetchScheduleData = async () => {
       setLoading(true); // Ensure loading is true at the start of fetch
@@ -57,9 +71,11 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
     console.log("WeeklyMatchupsDisplay: weeklyScheduleData status: Length:", weeklyScheduleData.length);
     console.log("WeeklyMatchupsDisplay: historicalMatchups status: Type:", typeof historicalMatchups, "Length:", historicalMatchups ? historicalMatchups.length : 0);
 
+    // Ensure currentWeek is defined before proceeding with calculations that rely on it
     if (!weeklyScheduleData || weeklyScheduleData.length === 0 ||
-        !historicalMatchups || historicalMatchups.length === 0) {
-      console.log("WeeklyMatchupsDisplay: Skipping matchup processing due to missing weeklyScheduleData or historicalMatchups.");
+        !historicalMatchups || historicalMatchups.length === 0 ||
+        typeof currentWeek === 'undefined') { // Added check for currentWeek here
+      console.log("WeeklyMatchupsDisplay: Skipping matchup processing due to missing weeklyScheduleData, historicalMatchups, or undefined currentWeek.");
       return [];
     }
 
@@ -75,22 +91,7 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
         return [];
     }
 
-    // --- MODIFIED: Determine currentWeek dynamically from schedule data keys ---
-    let currentWeek;
-    if (weeklyScheduleData.length > 0) {
-      const firstEntry = weeklyScheduleData[0];
-      // Find the first key that starts with 'Week_' and extract the number
-      const weekKey = Object.keys(firstEntry).find(key => key.startsWith('Week_') && !isNaN(parseInt(key.split('_')[1])));
-      if (weekKey) {
-        currentWeek = parseInt(weekKey.split('_')[1]);
-      }
-    }
-
-    if (typeof currentWeek === 'undefined') { // Add a check to prevent errors if currentWeek still isn't found
-        console.error("WeeklyMatchupsDisplay: Could not determine current week from weeklyScheduleData.");
-        return [];
-    }
-    // --- END MODIFICATION ---
+    // currentWeek is now defined in the outer scope, no need to redefine here.
 
     console.log("WeeklyMatchupsDisplay: Debugging team names - currentWeek:", currentWeek);
     if (weeklyScheduleData.length > 0) {
@@ -115,7 +116,7 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
     // Existing logic for processing matchups
     return weeklyScheduleData.map(match => {
         const team1Name = match.Player;
-        const team2Name = match[`Week_${currentWeek}`]; // This will now use the correct currentWeek
+        const team2Name = match[`Week_${currentWeek}`]; // This will now use the correctly scoped currentWeek
 
         // Pass the `currentYearForCalculations` and the directly accessed `seasonalMetricsForBetting`
         const team1Metrics = getPlayerMetricsForYear(team1Name, currentYearForCalculations, historicalMatchups, seasonalMetricsForBetting, metrics.weeklyGameScoresByYearAndWeek, safeGetMappedTeamName);
@@ -137,7 +138,7 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
             overUnder
         };
     });
-  }, [weeklyScheduleData, historicalMatchups, getMappedTeamName]); // Dependencies are still correct
+  }, [weeklyScheduleData, historicalMatchups, getMappedTeamName, currentWeek]); // Added currentWeek to dependencies
 
   if (loading) {
     return <div className="text-center py-4">Loading weekly schedule...</div>;
@@ -147,13 +148,18 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
     return <div className="text-center py-4 text-red-500">Error: {error}</div>;
   }
 
+  // Handle case where currentWeek might still be undefined (e.g., if no data or malformed data)
+  if (typeof currentWeek === 'undefined') {
+    return <div className="text-center py-4 text-yellow-500">Could not determine current week from schedule data.</div>;
+  }
+
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-3xl font-bold text-center mb-6">Weekly Matchups & Projections</h1>
       <div className="space-y-8">
         {processedWeeklyMatchups.length > 0 ? (
-          <div key={currentWeek} className="bg-white shadow-lg rounded-lg p-6"> {/* Use currentWeek directly */}
-            <h2 className="text-2xl font-semibold mb-4 text-gray-800">Week {currentWeek} Matchups</h2> {/* Use currentWeek directly */}
+          <div key={currentWeek} className="bg-white shadow-lg rounded-lg p-6">
+            <h2 className="text-2xl font-semibold mb-4 text-gray-800">Week {currentWeek} Matchups</h2>
             <ul className="space-y-4">
               {processedWeeklyMatchups.map((match, index) => (
                 <li key={index} className="flex flex-col sm:flex-row items-center bg-gray-50 rounded-lg shadow-sm overflow-hidden">
@@ -169,7 +175,7 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
 
                   {/* Team 2 */}
                   <div className="flex-1 p-4 flex flex-col items-center justify-center border-t sm:border-t-0 sm:border-l border-gray-200 w-full sm:w-auto">
-                    <span className="text-lg font-bold text-green-800">{match[`Week_${currentWeek}`]}</span> {/* This will now correctly access the opponent's name */}
+                    <span className="text-lg font-bold text-green-800">{match[`Week_${currentWeek}`]}</span>
                     <span className="text-sm text-gray-600">DPR: {match.team2Metrics?.currentDPR?.toFixed(2) || 'N/A'}</span>
                     <span className="text-sm text-gray-600">Proj. Score: {match.team2Metrics?.projectedScore?.toFixed(2) || 'N/A'}</span>
                   </div>
