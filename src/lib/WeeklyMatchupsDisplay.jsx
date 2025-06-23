@@ -56,8 +56,8 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
   const processedWeeklyMatchups = useMemo(() => {
     console.log("WeeklyMatchupsDisplay: Starting processedWeeklyMatchups useMemo.");
     console.log("WeeklyMatchupsDisplay: weeklyScheduleData status: Length:", weeklyScheduleData.length);
-    console.log("WeeklyMatchupsDisplay: seasonalMetrics status: Keys:", Object.keys(seasonalMetrics || {})); // seasonalMetrics is derived from calculateAllLeagueMetrics
-    console.log("WeeklyMatchupsDisplay: historicalMatchups status: Type:", typeof historicalMatchups, "Length:", historicalMatchups ? historicalMatchups.length : 0); // NEW DEBUG
+    // Removed the problematic log: console.log("WeeklyMatchupsDisplay: seasonalMetrics status: Keys:", Object.keys(seasonalMetrics || {}));
+    console.log("WeeklyMatchupsDisplay: historicalMatchups status: Type:", typeof historicalMatchups, "Length:", historicalMatchups ? historicalMatchups.length : 0);
 
     // Add historicalMatchups to the condition for skipping processing
     if (!weeklyScheduleData || weeklyScheduleData.length === 0 ||
@@ -76,6 +76,9 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
     // This will now be called within the useMemo, ensuring it has the latest historicalMatchups
     const metrics = calculateAllLeagueMetrics(historicalMatchups, safeGetMappedTeamName); // Use safeGetMappedTeamName
     const seasonalMetricsForBetting = metrics.seasonalMetrics; // This will hold the seasonal stats for betting calculations
+
+    // Now seasonalMetricsForBetting is defined, so we can log its keys
+    console.log("WeeklyMatchupsDisplay: seasonalMetricsForBetting status: Keys:", Object.keys(seasonalMetricsForBetting || {})); // Corrected log
 
     // Ensure seasonalMetricsForBetting is available before proceeding with mapping
     if (!seasonalMetricsForBetting || Object.keys(seasonalMetricsForBetting).length === 0) {
