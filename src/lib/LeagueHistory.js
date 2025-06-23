@@ -99,9 +99,8 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
             },
           };
         }
-        if (completedSeasons.has(year)) {
-            teamOverallStats[team].seasonsPlayed.add(year);
-        }
+        // Always add the year to seasonsPlayed, regardless of completion status
+        teamOverallStats[team].seasonsPlayed.add(year); //
       });
 
       // Aggregate overall wins, losses, ties, and points (ONLY if not a PointsOnlyBye game)
@@ -130,6 +129,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
 
     // Populate yearlyPointsLeaders using seasonalMetrics (which has totalPointsFor per team per year)
     Object.keys(seasonalMetrics).forEach(year => {
+        // Only consider completed seasons for yearly points leaders that result in awards
         if (!completedSeasons.has(parseInt(year))) {
             return;
         }
@@ -146,7 +146,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
     // Process championship games and final seeding for overall finish awards (Trophies)
     historicalMatchups.forEach(match => {
       const year = parseInt(match.year);
-      // Only process final seeding games that are part of a completed season
+      // Only process final seeding games that are part of a completed season for awards
       if (!(typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0 && completedSeasons.has(year))) {
           return;
       }
@@ -202,7 +202,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
     // Medal Calculation Pass (based on yearlyPointsLeaders)
     Object.keys(teamOverallStats).forEach(teamName => {
       Object.keys(yearlyPointsLeaders).forEach(year => {
-          // Ensure this year is a completed season
+          // Ensure this year is a completed season for points awards
           if (!completedSeasons.has(parseInt(year))) return;
 
           const yearLeaders = yearlyPointsLeaders[year];
@@ -239,7 +239,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
     // Final compilation for All-Time Standings display (SORTED BY WIN PERCENTAGE)
     const compiledStandings = Object.keys(teamOverallStats).map(teamName => {
       const stats = teamOverallStats[teamName];
-      // Only include teams that have actually participated in completed seasons
+      // Only include teams that have actually participated in at least one season
       if (stats.seasonsPlayed.size === 0) return null;
 
       const careerDPR = careerDPRData.find(dpr => dpr.team === teamName)?.dpr || 0;
@@ -251,7 +251,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
       const sortedYearsArray = Array.from(stats.seasonsPlayed).sort((a, b) => a - b);
       const minYear = sortedYearsArray.length > 0 ? sortedYearsArray[0] : '';
       const maxYear = sortedYearsArray.length > 0 ? sortedYearsArray[sortedYearsArray.length - 1] : '';
-      const seasonsCount = stats.seasonsPlayed.size;
+      const seasonsCount = stats.seasonsPlayed.size; // This now includes current season if applicable
 
       // MODIFIED: Use JSX to style the seasons count within the string
       let seasonsDisplay = (
