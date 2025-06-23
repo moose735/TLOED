@@ -53,14 +53,17 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
     const overallStats = { /* same as your base object */ totalWins: 0, totalLosses: 0, totalTies: 0, totalPointsFor: 0, totalGamesPlayed: 0, overallTopScoreWeeksCount: 0, playoffAppearancesCount: 0, avgDPR: 0, totalDPRSum: 0, seasonsWithDPRData: 0, totalLuckRating: 0, totalChampionships: 0, totalRunnerUps: 0, totalThirdPlaces: 0, totalPointsChampionships: 0, totalPointsRunnerUps: 0, totalThirdPlacePoints: 0, winRank: 'N/A', winPercentageRank: 'N/A', pointsForRank: 'N/A', topScoreWeeksRank: 'N/A', playoffRank: 'N/A', championshipRank: 'N/A', luckRank: 'N/A' };
 
     const seasonalData = {};
-    const completedSeasons = new Set();
+const completedSeasons = new Set();
+historicalMatchups.forEach(match => {
+  const year = parseInt(match.year);
+  const displayTeam1 = getMappedTeamName(String(match.team1 || '').trim());
+  const displayTeam2 = getMappedTeamName(String(match.team2 || '').trim());
 
-    historicalMatchups.forEach(match => {
-      if (match.finalSeedingGame === 1 || match.finalSeedingGame === '1') {
-        const year = parseInt(match.year);
-        if (!isNaN(year)) completedSeasons.add(year);
-      }
-    });
+  if (!isNaN(year) && (displayTeam1 === teamName || displayTeam2 === teamName)) {
+    completedSeasons.add(year);
+  }
+});
+
 
     const latestSeason = completedSeasons.size > 0 ? Math.max(...completedSeasons) : null;
 
