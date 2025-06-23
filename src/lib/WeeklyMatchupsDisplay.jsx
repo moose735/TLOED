@@ -56,45 +56,58 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
   const processedWeeklyMatchups = useMemo(() => {
     console.log("WeeklyMatchupsDisplay: Starting processedWeeklyMatchups useMemo.");
     console.log("WeeklyMatchupsDisplay: weeklyScheduleData status: Length:", weeklyScheduleData.length);
-    // Removed the problematic log: console.log("WeeklyMatchupsDisplay: seasonalMetrics status: Keys:", Object.keys(seasonalMetrics || {}));
     console.log("WeeklyMatchupsDisplay: historicalMatchups status: Type:", typeof historicalMatchups, "Length:", historicalMatchups ? historicalMatchups.length : 0);
 
-    // Add historicalMatchups to the condition for skipping processing
     if (!weeklyScheduleData || weeklyScheduleData.length === 0 ||
-        !historicalMatchups || historicalMatchups.length === 0) { // MODIFIED CONDITION
-      console.log("WeeklyMatchupsDisplay: Skipping matchup processing due to missing weeklyScheduleData or historicalMatchups."); // MODIFIED LOG
+        !historicalMatchups || historicalMatchups.length === 0) {
+      console.log("WeeklyMatchupsDisplay: Skipping matchup processing due to missing weeklyScheduleData or historicalMatchups.");
       return [];
     }
 
-    const currentYear = new Date().getFullYear(); // Assuming current year for projections
-    const currentWeek = weeklyScheduleData[0]?.Week_Number; // Assuming week number is available in the first entry
+    // Determine the latest year from historicalMatchups for calculations
+    const currentYearForCalculations = historicalMatchups.reduce((maxYear, match) => {
+        const matchYear = parseInt(match.year);
+        return isNaN(matchYear) ? maxYear : Math.max(maxYear, matchYear);
+    }, 0);
+    // If no years found (e.g., historicalMatchups is empty or malformed),
+    // calculations might be inaccurate, but the initial guard handles empty historicalMatchups.
+    if (currentYearForCalculations === 0) {
+        console.warn("No valid years found in historicalMatchups. Calculations might be inaccurate.");
+        return [];
+    }
 
-    // Ensure getMappedTeamName is a function before passing it, or provide a fallback
+    const currentWeek = weeklyScheduleData[0]?.Week_Number;
+
+    // --- NEW DEBUG LOGS HERE ---
+    console.log("WeeklyMatchupsDisplay: Debugging team names - currentWeek:", currentWeek);
+    if (weeklyScheduleData.length > 0) {
+      console.log("WeeklyMatchupsDisplay: Debugging team names - first schedule data entry:", weeklyScheduleData[0]);
+      console.log("WeeklyMatchupsDisplay: Debugging team names - Player from first entry:", weeklyScheduleData[0]?.Player);
+      console.log(`WeeklyMatchupsDisplay: Debugging team names - Opponent from first entry (Week_${currentWeek}):`, weeklyScheduleData[0]?.[`Week_${currentWeek}`]);
+    }
+    // --- END NEW DEBUG LOGS ---
+
     const safeGetMappedTeamName = typeof getMappedTeamName === 'function' ? getMappedTeamName : (name) => String(name || '').trim();
 
-    // Call calculateAllLeagueMetrics here to get current seasonal and career data
-    // This will now be called within the useMemo, ensuring it has the latest historicalMatchups
-    const metrics = calculateAllLeagueMetrics(historicalMatchups, safeGetMappedTeamName); // Use safeGetMappedTeamName
-    const seasonalMetricsForBetting = metrics.seasonalMetrics; // This will hold the seasonal stats for betting calculations
+    // calculateAllLeagueMetrics already computes seasonalMetrics for the *latest* year in historicalMatchups
+    const metrics = calculateAllLeagueMetrics(historicalMatchups, safeGetMappedTeamName);
+    const seasonalMetricsForBetting = metrics.seasonalMetrics; // CORRECTED: Access seasonalMetrics directly, it's not keyed by year here.
 
-    // Now seasonalMetricsForBetting is defined, so we can log its keys
-    console.log("WeeklyMatchupsDisplay: seasonalMetricsForBetting status: Keys:", Object.keys(seasonalMetricsForBetting || {})); // Corrected log
+    console.log("WeeklyMatchupsDisplay: seasonalMetricsForBetting status: Keys:", Object.keys(seasonalMetricsForBetting || {}));
 
-    // Ensure seasonalMetricsForBetting is available before proceeding with mapping
     if (!seasonalMetricsForBetting || Object.keys(seasonalMetricsForBetting).length === 0) {
-      console.log("WeeklyMatchupsDisplay: Skipping matchup processing because seasonalMetricsForBetting is not available.");
+      console.log(`WeeklyMatchupsDisplay: Skipping matchup processing because seasonalMetricsForBetting is not available or empty.`); // Simplified message
       return [];
     }
 
     // Existing logic for processing matchups
     return weeklyScheduleData.map(match => {
         const team1Name = match.Player;
-        const team2Name = match[`Week_${currentWeek}`]; // Dynamically get opponent for current week
+        const team2Name = match[`Week_${currentWeek}`];
 
-        // Fetch metrics for Team 1
-        const team1Metrics = getPlayerMetricsForYear(team1Name, currentYear, historicalMatchups, seasonalMetricsForBetting, metrics.weeklyGameScoresByYearAndWeek, safeGetMappedTeamName);
-        // Fetch metrics for Team 2
-        const team2Metrics = getPlayerMetricsForYear(team2Name, currentYear, historicalMatchups, seasonalMetricsForBetting, metrics.weeklyGameScoresByYearAndWeek, safeGetMappedTeamName);
+        // Pass the `currentYearForCalculations` and the directly accessed `seasonalMetricsForBetting`
+        const team1Metrics = getPlayerMetricsForYear(team1Name, currentYearForCalculations, historicalMatchups, seasonalMetricsForBetting, metrics.weeklyGameScoresByYearAndWeek, safeGetMappedTeamName);
+        const team2Metrics = getPlayerMetricsForYear(team2Name, currentYearForCalculations, historicalMatchups, seasonalMetricsForBetting, metrics.weeklyGameScoresByYearAndWeek, safeGetMappedTeamName);
 
         // Calculate moneyline odds and over/under for each matchup
         const team1WinPercentageProjection = calculateWeeklyWinPercentageProjection(team1Metrics.averageDifferenceVsOpponent, team1Metrics.errorFunctionCoefficient);
@@ -112,7 +125,7 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
             overUnder
         };
     });
-  }, [weeklyScheduleData, historicalMatchups, getMappedTeamName]); // Add historicalMatchups to dependencies
+  }, [weeklyScheduleData, historicalMatchups, getMappedTeamName]); // Dependencies are still correct
 
   if (loading) {
     return <div className="text-center py-4">Loading weekly schedule...</div>;
@@ -138,7 +151,7 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
                   <li key={index} className="flex flex-col sm:flex-row items-center bg-gray-50 rounded-lg shadow-sm overflow-hidden">
                     {/* Team 1 */}
                     <div className="flex-1 p-4 flex flex-col items-center justify-center border-b sm:border-b-0 sm:border-r border-gray-200 w-full sm:w-auto">
-                      <span className="text-lg font-bold text-blue-800">{match.team1Name}</span>
+                      <span className="text-lg font-bold text-blue-800">{match.Player}</span> {/* Use match.Player as team1Name */}
                       <span className="text-sm text-gray-600">DPR: {match.team1Metrics?.currentDPR?.toFixed(2) || 'N/A'}</span>
                       <span className="text-sm text-gray-600">Proj. Score: {match.team1Metrics?.projectedScore?.toFixed(2) || 'N/A'}</span>
                     </div>
@@ -148,7 +161,7 @@ const WeeklyMatchupsDisplay = ({ historicalMatchups, getMappedTeamName }) => {
 
                     {/* Team 2 */}
                     <div className="flex-1 p-4 flex flex-col items-center justify-center border-t sm:border-t-0 sm:border-l border-gray-200 w-full sm:w-auto">
-                      <span className="text-lg font-bold text-green-800">{match.team2Name}</span>
+                      <span className="text-lg font-bold text-green-800">{match[`Week_${currentWeek}`]}</span> {/* Use match[`Week_${currentWeek}`] as team2Name */}
                       <span className="text-sm text-gray-600">DPR: {match.team2Metrics?.currentDPR?.toFixed(2) || 'N/A'}</span>
                       <span className="text-sm text-gray-600">Proj. Score: {match.team2Metrics?.projectedScore?.toFixed(2) || 'N/A'}</span>
                     </div>
