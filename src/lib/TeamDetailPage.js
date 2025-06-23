@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { calculateAllLeagueMetrics } from '../utils/calculations';
 // Assuming config.js is in the same directory or accessible via this path
-import { HISTORICAL_MATCHUPS_API_URL } from '../config'; //
+import { HISTORICAL_MATCHUPS_API_URL } from '../config';
 
 // Helper function to get ordinal suffix (1st, 2nd, 3rd, 4th, etc.)
 const getOrdinalSuffix = (n) => {
@@ -63,12 +63,12 @@ const formatDPR = (value) => {
 };
 
 
-const TeamDetailPage = ({ teamName, getMappedTeamName }) => { // historicalMatchups prop removed
-  const [historicalMatchups, setHistoricalMatchups] = useState([]); // State to hold fetched data
+const TeamDetailPage = ({ teamName, getMappedTeamName }) => {
+  const [historicalMatchups, setHistoricalMatchups] = useState([]);
   const [teamOverallStats, setTeamOverallStats] = useState(null);
   const [teamSeasonHistory, setTeamSeasonHistory] = useState([]);
   const [loadingStats, setLoadingStats] = useState(true);
-  const [error, setError] = useState(null); // New state for error handling
+  const [error, setError] = useState(null);
 
   // State for sorting
   const [sortBy, setSortBy] = useState('year');
@@ -79,19 +79,31 @@ const TeamDetailPage = ({ teamName, getMappedTeamName }) => { // historicalMatch
     setLoadingStats(true);
     setError(null);
     try {
-      const response = await fetch(HISTORICAL_MATCHUPS_API_URL); // Fetch from API
+      const response = await fetch(HISTORICAL_MATCHUPS_API_URL);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const data = await response.json();
-      setHistoricalMatchups(data.historicalMatchups); // Assuming the JSON has a 'historicalMatchups' key
+
+      // IMPORTANT: Handle different JSON response structures from Google Apps Script
+      // It might return an object { historicalMatchups: [...] } or just the array [...]
+      let matchupsArray = [];
+      if (data && Array.isArray(data.historicalMatchups)) {
+        matchupsArray = data.historicalMatchups;
+      } else if (Array.isArray(data)) {
+        matchupsArray = data;
+      } else {
+        throw new Error("Unexpected data format from API. Expected an array or an object with 'historicalMatchups' key.");
+      }
+
+      setHistoricalMatchups(matchupsArray);
     } catch (e) {
       console.error("Failed to fetch historical matchups:", e);
-      setError("Failed to load historical data. Please try again later.");
+      setError(`Failed to load historical data. Please ensure the API is accessible and returns valid JSON. Error: ${e.message}`);
     } finally {
       setLoadingStats(false);
     }
-  }, []); // Empty dependency array means this function is created once
+  }, []);
 
   // Effect to fetch data on component mount and set up refresh interval
   useEffect(() => {
@@ -109,7 +121,11 @@ const TeamDetailPage = ({ teamName, getMappedTeamName }) => { // historicalMatch
     if (!teamName || !historicalMatchups || historicalMatchups.length === 0) {
       setTeamOverallStats(null); // Clear stats if no data
       setTeamSeasonHistory([]);
-      setLoadingStats(false); // Make sure loading is false if there's no data for the team
+      // Only set loading to false here if there was an actual error or no data after an attempt.
+      // If loading is true, we should wait for fetchHistoricalData to set it false.
+      if (!loadingStats) { // Avoid resetting loading state prematurely if a fetch is ongoing
+        setLoadingStats(false);
+      }
       return;
     }
 
@@ -221,7 +237,7 @@ const TeamDetailPage = ({ teamName, getMappedTeamName }) => { // historicalMatch
     });
 
     // Calculate all league metrics including seasonal ranks and awards
-    const { seasonalMetrics } = calculateAllLeagueMetrics(historicalMatchups, getMappedTeamName); //
+    const { seasonalMetrics } = calculateAllLeagueMetrics(historicalMatchups, getMappedTeamName);
 
     const compiledSeasonHistory = [];
     // Aggregate all teams' career stats for ranking purposes
@@ -371,8 +387,7 @@ const TeamDetailPage = ({ teamName, getMappedTeamName }) => { // historicalMatch
 
     setTeamOverallStats(overallStats);
     setTeamSeasonHistory(compiledSeasonHistory);
-    // setLoadingStats(false); // Removed, handled by fetchHistoricalData's finally block
-  }, [teamName, historicalMatchups, getMappedTeamName]);
+  }, [teamName, historicalMatchups, getMappedTeamName, loadingStats]); // Added loadingStats to dependencies
 
   // Handle sorting logic for season history
   const sortedSeasonHistory = useMemo(() => {
@@ -458,7 +473,7 @@ const TeamDetailPage = ({ teamName, getMappedTeamName }) => { // historicalMatch
   if (!teamOverallStats) {
     return (
       <div className="w-full bg-white p-8 rounded-lg shadow-md mt-8 text-center text-red-500">
-        No data found for {teamName}.
+        No data found for {teamName}. This could mean the team name is incorrect or no data exists for this team.
       </div>
     );
   }
