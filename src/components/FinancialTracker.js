@@ -5,11 +5,10 @@ import {
     onAuthStateChanged, 
     signInWithEmailAndPassword, 
     signOut,
-    signInAnonymously // Added back signInAnonymously
+    signInAnonymously 
 } from 'firebase/auth';
 import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
 
-// CHART_COLORS can be reused from PowerRankings or defined here if not used elsewhere
 const CHART_COLORS = [
     '#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#00c49f', '#ff0000',
     '#0088fe', '#bb3f85', '#7a421a', '#4a4a4a', '#a5d6a7', '#ef9a9a'
@@ -19,8 +18,13 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [transactions, setTransactions] = useState([]);
     const [amount, setAmount] = useState('');
     const [description, setDescription] = useState('');
-    const [type, setType] = useState('fee');
-    const [teamName, setTeamName] = useState('');
+    const [type, setType] = useState('fee'); // 'fee' or 'payout'
+    // New states for structured payouts
+    const [payoutCategory, setPayoutCategory] = useState('general'); // e.g., 'general', 'highest_weekly_points', 'side_pot'
+    const [weeklyPointsWeek, setWeeklyPointsWeek] = useState('');
+    const [sidePotName, setSidePotName] = useState('');
+
+    const [teamName, setTeamName] = useState(''); 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [db, setDb] = useState(null);
@@ -29,18 +33,17 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [uniqueTeams, setUniqueTeams] = useState([]);
     
-    // State for deletion confirmation modal
     const [showConfirmDelete, setShowConfirmDelete] = useState(false);
     const [transactionToDelete, setTransactionToDelete] = useState(null);
 
-    // New states for login form
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loginError, setLoginError] = useState(null);
 
-    // Get the Commish UID from environment variables
+    const [filterTeam, setFilterTeam] = useState(''); // New state for filtering transactions by team
+
     const COMMISH_UID = process.env.REACT_APP_COMMISH_UID;
-    const isCommish = userId && COMMISH_UID && userId === COMMISH_UID; // Check if current user is the commish
+    const isCommish = userId && COMMISH_UID && userId === COMMISH_UID; 
 
     // Derive unique teams from historicalMatchups whenever it changes
     useEffect(() => {
@@ -54,7 +57,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             });
             const sortedTeams = Array.from(teamsSet).sort();
             
-            setUniqueTeams(['ALL_TEAMS_MULTIPLIER', ...sortedTeams]);
+            setUniqueTeams(['ALL_TEAMS_MULTIPLIER', ...sortedTeams]); // Keep special value for 'All Teams' option
             
             if (sortedTeams.length > 0) {
                 setTeamName(''); 
@@ -99,25 +102,23 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setDb(firestore);
             setAuth(firebaseAuth);
 
-            // Authentication listener for both initial load and subsequent changes
-            const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => { // Added 'async' here
+            const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
                 if (user) {
                     setUserId(user.uid);
                     console.log("Firebase Auth Ready. User ID:", user.uid);
                 } else {
-                    // If no user is logged in, try to sign in anonymously
                     console.log("No user signed in. Attempting anonymous sign-in to allow read access.");
                     try {
                         await signInAnonymously(firebaseAuth);
-                        setUserId(firebaseAuth.currentUser?.uid); // Set UID from newly signed-in anonymous user
+                        setUserId(firebaseAuth.currentUser?.uid); 
                         console.log("Signed in anonymously. User ID:", firebaseAuth.currentUser?.uid);
                     } catch (anonSignInError) {
                         console.error("Error during anonymous sign-in:", anonSignInError);
                         setError(`Failed to sign in anonymously: ${anonSignInError.message}. Read access may be affected.`);
-                        setUserId(null); // Keep user ID null if anonymous sign-in also fails
+                        setUserId(null); 
                     }
                 }
-                setIsAuthReady(true); // Auth system is ready, even if no user is logged in
+                setIsAuthReady(true); 
             });
 
             return () => unsubscribe();
@@ -129,10 +130,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         }
     }, []);
 
-    // Function to handle Email/Password login
     const handleLogin = async (e) => {
         e.preventDefault();
-        setLoginError(null); // Clear previous errors
+        setLoginError(null); 
         if (!auth) {
             setLoginError("Authentication service not initialized.");
             return;
@@ -149,21 +149,18 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         }
     };
 
-    // Function to handle logout
     const handleLogout = async () => {
         if (!auth) return;
         try {
             await signOut(auth);
             console.log("Logged out successfully!");
             setLoginError(null);
-            // After logout, the onAuthStateChanged listener will trigger and sign in anonymously
         } catch (error) {
             console.error("Logout Error:", error);
             setLoginError(`Logout failed: ${error.message}`);
         }
     };
 
-    // Fetch transactions from Firestore once Firebase and authentication are ready
     useEffect(() => {
         if (!db || !isAuthReady) {
             console.log("Firestore not ready or Auth not ready. Waiting for db and isAuthReady...");
@@ -211,7 +208,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setError("Database not ready or user not authenticated. Cannot add transaction.");
             return;
         }
-        // Only allow commish to add transactions
         if (!isCommish) {
             setError("You do not have permission to add transactions.");
             return;
@@ -228,24 +224,49 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         let finalAmount = parseFloat(amount);
         let finalTeamName = teamName;
 
-        if (teamName === 'ALL_TEAMS_MULTIPLIER') {
+        // "All Teams" multiplier only applies to 'fee' type
+        if (teamName === 'ALL_TEAMS_MULTIPLIER' && type === 'fee') {
             const activeTeamsCount = uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').length;
             if (activeTeamsCount === 0) {
                 setError("Cannot process 'All Teams' transaction: No active teams found.");
                 return;
             }
             finalAmount = finalAmount * activeTeamsCount;
+            finalTeamName = 'All Teams'; 
+        } else if (teamName === 'ALL_TEAMS_MULTIPLIER' && type === 'payout') {
+            // If "All Teams" is selected for a payout, store it as "All Teams" but don't multiply
             finalTeamName = 'All Teams';
+            setError("Warning: 'All Teams' selected for a payout. Amount will not be multiplied.");
         }
+
 
         const newTransaction = {
             amount: finalAmount,
             description: description.trim(),
             type: type,
-            teamName: finalTeamName,
+            teamName: finalTeamName, 
             date: serverTimestamp(),
             userId: userId,
+            // New fields for structured payouts
+            category: payoutCategory, 
         };
+
+        // Add conditional fields based on payoutCategory
+        if (type === 'payout') {
+            if (payoutCategory === 'highest_weekly_points' || payoutCategory === 'second_highest_weekly_points') {
+                if (!weeklyPointsWeek || isNaN(parseInt(weeklyPointsWeek))) {
+                    setError("Please enter a valid week number for weekly points payouts.");
+                    return;
+                }
+                newTransaction.weekNumber = parseInt(weeklyPointsWeek);
+            } else if (payoutCategory === 'side_pot') {
+                if (!sidePotName.trim()) {
+                    setError("Please enter a name for the side pot.");
+                    return;
+                }
+                newTransaction.potName = sidePotName.trim();
+            }
+        }
 
         try {
             const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
@@ -254,7 +275,11 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             
             setAmount('');
             setDescription('');
-            setTeamName('');
+            setType('fee'); // Reset type to default
+            setTeamName(''); 
+            setPayoutCategory('general'); // Reset payout category
+            setWeeklyPointsWeek(''); // Reset weekly points week
+            setSidePotName(''); // Reset side pot name
             setError(null);
             console.log("Transaction added to Firestore successfully.");
         } catch (addError) {
@@ -263,20 +288,17 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         }
     };
 
-    // Function to initiate deletion, opens confirmation modal
     const confirmDelete = (transaction) => {
         setTransactionToDelete(transaction);
         setShowConfirmDelete(true);
     };
 
-    // Function to execute deletion after confirmation
     const executeDelete = async () => {
-        setShowConfirmDelete(false); // Close the modal
+        setShowConfirmDelete(false); 
         if (!transactionToDelete || !db || !userId) {
             setError("Cannot delete: Invalid transaction or not authenticated.");
             return;
         }
-        // Only allow commish to delete transactions
         if (!isCommish) {
             setError("You do not have permission to delete transactions.");
             return;
@@ -288,25 +310,28 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             await deleteDoc(transactionDocRef);
             setError(null);
             console.log("Transaction deleted successfully.");
-            setTransactionToDelete(null); // Clear the transaction from state
+            setTransactionToDelete(null); 
         } catch (deleteError) {
             console.error("Error deleting transaction:", deleteError);
             setError(`Failed to delete transaction: ${deleteError.message}. Please check your permissions.`);
         }
     };
 
-    // Function to cancel deletion
     const cancelDelete = () => {
         setShowConfirmDelete(false);
         setTransactionToDelete(null);
     };
 
+    // Filtered transactions for display based on selected team
+    const filteredTransactions = transactions.filter(t => 
+        filterTeam === '' || t.teamName === filterTeam || (filterTeam === 'ALL_TEAMS_MULTIPLIER' && t.teamName === 'All Teams')
+    );
 
-    const totalFees = transactions
+    const totalFees = filteredTransactions
         .filter(t => t.type === 'fee')
         .reduce((sum, t) => sum + (t.amount || 0), 0);
 
-    const totalPayouts = transactions
+    const totalPayouts = filteredTransactions
         .filter(t => t.type === 'payout')
         .reduce((sum, t) => sum + (t.amount || 0), 0);
 
@@ -318,7 +343,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 League Financial Tracker
             </h2>
 
-            {/* User ID Display and Login/Logout UI */}
             <div className="mb-4 text-center text-sm text-gray-600 p-2 bg-blue-50 rounded">
                 Your User ID: <span className="font-mono text-blue-700 break-all">{userId || "Not logged in"}</span><br/>
                 {COMMISH_UID ? (
@@ -331,24 +355,23 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     </span>
                 )}
                 
-                {/* Login/Logout UI */}
-                {isAuthReady && ( // Only show login/logout options once Firebase Auth is ready
+                {isAuthReady && ( 
                     <div className="mt-4">
-                        {userId && !isCommish ? ( // If a user is logged in, but NOT the commish, show logout
+                        {userId && !isCommish ? ( 
                              <button
                                 onClick={handleLogout}
                                 className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-bold rounded-md transition-colors"
                             >
                                 Logout (Currently Viewing Only)
                             </button>
-                        ) : (userId && isCommish ? ( // If commish is logged in
+                        ) : (userId && isCommish ? ( 
                             <button
                                 onClick={handleLogout}
                                 className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-bold rounded-md transition-colors"
                             >
                                 Logout (Commish)
                             </button>
-                        ) : ( // If no one is logged in, show login form
+                        ) : ( 
                             <form onSubmit={handleLogin} className="flex flex-col items-center space-y-2">
                                 <p className="text-gray-700 font-semibold mb-2">Commish Login</p>
                                 <input
@@ -380,11 +403,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 )}
             </div>
 
-            {/* Display loading or error messages */}
             {loading && <p className="text-center text-blue-600 font-semibold">Loading financial data...</p>}
             {error && <p className="text-center text-red-600 font-semibold mb-4">{error}</p>}
 
-            {/* Render content only when not loading and no major errors */}
             {!loading && !error && (
                 <>
                     {/* Financial Summary */}
@@ -449,6 +470,54 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                     />
                                 </div>
+
+                                {type === 'payout' && ( // Show payout category only for payouts
+                                    <div className="flex-1">
+                                        <label htmlFor="payoutCategory" className="block text-sm font-medium text-gray-700 mb-1">Payout Category</label>
+                                        <select
+                                            id="payoutCategory"
+                                            value={payoutCategory}
+                                            onChange={(e) => setPayoutCategory(e.target.value)}
+                                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                        >
+                                            <option value="general">General Payout</option>
+                                            <option value="highest_weekly_points">Highest Weekly Points</option>
+                                            <option value="second_highest_weekly_points">Second Highest Weekly Points</option>
+                                            <option value="side_pot">Side Pot</option>
+                                        </select>
+                                    </div>
+                                )}
+
+                                {type === 'payout' && (payoutCategory === 'highest_weekly_points' || payoutCategory === 'second_highest_weekly_points') && (
+                                    <div>
+                                        <label htmlFor="weeklyPointsWeek" className="block text-sm font-medium text-gray-700 mb-1">Week Number</label>
+                                        <input
+                                            type="number"
+                                            id="weeklyPointsWeek"
+                                            value={weeklyPointsWeek}
+                                            onChange={(e) => setWeeklyPointsWeek(e.target.value)}
+                                            placeholder="e.g., 1, 5, 14"
+                                            min="1"
+                                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                        />
+                                    </div>
+                                )}
+
+                                {type === 'payout' && payoutCategory === 'side_pot' && (
+                                    <div>
+                                        <label htmlFor="sidePotName" className="block text-sm font-medium text-gray-700 mb-1">Side Pot Name</label>
+                                        <input
+                                            type="text"
+                                            id="sidePotName"
+                                            value={sidePotName}
+                                            onChange={(e) => setSidePotName(e.target.value)}
+                                            placeholder="e.g., Draft Day Pot, Playoff Pool"
+                                            maxLength="50"
+                                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                        />
+                                    </div>
+                                )}
+
                                 <div>
                                     <label htmlFor="teamName" className="block text-sm font-medium text-gray-700 mb-1">Associated Team (Optional)</label>
                                     <select
@@ -458,8 +527,11 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                     >
                                         <option value="">Select Team (Optional)</option>
-                                        <option value="ALL_TEAMS_MULTIPLIER">All Teams (Multiplied)</option>
-                                        {uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').map(team => (
+                                        {/* "All Teams" option visible only for 'fee' type, or always if you want */}
+                                        {type === 'fee' && ( // Only show "All Teams" option for fees
+                                            <option value="ALL_TEAMS_MULTIPLIER">All Teams (Multiplied)</option>
+                                        )}
+                                        {uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').map(team => ( 
                                             <option key={team} value={team}>{team}</option>
                                         ))}
                                     </select>
@@ -481,8 +553,24 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     {/* Transaction History Table */}
                     <section>
                         <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">Transaction History</h3>
-                        {transactions.length === 0 ? (
-                            <p className="text-center text-gray-600">No transactions recorded yet.</p>
+                        {/* Team Filter Dropdown */}
+                        <div className="mb-4 text-right">
+                            <label htmlFor="filterTeam" className="block text-sm font-medium text-gray-700 mb-1">Filter by Team:</label>
+                            <select
+                                id="filterTeam"
+                                value={filterTeam}
+                                onChange={(e) => setFilterTeam(e.target.value)}
+                                className="mt-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                            >
+                                <option value="">Show All Teams</option>
+                                {uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').map(team => (
+                                    <option key={team} value={team}>{team}</option>
+                                ))}
+                                <option value="All Teams">Transactions for 'All Teams'</option> {/* Option to specifically filter for "All Teams" transactions */}
+                            </select>
+                        </div>
+                        {filteredTransactions.length === 0 ? (
+                            <p className="text-center text-gray-600">No transactions recorded yet{filterTeam && ` for ${filterTeam}`}.</p>
                         ) : (
                             <div className="overflow-x-auto">
                                 <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
@@ -493,16 +581,22 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
                                             <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Amount</th>
                                             <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Type</th>
+                                            <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Category</th> {/* New column */}
                                             {isCommish && <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Actions</th>}
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {transactions.map((t, index) => (
+                                        {filteredTransactions.map((t, index) => (
                                             <tr key={t.id} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                                                 <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
                                                     {t.date?.toDate ? t.date.toDate().toLocaleDateString() : 'N/A'}
                                                 </td>
-                                                <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{t.description}</td>
+                                                <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
+                                                    {t.description}
+                                                    {t.category === 'highest_weekly_points' && t.weekNumber && ` (Week ${t.weekNumber})`}
+                                                    {t.category === 'second_highest_weekly_points' && t.weekNumber && ` (Week ${t.weekNumber})`}
+                                                    {t.category === 'side_pot' && t.potName && ` (${t.potName})`}
+                                                </td>
                                                 <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{t.teamName || '-'}</td>
                                                 <td className="py-2 px-4 text-sm text-right border-b border-gray-200">
                                                     <span className={`${t.type === 'fee' ? 'text-green-700' : 'text-red-700'} font-medium`}>
@@ -516,7 +610,10 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                         {t.type === 'fee' ? 'Fee' : 'Payout'}
                                                     </span>
                                                 </td>
-                                                {isCommish && ( // Conditionally render delete button for commish
+                                                <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200 capitalize">
+                                                    {t.category ? t.category.replace(/_/g, ' ') : 'General'}
+                                                </td> {/* Display category */}
+                                                {isCommish && ( 
                                                     <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
                                                         <button
                                                             onClick={() => confirmDelete(t)}
@@ -537,7 +634,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 </>
             )}
 
-            {/* Custom Confirmation Modal for Deletion */}
             {showConfirmDelete && (
                 <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50">
                     <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full text-center">
