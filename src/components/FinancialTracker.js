@@ -3,8 +3,9 @@ import { initializeApp } from 'firebase/app';
 import { 
     getAuth, 
     onAuthStateChanged, 
-    signInWithEmailAndPassword, // New: for email/password login
-    signOut // New: for logging out
+    signInWithEmailAndPassword, 
+    signOut,
+    signInAnonymously // Added back signInAnonymously
 } from 'firebase/auth';
 import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
 
@@ -99,13 +100,22 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setAuth(firebaseAuth);
 
             // Authentication listener for both initial load and subsequent changes
-            const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
+            const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => { // Added 'async' here
                 if (user) {
                     setUserId(user.uid);
                     console.log("Firebase Auth Ready. User ID:", user.uid);
                 } else {
-                    setUserId(null); // No user signed in
-                    console.log("No user signed in.");
+                    // If no user is logged in, try to sign in anonymously
+                    console.log("No user signed in. Attempting anonymous sign-in to allow read access.");
+                    try {
+                        await signInAnonymously(firebaseAuth);
+                        setUserId(firebaseAuth.currentUser?.uid); // Set UID from newly signed-in anonymous user
+                        console.log("Signed in anonymously. User ID:", firebaseAuth.currentUser?.uid);
+                    } catch (anonSignInError) {
+                        console.error("Error during anonymous sign-in:", anonSignInError);
+                        setError(`Failed to sign in anonymously: ${anonSignInError.message}. Read access may be affected.`);
+                        setUserId(null); // Keep user ID null if anonymous sign-in also fails
+                    }
                 }
                 setIsAuthReady(true); // Auth system is ready, even if no user is logged in
             });
@@ -146,6 +156,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             await signOut(auth);
             console.log("Logged out successfully!");
             setLoginError(null);
+            // After logout, the onAuthStateChanged listener will trigger and sign in anonymously
         } catch (error) {
             console.error("Logout Error:", error);
             setLoginError(`Logout failed: ${error.message}`);
@@ -310,12 +321,11 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             {/* User ID Display and Login/Logout UI */}
             <div className="mb-4 text-center text-sm text-gray-600 p-2 bg-blue-50 rounded">
                 Your User ID: <span className="font-mono text-blue-700 break-all">{userId || "Not logged in"}</span><br/>
-                {COMMISH_UID && (
+                {COMMISH_UID ? (
                     <span className="font-semibold mt-1">
                         {isCommish ? "You are logged in as the Commish." : "You are not the Commish."}
                     </span>
-                )}
-                {!COMMISH_UID && (
+                ) : (
                     <span className="text-red-600 mt-1">
                         REACT_APP_COMMISH_UID not set in Vercel. Commish access not configured.
                     </span>
@@ -324,14 +334,21 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 {/* Login/Logout UI */}
                 {isAuthReady && ( // Only show login/logout options once Firebase Auth is ready
                     <div className="mt-4">
-                        {userId ? ( // If logged in
+                        {userId && !isCommish ? ( // If a user is logged in, but NOT the commish, show logout
+                             <button
+                                onClick={handleLogout}
+                                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-bold rounded-md transition-colors"
+                            >
+                                Logout (Currently Viewing Only)
+                            </button>
+                        ) : (userId && isCommish ? ( // If commish is logged in
                             <button
                                 onClick={handleLogout}
                                 className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-bold rounded-md transition-colors"
                             >
-                                Logout
+                                Logout (Commish)
                             </button>
-                        ) : ( // If not logged in
+                        ) : ( // If no one is logged in, show login form
                             <form onSubmit={handleLogin} className="flex flex-col items-center space-y-2">
                                 <p className="text-gray-700 font-semibold mb-2">Commish Login</p>
                                 <input
@@ -358,7 +375,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                 </button>
                                 {loginError && <p className="text-red-500 text-sm mt-2">{loginError}</p>}
                             </form>
-                        )}
+                        ))}
                     </div>
                 )}
             </div>
