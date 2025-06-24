@@ -60,9 +60,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [currentPage, setCurrentPage] = useState(1);
     const transactionsPerPage = 10;
 
-    // Removed: State for expanded team rows in the summary table
-    // const [expandedTeams, setExpandedTeams] = useState({});
-
     const COMMISH_UID = process.env.REACT_APP_COMMISH_UID;
     const isCommish = userId && COMMISH_UID && userId === COMMISH_UID; 
 
@@ -635,20 +632,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     const netBalance = totalDebits - totalCredits; 
 
-    // Removed Total Collected and Total Payout from summary calculations
-    // const totalCollected = filteredTransactions
-    //     .filter(t => t.type === 'debit')
-    //     .reduce((sum, t) => {
-    //         if (filterTeam !== '' && filterTeam !== 'All Teams' && t.teamName === 'All Teams' && t.teamsInvolvedCount > 0) {
-    //             return sum + (t.amount / t.teamsInvolvedCount || 0);
-    //         }
-    //         return sum + (t.amount || 0);
-    //     }, 0);
-
-    // const totalPayout = filteredTransactions
-    //     .filter(t => t.type === 'credit')
-    //     .reduce((sum, t) => sum + (t.amount || 0), 0);
-
     // Calculate team summary data
     const teamSummary = {};
     uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').forEach(team => {
@@ -656,6 +639,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             totalDebits: 0,
             totalCredits: 0,
             netBalance: 0,
+            totalDebitsLessEntryFee: 0, 
+            netBalanceLessEntryFee: 0, 
         };
     });
 
@@ -666,11 +651,19 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').forEach(team => {
                 if (teamSummary[team]) { 
                     teamSummary[team].totalDebits += perTeamAmount;
+                    // Add to totalDebitsLessEntryFee only if not annual_fee
+                    if (t.category !== 'annual_fee') {
+                        teamSummary[team].totalDebitsLessEntryFee += perTeamAmount;
+                    }
                 }
             });
         } else if (teamSummary[t.teamName]) { 
             if (t.type === 'debit') {
                 teamSummary[t.teamName].totalDebits += (t.amount || 0);
+                // Add to totalDebitsLessEntryFee only if not annual_fee
+                if (t.category !== 'annual_fee') {
+                    teamSummary[t.teamName].totalDebitsLessEntryFee += (t.amount || 0);
+                }
             } else if (t.type === 'credit') {
                 teamSummary[t.teamName].totalCredits += (t.amount || 0);
             }
@@ -679,6 +672,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     Object.keys(teamSummary).forEach(team => {
         teamSummary[team].netBalance = teamSummary[team].totalDebits - teamSummary[team].totalCredits;
+        // Calculate netBalanceLessEntryFee
+        teamSummary[team].netBalanceLessEntryFee = teamSummary[team].totalDebitsLessEntryFee - teamSummary[team].totalCredits;
     });
 
     const handleAddTradeTeam = () => {
@@ -777,14 +772,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         }
     };
 
-    // Removed: Toggle for team summary dropdown
-    // const toggleTeamExpansion = (teamName) => {
-    //     setExpandedTeams(prevState => ({
-    //         ...prevState,
-    //         [teamName]: !prevState[teamName]
-    //     }));
-    // };
-
     return (
         <div className="w-full max-w-4xl bg-white p-8 rounded-lg shadow-md mt-4 mx-auto">
             <h2 className="text-3xl font-extrabold text-blue-800 mb-6 text-center">
@@ -882,7 +869,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                             <h3 className="text-lg font-semibold text-blue-700">Net Total</h3>
                             <p className={`text-2xl font-bold ${netBalance >= 0 ? 'text-blue-900' : 'text-red-900'}`}>${netBalance.toFixed(2)}</p>
                         </div>
-                        {/* Removed Total Collected and Total Payout cards */}
                         <div className="bg-yellow-50 p-4 rounded-lg shadow-sm text-center">
                             <h3 className="text-lg font-semibold text-yellow-700">Transaction Pot</h3>
                             <p className="text-2xl font-bold text-yellow-900">${transactionPot.toFixed(2)}</p>
@@ -1203,16 +1189,20 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Total Debits</th>
                                             <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Total Credits</th>
                                             <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Net Balance</th>
+                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Balance less Entry Fee</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {Object.entries(teamSummary).sort(([teamA], [teamB]) => teamA.localeCompare(teamB)).map(([team, data], index) => (
                                             <tr key={team} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                                                 <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{team}</td>
-                                                <td className="py-2 px-4 text-sm text-right text-gray-700 font-medium border-b border-gray-200">${data.totalDebits.toFixed(2)}</td>
-                                                <td className="py-2 px-4 text-sm text-right text-gray-700 font-medium border-b border-gray-200">${data.totalCredits.toFixed(2)}</td>
+                                                <td className="py-2 px-4 text-sm text-right text-red-700 font-medium border-b border-gray-200">${data.totalDebits.toFixed(2)}</td>
+                                                <td className="py-2 px-4 text-sm text-right text-green-700 font-medium border-b border-gray-200">${data.totalCredits.toFixed(2)}</td>
                                                 <td className={`py-2 px-4 text-sm text-right font-bold border-b border-gray-200 ${data.netBalance >= 0 ? 'text-blue-900' : 'text-red-900'}`}>
                                                     ${data.netBalance.toFixed(2)}
+                                                </td>
+                                                <td className={`py-2 px-4 text-sm text-right font-bold border-b border-gray-200 ${data.netBalanceLessEntryFee >= 0 ? 'text-blue-900' : 'text-red-900'}`}>
+                                                    ${data.netBalanceLessEntryFee.toFixed(2)}
                                                 </td>
                                             </tr>
                                         ))}
