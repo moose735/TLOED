@@ -1413,7 +1413,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                             </div>
                         ) : (
                             // Display mode for structure - visible to all
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="grid grid-cols-1 gap-6">
                                 <div>
                                     <h4 className="text-xl font-semibold text-red-700 mb-3">Fees (Money In)</h4>
                                     <ul className="list-disc list-inside space-y-1 text-gray-700">
