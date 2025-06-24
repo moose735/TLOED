@@ -85,7 +85,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                 return;
             }
 
-            const yearData = seasonalMetrics[newestYear];
+            // const yearData = seasonalMetrics[newestYear]; // This is for overall season metrics
 
             // --- Chart Data Preparation (Weekly Cumulative Adjusted DPR and Rank) ---
             const newestYearMatchups = historicalMatchups.filter(match => parseInt(match.year) === newestYear);
@@ -182,8 +182,10 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                     .sort((a, b) => b.dpr - a.dpr); // Sort by DPR to get ranks
 
                 rankedTeamsForWeek.forEach((rankedTeam, index) => {
-                    weeklyEntry[rankedTeam.team] = index + 1; // This is the RANK
-                    weeklyEntry.dprValues[rankedTeam.team] = rankedTeam.dpr; // This is the actual DPR value
+                    // Store the rank for this week
+                    weeklyEntry[rankedTeam.team] = index + 1;
+                    // Store the actual DPR value for tooltip
+                    weeklyEntry.dprValues[rankedTeam.team] = rankedTeam.dpr;
                 });
                 
                 weeklyDPRsChartData.push(weeklyEntry);
@@ -200,35 +202,36 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
 
 
             // --- Prepare data for the Power Rankings Table (including Rank and Movement) ---
-            // Get the data for the most recent week entered
-            const latestWeekIndex = weeklyDPRsChartData.length - 1;
-            const lastWeekChartData = weeklyDPRsChartData[latestWeekIndex];
-
             const finalPowerRankingsForTable = uniqueTeamsInNewestYear
                 .map(teamName => {
-                    const cumulativeTeamStatsForTable = yearData[teamName]; // Use the full season metrics
+                    // Use the overall season metrics for the table's main stats
+                    const cumulativeTeamStatsForTable = seasonalMetrics[newestYear][teamName]; 
 
-                    // Current rank is always from the last available week's chart data
-                    const currentRankInChart = lastWeekChartData ? (lastWeekChartData[teamName] || 0) : 0;
+                    // Get the rank for the current (latest) week
+                    const currentRankInChart = weeklyDPRsChartData.length > 0
+                        ? (weeklyDPRsChartData[weeklyDPRsChartData.length - 1][teamName] || 0)
+                        : 0;
 
+                    // Find the rank for the immediately preceding week where the team had a rank
                     let previousRankInChart = 0;
-                    // Only calculate movement if there's data for at least two weeks
-                    if (weeklyDPRsChartData.length >= 2) {
-                        // Look specifically at the second-to-last week's data
-                        const secondToLastWeekData = weeklyDPRsChartData[latestWeekIndex - 1];
-                        if (secondToLastWeekData) {
-                            previousRankInChart = secondToLastWeekData[teamName] || 0;
+                    if (weeklyDPRsChartData.length > 1) {
+                        // Iterate backward from the second-to-last week
+                        for (let i = weeklyDPRsChartData.length - 2; i >= 0; i--) {
+                            if (weeklyDPRsChartData[i][teamName] !== undefined && weeklyDPRsChartData[i][teamName] !== null) {
+                                previousRankInChart = weeklyDPRsChartData[i][teamName];
+                                break; // Found the last known rank before the current week, exit loop
+                            }
                         }
                     }
 
                     let movement = 0;
                     if (currentRankInChart !== 0 && previousRankInChart !== 0) {
-                        // Movement is previous rank minus current rank (e.g., 5th to 3rd is +2)
+                        // Movement is previous rank minus current rank (e.g., if previous was 5, current is 3, movement is +2)
                         movement = previousRankInChart - currentRankInChart;
                     } 
                     // If currentRank is 0, it means the team has no data for the latest week, so no movement.
-                    // If previousRank is 0 and currentRank is not 0, it's a "new" entry, movement is 0.
-                    // This handles cases where a team might appear for the first time in the chart, or had no score in prev week.
+                    // If previousRank is 0 and currentRank is not 0, it's considered a "new" entry for comparison,
+                    // so we keep movement as 0 (or could add a "NEW" indicator if desired in the UI).
 
 
                     return {
