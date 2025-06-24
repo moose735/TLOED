@@ -46,6 +46,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loginError, setLoginError] = useState(null);
+    const [showCommishLogin, setShowCommishLogin] = useState(false); // New state for showing login fields
 
     const [filterTeam, setFilterTeam] = useState(''); 
 
@@ -352,6 +353,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setEmail('');
             setPassword('');
             setError(null); // Clear any general errors
+            setShowCommishLogin(false); // Hide login fields after successful login
         } catch (error) {
             console.error("Login Error:", error);
             setLoginError(`Login failed: ${error.message}`);
@@ -826,7 +828,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             </h2>
 
             <div className="mb-4 text-center text-sm text-gray-600 p-2 bg-blue-50 rounded">
-                Your User ID: <span className="font-mono text-blue-700 break-all">{userId || "Not logged in"}</span><br/>
                 {COMMISH_UID ? (
                     <span className="font-semibold mt-1">
                         {isCommish ? "You are logged in as the Commish." : "You are not the Commish."}
@@ -846,33 +847,51 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                             >
                                 Logout (Commish)
                             </button>
-                        ) : ( // If not commish or not logged in, show login form
-                            <form onSubmit={handleLogin} className="flex flex-col items-center space-y-2">
-                                <p className="text-gray-700 font-semibold mb-2">Commish Login</p>
-                                <input
-                                    type="email"
-                                    placeholder="Commish Email"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    required
-                                    className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 w-full max-w-xs"
-                                />
-                                <input
-                                    type="password"
-                                    placeholder="Password"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    required
-                                    className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 w-full max-w-xs"
-                                />
-                                <button
-                                    type="submit"
-                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-md transition-colors w-full max-w-xs"
-                                >
-                                    Login (Commish Only)
-                                </button>
-                                {loginError && <p className="text-red-500 text-sm mt-2">{loginError}</p>}
-                            </form>
+                        ) : ( // If not commish or not logged in
+                            <>
+                                {!showCommishLogin ? (
+                                    <button
+                                        onClick={() => setShowCommishLogin(true)}
+                                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-md transition-colors w-full max-w-xs"
+                                    >
+                                        Commish Login
+                                    </button>
+                                ) : (
+                                    <form onSubmit={handleLogin} className="flex flex-col items-center space-y-2">
+                                        <p className="text-gray-700 font-semibold mb-2">Enter Commish Credentials</p>
+                                        <input
+                                            type="email"
+                                            placeholder="Commish Email"
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                            required
+                                            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 w-full max-w-xs"
+                                        />
+                                        <input
+                                            type="password"
+                                            placeholder="Password"
+                                            value={password}
+                                            onChange={(e) => setPassword(e.target.value)}
+                                            required
+                                            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 w-full max-w-xs"
+                                        />
+                                        <button
+                                            type="submit"
+                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-md transition-colors w-full max-w-xs"
+                                        >
+                                            Login (Commish Only)
+                                        </button>
+                                        {loginError && <p className="text-red-500 text-sm mt-2">{loginError}</p>}
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowCommishLogin(false)}
+                                            className="text-gray-500 hover:text-gray-700 text-sm mt-2"
+                                        >
+                                            Hide Login
+                                        </button>
+                                    </form>
+                                )}
+                            </>
                         )}
                     </div>
                 )}
@@ -1311,7 +1330,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             />
                                             <input
                                                 type="text"
-                                                value={item.description}
                                                 onChange={(e) => handleDebitStructureChange(index, 'description', e.target.value)}
                                                 placeholder="Description (optional)"
                                                 className="flex-1 px-3 py-2 border rounded-md"
