@@ -86,7 +86,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         if (type !== 'fee' || category !== 'trade_fee') {
             setTradeTeams(['', '']);
         }
-    }, [type, category]); // Added category to dependency array to react to category changes within the same type
+    }, [type, category]); 
 
 
     // Derive unique teams and calculate weekly high scores from historicalMatchups
@@ -162,7 +162,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setUniqueTeams(['ALL_TEAMS_MULTIPLIER', ...sortedTeams]); 
             setActiveTeamsCount(sortedTeams.length); 
             
-            // Do not clear teamName here, let the auto-population or manual selection handle it
         }
     }, [historicalMatchups, getDisplayTeamName]);
 
@@ -202,11 +201,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setTeamName(''); 
             setDescription(`Payout: Side Pot`);
         } else if (type === 'fee' && (category === 'trade_fee' || category === 'waiver_pickup_fee')) {
-            // For these specific fees, clear general teamName and description for manual entry
             setTeamName(''); 
             setDescription('');
         } else {
-            // Default behavior for other categories
             setTeamName('');
             setDescription('');
         }
@@ -442,7 +439,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                         return;
                     }
                     const weekNum = parseInt(weeklyPointsWeek);
-                    transactionsToAdd[0].weekNumber = weekNum; // Update the single transaction object
+                    transactionsToAdd[0].weekNumber = weekNum; 
 
                     const weekData = weeklyHighScores[weekNum];
                     if (weekData) {
@@ -483,7 +480,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setType('fee'); 
             setCategory('general_fee'); 
             setTeamName(''); 
-            setTradeTeams(['', '']); // Reset trade teams
+            setTradeTeams(['', '']); 
             setWeeklyPointsWeek(''); 
             setSidePotName(''); 
             setError(null); 
@@ -529,20 +526,16 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         setTransactionToDelete(null);
     };
 
-    // Team selection dropdown is disabled if it's auto-populated (for payouts) or if it's a trade fee (handled by tradeTeams)
     const isTeamSelectionDisabled = isTeamAutoPopulated || (type === 'fee' && category === 'trade_fee');
 
     const filteredTransactions = transactions.filter(t => {
         const isCurrentSeason = (currentSeason === null || t.season === currentSeason);
 
         if (filterTeam === '') {
-            return isCurrentSeason; // Show all transactions for the current season
+            return isCurrentSeason; 
         } else if (filterTeam === 'All Teams') {
-            // Show only transactions specifically marked as 'All Teams'
             return isCurrentSeason && t.teamName === 'All Teams';
         } else {
-            // If filterTeam is a specific individual team name
-            // Show transactions for that specific team OR for 'All Teams' (fees only)
             return isCurrentSeason && (t.teamName === filterTeam || (t.teamName === 'All Teams' && t.type === 'fee'));
         }
     });
@@ -550,7 +543,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const totalFees = filteredTransactions
         .filter(t => t.type === 'fee')
         .reduce((sum, t) => {
-            // Adjust 'All Teams' fees to reflect individual share if filter is by specific team
             if (filterTeam !== '' && filterTeam !== 'All Teams' && t.teamName === 'All Teams' && t.teamsInvolvedCount > 0) {
                 return sum + (t.amount / t.teamsInvolvedCount || 0);
             }
@@ -565,7 +557,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     // Calculate team summary data
     const teamSummary = {};
-    // Initialize summary for each unique team (excluding the 'ALL_TEAMS_MULTIPLIER' option)
     uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').forEach(team => {
         teamSummary[team] = {
             totalFees: 0,
@@ -574,9 +565,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         };
     });
 
-    // Process all transactions for the current season for the team summary
     transactions.filter(t => currentSeason === null || t.season === currentSeason).forEach(t => { 
-        // If it's an 'All Teams' fee, divide it among all teams
         if (t.teamName === 'All Teams' && t.type === 'fee' && t.teamsInvolvedCount > 0) {
             const perTeamAmount = t.amount / t.teamsInvolvedCount;
             uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').forEach(team => {
@@ -698,13 +687,15 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 <>
                     {/* Financial Summary */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                        <div className="bg-green-50 p-4 rounded-lg shadow-sm text-center">
-                            <h3 className="text-lg font-semibold text-green-700">Total Fees Collected</h3>
-                            <p className="text-2xl font-bold text-green-900">${totalFees.toFixed(2)}</p>
-                        </div>
+                        {/* Total Fees Collected - Now Red */}
                         <div className="bg-red-50 p-4 rounded-lg shadow-sm text-center">
-                            <h3 className="text-lg font-semibold text-red-700">Total Payouts Made</h3>
-                            <p className="text-2xl font-bold text-red-900">${totalPayouts.toFixed(2)}</p>
+                            <h3 className="text-lg font-semibold text-red-700">Total Fees Collected</h3>
+                            <p className="text-2xl font-bold text-red-900">${totalFees.toFixed(2)}</p>
+                        </div>
+                        {/* Total Payouts Made - Now Green */}
+                        <div className="bg-green-50 p-4 rounded-lg shadow-sm text-center">
+                            <h3 className="text-lg font-semibold text-green-700">Total Payouts Made</h3>
+                            <p className="text-2xl font-bold text-green-900">${totalPayouts.toFixed(2)}</p>
                         </div>
                         <div className={`p-4 rounded-lg shadow-sm text-center ${netBalance >= 0 ? 'bg-blue-50' : 'bg-red-100'}`}>
                             <h3 className="text-lg font-semibold text-blue-700">Net Balance</h3>
@@ -931,9 +922,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                     <tbody>
                                         {filteredTransactions.map((t, index) => {
                                             let displayAmount = (t.amount || 0).toFixed(2);
-                                            // Apply division logic only if filtering by a specific team AND
-                                            // transaction is a fee for 'All Teams'.
-                                            // Use t.teamsInvolvedCount if available, otherwise fallback to current activeTeamsCount.
                                             const effectiveTeamsCount = t.teamsInvolvedCount > 0 ? t.teamsInvolvedCount : activeTeamsCount;
 
                                             if (filterTeam !== '' && filterTeam !== 'All Teams' && t.teamName === 'All Teams' && t.type === 'fee' && effectiveTeamsCount > 0) {
@@ -945,20 +933,19 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                         {t.date?.toDate ? t.date.toDate().toLocaleDateString() : 'N/A'}
                                                     </td>
                                                     <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
+                                                        {/* Display description as is, remove redundant week display */}
                                                         {t.description}
-                                                        {t.category === 'highest_weekly_points' && t.weekNumber && ` (Week ${t.weekNumber})`}
-                                                        {t.category === 'second_highest_weekly_points' && t.weekNumber && ` (Week ${t.weekNumber})`}
                                                         {t.category === 'side_pot' && t.potName && ` (${t.potName})`}
                                                     </td>
                                                     <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{t.teamName || '-'}</td>
                                                     <td className="py-2 px-4 text-sm text-right border-b border-gray-200">
-                                                        <span className={`${t.type === 'fee' ? 'text-green-700' : 'text-red-700'} font-medium`}>
+                                                        <span className={`${t.type === 'fee' ? 'text-red-700' : 'text-green-700'} font-medium`}>
                                                             ${displayAmount}
                                                         </span>
                                                     </td>
                                                     <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
                                                         <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                                                            t.type === 'fee' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                                            t.type === 'fee' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
                                                         }`}>
                                                             {t.type === 'fee' ? 'Fee' : 'Payout'}
                                                         </span>
@@ -1004,8 +991,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                         {Object.entries(teamSummary).sort(([teamA], [teamB]) => teamA.localeCompare(teamB)).map(([team, data], index) => (
                                             <tr key={team} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                                                 <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{team}</td>
-                                                <td className="py-2 px-4 text-sm text-right text-green-700 font-medium border-b border-gray-200">${data.totalFees.toFixed(2)}</td>
-                                                <td className="py-2 px-4 text-sm text-right text-red-700 font-medium border-b border-gray-200">${data.totalPayouts.toFixed(2)}</td>
+                                                <td className="py-2 px-4 text-sm text-right text-red-700 font-medium border-b border-gray-200">${data.totalFees.toFixed(2)}</td>
+                                                <td className="py-2 px-4 text-sm text-right text-green-700 font-medium border-b border-gray-200">${data.totalPayouts.toFixed(2)}</td>
                                                 <td className={`py-2 px-4 text-sm text-right font-bold border-b border-gray-200 ${data.netBalance >= 0 ? 'text-blue-900' : 'text-red-900'}`}>
                                                     ${data.netBalance.toFixed(2)}
                                                 </td>
