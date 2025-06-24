@@ -9,7 +9,7 @@ import {
 } from 'firebase/auth';
 import { 
     getFirestore, collection, addDoc, query, orderBy, onSnapshot, 
-    serverTimestamp, deleteDoc, doc, setDoc, getDoc 
+    serverTimestamp, deleteDoc, doc, setDoc, getDoc, writeBatch 
 } from 'firebase/firestore';
 
 const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
@@ -23,6 +23,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     const [teamName, setTeamName] = useState(''); 
     const [tradeTeams, setTradeTeams] = useState(['', '']); 
+    // State for multiple waiver/FA entries
+    const [waiverEntries, setWaiverEntries] = useState([{ team: '', numPickups: 1 }]); 
     
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null); 
@@ -37,12 +39,15 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [availableSeasons, setAvailableSeasons] = useState([]); // All seasons available in historicalMatchups
     const [activeTeamsCount, setActiveTeamsCount] = useState(0); 
     
-    // CORRECTED: Initialized with useState hook
     const [isTeamAutoPopulated, setIsTeamAutoPopulated] = useState(false); 
     const [autoPopulateWarning, setAutoPopulateWarning] = useState(null); 
     
     const [showConfirmDelete, setShowConfirmDelete] = useState(false);
-    const [transactionToDelete, setTransactionToDelete] = useState(null);
+    const [transactionToDelete, setTransactionToDelete] = useState(null); // For single delete
+    // State for multi-select delete
+    const [selectedTransactionIds, setSelectedTransactionIds] = useState([]);
+    const [showConfirmBulkDelete, setShowConfirmBulkDelete] = useState(false);
+
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -74,16 +79,16 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 { value: 'entry_fee', label: 'Entry Fee' },
                 { value: 'waiver_fa_fee', label: 'Waiver/FA Fee' },
                 { value: 'trade_fee', label: 'Trade Fee' },
-                { value: 'other_fee', label: 'Other' }, // Changed to 'Other'
+                { value: 'other_fee', label: 'Other' }, 
             ];
         } else if (currentType === 'credit') {
             return [
-                { value: 'weekly_1st_points', label: 'Weekly 1st - Points' }, // Renamed
-                { value: 'weekly_2nd_points', label: 'Weekly 2nd - Points' }, // Renamed
-                { value: 'playoff_finish', label: 'Playoff Finish' }, // New category
-                { value: 'points_finish', label: 'Points Finish' }, // New category
+                { value: 'weekly_1st_points', label: 'Weekly 1st - Points' }, 
+                { value: 'weekly_2nd_points', label: 'Weekly 2nd - Points' }, 
+                { value: 'playoff_finish', label: 'Playoff Finish' }, 
+                { value: 'points_finish', label: 'Points Finish' }, 
                 { value: 'side_pot', label: 'Side Pot' },
-                { value: 'other_payout', label: 'Other' }, // Changed to 'Other'
+                { value: 'other_payout', label: 'Other' }, 
             ];
         }
         return [];
@@ -94,7 +99,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         { name: 'League Entry Fee', amount: '$70', description: 'Paid per team for entry.' },
         { name: 'Waivers/Free Agents', amount: '$1', description: 'Per transaction.' },
         { name: 'Trades', amount: '$2', description: 'Per team involved.' },
-        { name: 'Other', amount: '', description: 'Miscellaneous fees.' },
+        { name: 'Other Fee', amount: '', description: 'Miscellaneous fees.' },
     ];
 
     const defaultCreditStructure = [
@@ -107,7 +112,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         { name: '2nd Place Overall Points', amount: '$40' },
         { name: '3rd Place Overall Points', amount: '$25' },
         { name: 'Side Pots', description: 'Vary in amount and criteria.' },
-        { name: 'Other', amount: '', description: 'Miscellaneous payouts.' },
+        { name: 'Other Payout', amount: '', description: 'Miscellaneous payouts.' },
     ];
 
 
@@ -123,9 +128,12 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         } else {
             setCategory('');
         }
-        // When type changes, reset tradeTeams as it's specific to trade fees
-        if (type !== 'debit' || category !== 'trade_fee') {
+        // When type changes, reset tradeTeams and waiverEntries as they are category specific
+        if (!(type === 'debit' && category === 'trade_fee')) {
             setTradeTeams(['', '']);
+        }
+        if (!(type === 'debit' && category === 'waiver_fa_fee')) {
+            setWaiverEntries([{ team: '', numPickups: 1 }]);
         }
     }, [type, category]); 
 
@@ -223,9 +231,12 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         setAutoPopulateWarning(null); 
         setIsTeamAutoPopulated(false); 
 
-        // Reset tradeTeams if not a trade fee category
-        if (!(type === 'debit' || category === 'trade_fee')) {
+        // Reset tradeTeams and waiverEntries if not applicable
+        if (!(type === 'debit' && category === 'trade_fee')) {
             setTradeTeams(['', '']);
+        }
+        if (!(type === 'debit' && category === 'waiver_fa_fee')) {
+            setWaiverEntries([{ team: '', numPickups: 1 }]);
         }
 
         if (type === 'credit' && 
@@ -254,6 +265,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setTeamName(''); 
             setDescription(`Payout: Side Pot`);
         } else {
+            // Clear team name and description for other categories
             setTeamName('');
             setDescription('');
         }
@@ -387,7 +399,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setTransactions([]); // Clear existing transactions
             setTransactionPot(0); // Clear pot
             setLoading(false); // Stop loading
-            // Do not set specific error about commish here, let general error or UI handle it
+            setSelectedTransactionIds([]); // Clear selections
             return;
         }
 
@@ -423,12 +435,13 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             // Calculate transaction pot for the selected season
             const currentSeasonTransactionPot = filteredBySeason
                 .filter(t => 
-                    (t.category === 'waiver_pickup_fee' || t.category === 'trade_fee')
+                    (t.category === 'waiver_fa_fee' || t.category === 'trade_fee') 
                 )
                 .reduce((sum, t) => sum + (t.amount || 0), 0);
             setTransactionPot(currentSeasonTransactionPot);
 
             setLoading(false);
+            setSelectedTransactionIds([]); // Clear selections on new data fetch
             console.log(`Fetched and filtered transactions for season ${selectedSeason}:`, filteredBySeason.length);
         }, (firestoreError) => {
             console.error("Error fetching transactions from Firestore:", firestoreError);
@@ -503,7 +516,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setError("Please enter a valid positive amount.");
             return;
         }
-        if (!description.trim()) {
+        if (!description.trim() && category !== 'waiver_fa_fee') { // Description can be auto-generated for waiver/FA
             setError("Description cannot be empty.");
             return;
         }
@@ -534,7 +547,34 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     teamsInvolvedCount: 1,
                 });
             }
-        } else {
+        } else if (type === 'debit' && category === 'waiver_fa_fee') {
+            if (waiverEntries.length === 0 || waiverEntries.some(entry => !entry.team || entry.numPickups <= 0)) {
+                setError("Please add at least one valid waiver/FA entry with a team and positive number of pickups.");
+                return;
+            }
+            const perPickupCost = parseFloat(amount); // Amount field is now per-pickup cost
+
+            for (const entry of waiverEntries) {
+                if (entry.team && entry.numPickups > 0) {
+                    transactionsToAdd.push({
+                        amount: perPickupCost * entry.numPickups,
+                        description: `Waiver/FA Fee: ${entry.team} - ${entry.numPickups} pickup(s)`,
+                        type: type,
+                        teamName: entry.team,
+                        date: serverTimestamp(),
+                        userId: userId,
+                        category: category,
+                        season: currentSeason,
+                        numPickups: entry.numPickups, // Store number of pickups
+                    });
+                }
+            }
+            if (transactionsToAdd.length === 0) {
+                setError("No valid waiver/FA entries to add.");
+                return;
+            }
+
+        } else { // Handle other single team/all teams transactions
             if (!teamName.trim() && teamName !== 'ALL_TEAMS_MULTIPLIER') { 
                 setError("Please select an Associated Team.");
                 return;
@@ -611,12 +651,14 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 await addDoc(transactionCollectionRef, transaction);
             }
             
+            // Reset form fields after successful submission
             setAmount('');
             setDescription('');
             setType('debit'); 
             setCategory(getCategoriesForType('debit')[0].value); // Reset to first debit category
             setTeamName(''); 
             setTradeTeams(['', '']); 
+            setWaiverEntries([{ team: '', numPickups: 1 }]); // Reset waiver entries
             setWeeklyPointsWeek(''); 
             setSidePotName(''); 
             setError(null); 
@@ -651,6 +693,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setError(null);
             console.log("Transaction deleted successfully.");
             setTransactionToDelete(null); 
+            setSelectedTransactionIds([]); // Clear selections after single delete
         } catch (deleteError) {
             console.error("Error deleting transaction:", deleteError);
             setError(`Failed to delete transaction: ${deleteError.message}. Please check your permissions.`);
@@ -662,7 +705,26 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         setTransactionToDelete(null);
     };
 
-    const isTeamSelectionDisabled = isTeamAutoPopulated || (type === 'debit' || category === 'trade_fee'); // Simplified condition
+    // New functions for bulk waiver entries
+    const handleAddWaiverEntry = () => {
+        setWaiverEntries([...waiverEntries, { team: '', numPickups: 1 }]);
+    };
+
+    const handleRemoveWaiverEntry = (indexToRemove) => {
+        setWaiverEntries(waiverEntries.filter((_, index) => index !== indexToRemove));
+    };
+
+    const handleWaiverEntryChange = (index, field, value) => {
+        const newWaiverEntries = [...waiverEntries];
+        if (field === 'numPickups') {
+            newWaiverEntries[index][field] = parseInt(value) || 0; // Ensure number
+        } else {
+            newWaiverEntries[index][field] = value;
+        }
+        setWaiverEntries(newWaiverEntries);
+    };
+
+    const isTeamSelectionDisabled = isTeamAutoPopulated || (type === 'debit' && (category === 'trade_fee' || category === 'waiver_fa_fee'));
 
     // Filter transactions for history table and pagination
     const filteredTransactions = transactions.filter(t => {
@@ -676,6 +738,66 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             return (t.teamName === filterTeam || (t.teamName === 'All Teams' && t.type === 'debit'));
         }
     });
+
+    // Multi-select delete logic
+    const handleToggleTransaction = (transactionId) => {
+        setSelectedTransactionIds(prevSelected => {
+            if (prevSelected.includes(transactionId)) {
+                return prevSelected.filter(id => id !== transactionId);
+            } else {
+                return [...prevSelected, transactionId];
+            }
+        });
+    };
+
+    const handleToggleSelectAll = () => {
+        if (selectedTransactionIds.length === currentTransactions.length && currentTransactions.length > 0) {
+            // If all are selected, deselect all
+            setSelectedTransactionIds([]);
+        } else {
+            // Select all currently displayed transactions
+            setSelectedTransactionIds(currentTransactions.map(t => t.id));
+        }
+    };
+
+    const confirmBulkDelete = () => {
+        if (selectedTransactionIds.length > 0) {
+            setShowConfirmBulkDelete(true);
+        }
+    };
+
+    const executeBulkDelete = async () => {
+        setShowConfirmBulkDelete(false);
+        if (!db || !userId) {
+            setError("Database not ready or user not authenticated. Cannot delete transactions.");
+            return;
+        }
+        if (!isCommish) {
+            setError("You do not have permission to delete transactions.");
+            return;
+        }
+
+        try {
+            const batch = writeBatch(db);
+            const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
+            
+            selectedTransactionIds.forEach(id => {
+                const docRef = doc(db, `/artifacts/${appId}/public/data/financial_transactions`, id);
+                batch.delete(docRef);
+            });
+            await batch.commit();
+            setError(null);
+            setSelectedTransactionIds([]); // Clear selection after successful deletion
+            console.log(`${selectedTransactionIds.length} transactions deleted successfully.`);
+        } catch (bulkDeleteError) {
+            console.error("Error deleting selected transactions:", bulkDeleteError);
+            setError(`Failed to delete selected transactions: ${bulkDeleteError.message}.`);
+        }
+    };
+
+    const cancelBulkDelete = () => {
+        setShowConfirmBulkDelete(false);
+    };
 
     // Calculate OVERALL totals for Fees and Payouts (for summary cards)
     const overallDebits = transactions // Use `transactions` which are already filtered by selectedSeason
@@ -963,7 +1085,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             id="amount"
                                             value={amount}
                                             onChange={(e) => setAmount(e.target.value)}
-                                            placeholder="e.g., 50.00"
+                                            placeholder={category === 'waiver_fa_fee' ? "e.g., 1.00 (per pickup)" : "e.g., 50.00"}
                                             step="0.01"
                                             min="0.01"
                                             required
@@ -993,6 +1115,10 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             setCategory(e.target.value);
                                             setWeeklyPointsWeek(''); 
                                             setSidePotName('');
+                                            setTeamName(''); // Reset team name on category change
+                                            setTradeTeams(['', '']); // Reset trade teams
+                                            setWaiverEntries([{ team: '', numPickups: 1 }]); // Reset waiver entries
+                                            setDescription(''); // Reset description
                                         }}
                                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                     >
@@ -1001,22 +1127,23 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                         ))}
                                     </select>
                                 </div>
-                                <div>
-                                    <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                                    <input
-                                        type="text"
-                                        id="description"
-                                        value={description}
-                                        onChange={(e) => setDescription(e.target.value)}
-                                        placeholder="e.g., Annual League Entry, Weekly Winnings"
-                                        maxLength="100"
-                                        required
-                                        readOnly={isTeamAutoPopulated} 
-                                        className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none ${isTeamAutoPopulated ? 'bg-gray-200 cursor-not-allowed' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'} sm:text-sm`}
-                                    />
-                                </div>
-
-                                
+                                {/* Description field (conditionally rendered for waiver/FA) */}
+                                {!(type === 'debit' && category === 'waiver_fa_fee') && (
+                                    <div>
+                                        <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                                        <input
+                                            type="text"
+                                            id="description"
+                                            value={description}
+                                            onChange={(e) => setDescription(e.target.value)}
+                                            placeholder="e.g., Annual League Entry, Weekly Winnings"
+                                            maxLength="100"
+                                            required
+                                            readOnly={isTeamAutoPopulated} 
+                                            className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none ${isTeamAutoPopulated ? 'bg-gray-200 cursor-not-allowed' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'} sm:text-sm`}
+                                        />
+                                    </div>
+                                )}
 
                                 {(category === 'weekly_1st_points' || category === 'weekly_2nd_points') && (
                                     <div>
@@ -1065,7 +1192,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                         <option key={optionTeam} value={optionTeam}>{optionTeam}</option>
                                                     ))}
                                                 </select>
-                                                {tradeTeams.length > 2 && ( 
+                                                {tradeTeams.length > 1 && ( 
                                                     <button
                                                         type="button"
                                                         onClick={() => handleRemoveTradeTeam(index)}
@@ -1082,6 +1209,51 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-md shadow-md transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2"
                                         >
                                             Add Another Team
+                                        </button>
+                                    </div>
+                                ) : type === 'debit' && category === 'waiver_fa_fee' ? (
+                                    // Multiple entries for waiver/FA fees
+                                    <div className="space-y-2">
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Waiver/FA Pickups (Enter per team)</label>
+                                        {waiverEntries.map((entry, index) => (
+                                            <div key={index} className="flex flex-col sm:flex-row gap-2 items-center">
+                                                <select
+                                                    value={entry.team}
+                                                    onChange={(e) => handleWaiverEntryChange(index, 'team', e.target.value)}
+                                                    required
+                                                    className="flex-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                                >
+                                                    <option value="">Select Team</option>
+                                                    {nonAllTeams.map(optionTeam => (
+                                                        <option key={optionTeam} value={optionTeam}>{optionTeam}</option>
+                                                    ))}
+                                                </select>
+                                                <input
+                                                    type="number"
+                                                    value={entry.numPickups}
+                                                    onChange={(e) => handleWaiverEntryChange(index, 'numPickups', e.target.value)}
+                                                    placeholder="Pickups"
+                                                    min="1"
+                                                    required
+                                                    className="w-24 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                                />
+                                                {waiverEntries.length > 1 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveWaiverEntry(index)}
+                                                        className="p-2 bg-red-400 text-white rounded-md hover:bg-red-500 transition-colors text-sm"
+                                                    >
+                                                        Remove
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ))}
+                                        <button
+                                            type="button"
+                                            onClick={handleAddWaiverEntry}
+                                            className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-md shadow-md transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2"
+                                        >
+                                            Add Another Waiver Entry
                                         </button>
                                     </div>
                                 ) : (
@@ -1135,23 +1307,33 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     <section>
                         <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">Transaction History</h3>
                         {/* Team Filter Dropdown */}
-                        <div className="mb-4 text-right">
-                            <label htmlFor="filterTeam" className="block text-sm font-medium text-gray-700 mb-1">Filter by Team:</label>
-                            <select
-                                id="filterTeam"
-                                value={filterTeam}
-                                onChange={(e) => {
-                                    setFilterTeam(e.target.value);
-                                    setCurrentPage(1); // Reset to first page on filter change
-                                }}
-                                className="mt-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                            >
-                                <option value="">Show All Teams</option>
-                                {uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').map(team => (
-                                    <option key={team} value={team}>{team}</option>
-                                ))}
-                                <option value="All Teams">Transactions for 'All Teams'</option> 
-                            </select>
+                        <div className="flex justify-between items-center mb-4">
+                            <div className="w-1/2"> {/* Adjusted width for filter */}
+                                <label htmlFor="filterTeam" className="block text-sm font-medium text-gray-700 mb-1">Filter by Team:</label>
+                                <select
+                                    id="filterTeam"
+                                    value={filterTeam}
+                                    onChange={(e) => {
+                                        setFilterTeam(e.target.value);
+                                        setCurrentPage(1); // Reset to first page on filter change
+                                    }}
+                                    className="mt-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm w-full"
+                                >
+                                    <option value="">Show All Teams</option>
+                                    {uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').map(team => (
+                                        <option key={team} value={team}>{team}</option>
+                                    ))}
+                                    <option value="All Teams">Transactions for 'All Teams'</option> 
+                                </select>
+                            </div>
+                            {isCommish && selectedTransactionIds.length > 0 && (
+                                <button
+                                    onClick={confirmBulkDelete}
+                                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-md shadow-md transition-colors text-sm flex-shrink-0 ml-4"
+                                >
+                                    Delete Selected ({selectedTransactionIds.length})
+                                </button>
+                            )}
                         </div>
                         {filteredTransactions.length === 0 ? (
                             <p className="text-center text-gray-600">No transactions recorded yet{filterTeam && ` for ${filterTeam}`}.</p>
@@ -1160,6 +1342,16 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                 <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
                                     <thead className="bg-blue-100">
                                         <tr>
+                                            {isCommish && (
+                                                <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 w-12">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedTransactionIds.length === currentTransactions.length && currentTransactions.length > 0}
+                                                        onChange={handleToggleSelectAll}
+                                                        className="form-checkbox h-4 w-4 text-blue-600"
+                                                    />
+                                                </th>
+                                            )}
                                             <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Date</th>
                                             <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Description</th>
                                             <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
@@ -1179,6 +1371,16 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             }
                                             return (
                                                 <tr key={t.id} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                                                    {isCommish && (
+                                                        <td className="py-2 px-4 text-sm border-b border-gray-200">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={selectedTransactionIds.includes(t.id)}
+                                                                onChange={() => handleToggleTransaction(t.id)}
+                                                                className="form-checkbox h-4 w-4 text-blue-600"
+                                                            />
+                                                        </td>
+                                                    )}
                                                     <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
                                                         {t.date?.toDate ? t.date.toDate().toLocaleDateString() : 'N/A'}
                                                     </td>
@@ -1436,6 +1638,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 </>
             )}
 
+            {/* Single Delete Confirmation Modal */}
             {showConfirmDelete && (
                 <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50">
                     <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full text-center">
@@ -1445,16 +1648,46 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                         </p>
                         <div className="flex justify-center space-x-4">
                             <button
+                                type="button" // Explicitly setting type="button"
                                 onClick={cancelDelete}
                                 className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-md transition-colors"
                             >
                                 Cancel
                             </button>
                             <button
+                                type="button" // Explicitly setting type="button"
                                 onClick={executeDelete}
                                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors"
                             >
                                 Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Bulk Delete Confirmation Modal */}
+            {showConfirmBulkDelete && (
+                <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50">
+                    <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full text-center">
+                        <h3 className="text-lg font-bold text-gray-800 mb-4">Confirm Bulk Deletion</h3>
+                        <p className="text-gray-600 mb-6">
+                            Are you sure you want to delete {selectedTransactionIds.length} selected transactions? This action cannot be undone.
+                        </p>
+                        <div className="flex justify-center space-x-4">
+                            <button
+                                type="button" // Explicitly setting type="button"
+                                onClick={cancelBulkDelete}
+                                className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-md transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button" // Explicitly setting type="button"
+                                onClick={executeBulkDelete}
+                                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors"
+                            >
+                                Delete All Selected
                             </button>
                         </div>
                     </div>
