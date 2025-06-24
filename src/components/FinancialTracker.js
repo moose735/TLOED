@@ -19,14 +19,14 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [amount, setAmount] = useState('');
     const [description, setDescription] = useState('');
     const [type, setType] = useState('fee'); // 'fee' or 'payout'
-    // New states for structured payouts
-    const [payoutCategory, setPayoutCategory] = useState('general'); // e.g., 'general', 'highest_weekly_points', 'side_pot'
+    // Renamed payoutCategory to category for general use
+    const [category, setCategory] = useState('general_fee'); // Default to a fee category
     const [weeklyPointsWeek, setWeeklyPointsWeek] = useState('');
     const [sidePotName, setSidePotName] = useState('');
 
     const [teamName, setTeamName] = useState(''); 
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null); // General error message for Firebase issues, etc.
+    const [error, setError] = useState(null); 
     const [db, setDb] = useState(null);
     const [auth, setAuth] = useState(null);
     const [userId, setUserId] = useState(null);
@@ -34,11 +34,10 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [uniqueTeams, setUniqueTeams] = useState([]);
     const [weeklyHighScores, setWeeklyHighScores] = useState({});
     const [currentSeason, setCurrentSeason] = useState(null); 
-    const [activeTeamsCount, setActiveTeamsCount] = useState(0); // Count of active teams in the CURRENT season
+    const [activeTeamsCount, setActiveTeamsCount] = useState(0); 
     
-    // State to manage automatic population of teamName field and associated warning
     const [isTeamAutoPopulated, setIsTeamAutoPopulated] = useState(false);
-    const [autoPopulateWarning, setAutoPopulateWarning] = useState(null); // Warning for auto-population specific issues
+    const [autoPopulateWarning, setAutoPopulateWarning] = useState(null); 
     
     const [showConfirmDelete, setShowConfirmDelete] = useState(false);
     const [transactionToDelete, setTransactionToDelete] = useState(null);
@@ -51,6 +50,40 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     const COMMISH_UID = process.env.REACT_APP_COMMISH_UID;
     const isCommish = userId && COMMISH_UID && userId === COMMISH_UID; 
+
+    // Define categories based on type
+    const getCategoriesForType = (currentType) => {
+        if (currentType === 'fee') {
+            return [
+                { value: 'general_fee', label: 'General Fee' },
+                { value: 'annual_fee', label: 'Annual League Fee' },
+                { value: 'trade_fee', label: 'Trade Fee' },
+                { value: 'waiver_pickup_fee', label: 'Waiver Pickup Fee' },
+            ];
+        } else if (currentType === 'payout') {
+            return [
+                { value: 'general_payout', label: 'General Payout' },
+                { value: 'highest_weekly_points', label: 'Highest Weekly Points' },
+                { value: 'second_highest_weekly_points', label: 'Second Highest Weekly Points' },
+                { value: 'side_pot', label: 'Side Pot' },
+            ];
+        }
+        return [];
+    };
+
+    // Effect to update category when type changes
+    useEffect(() => {
+        const categories = getCategoriesForType(type);
+        if (categories.length > 0) {
+            // Set to the first category if current category is not valid for new type
+            if (!categories.some(cat => cat.value === category)) {
+                setCategory(categories[0].value);
+            }
+        } else {
+            setCategory('');
+        }
+    }, [type]);
+
 
     // Derive unique teams and calculate weekly high scores from historicalMatchups
     useEffect(() => {
@@ -125,47 +158,55 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setUniqueTeams(['ALL_TEAMS_MULTIPLIER', ...sortedTeams]); 
             setActiveTeamsCount(sortedTeams.length); 
             
-            if (sortedTeams.length > 0) {
-                setTeamName(''); 
+            // Set initial team name if there are teams and it's not auto-populated
+            if (!isTeamAutoPopulated && sortedTeams.length > 0) {
+                setTeamName(''); // Clear existing selection to force a choice, making it mandatory
             }
         }
     }, [historicalMatchups, getDisplayTeamName]);
 
-    // Effect to automatically set teamName and description when payoutCategory and weeklyPointsWeek change
+    // Effect to automatically set teamName and description when category and weeklyPointsWeek change
     useEffect(() => {
         setAutoPopulateWarning(null); 
         setIsTeamAutoPopulated(false); 
 
         if (type === 'payout' && 
-            (payoutCategory === 'highest_weekly_points' || payoutCategory === 'second_highest_weekly_points') &&
+            (category === 'highest_weekly_points' || category === 'second_highest_weekly_points') &&
             weeklyPointsWeek) 
         {
             const weekNum = parseInt(weeklyPointsWeek);
             const weekData = weeklyHighScores[weekNum];
 
             if (weekData) {
-                if (payoutCategory === 'highest_weekly_points' && weekData.highest) {
+                if (category === 'highest_weekly_points' && weekData.highest) {
                     setTeamName(weekData.highest.team);
                     setDescription(`Payout: Highest Weekly Points (Week ${weeklyPointsWeek}) - ${weekData.highest.team} (${weekData.highest.score} pts)`);
                     setIsTeamAutoPopulated(true);
-                } else if (payoutCategory === 'second_highest_weekly_points' && weekData.secondHighest) {
+                } else if (category === 'second_highest_weekly_points' && weekData.secondHighest) {
                     setTeamName(weekData.secondHighest.team);
                     setDescription(`Payout: Second Highest Weekly Points (Week ${weeklyPointsWeek}) - ${weekData.secondHighest.team} (${weekData.secondHighest.score} pts)`);
                     setIsTeamAutoPopulated(true);
                 } else {
-                    setAutoPopulateWarning(`No ${payoutCategory.replace(/_/g, ' ')} winner found for Week ${weeklyPointsWeek} in the current season.`);
+                    setAutoPopulateWarning(`No ${category.replace(/_/g, ' ')} winner found for Week ${weeklyPointsWeek} in the current season.`);
                 }
             } else {
                 setAutoPopulateWarning(`No score data found for Week ${weeklyPointsWeek} in the current season.`);
             }
-        } else if (type === 'payout' && payoutCategory === 'side_pot') {
+        } else if (type === 'payout' && category === 'side_pot') {
             setTeamName(''); 
             setDescription(`Payout: Side Pot`);
-        } else {
+        } else if (type === 'fee' && category === 'trade_fee') {
+            // For fees, we might want to clear teamName to force selection, or keep it if a team was already selected
+            // But don't auto-populate if it's not a highest/second-highest payout
+            setIsTeamAutoPopulated(false); 
+            setTeamName(''); // Clear team name to enforce mandatory selection for new fees/general payouts
+            setDescription(''); // Clear description for manual entry
+        }
+         else {
             setTeamName('');
             setDescription('');
         }
-    }, [payoutCategory, weeklyPointsWeek, weeklyHighScores, type]); 
+    }, [category, weeklyPointsWeek, weeklyHighScores, type]); 
 
 
     // Initialize Firebase and set up authentication
@@ -307,6 +348,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const handleAddTransaction = async (e) => {
         e.preventDefault();
 
+        setError(null); // Clear previous errors
+        setAutoPopulateWarning(null); // Clear previous auto-populate warnings
+
         if (!db || !userId) {
             setError("Database not ready or user not authenticated. Cannot add transaction.");
             return;
@@ -321,6 +365,10 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         }
         if (!description.trim()) {
             setError("Description cannot be empty.");
+            return;
+        }
+        if (!teamName.trim() && teamName !== 'ALL_TEAMS_MULTIPLIER') { // Team name is mandatory now
+            setError("Please select an Associated Team.");
             return;
         }
         
@@ -349,13 +397,13 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             teamName: finalTeamName, 
             date: serverTimestamp(),
             userId: userId,
-            category: payoutCategory, 
+            category: category, // Use the general category state
             season: currentSeason,
             teamsInvolvedCount: teamsInvolved 
         };
 
         if (type === 'payout') {
-            if (payoutCategory === 'highest_weekly_points' || payoutCategory === 'second_highest_weekly_points') {
+            if (category === 'highest_weekly_points' || category === 'second_highest_weekly_points') {
                 if (!weeklyPointsWeek || isNaN(parseInt(weeklyPointsWeek))) {
                     setError("Please enter a valid week number for weekly points payouts.");
                     return;
@@ -365,21 +413,21 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
                 const weekData = weeklyHighScores[weekNum];
                 if (weekData) {
-                    if (payoutCategory === 'highest_weekly_points' && weekData.highest) {
+                    if (category === 'highest_weekly_points' && weekData.highest) {
                         newTransaction.teamName = weekData.highest.team;
                         newTransaction.description = `Payout: Highest Weekly Points (Week ${weekNum}) - ${weekData.highest.team} (${weekData.highest.score} pts)`;
-                    } else if (payoutCategory === 'second_highest_weekly_points' && weekData.secondHighest) {
+                    } else if (category === 'second_highest_weekly_points' && weekData.secondHighest) {
                         newTransaction.teamName = weekData.secondHighest.team;
                         newTransaction.description = `Payout: Second Highest Weekly Points (Week ${weekNum}) - ${weekData.secondHighest.team} (${weekData.secondHighest.score} pts)`;
                     } else {
-                        setError(`Could not find a winning team for ${payoutCategory.replace(/_/g, ' ')} in Week ${weekNum} for the current season. Transaction not added.`);
+                        setError(`Could not find a winning team for ${category.replace(/_/g, ' ')} in Week ${weekNum} for the current season. Transaction not added.`);
                         return; 
                     }
                 } else {
                     setError(`No score data found for Week ${weekNum} in the current season. Transaction not added.`);
                     return; 
                 }
-            } else if (payoutCategory === 'side_pot') {
+            } else if (category === 'side_pot') {
                 if (!sidePotName.trim()) {
                     setError("Please enter a name for the side pot.");
                     return;
@@ -396,8 +444,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setAmount('');
             setDescription('');
             setType('fee'); 
+            setCategory('general_fee'); // Reset to a valid fee category
             setTeamName(''); 
-            setPayoutCategory('general'); 
             setWeeklyPointsWeek(''); 
             setSidePotName(''); 
             setError(null); 
@@ -443,6 +491,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         setTransactionToDelete(null);
     };
 
+    // Team selection dropdown is disabled if it's auto-populated
     const isTeamSelectionDisabled = isTeamAutoPopulated;
 
     const filteredTransactions = transactions.filter(t => {
@@ -481,24 +530,22 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         };
     });
 
-    filteredTransactions.forEach(t => {
+    transactions.filter(t => currentSeason === null || t.season === currentSeason).forEach(t => { // Use all current season transactions for summary
         // If it's an 'All Teams' fee, divide it among all teams
         if (t.teamName === 'All Teams' && t.type === 'fee' && t.teamsInvolvedCount > 0) {
             const perTeamAmount = t.amount / t.teamsInvolvedCount;
             uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').forEach(team => {
-                if (teamSummary[team]) { // Ensure team exists in current season's uniqueTeams
+                if (teamSummary[team]) { 
                     teamSummary[team].totalFees += perTeamAmount;
                 }
             });
-        } else if (teamSummary[t.teamName]) { // For individual team transactions
+        } else if (teamSummary[t.teamName]) { 
             if (t.type === 'fee') {
                 teamSummary[t.teamName].totalFees += (t.amount || 0);
             } else if (t.type === 'payout') {
                 teamSummary[t.teamName].totalPayouts += (t.amount || 0);
             }
         }
-        // If a transaction is for 'All Teams' and is a payout, it won't be attributed to individual teams here.
-        // This keeps the individual team summary focused on their direct fees/payouts + their share of 'All Team' fees.
     });
 
     Object.keys(teamSummary).forEach(team => {
@@ -653,28 +700,27 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                     />
                                 </div>
 
-                                {type === 'payout' && ( 
-                                    <div className="flex-1">
-                                        <label htmlFor="payoutCategory" className="block text-sm font-medium text-gray-700 mb-1">Payout Category</label>
-                                        <select
-                                            id="payoutCategory"
-                                            value={payoutCategory}
-                                            onChange={(e) => {
-                                                setPayoutCategory(e.target.value);
-                                                setWeeklyPointsWeek(''); 
-                                                setSidePotName('');
-                                            }}
-                                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                        >
-                                            <option value="general">General Payout</option>
-                                            <option value="highest_weekly_points">Highest Weekly Points</option>
-                                            <option value="second_highest_weekly_points">Second Highest Weekly Points</option>
-                                            <option value="side_pot">Side Pot</option>
-                                        </select>
-                                    </div>
-                                )}
+                                {/* Dynamic Category Selection */}
+                                <div className="flex-1">
+                                    <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                                    <select
+                                        id="category"
+                                        value={category}
+                                        onChange={(e) => {
+                                            setCategory(e.target.value);
+                                            setWeeklyPointsWeek(''); 
+                                            setSidePotName('');
+                                        }}
+                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                    >
+                                        {getCategoriesForType(type).map(cat => (
+                                            <option key={cat.value} value={cat.value}>{cat.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                
 
-                                {type === 'payout' && (payoutCategory === 'highest_weekly_points' || payoutCategory === 'second_highest_weekly_points') && (
+                                {(category === 'highest_weekly_points' || category === 'second_highest_weekly_points') && (
                                     <div>
                                         <label htmlFor="weeklyPointsWeek" className="block text-sm font-medium text-gray-700 mb-1">Week Number</label>
                                         <input
@@ -689,7 +735,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                     </div>
                                 )}
 
-                                {type === 'payout' && payoutCategory === 'side_pot' && (
+                                {category === 'side_pot' && (
                                     <div>
                                         <label htmlFor="sidePotName" className="block text-sm font-medium text-gray-700 mb-1">Side Pot Name</label>
                                         <input
@@ -705,7 +751,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                 )}
 
                                 <div>
-                                    <label htmlFor="teamName" className="block text-sm font-medium text-gray-700 mb-1">Associated Team (Optional)</label>
+                                    <label htmlFor="teamName" className="block text-sm font-medium text-gray-700 mb-1">Associated Team</label>
                                     <select
                                         id="teamName"
                                         value={teamName}
@@ -714,10 +760,11 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             setIsTeamAutoPopulated(false);
                                             setAutoPopulateWarning(null); 
                                         }}
+                                        required // Make team selection mandatory
                                         disabled={isTeamSelectionDisabled} 
                                         className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none ${isTeamSelectionDisabled ? 'bg-gray-200 cursor-not-allowed' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'} sm:text-sm`}
                                     >
-                                        <option value="">Select Team (Optional)</option>
+                                        <option value="">Select Team</option> {/* Placeholder option for mandatory select */}
                                         {type === 'fee' && ( 
                                             <option value="ALL_TEAMS_MULTIPLIER">All Teams (Multiplied)</option>
                                         )}
