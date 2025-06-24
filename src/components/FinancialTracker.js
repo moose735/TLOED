@@ -203,7 +203,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
         // Reset tradeTeams if not a trade fee category
         if (!(type === 'debit' || category === 'trade_fee')) {
-            setTradeTeams(['', '']); 
+            setTradeTeams(['', '']);
         }
 
         if (type === 'credit' && 
@@ -631,7 +631,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         .filter(t => (currentSeason === 0 || t.season === currentSeason) && t.type === 'credit')
         .reduce((sum, t) => sum + (t.amount || 0), 0);
 
-    const overallNetBalance = overallDebits - overallCredits; 
+    const overallNetBalance = overallCredits - overallDebits; // Changed to Credits - Debits
 
     // Calculate team summary data
     const teamSummary = {};
@@ -864,9 +864,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                             <h3 className="text-lg font-semibold text-green-700">Total Credits</h3>
                             <p className="text-2xl font-bold text-green-900">${overallCredits.toFixed(2)}</p> {/* Changed to overallCredits */}
                         </div>
-                        <div className={`p-4 rounded-lg shadow-sm text-center ${overallNetBalance >= 0 ? 'bg-blue-50' : 'bg-red-100'}`}>
+                        <div className={`p-4 rounded-lg shadow-sm text-center ${overallNetBalance >= 0 ? 'bg-green-100' : 'bg-red-100'}`}> {/* Adjusted color logic */}
                             <h3 className="text-lg font-semibold text-blue-700">Net Total</h3>
-                            <p className={`text-2xl font-bold ${overallNetBalance >= 0 ? 'text-blue-900' : 'text-red-900'}`}>${overallNetBalance.toFixed(2)}</p> {/* Changed to overallNetBalance */}
+                            <p className={`text-2xl font-bold ${overallNetBalance >= 0 ? 'text-green-900' : 'text-red-900'}`}>${overallNetBalance.toFixed(2)}</p> {/* Changed to overallNetBalance and adjusted color */}
                         </div>
                         <div className="bg-yellow-50 p-4 rounded-lg shadow-sm text-center">
                             <h3 className="text-lg font-semibold text-yellow-700">Transaction Pot</h3>
