@@ -326,7 +326,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         
         let finalAmount = parseFloat(amount);
         let finalTeamName = teamName; 
-        let teamsInvolved = 1; // Default to 1 for individual transactions
+        let teamsInvolved = 1; 
 
         if (type === 'fee' && teamName === 'ALL_TEAMS_MULTIPLIER') {
             if (activeTeamsCount === 0) {
@@ -470,6 +470,42 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     const netBalance = totalFees - totalPayouts;
 
+    // Calculate team summary data
+    const teamSummary = {};
+    // Initialize summary for each unique team (excluding the 'ALL_TEAMS_MULTIPLIER' option)
+    uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').forEach(team => {
+        teamSummary[team] = {
+            totalFees: 0,
+            totalPayouts: 0,
+            netBalance: 0
+        };
+    });
+
+    filteredTransactions.forEach(t => {
+        // If it's an 'All Teams' fee, divide it among all teams
+        if (t.teamName === 'All Teams' && t.type === 'fee' && t.teamsInvolvedCount > 0) {
+            const perTeamAmount = t.amount / t.teamsInvolvedCount;
+            uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').forEach(team => {
+                if (teamSummary[team]) { // Ensure team exists in current season's uniqueTeams
+                    teamSummary[team].totalFees += perTeamAmount;
+                }
+            });
+        } else if (teamSummary[t.teamName]) { // For individual team transactions
+            if (t.type === 'fee') {
+                teamSummary[t.teamName].totalFees += (t.amount || 0);
+            } else if (t.type === 'payout') {
+                teamSummary[t.teamName].totalPayouts += (t.amount || 0);
+            }
+        }
+        // If a transaction is for 'All Teams' and is a payout, it won't be attributed to individual teams here.
+        // This keeps the individual team summary focused on their direct fees/payouts + their share of 'All Team' fees.
+    });
+
+    Object.keys(teamSummary).forEach(team => {
+        teamSummary[team].netBalance = teamSummary[team].totalFees - teamSummary[team].totalPayouts;
+    });
+
+
     return (
         <div className="w-full max-w-4xl bg-white p-8 rounded-lg shadow-md mt-4 mx-auto">
             <h2 className="text-3xl font-extrabold text-blue-800 mb-6 text-center">
@@ -502,7 +538,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                 onClick={handleLogout}
                                 className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-bold rounded-md transition-colors"
                             >
-                                Logout (Commish)
+                            Logout (Commish)
                             </button>
                         ) : ( 
                             <form onSubmit={handleLogin} className="flex flex-col items-center space-y-2">
@@ -802,6 +838,37 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                             </div>
                         )}
                     </section>
+
+                    {/* Team Financial Summary Section */}
+                    {Object.keys(teamSummary).length > 0 && (
+                        <section className="mt-8 p-6 bg-gray-50 rounded-lg shadow-inner">
+                            <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">Team Financial Summary (Current Season)</h3>
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
+                                    <thead className="bg-blue-100">
+                                        <tr>
+                                            <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team Name</th>
+                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Total Fees Paid</th>
+                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Total Payouts Received</th>
+                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Net Balance</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {Object.entries(teamSummary).sort(([teamA], [teamB]) => teamA.localeCompare(teamB)).map(([team, data], index) => (
+                                            <tr key={team} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                                                <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{team}</td>
+                                                <td className="py-2 px-4 text-sm text-right text-green-700 font-medium border-b border-gray-200">${data.totalFees.toFixed(2)}</td>
+                                                <td className="py-2 px-4 text-sm text-right text-red-700 font-medium border-b border-gray-200">${data.totalPayouts.toFixed(2)}</td>
+                                                <td className={`py-2 px-4 text-sm text-right font-bold border-b border-gray-200 ${data.netBalance >= 0 ? 'text-blue-900' : 'text-red-900'}`}>
+                                                    ${data.netBalance.toFixed(2)}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+                    )}
                 </>
             )}
 
