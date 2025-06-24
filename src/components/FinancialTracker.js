@@ -33,12 +33,14 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [userId, setUserId] = useState(null);
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [uniqueTeams, setUniqueTeams] = useState([]);
-    const [weeklyHighScores, setWeeklyHighScores] = useState({});
-    const [currentSeason, setCurrentSeason] = useState(0); // Latest season from historicalMatchups, used for new transactions
-    const [currentWeek, setCurrentWeek] = useState(0); // New state for the latest week in the current season
+    // weeklyHighScores will now store data for the currently selected season
+    const [weeklyHighScores, setWeeklyHighScores] = useState({}); 
+    // currentWeek will now store the max week for the currently selected season
+    const [currentWeekForSelectedSeason, setCurrentWeekForSelectedSeason] = useState(0); 
+
     const [selectedSeason, setSelectedSeason] = useState(null); // Season currently being viewed/filtered
     const [availableSeasons, setAvailableSeasons] = useState([]); // All seasons available in historicalMatchups
-    const [activeTeamsCount, setActiveTeamsCount] = useState(0); 
+    const [activeTeamsCount, setActiveTeamsCount] = useState(0); // Teams in the selected season
     
     const [isTeamAutoPopulated, setIsTeamAutoPopulated] = useState(false); 
     const [autoPopulateWarning, setAutoPopulateWarning] = useState(null); 
@@ -143,14 +145,13 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     useEffect(() => {
         if (historicalMatchups && Array.isArray(historicalMatchups)) {
             const yearsSet = new Set();
-            let maxSeason = 0;
-            let maxWeekInCurrentSeason = 0; // Track the maximum week for the latest season
+            let maxSeasonOverall = 0; // Track the absolute latest season
 
             historicalMatchups.forEach(match => {
                 if (match.year && typeof match.year === 'number') {
                     yearsSet.add(match.year);
-                    if (match.year > maxSeason) {
-                        maxSeason = match.year;
+                    if (match.year > maxSeasonOverall) {
+                        maxSeasonOverall = match.year;
                     }
                 }
             });
@@ -158,80 +159,88 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             const sortedYears = Array.from(yearsSet).sort((a, b) => b - a); // Descending order
             setAvailableSeasons(sortedYears);
             
-            // Set currentSeason to the latest, and selectedSeason to the latest (default view)
-            setCurrentSeason(maxSeason > 0 ? maxSeason : 0);
-            if (maxSeason > 0 && selectedSeason === null) { // Only set default on initial load
-                setSelectedSeason(maxSeason);
+            // Set selectedSeason to the latest overall season on initial load if not already set
+            if (maxSeasonOverall > 0 && selectedSeason === null) {
+                setSelectedSeason(maxSeasonOverall);
             }
-            console.log("Determined Current Season:", maxSeason);
+            console.log("Determined maxSeasonOverall:", maxSeasonOverall);
             console.log("Available Seasons:", sortedYears);
-
-            if (maxSeason === 0) {
-                return; 
-            }
-
-            const teamsSet = new Set();
-            const weeklyScores = {}; 
-
-            historicalMatchups.forEach(match => {
-                // Only consider data for the determined current (latest) season for team list and weekly high scores
-                if (match.year === maxSeason) { 
-                    const team1 = getDisplayTeamName(match.team1);
-                    const team2 = getDisplayTeamName(match.team2);
-                    if (team1) teamsSet.add(team1);
-                    if (team2) teamsSet.add(team2);
-
-                    const week = match.week; 
-                    if (week) {
-                        if (!weeklyScores[week]) {
-                            weeklyScores[week] = [];
-                        }
-                        if (team1 && match.team1Score != null) {
-                            weeklyScores[week].push({ team: team1, score: parseFloat(match.team1Score) });
-                        }
-                        if (team2 && match.team2Score != null) {
-                            weeklyScores[week].push({ team: team2, score: parseFloat(match.team2Score) });
-                        }
-                        if (week > maxWeekInCurrentSeason) {
-                            maxWeekInCurrentSeason = week;
-                        }
-                    }
-                }
-            });
-            setCurrentWeek(maxWeekInCurrentSeason); // Set the latest week for the current season
-            console.log("Determined Current Week for Current Season:", maxWeekInCurrentSeason);
-
-            const calculatedHighScores = {};
-            Object.keys(weeklyScores).forEach(week => {
-                const scoresInWeek = weeklyScores[week];
-                if (scoresInWeek.length > 0) {
-                    scoresInWeek.sort((a, b) => b.score - a.score);
-
-                    calculatedHighScores[week] = {
-                        highest: scoresInWeek[0],
-                        secondHighest: null 
-                    };
-
-                    let secondHighestScore = null;
-                    for (let i = 1; i < scoresInWeek.length; i++) {
-                        if (scoresInWeek[i].score < scoresInWeek[0].score) {
-                            secondHighestScore = scoresInWeek[i];
-                            break; 
-                        }
-                    }
-                    calculatedHighScores[week].secondHighest = secondHighestScore;
-                }
-            });
-            setWeeklyHighScores(calculatedHighScores);
-            console.log("Calculated Weekly High Scores (Current Season Only):", calculatedHighScores);
-
-
-            const sortedTeams = Array.from(teamsSet).sort();
-            setUniqueTeams(['ALL_TEAMS_MULTIPLIER', ...sortedTeams]); 
-            setActiveTeamsCount(sortedTeams.length); 
-            
         }
-    }, [historicalMatchups, getDisplayTeamName, selectedSeason]); // Added selectedSeason as dependency to allow initial setting
+    }, [historicalMatchups, selectedSeason]);
+
+
+    // Effect to update team data, weekly high scores, and current week based on selectedSeason
+    useEffect(() => {
+        if (!selectedSeason || !historicalMatchups) {
+            setUniqueTeams([]);
+            setWeeklyHighScores({});
+            setCurrentWeekForSelectedSeason(0);
+            setActiveTeamsCount(0);
+            return;
+        }
+
+        const teamsSet = new Set();
+        const weeklyScores = {};
+        let maxWeekForCurrentSelectedSeason = 0;
+
+        historicalMatchups.forEach(match => {
+            if (match.year === selectedSeason) {
+                const team1 = getDisplayTeamName(match.team1);
+                const team2 = getDisplayTeamName(match.team2);
+                if (team1) teamsSet.add(team1);
+                if (team2) teamsSet.add(team2);
+
+                const week = match.week;
+                if (week) {
+                    if (!weeklyScores[week]) {
+                        weeklyScores[week] = [];
+                    }
+                    if (team1 && match.team1Score != null) {
+                        weeklyScores[week].push({ team: team1, score: parseFloat(match.team1Score) });
+                    }
+                    if (team2 && match.team2Score != null) {
+                        weeklyScores[week].push({ team: team2, score: parseFloat(match.team2Score) });
+                    }
+                    if (week > maxWeekForCurrentSelectedSeason) {
+                        maxWeekForCurrentSelectedSeason = week;
+                    }
+                }
+            }
+        });
+
+        const calculatedHighScores = {};
+        Object.keys(weeklyScores).forEach(week => {
+            const scoresInWeek = weeklyScores[week];
+            if (scoresInWeek.length > 0) {
+                scoresInWeek.sort((a, b) => b.score - a.score);
+
+                calculatedHighScores[week] = {
+                    highest: scoresInWeek[0],
+                    secondHighest: null
+                };
+
+                let secondHighestScore = null;
+                for (let i = 1; i < scoresInWeek.length; i++) {
+                    if (scoresInWeek[i].score < scoresInWeek[0].score) {
+                        secondHighestScore = scoresInWeek[i];
+                        break;
+                    }
+                }
+                calculatedHighScores[week].secondHighest = secondHighestScore;
+            }
+        });
+        setWeeklyHighScores(calculatedHighScores);
+        setCurrentWeekForSelectedSeason(maxWeekForCurrentSelectedSeason);
+        console.log(`Calculated Weekly High Scores for selected season ${selectedSeason}:`, calculatedHighScores);
+        console.log(`Determined max week for selected season ${selectedSeason}:`, maxWeekForCurrentSelectedSeason);
+
+
+        const sortedTeams = Array.from(teamsSet).sort();
+        setUniqueTeams(['ALL_TEAMS_MULTIPLIER', ...sortedTeams]); 
+        setActiveTeamsCount(sortedTeams.length); 
+        console.log(`Unique teams for selected season ${selectedSeason}:`, sortedTeams);
+    }, [selectedSeason, historicalMatchups, getDisplayTeamName]);
+
 
     // Effect to automatically set teamName and description when category and weeklyPointsWeek change
     useEffect(() => {
@@ -263,10 +272,10 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     setDescription(`Payout: Weekly 2nd Points - ${weekData.secondHighest.team} (${weekData.secondHighest.score} pts)`);
                     setIsTeamAutoPopulated(true);
                 } else {
-                    setAutoPopulateWarning(`No ${category.replace(/_/g, ' ')} winner found for Week ${weeklyPointsWeek} in the current season.`);
+                    setAutoPopulateWarning(`No ${category.replace(/_/g, ' ')} winner found for Week ${weeklyPointsWeek} in the selected season.`);
                 }
             } else {
-                setAutoPopulateWarning(`No score data found for Week ${weeklyPointsWeek} in the current season.`);
+                setAutoPopulateWarning(`No score data found for Week ${weeklyPointsWeek} in the selected season.`);
             }
         } else if (type === 'credit' && category === 'side_pot') {
             setTeamName(''); 
@@ -276,8 +285,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setTeamName('');
             setDescription('');
         }
-    }, [category, weeklyPointsWeek, weeklyHighScores, type]); 
-
+    }, [category, weeklyPointsWeek, weeklyHighScores, type, selectedSeason]); // Added selectedSeason here
 
     // Initialize Firebase and set up authentication
     useEffect(() => {
@@ -433,7 +441,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 ...doc.data()
             }));
             
-            // Client-client filtering by selectedSeason
+            // Client-side filtering by selectedSeason
             const filteredBySeason = fetchedTransactions.filter(t => 
                 selectedSeason === 0 || t.season === selectedSeason
             );
@@ -550,8 +558,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     date: serverTimestamp(),
                     userId: userId,
                     category: category,
-                    season: currentSeason, // Always use currentSeason for new transactions
-                    weekNumber: currentWeek, // Assign current week
+                    season: selectedSeason, // Use selectedSeason for new transactions
+                    weekNumber: currentWeekForSelectedSeason, // Assign current week for selected season
                     teamsInvolvedCount: 1,
                 });
             }
@@ -572,8 +580,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                         date: serverTimestamp(),
                         userId: userId,
                         category: category,
-                        season: currentSeason,
-                        weekNumber: currentWeek, // Assign current week
+                        season: selectedSeason, // Use selectedSeason for new transactions
+                        weekNumber: currentWeekForSelectedSeason, // Assign current week for selected season
                         numPickups: entry.numPickups, // Store number of pickups
                     });
                 }
@@ -595,7 +603,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
             if (type === 'debit' && teamName === 'ALL_TEAMS_MULTIPLIER') {
                 if (activeTeamsCount === 0) {
-                    setError("Cannot process 'All Teams' transaction: No active teams found in the current season.");
+                    setError("Cannot process 'All Teams' transaction: No active teams found in the selected season.");
                     return;
                 }
                 finalAmount = finalAmount * activeTeamsCount;
@@ -613,8 +621,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 date: serverTimestamp(),
                 userId: userId,
                 category: category, 
-                season: currentSeason, // Always use currentSeason for new transactions
-                weekNumber: currentWeek, // Assign current week by default
+                season: selectedSeason, // Use selectedSeason for new transactions
+                weekNumber: currentWeekForSelectedSeason, // Assign current week for selected season by default
                 teamsInvolvedCount: teamsInvolved,
             });
 
@@ -636,11 +644,11 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                             transactionsToAdd[0].teamName = weekData.secondHighest.team;
                             transactionsToAdd[0].description = `Payout: Weekly 2nd Points - ${weekData.secondHighest.team} (${weekData.secondHighest.score} pts)`;
                         } else {
-                            setError(`Could not find a winning team for ${category.replace(/_/g, ' ')} in Week ${weekNum} for the current season. Transaction not added.`);
+                            setError(`Could not find a winning team for ${category.replace(/_/g, ' ')} in Week ${weekNum} for the selected season. Transaction not added.`);
                             return; 
                         }
                     } else {
-                        setError(`No score data found for Week ${weekNum} in the current season. Transaction not added.`);
+                        setError(`No score data found for Week ${weekNum} in the selected season. Transaction not added.`);
                         return; 
                     }
                 } else if (category === 'side_pot') {
@@ -1041,13 +1049,13 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                         <p className="text-center text-red-600 font-semibold mb-4">{error}</p>
                     )}
 
-                    {/* Season Selector */}
+                    {/* Season Selector for Viewing */}
                     {availableSeasons.length > 0 && (
                         <div className="flex justify-center items-center mb-4 p-2 bg-blue-50 rounded-lg shadow-sm">
-                            <label htmlFor="seasonFilter" className="mr-2 font-semibold text-blue-700">View Season:</label>
+                            <label htmlFor="seasonFilter" className="mr-2 font-semibold text-blue-700">View/Add Data For Season:</label>
                             <select
                                 id="seasonFilter"
-                                value={selectedSeason || ''} // Handle null initial state
+                                value={selectedSeason || ''} 
                                 onChange={(e) => {
                                     const newSeason = parseInt(e.target.value);
                                     setSelectedSeason(isNaN(newSeason) ? null : newSeason);
@@ -1065,7 +1073,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
 
                     {/* Financial Summary */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8"> {/* Changed to responsive grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8"> 
                         <div className="bg-red-50 p-4 rounded-lg shadow-sm text-center">
                             <h3 className="text-lg font-semibold text-red-700">Total Fees</h3>
                             <p className="text-2xl font-bold text-red-900">${overallDebits.toFixed(2)}</p>
@@ -1087,7 +1095,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     {/* Add New Transaction Form (Conditionally rendered for Commish) */}
                     {isCommish ? (
                         <section className="mb-8 p-6 bg-gray-50 rounded-lg shadow-inner">
-                            <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">Add New Transaction</h3>
+                            <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">Add New Transaction (for {selectedSeason || 'selected'} season)</h3>
                             <form onSubmit={handleAddTransaction} className="space-y-4">
                                 <div className="flex flex-col md:flex-row gap-4">
                                     <div className="flex-1">
@@ -1159,7 +1167,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
                                 {(category === 'weekly_1st_points' || category === 'weekly_2nd_points') && (
                                     <div>
-                                        <label htmlFor="weeklyPointsWeek" className="block text-sm font-medium text-gray-700 mb-1">Week Number (Override current week)</label>
+                                        <label htmlFor="weeklyPointsWeek" className="block text-sm font-medium text-gray-700 mb-1">Week Number (defaults to latest for selected season)</label>
                                         <input
                                             type="number"
                                             id="weeklyPointsWeek"
@@ -1370,7 +1378,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Amount</th>
                                             <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Type</th>
                                             <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Category</th> 
-                                            <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Week</th> {/* New Week Column */}
+                                            <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Week</th> 
                                             {isCommish && <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Actions</th>}
                                         </tr>
                                     </thead>
@@ -1418,7 +1426,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                         {t.category ? t.category.replace(/_/g, ' ') : 'General'}
                                                     </td> 
                                                     <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
-                                                        {t.weekNumber === 0 ? 'Pre' : (t.weekNumber || '-')} {/* Display Week Number, 'Pre' if 0 */}
+                                                        {t.weekNumber === 0 ? 'Pre' : (t.weekNumber || '-')} 
                                                     </td>
                                                     {isCommish && ( 
                                                         <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
@@ -1664,14 +1672,14 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                         </p>
                         <div className="flex justify-center space-x-4">
                             <button
-                                type="button" // Explicitly setting type="button"
+                                type="button" 
                                 onClick={cancelDelete}
                                 className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-md transition-colors"
                             >
                                 Cancel
                             </button>
                             <button
-                                type="button" // Explicitly setting type="button"
+                                type="button" 
                                 onClick={executeDelete}
                                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors"
                             >
@@ -1692,14 +1700,14 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                         </p>
                         <div className="flex justify-center space-x-4">
                             <button
-                                type="button" // Explicitly setting type="button"
+                                type="button" 
                                 onClick={cancelBulkDelete}
                                 className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-md transition-colors"
                             >
                                 Cancel
                             </button>
                             <button
-                                type="button" // Explicitly setting type="button"
+                                type="button" 
                                 onClick={executeBulkDelete}
                                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors"
                             >
