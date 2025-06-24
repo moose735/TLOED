@@ -26,7 +26,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     const [teamName, setTeamName] = useState(''); 
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const [error, setError] = useState(null); // General error message for Firebase issues, etc.
     const [db, setDb] = useState(null);
     const [auth, setAuth] = useState(null);
     const [userId, setUserId] = useState(null);
@@ -34,10 +34,11 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [uniqueTeams, setUniqueTeams] = useState([]);
     const [weeklyHighScores, setWeeklyHighScores] = useState({});
     const [currentSeason, setCurrentSeason] = useState(null); 
-    const [activeTeamsCount, setActiveTeamsCount] = useState(0); // New state for count of active teams
+    const [activeTeamsCount, setActiveTeamsCount] = useState(0); 
     
-    // State to manage automatic population of teamName field
+    // State to manage automatic population of teamName field and associated warning
     const [isTeamAutoPopulated, setIsTeamAutoPopulated] = useState(false);
+    const [autoPopulateWarning, setAutoPopulateWarning] = useState(null); // Warning for auto-population specific issues
     
     const [showConfirmDelete, setShowConfirmDelete] = useState(false);
     const [transactionToDelete, setTransactionToDelete] = useState(null);
@@ -67,6 +68,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
             if (maxSeason === 0) {
                 setError("No historical matchup data with a valid 'year' property found to determine the current season. Showing all transactions.");
+                // We'll proceed without a currentSeason filter in this case, but still show the error.
+                // The transaction list will then show ALL transactions regardless of season.
                 return; 
             }
 
@@ -122,7 +125,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
             const sortedTeams = Array.from(teamsSet).sort();
             setUniqueTeams(['ALL_TEAMS_MULTIPLIER', ...sortedTeams]); 
-            setActiveTeamsCount(sortedTeams.length); // Set the count of active teams
+            setActiveTeamsCount(sortedTeams.length); 
             
             if (sortedTeams.length > 0) {
                 setTeamName(''); 
@@ -132,7 +135,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     // Effect to automatically set teamName and description when payoutCategory and weeklyPointsWeek change
     useEffect(() => {
-        setError(null); // Clear errors related to previous auto-population attempts
+        setAutoPopulateWarning(null); // Clear auto-populate warning at the start of this effect
         setIsTeamAutoPopulated(false); // Reset auto-population flag
 
         if (type === 'payout' && 
@@ -152,25 +155,21 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     setDescription(`Payout: Second Highest Weekly Points (Week ${weeklyPointsWeek}) - ${weekData.secondHighest.team} (${weekData.secondHighest.score} pts)`);
                     setIsTeamAutoPopulated(true);
                 } else {
-                    setTeamName('');
-                    // Only set a specific error if data is explicitly missing for the selected category
-                    if (payoutCategory === 'highest_weekly_points' && !weekData.highest) {
-                        setError(`No Highest Weekly Points winner found for Week ${weeklyPointsWeek} in the current season.`);
-                    } else if (payoutCategory === 'second_highest_weekly_points' && !weekData.secondHighest) {
-                        setError(`No Second Highest Weekly Points winner found for Week ${weeklyPointsWeek} in the current season.`);
-                    }
-                    setDescription(''); // Clear description if automated team not found
+                    // No winner found for specific category in this week
+                    setAutoPopulateWarning(`No ${payoutCategory.replace(/_/g, ' ')} winner found for Week ${weeklyPointsWeek} in the current season.`);
+                    // DO NOT clear teamName or description here. Let user fill manually or keep previous.
                 }
             } else {
-                setTeamName('');
-                setDescription('');
-                setError(`No score data found for Week ${weeklyPointsWeek} in the current season. Please ensure data is available for this week.`);
+                // No data found for the week at all
+                setAutoPopulateWarning(`No score data found for Week ${weeklyPointsWeek} in the current season.`);
+                // DO NOT clear teamName or description here.
             }
         } else if (type === 'payout' && payoutCategory === 'side_pot') {
             setTeamName(''); 
             setDescription(`Payout: Side Pot`);
-            // Side pot team is manually selected, so not auto-populated
+            // Side pot team is manually selected, not auto-populated
         } else {
+            // Reset to default behavior if not an automated payout type
             setTeamName('');
             setDescription('');
         }
@@ -378,10 +377,12 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                         newTransaction.teamName = weekData.secondHighest.team;
                         newTransaction.description = `Payout: Second Highest Weekly Points (Week ${weekNum}) - ${weekData.secondHighest.team} (${weekData.secondHighest.score} pts)`;
                     } else {
+                        // This case means week data exists but no winner for the specific category
                         setError(`Could not find a winning team for ${payoutCategory.replace(/_/g, ' ')} in Week ${weekNum} for the current season. Transaction not added.`);
                         return; 
                     }
                 } else {
+                    // This case means no historical data for the selected week
                     setError(`No score data found for Week ${weekNum} in the current season. Transaction not added.`);
                     return; 
                 }
@@ -406,7 +407,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setPayoutCategory('general'); 
             setWeeklyPointsWeek(''); 
             setSidePotName(''); 
-            setError(null);
+            setError(null); // Clear any general errors on successful add
+            setAutoPopulateWarning(null); // Clear auto-populate warning on successful add
             console.log("Transaction added to Firestore successfully.");
         } catch (addError) {
             console.error("Error adding transaction:", addError);
@@ -448,12 +450,13 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         setTransactionToDelete(null);
     };
 
-    // Determine if team dropdown should be disabled/read-only. Now depends on isTeamAutoPopulated.
+    // Team selection dropdown is disabled if it's auto-populated
     const isTeamSelectionDisabled = isTeamAutoPopulated;
 
     // Filtered transactions for display based on selected team AND current season
     const filteredTransactions = transactions.filter(t => 
-        t.season === currentSeason && 
+        // If currentSeason is null (e.g., no 'year' in data), show all transactions. Otherwise, filter by season.
+        (currentSeason === null || t.season === currentSeason) && 
         (filterTeam === '' || t.teamName === filterTeam || (filterTeam === 'ALL_TEAMS_MULTIPLIER' && t.teamName === 'All Teams'))
     );
 
@@ -609,8 +612,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                         placeholder="e.g., Annual League Fee, Playoff Winner Bonus"
                                         maxLength="100"
                                         required
-                                        // Make description read-only if team is auto-populated
-                                        readOnly={isTeamAutoPopulated}
+                                        readOnly={isTeamAutoPopulated} // Read-only only if auto-populated
                                         className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none ${isTeamAutoPopulated ? 'bg-gray-200 cursor-not-allowed' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'} sm:text-sm`}
                                     />
                                 </div>
@@ -623,7 +625,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             value={payoutCategory}
                                             onChange={(e) => {
                                                 setPayoutCategory(e.target.value);
-                                                // Reset weeklyPointsWeek and sidePotName when category changes
                                                 setWeeklyPointsWeek(''); 
                                                 setSidePotName('');
                                             }}
@@ -672,8 +673,13 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                     <select
                                         id="teamName"
                                         value={teamName}
-                                        onChange={(e) => setTeamName(e.target.value)}
-                                        disabled={isTeamSelectionDisabled} // Use new state here
+                                        onChange={(e) => {
+                                            setTeamName(e.target.value);
+                                            // If user manually changes teamName, it's no longer auto-populated
+                                            setIsTeamAutoPopulated(false);
+                                            setAutoPopulateWarning(null); // Clear any auto-populate warnings
+                                        }}
+                                        disabled={isTeamSelectionDisabled} 
                                         className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none ${isTeamSelectionDisabled ? 'bg-gray-200 cursor-not-allowed' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'} sm:text-sm`}
                                     >
                                         <option value="">Select Team (Optional)</option>
@@ -684,7 +690,10 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             <option key={team} value={team}>{team}</option>
                                         ))}
                                     </select>
-                                    {isTeamAutoPopulated && teamName && ( // Show message only if auto-populated
+                                    {autoPopulateWarning && ( // Display warning if auto-population failed
+                                        <p className="text-xs text-orange-600 mt-1">{autoPopulateWarning}</p>
+                                    )}
+                                    {isTeamAutoPopulated && teamName && ( // Show message only if successfully auto-populated
                                         <p className="text-xs text-gray-500 mt-1">Automatically determined: {teamName}</p>
                                     )}
                                 </div>
