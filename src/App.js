@@ -401,7 +401,6 @@ const App = () => {
              />
            )}
            {/* NEW: Render FinancialTracker */}
-          // Inside your App.js render method:
 {activeTab === TABS.FINANCIALS && (
     <FinancialTracker
         getDisplayTeamName={getMappedTeamName}
