@@ -32,9 +32,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [userId, setUserId] = useState(null);
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [uniqueTeams, setUniqueTeams] = useState([]);
-    // New state to store calculated weekly high scores
     const [weeklyHighScores, setWeeklyHighScores] = useState({});
-    
+    const [currentSeason, setCurrentSeason] = useState(null); // New state for the current season
+
     const [showConfirmDelete, setShowConfirmDelete] = useState(false);
     const [transactionToDelete, setTransactionToDelete] = useState(null);
 
@@ -42,7 +42,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [password, setPassword] = useState('');
     const [loginError, setLoginError] = useState(null);
 
-    const [filterTeam, setFilterTeam] = useState(''); // New state for filtering transactions by team
+    const [filterTeam, setFilterTeam] = useState(''); 
 
     const COMMISH_UID = process.env.REACT_APP_COMMISH_UID;
     const isCommish = userId && COMMISH_UID && userId === COMMISH_UID; 
@@ -50,62 +50,75 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     // Derive unique teams and calculate weekly high scores from historicalMatchups
     useEffect(() => {
         if (historicalMatchups && Array.isArray(historicalMatchups)) {
-            const teamsSet = new Set();
-            const weeklyScores = {}; // To store { week: [{ team, score }] }
-
+            let maxSeason = 0;
+            // First pass: Determine the most current season/year
             historicalMatchups.forEach(match => {
-                const team1 = getDisplayTeamName(match.team1);
-                const team2 = getDisplayTeamName(match.team2);
-                if (team1) teamsSet.add(team1);
-                if (team2) teamsSet.add(team2);
-
-                const week = match.week; // Assuming 'week' property exists in match object
-                if (week) {
-                    if (!weeklyScores[week]) {
-                        weeklyScores[week] = [];
-                    }
-                    if (team1 && match.team1Score != null) {
-                        weeklyScores[week].push({ team: team1, score: parseFloat(match.team1Score) });
-                    }
-                    if (team2 && match.team2Score != null) {
-                        weeklyScores[week].push({ team: team2, score: parseFloat(match.team2Score) });
+                // Assuming 'year' is the property that indicates the season.
+                // Adjust 'match.year' if your data uses a different property (e.g., 'season').
+                if (match.year && typeof match.year === 'number') {
+                    if (match.year > maxSeason) {
+                        maxSeason = match.year;
                     }
                 }
             });
+            setCurrentSeason(maxSeason > 0 ? maxSeason : null);
+            console.log("Determined Current Season:", maxSeason);
 
-            // Calculate highest and second highest for each week
-            const calculatedHighScores = {};
-            Object.keys(weeklyScores).forEach(week => {
-                const scoresInWeek = weeklyScores[week];
-                if (scoresInWeek.length > 0) {
-                    // Sort scores in descending order
-                    scoresInWeek.sort((a, b) => b.score - a.score);
+            if (maxSeason === 0) {
+                setError("No historical matchup data with a valid 'year' property found to determine the current season.");
+                return; // Exit if no season can be determined
+            }
 
-                    calculatedHighScores[week] = {
-                        highest: scoresInWeek[0], // Highest score
-                        secondHighest: scoresInWeek.length > 1 && scoresInWeek[0].score !== scoresInWeek[1].score
-                                       ? scoresInWeek[1] // Second highest if different from highest
-                                       : (scoresInWeek.length > 2 && scoresInWeek[0].score === scoresInWeek[1].score && scoresInWeek[1].score !== scoresInWeek[2].score
-                                          ? scoresInWeek[2] // Handle ties for first if there's a distinct second
-                                          : null) // No distinct second highest
-                    };
+            const teamsSet = new Set();
+            const weeklyScores = {}; // To store { week: [{ team, score }] }
 
-                    // Handle ties for highest: if multiple teams have the same highest score, only list one.
-                    // This logic ensures `secondHighest` is truly the second highest *distinct* score.
-                    if (calculatedHighScores[week].secondHighest && calculatedHighScores[week].secondHighest.score === calculatedHighScores[week].highest.score) {
-                        // If secondHighest is a tie for the highest score, find the next distinct score
-                        const distinctScores = Array.from(new Set(scoresInWeek.map(s => s.score))).sort((a, b) => b - a);
-                        if (distinctScores.length > 1) {
-                            const secondDistinctScore = distinctScores[1];
-                            calculatedHighScores[week].secondHighest = scoresInWeek.find(s => s.score === secondDistinctScore);
-                        } else {
-                            calculatedHighScores[week].secondHighest = null; // No distinct second highest
+            // Second pass: Filter data for the current season and process it
+            historicalMatchups.forEach(match => {
+                if (match.year === maxSeason) { // Only process data for the current season
+                    const team1 = getDisplayTeamName(match.team1);
+                    const team2 = getDisplayTeamName(match.team2);
+                    if (team1) teamsSet.add(team1);
+                    if (team2) teamsSet.add(team2);
+
+                    const week = match.week; 
+                    if (week) {
+                        if (!weeklyScores[week]) {
+                            weeklyScores[week] = [];
+                        }
+                        if (team1 && match.team1Score != null) {
+                            weeklyScores[week].push({ team: team1, score: parseFloat(match.team1Score) });
+                        }
+                        if (team2 && match.team2Score != null) {
+                            weeklyScores[week].push({ team: team2, score: parseFloat(match.team2Score) });
                         }
                     }
                 }
             });
+
+            const calculatedHighScores = {};
+            Object.keys(weeklyScores).forEach(week => {
+                const scoresInWeek = weeklyScores[week];
+                if (scoresInWeek.length > 0) {
+                    scoresInWeek.sort((a, b) => b.score - a.score);
+
+                    calculatedHighScores[week] = {
+                        highest: scoresInWeek[0],
+                        secondHighest: null // Initialize secondHighest to null
+                    };
+
+                    // Find the second highest distinct score
+                    let secondHighestScore = null;
+                    for (let i = 1; i < scoresInWeek.length; i++) {
+                        if (scoresInWeek[i].score < scoresInWeek[0].score) {
+                            secondHighestScore = scoresInWeek[i];
+                            break; // Found the first distinct second highest
+                        }
+                    }
+                    calculatedHighScores[week].secondHighest = secondHighestScore;
+                }
+            });
             setWeeklyHighScores(calculatedHighScores);
-            console.log("Calculated Weekly High Scores:", calculatedHighScores);
+            console.log("Calculated Weekly High Scores (Current Season Only):", calculatedHighScores);
 
 
             const sortedTeams = Array.from(teamsSet).sort();
@@ -116,7 +129,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         }
     }, [historicalMatchups, getDisplayTeamName]);
 
-    // Effect to automatically set teamName when payoutCategory and weeklyPointsWeek change
+    // Effect to automatically set teamName and description when payoutCategory and weeklyPointsWeek change
     useEffect(() => {
         if (type === 'payout' && 
             (payoutCategory === 'highest_weekly_points' || payoutCategory === 'second_highest_weekly_points') &&
@@ -133,22 +146,21 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 } else {
                     setTeamName('');
                     setDescription('');
-                    setError(`No data found for ${payoutCategory.replace(/_/g, ' ')} in Week ${weeklyPointsWeek}.`);
+                    setError(`No data found for ${payoutCategory.replace(/_/g, ' ')} in Week ${weeklyPointsWeek}. Ensure data is available for this week in the current season.`);
                 }
             } else {
                 setTeamName('');
                 setDescription('');
-                setError(`No score data found for Week ${weeklyPointsWeek}.`);
+                setError(`No score data found for Week ${weeklyPointsWeek} in the current season. Please check the week number or historical data.`);
             }
         } else if (type === 'payout' && payoutCategory === 'side_pot') {
-            setTeamName(''); // Clear team name for side pot, as it's manually selected
+            setTeamName(''); 
             setDescription(`Payout: Side Pot`);
         } else {
-            // Clear team name and description if not an automated payout type
             setTeamName('');
             setDescription('');
         }
-    }, [payoutCategory, weeklyPointsWeek, weeklyHighScores, type]); // Dependencies for this effect
+    }, [payoutCategory, weeklyPointsWeek, weeklyHighScores, type]); 
 
 
     // Initialize Firebase and set up authentication
@@ -259,6 +271,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
         const transactionCollectionPath = `/artifacts/${appId}/public/data/financial_transactions`;
         
+        // Fetch all transactions, then filter by season in frontend if needed
         const q = query(collection(db, transactionCollectionPath), orderBy('date', 'desc'));
 
         console.log("Attempting to listen to Firestore collection:", transactionCollectionPath);
@@ -308,22 +321,20 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         }
         
         let finalAmount = parseFloat(amount);
-        let finalTeamName = teamName; // This will be pre-populated for auto-payouts
+        let finalTeamName = teamName; 
 
-        // "All Teams" multiplier only applies to 'fee' type
         if (teamName === 'ALL_TEAMS_MULTIPLIER' && type === 'fee') {
+            // Filter uniqueTeams to only include actual team names (exclude 'ALL_TEAMS_MULTIPLIER')
             const activeTeamsCount = uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').length;
             if (activeTeamsCount === 0) {
-                setError("Cannot process 'All Teams' transaction: No active teams found.");
+                setError("Cannot process 'All Teams' transaction: No active teams found in the current season.");
                 return;
             }
             finalAmount = finalAmount * activeTeamsCount;
             finalTeamName = 'All Teams'; 
         } else if (teamName === 'ALL_TEAMS_MULTIPLIER' && type === 'payout') {
-            // If "All Teams" is selected for a payout, store it as "All Teams" but don't multiply
             finalTeamName = 'All Teams';
-            // Optionally, remove this setError if the user understands this is just a label for payouts
-            setError("Warning: 'All Teams' selected for a payout. Amount will not be multiplied.");
+            setError("Warning: 'All Teams' selected for a payout. Amount will not be multiplied. Ensure this is intentional.");
         }
 
 
@@ -335,9 +346,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             date: serverTimestamp(),
             userId: userId,
             category: payoutCategory, 
+            season: currentSeason // Store the current season with the transaction
         };
 
-        // Add conditional fields based on payoutCategory
         if (type === 'payout') {
             if (payoutCategory === 'highest_weekly_points' || payoutCategory === 'second_highest_weekly_points') {
                 if (!weeklyPointsWeek || isNaN(parseInt(weeklyPointsWeek))) {
@@ -347,7 +358,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 const weekNum = parseInt(weeklyPointsWeek);
                 newTransaction.weekNumber = weekNum;
 
-                // AUTOMATION: Set teamName based on calculated high scores
                 const weekData = weeklyHighScores[weekNum];
                 if (weekData) {
                     if (payoutCategory === 'highest_weekly_points' && weekData.highest) {
@@ -357,12 +367,12 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                         newTransaction.teamName = weekData.secondHighest.team;
                         newTransaction.description = `Payout: Second Highest Weekly Points (Week ${weekNum}) - ${weekData.secondHighest.team} (${weekData.secondHighest.score} pts)`;
                     } else {
-                        setError(`Could not find a winning team for ${payoutCategory.replace(/_/g, ' ')} in Week ${weekNum}. Transaction not added.`);
-                        return; // Prevent adding transaction if team cannot be determined
+                        setError(`Could not find a winning team for ${payoutCategory.replace(/_/g, ' ')} in Week ${weekNum} for the current season. Transaction not added.`);
+                        return; 
                     }
                 } else {
-                    setError(`No score data found for Week ${weekNum}. Transaction not added.`);
-                    return; // Prevent adding transaction if no data
+                    setError(`No score data found for Week ${weekNum} in the current season. Transaction not added.`);
+                    return; 
                 }
             } else if (payoutCategory === 'side_pot') {
                 if (!sidePotName.trim()) {
@@ -427,17 +437,16 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         setTransactionToDelete(null);
     };
 
-    // Determine if team dropdown should be disabled/read-only
     const isTeamSelectionAutomated = type === 'payout' && (
         payoutCategory === 'highest_weekly_points' || 
         payoutCategory === 'second_highest_weekly_points'
     );
 
-    // Filtered transactions for display based on selected team
+    // Filtered transactions for display based on selected team AND current season
     const filteredTransactions = transactions.filter(t => 
-        filterTeam === '' || 
-        t.teamName === filterTeam || 
-        (filterTeam === 'ALL_TEAMS_MULTIPLIER' && t.teamName === 'All Teams')
+        // Only show transactions for the current season
+        t.season === currentSeason && 
+        (filterTeam === '' || t.teamName === filterTeam || (filterTeam === 'ALL_TEAMS_MULTIPLIER' && t.teamName === 'All Teams'))
     );
 
     const totalFees = filteredTransactions
@@ -516,6 +525,18 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 )}
             </div>
 
+            {currentSeason && (
+                <div className="text-center text-sm text-blue-700 font-semibold mb-4">
+                    Displaying Data for: Season {currentSeason}
+                </div>
+            )}
+            {!currentSeason && !loading && (
+                 <div className="text-center text-orange-600 text-sm font-semibold mb-4">
+                    Could not determine current season from historical data. Showing all available transactions.
+                 </div>
+            )}
+
+
             {loading && <p className="text-center text-blue-600 font-semibold">Loading financial data...</p>}
             {error && <p className="text-center text-red-600 font-semibold mb-4">{error}</p>}
 
@@ -584,7 +605,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                     />
                                 </div>
 
-                                {type === 'payout' && ( // Show payout category only for payouts
+                                {type === 'payout' && ( 
                                     <div className="flex-1">
                                         <label htmlFor="payoutCategory" className="block text-sm font-medium text-gray-700 mb-1">Payout Category</label>
                                         <select
@@ -637,12 +658,10 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                         id="teamName"
                                         value={teamName}
                                         onChange={(e) => setTeamName(e.target.value)}
-                                        // Disable if team selection is automated
                                         disabled={isTeamSelectionAutomated}
                                         className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none ${isTeamSelectionAutomated ? 'bg-gray-200 cursor-not-allowed' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'} sm:text-sm`}
                                     >
                                         <option value="">Select Team (Optional)</option>
-                                        {/* "All Teams" option visible only for 'fee' type */}
                                         {type === 'fee' && ( 
                                             <option value="ALL_TEAMS_MULTIPLIER">All Teams (Multiplied)</option>
                                         )}
