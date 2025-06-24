@@ -19,12 +19,13 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [amount, setAmount] = useState('');
     const [description, setDescription] = useState('');
     const [type, setType] = useState('fee'); // 'fee' or 'payout'
-    // Renamed payoutCategory to category for general use
-    const [category, setCategory] = useState('general_fee'); // Default to a fee category
+    const [category, setCategory] = useState('general_fee'); 
     const [weeklyPointsWeek, setWeeklyPointsWeek] = useState('');
     const [sidePotName, setSidePotName] = useState('');
 
-    const [teamName, setTeamName] = useState(''); 
+    const [teamName, setTeamName] = useState(''); // For single team transactions
+    const [tradeTeams, setTradeTeams] = useState(['', '']); // For trade fees, initially two empty selections
+    
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null); 
     const [db, setDb] = useState(null);
@@ -75,14 +76,17 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     useEffect(() => {
         const categories = getCategoriesForType(type);
         if (categories.length > 0) {
-            // Set to the first category if current category is not valid for new type
             if (!categories.some(cat => cat.value === category)) {
                 setCategory(categories[0].value);
             }
         } else {
             setCategory('');
         }
-    }, [type]);
+        // When type changes, reset tradeTeams as it's specific to trade fees
+        if (type !== 'fee' || category !== 'trade_fee') {
+            setTradeTeams(['', '']);
+        }
+    }, [type, category]); // Added category to dependency array to react to category changes within the same type
 
 
     // Derive unique teams and calculate weekly high scores from historicalMatchups
@@ -158,10 +162,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setUniqueTeams(['ALL_TEAMS_MULTIPLIER', ...sortedTeams]); 
             setActiveTeamsCount(sortedTeams.length); 
             
-            // Set initial team name if there are teams and it's not auto-populated
-            if (!isTeamAutoPopulated && sortedTeams.length > 0) {
-                setTeamName(''); // Clear existing selection to force a choice, making it mandatory
-            }
+            // Do not clear teamName here, let the auto-population or manual selection handle it
         }
     }, [historicalMatchups, getDisplayTeamName]);
 
@@ -169,6 +170,11 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     useEffect(() => {
         setAutoPopulateWarning(null); 
         setIsTeamAutoPopulated(false); 
+
+        // Reset tradeTeams if not a trade fee category
+        if (!(type === 'fee' && category === 'trade_fee')) {
+            setTradeTeams(['', '']); 
+        }
 
         if (type === 'payout' && 
             (category === 'highest_weekly_points' || category === 'second_highest_weekly_points') &&
@@ -195,14 +201,12 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         } else if (type === 'payout' && category === 'side_pot') {
             setTeamName(''); 
             setDescription(`Payout: Side Pot`);
-        } else if (type === 'fee' && category === 'trade_fee') {
-            // For fees, we might want to clear teamName to force selection, or keep it if a team was already selected
-            // But don't auto-populate if it's not a highest/second-highest payout
-            setIsTeamAutoPopulated(false); 
-            setTeamName(''); // Clear team name to enforce mandatory selection for new fees/general payouts
-            setDescription(''); // Clear description for manual entry
-        }
-         else {
+        } else if (type === 'fee' && (category === 'trade_fee' || category === 'waiver_pickup_fee')) {
+            // For these specific fees, clear general teamName and description for manual entry
+            setTeamName(''); 
+            setDescription('');
+        } else {
+            // Default behavior for other categories
             setTeamName('');
             setDescription('');
         }
@@ -348,8 +352,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const handleAddTransaction = async (e) => {
         e.preventDefault();
 
-        setError(null); // Clear previous errors
-        setAutoPopulateWarning(null); // Clear previous auto-populate warnings
+        setError(null); 
+        setAutoPopulateWarning(null); 
 
         if (!db || !userId) {
             setError("Database not ready or user not authenticated. Cannot add transaction.");
@@ -367,90 +371,124 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setError("Description cannot be empty.");
             return;
         }
-        if (!teamName.trim() && teamName !== 'ALL_TEAMS_MULTIPLIER') { // Team name is mandatory now
-            setError("Please select an Associated Team.");
-            return;
-        }
         
-        let finalAmount = parseFloat(amount);
-        let finalTeamName = teamName; 
-        let teamsInvolved = 1; 
+        let transactionsToAdd = [];
 
-        if (type === 'fee' && teamName === 'ALL_TEAMS_MULTIPLIER') {
-            if (activeTeamsCount === 0) {
-                setError("Cannot process 'All Teams' transaction: No active teams found in the current season.");
+        if (type === 'fee' && category === 'trade_fee') {
+            // Validate trade teams
+            const validTradeTeams = tradeTeams.filter(team => team.trim() !== '');
+            if (validTradeTeams.length < 2) {
+                setError("Please select at least two teams for a trade fee.");
                 return;
             }
-            finalAmount = finalAmount * activeTeamsCount;
-            finalTeamName = 'All Teams'; 
-            teamsInvolved = activeTeamsCount; 
-        } else if (type === 'payout' && teamName === 'ALL_TEAMS_MULTIPLIER') {
-            finalTeamName = 'All Teams';
-            setError("Warning: 'All Teams' selected for a payout. Amount will not be multiplied. Ensure this is intentional.");
-        }
+            if (new Set(validTradeTeams).size !== validTradeTeams.length) {
+                setError("Duplicate teams detected for trade fee. Please select unique teams.");
+                return;
+            }
 
+            for (const team of validTradeTeams) {
+                transactionsToAdd.push({
+                    amount: parseFloat(amount), // Amount is per team for trades
+                    description: description.trim(),
+                    type: type,
+                    teamName: team,
+                    date: serverTimestamp(),
+                    userId: userId,
+                    category: category,
+                    season: currentSeason,
+                    teamsInvolvedCount: 1 // Each is an individual transaction for a single team
+                });
+            }
+        } else {
+            // Handle single team or "All Teams" transactions
+            if (!teamName.trim() && teamName !== 'ALL_TEAMS_MULTIPLIER') { 
+                setError("Please select an Associated Team.");
+                return;
+            }
 
-        const newTransaction = {
-            amount: finalAmount,
-            description: description.trim(),
-            type: type,
-            teamName: finalTeamName, 
-            date: serverTimestamp(),
-            userId: userId,
-            category: category, // Use the general category state
-            season: currentSeason,
-            teamsInvolvedCount: teamsInvolved 
-        };
+            let finalAmount = parseFloat(amount);
+            let finalTeamName = teamName; 
+            let teamsInvolved = 1; 
 
-        if (type === 'payout') {
-            if (category === 'highest_weekly_points' || category === 'second_highest_weekly_points') {
-                if (!weeklyPointsWeek || isNaN(parseInt(weeklyPointsWeek))) {
-                    setError("Please enter a valid week number for weekly points payouts.");
+            if (type === 'fee' && teamName === 'ALL_TEAMS_MULTIPLIER') {
+                if (activeTeamsCount === 0) {
+                    setError("Cannot process 'All Teams' transaction: No active teams found in the current season.");
                     return;
                 }
-                const weekNum = parseInt(weeklyPointsWeek);
-                newTransaction.weekNumber = weekNum;
+                finalAmount = finalAmount * activeTeamsCount;
+                finalTeamName = 'All Teams'; 
+                teamsInvolved = activeTeamsCount; 
+            } else if (type === 'payout' && teamName === 'ALL_TEAMS_MULTIPLIER') {
+                finalTeamName = 'All Teams';
+                // No explicit error, but a warning if user misinterprets 'All Teams' for payout
+            }
 
-                const weekData = weeklyHighScores[weekNum];
-                if (weekData) {
-                    if (category === 'highest_weekly_points' && weekData.highest) {
-                        newTransaction.teamName = weekData.highest.team;
-                        newTransaction.description = `Payout: Highest Weekly Points (Week ${weekNum}) - ${weekData.highest.team} (${weekData.highest.score} pts)`;
-                    } else if (category === 'second_highest_weekly_points' && weekData.secondHighest) {
-                        newTransaction.teamName = weekData.secondHighest.team;
-                        newTransaction.description = `Payout: Second Highest Weekly Points (Week ${weekNum}) - ${weekData.secondHighest.team} (${weekData.secondHighest.score} pts)`;
+            transactionsToAdd.push({
+                amount: finalAmount,
+                description: description.trim(),
+                type: type,
+                teamName: finalTeamName, 
+                date: serverTimestamp(),
+                userId: userId,
+                category: category, 
+                season: currentSeason,
+                teamsInvolvedCount: teamsInvolved 
+            });
+
+            if (type === 'payout') {
+                if (category === 'highest_weekly_points' || category === 'second_highest_weekly_points') {
+                    if (!weeklyPointsWeek || isNaN(parseInt(weeklyPointsWeek))) {
+                        setError("Please enter a valid week number for weekly points payouts.");
+                        return;
+                    }
+                    const weekNum = parseInt(weeklyPointsWeek);
+                    transactionsToAdd[0].weekNumber = weekNum; // Update the single transaction object
+
+                    const weekData = weeklyHighScores[weekNum];
+                    if (weekData) {
+                        if (category === 'highest_weekly_points' && weekData.highest) {
+                            transactionsToAdd[0].teamName = weekData.highest.team;
+                            transactionsToAdd[0].description = `Payout: Highest Weekly Points (Week ${weekNum}) - ${weekData.highest.team} (${weekData.highest.score} pts)`;
+                        } else if (category === 'second_highest_weekly_points' && weekData.secondHighest) {
+                            transactionsToAdd[0].teamName = weekData.secondHighest.team;
+                            transactionsToAdd[0].description = `Payout: Second Highest Weekly Points (Week ${weekNum}) - ${weekData.secondHighest.team} (${weekData.secondHighest.score} pts)`;
+                        } else {
+                            setError(`Could not find a winning team for ${category.replace(/_/g, ' ')} in Week ${weekNum} for the current season. Transaction not added.`);
+                            return; 
+                        }
                     } else {
-                        setError(`Could not find a winning team for ${category.replace(/_/g, ' ')} in Week ${weekNum} for the current season. Transaction not added.`);
+                        setError(`No score data found for Week ${weekNum} in the current season. Transaction not added.`);
                         return; 
                     }
-                } else {
-                    setError(`No score data found for Week ${weekNum} in the current season. Transaction not added.`);
-                    return; 
+                } else if (category === 'side_pot') {
+                    if (!sidePotName.trim()) {
+                        setError("Please enter a name for the side pot.");
+                        return;
+                    }
+                    transactionsToAdd[0].potName = sidePotName.trim();
                 }
-            } else if (category === 'side_pot') {
-                if (!sidePotName.trim()) {
-                    setError("Please enter a name for the side pot.");
-                    return;
-                }
-                newTransaction.potName = sidePotName.trim();
             }
         }
 
         try {
             const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
             const transactionCollectionRef = collection(db, `/artifacts/${appId}/public/data/financial_transactions`);
-            await addDoc(transactionCollectionRef, newTransaction);
+            
+            for (const transaction of transactionsToAdd) {
+                await addDoc(transactionCollectionRef, transaction);
+            }
             
             setAmount('');
             setDescription('');
             setType('fee'); 
-            setCategory('general_fee'); // Reset to a valid fee category
+            setCategory('general_fee'); 
             setTeamName(''); 
+            setTradeTeams(['', '']); // Reset trade teams
             setWeeklyPointsWeek(''); 
             setSidePotName(''); 
             setError(null); 
             setAutoPopulateWarning(null); 
-            console.log("Transaction added to Firestore successfully.");
+            console.log("Transaction(s) added to Firestore successfully.");
         } catch (addError) {
             console.error("Error adding transaction:", addError);
             setError(`Failed to add transaction: ${addError.message}. Please try again.`);
@@ -491,8 +529,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         setTransactionToDelete(null);
     };
 
-    // Team selection dropdown is disabled if it's auto-populated
-    const isTeamSelectionDisabled = isTeamAutoPopulated;
+    // Team selection dropdown is disabled if it's auto-populated (for payouts) or if it's a trade fee (handled by tradeTeams)
+    const isTeamSelectionDisabled = isTeamAutoPopulated || (type === 'fee' && category === 'trade_fee');
 
     const filteredTransactions = transactions.filter(t => {
         const isCurrentSeason = (currentSeason === null || t.season === currentSeason);
@@ -504,14 +542,20 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             return isCurrentSeason && t.teamName === 'All Teams';
         } else {
             // If filterTeam is a specific individual team name
-            // Show transactions for that specific team OR for 'All Teams'
-            return isCurrentSeason && (t.teamName === filterTeam || t.teamName === 'All Teams');
+            // Show transactions for that specific team OR for 'All Teams' (fees only)
+            return isCurrentSeason && (t.teamName === filterTeam || (t.teamName === 'All Teams' && t.type === 'fee'));
         }
     });
 
     const totalFees = filteredTransactions
         .filter(t => t.type === 'fee')
-        .reduce((sum, t) => sum + (t.amount || 0), 0);
+        .reduce((sum, t) => {
+            // Adjust 'All Teams' fees to reflect individual share if filter is by specific team
+            if (filterTeam !== '' && filterTeam !== 'All Teams' && t.teamName === 'All Teams' && t.teamsInvolvedCount > 0) {
+                return sum + (t.amount / t.teamsInvolvedCount || 0);
+            }
+            return sum + (t.amount || 0);
+        }, 0);
 
     const totalPayouts = filteredTransactions
         .filter(t => t.type === 'payout')
@@ -530,7 +574,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         };
     });
 
-    transactions.filter(t => currentSeason === null || t.season === currentSeason).forEach(t => { // Use all current season transactions for summary
+    // Process all transactions for the current season for the team summary
+    transactions.filter(t => currentSeason === null || t.season === currentSeason).forEach(t => { 
         // If it's an 'All Teams' fee, divide it among all teams
         if (t.teamName === 'All Teams' && t.type === 'fee' && t.teamsInvolvedCount > 0) {
             const perTeamAmount = t.amount / t.teamsInvolvedCount;
@@ -552,6 +597,21 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         teamSummary[team].netBalance = teamSummary[team].totalFees - teamSummary[team].totalPayouts;
     });
 
+    const handleAddTradeTeam = () => {
+        setTradeTeams([...tradeTeams, '']);
+    };
+
+    const handleRemoveTradeTeam = (indexToRemove) => {
+        setTradeTeams(tradeTeams.filter((_, index) => index !== indexToRemove));
+    };
+
+    const handleTradeTeamChange = (index, value) => {
+        const newTradeTeams = [...tradeTeams];
+        newTradeTeams[index] = value;
+        setTradeTeams(newTradeTeams);
+    };
+
+    const nonAllTeams = uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER');
 
     return (
         <div className="w-full max-w-4xl bg-white p-8 rounded-lg shadow-md mt-4 mx-auto">
@@ -749,36 +809,76 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                         />
                                     </div>
                                 )}
-
-                                <div>
-                                    <label htmlFor="teamName" className="block text-sm font-medium text-gray-700 mb-1">Associated Team</label>
-                                    <select
-                                        id="teamName"
-                                        value={teamName}
-                                        onChange={(e) => {
-                                            setTeamName(e.target.value);
-                                            setIsTeamAutoPopulated(false);
-                                            setAutoPopulateWarning(null); 
-                                        }}
-                                        required // Make team selection mandatory
-                                        disabled={isTeamSelectionDisabled} 
-                                        className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none ${isTeamSelectionDisabled ? 'bg-gray-200 cursor-not-allowed' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'} sm:text-sm`}
-                                    >
-                                        <option value="">Select Team</option> {/* Placeholder option for mandatory select */}
-                                        {type === 'fee' && ( 
-                                            <option value="ALL_TEAMS_MULTIPLIER">All Teams (Multiplied)</option>
-                                        )}
-                                        {uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').map(team => ( 
-                                            <option key={team} value={team}>{team}</option>
+                                
+                                {type === 'fee' && category === 'trade_fee' ? (
+                                    // Multiple team selectors for trade fees
+                                    <div className="space-y-2">
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Teams Involved in Trade (Min 2)</label>
+                                        {tradeTeams.map((team, index) => (
+                                            <div key={index} className="flex items-center space-x-2">
+                                                <select
+                                                    value={team}
+                                                    onChange={(e) => handleTradeTeamChange(index, e.target.value)}
+                                                    required
+                                                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                                >
+                                                    <option value="">Select Team</option>
+                                                    {nonAllTeams.map(optionTeam => (
+                                                        <option key={optionTeam} value={optionTeam}>{optionTeam}</option>
+                                                    ))}
+                                                </select>
+                                                {tradeTeams.length > 2 && ( // Allow removing if more than 2 teams
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveTradeTeam(index)}
+                                                        className="p-2 bg-red-400 text-white rounded-md hover:bg-red-500 transition-colors text-sm"
+                                                    >
+                                                        Remove
+                                                    </button>
+                                                )}
+                                            </div>
                                         ))}
-                                    </select>
-                                    {autoPopulateWarning && ( 
-                                        <p className="text-xs text-orange-600 mt-1">{autoPopulateWarning}</p>
-                                    )}
-                                    {isTeamAutoPopulated && teamName && ( 
-                                        <p className="text-xs text-gray-500 mt-1">Automatically determined: {teamName}</p>
-                                    )}
-                                </div>
+                                        <button
+                                            type="button"
+                                            onClick={handleAddTradeTeam}
+                                            className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-md shadow-md transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2"
+                                        >
+                                            Add Another Team
+                                        </button>
+                                    </div>
+                                ) : (
+                                    // Single team selector for other transaction types
+                                    <div>
+                                        <label htmlFor="teamName" className="block text-sm font-medium text-gray-700 mb-1">Associated Team</label>
+                                        <select
+                                            id="teamName"
+                                            value={teamName}
+                                            onChange={(e) => {
+                                                setTeamName(e.target.value);
+                                                setIsTeamAutoPopulated(false);
+                                                setAutoPopulateWarning(null); 
+                                            }}
+                                            required 
+                                            disabled={isTeamSelectionDisabled} 
+                                            className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none ${isTeamSelectionDisabled ? 'bg-gray-200 cursor-not-allowed' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'} sm:text-sm`}
+                                        >
+                                            <option value="">Select Team</option> 
+                                            {type === 'fee' && ( 
+                                                <option value="ALL_TEAMS_MULTIPLIER">All Teams (Multiplied)</option>
+                                            )}
+                                            {nonAllTeams.map(team => ( 
+                                                <option key={team} value={team}>{team}</option>
+                                            ))}
+                                        </select>
+                                        {autoPopulateWarning && ( 
+                                            <p className="text-xs text-orange-600 mt-1">{autoPopulateWarning}</p>
+                                        )}
+                                        {isTeamAutoPopulated && teamName && ( 
+                                            <p className="text-xs text-gray-500 mt-1">Automatically determined: {teamName}</p>
+                                        )}
+                                    </div>
+                                )}
+
                                 <button
                                     type="submit"
                                     className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md shadow-md transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
