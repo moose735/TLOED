@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { 
+    getAuth, 
+    onAuthStateChanged, 
+    signInWithEmailAndPassword, // New: for email/password login
+    signOut // New: for logging out
+} from 'firebase/auth';
+import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
 
 // CHART_COLORS can be reused from PowerRankings or defined here if not used elsewhere
 const CHART_COLORS = [
@@ -9,20 +14,32 @@ const CHART_COLORS = [
     '#0088fe', '#bb3f85', '#7a421a', '#4a4a4a', '#a5d6a7', '#ef9a9a'
 ];
 
-// Added historicalMatchups prop to receive data from App.js
 const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [transactions, setTransactions] = useState([]);
     const [amount, setAmount] = useState('');
     const [description, setDescription] = useState('');
-    const [type, setType] = useState('fee'); // Corrected to useState, as it's a selectable input
-    const [teamName, setTeamName] = useState(''); // State for the selected team name
+    const [type, setType] = useState('fee');
+    const [teamName, setTeamName] = useState('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [db, setDb] = useState(null);
     const [auth, setAuth] = useState(null);
     const [userId, setUserId] = useState(null);
     const [isAuthReady, setIsAuthReady] = useState(false);
-    const [uniqueTeams, setUniqueTeams] = useState([]); // New state for unique team names
+    const [uniqueTeams, setUniqueTeams] = useState([]);
+    
+    // State for deletion confirmation modal
+    const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+    const [transactionToDelete, setTransactionToDelete] = useState(null);
+
+    // New states for login form
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [loginError, setLoginError] = useState(null);
+
+    // Get the Commish UID from environment variables
+    const COMMISH_UID = process.env.REACT_APP_COMMISH_UID;
+    const isCommish = userId && COMMISH_UID && userId === COMMISH_UID; // Check if current user is the commish
 
     // Derive unique teams from historicalMatchups whenever it changes
     useEffect(() => {
@@ -36,24 +53,20 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             });
             const sortedTeams = Array.from(teamsSet).sort();
             
-            // Add the "All Teams" option to the beginning of the list
-            setUniqueTeams(['ALL_TEAMS_MULTIPLIER', ...sortedTeams]); // Use a special value for "All Teams"
+            setUniqueTeams(['ALL_TEAMS_MULTIPLIER', ...sortedTeams]);
             
             if (sortedTeams.length > 0) {
-                setTeamName(''); // Set initial value for the dropdown to empty/placeholder
+                setTeamName(''); 
             }
         }
     }, [historicalMatchups, getDisplayTeamName]);
 
-
     // Initialize Firebase and set up authentication
     useEffect(() => {
         let firebaseConfig = {};
-        let appId = 'default-app-id'; // Default value if not set via env
-        let initialAuthToken = undefined;
+        let appId = 'default-app-id';
 
         try {
-            // Attempt to retrieve and parse REACT_APP_FIREBASE_CONFIG
             const rawFirebaseConfig = process.env.REACT_APP_FIREBASE_CONFIG;
             if (rawFirebaseConfig) {
                 try {
@@ -66,7 +79,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 throw new Error("REACT_APP_FIREBASE_CONFIG environment variable is not defined or is empty. Please ensure it's set in your Vercel project settings with the 'REACT_APP_' prefix.");
             }
 
-            // Attempt to retrieve REACT_APP_APP_ID
             const envAppId = process.env.REACT_APP_APP_ID;
             if (envAppId) {
                 appId = envAppId;
@@ -75,98 +87,90 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 console.warn("REACT_APP_APP_ID environment variable is not defined or is empty. Using 'default-app-id'.");
             }
 
-            // Attempt to retrieve REACT_APP_INITIAL_AUTH_TOKEN
-            const envInitialAuthToken = process.env.REACT_APP_INITIAL_AUTH_TOKEN;
-            if (envInitialAuthToken !== undefined) {
-                initialAuthToken = envInitialAuthToken;
-                // Log whether the token is empty or has content for debugging
-                console.log("Initial Auth Token from REACT_APP_INITIAL_AUTH_TOKEN:", initialAuthToken === "" ? "empty string" : "present (non-empty)");
-            } else {
-                console.warn("REACT_APP_INITIAL_AUTH_TOKEN environment variable is not defined. Anonymous sign-in will be attempted.");
-            }
-
-            // Essential check: Ensure projectId and apiKey are provided for Firebase initialization
             if (!firebaseConfig.projectId || !firebaseConfig.apiKey) {
-                // If config is missing, set an error and stop loading
                 throw new Error("Firebase configuration missing projectId or apiKey. Please ensure your REACT_APP_FIREBASE_CONFIG environment variable contains these properties and is correctly formatted JSON.");
             }
 
-            // Initialize Firebase app with the provided configuration and app ID
             const app = initializeApp(firebaseConfig, appId);
             const firestore = getFirestore(app);
             const firebaseAuth = getAuth(app);
 
-            // Store initialized Firebase instances in state
             setDb(firestore);
             setAuth(firebaseAuth);
 
-            // Set up an authentication state listener
-            const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
+            // Authentication listener for both initial load and subsequent changes
+            const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
                 if (user) {
-                    // If a user is logged in (authenticated), set their UID
                     setUserId(user.uid);
                     console.log("Firebase Auth Ready. User ID:", user.uid);
                 } else {
-                    // If no user, attempt to sign in anonymously or with a custom token
-                    console.log("No user signed in. Attempting anonymous sign-in or custom token sign-in.");
-                    try {
-                        // FIX: Explicitly check if initialAuthToken is NOT an empty string before using signInWithCustomToken
-                        if (initialAuthToken !== undefined && initialAuthToken !== "") {
-                            // If a valid custom auth token is available, use it for sign-in
-                            await signInWithCustomToken(firebaseAuth, initialAuthToken);
-                            console.log("Signed in with custom token.");
-                        } else {
-                            // Otherwise (if token is undefined or empty string), sign in anonymously
-                            await signInAnonymously(firebaseAuth);
-                            console.log("Signed in anonymously.");
-                        }
-                        // After successful sign-in (anonymous or custom), update the userId state
-                        setUserId(firebaseAuth.currentUser?.uid || crypto.randomUUID()); // Fallback to random if no UID for some reason
-                    } catch (signInError) {
-                        console.error("Error during initial Firebase sign-in:", signInError);
-                        setError(`Authentication failed: ${signInError.message}. Data persistence may be affected.`);
-                        // Even on sign-in error, proceed as the app might still display public data
-                        setUserId(crypto.randomUUID()); // Use a random ID if auth fails for client-side ops
-                    }
+                    setUserId(null); // No user signed in
+                    console.log("No user signed in.");
                 }
-                setIsAuthReady(true); // Mark authentication as ready, regardless of success or failure
+                setIsAuthReady(true); // Auth system is ready, even if no user is logged in
             });
 
-            // Cleanup the authentication listener when the component unmounts
             return () => unsubscribe();
         } catch (initError) {
-            // Catch and display any errors during Firebase initialization
             console.error("Error initializing Firebase:", initError);
             setError(`Firebase initialization failed: ${initError.message}`);
             setLoading(false);
-            setIsAuthReady(true); // Mark ready to display the error
+            setIsAuthReady(true);
         }
-    }, []); // Empty dependency array ensures this runs only once on component mount
+    }, []);
+
+    // Function to handle Email/Password login
+    const handleLogin = async (e) => {
+        e.preventDefault();
+        setLoginError(null); // Clear previous errors
+        if (!auth) {
+            setLoginError("Authentication service not initialized.");
+            return;
+        }
+
+        try {
+            await signInWithEmailAndPassword(auth, email, password);
+            console.log("Logged in successfully!");
+            setEmail('');
+            setPassword('');
+        } catch (error) {
+            console.error("Login Error:", error);
+            setLoginError(`Login failed: ${error.message}`);
+        }
+    };
+
+    // Function to handle logout
+    const handleLogout = async () => {
+        if (!auth) return;
+        try {
+            await signOut(auth);
+            console.log("Logged out successfully!");
+            setLoginError(null);
+        } catch (error) {
+            console.error("Logout Error:", error);
+            setLoginError(`Logout failed: ${error.message}`);
+        }
+    };
 
     // Fetch transactions from Firestore once Firebase and authentication are ready
     useEffect(() => {
         if (!db || !isAuthReady) {
-            // Wait until Firestore instance and authentication state are ready
             console.log("Firestore not ready or Auth not ready. Waiting for db and isAuthReady...");
             return;
         }
 
-        setLoading(true); // Set loading to true while fetching data
-        setError(null); // Clear previous errors
+        setLoading(true);
+        setError(null);
 
-        // Define the public collection path as per Firestore security rules for shared data
-        const appId = process.env.REACT_APP_APP_ID || 'default-app-id'; // Use REACT_APP_APP_ID here too
-        // Data for everyone to see should be in a public collection
+        const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
         const transactionCollectionPath = `/artifacts/${appId}/public/data/financial_transactions`;
         
-        // Create a query to order transactions by date (most recent first)
         const q = query(collection(db, transactionCollectionPath), orderBy('date', 'desc'));
 
         console.log("Attempting to listen to Firestore collection:", transactionCollectionPath);
 
-        // Set up a real-time listener for changes in the transactions collection
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            if (!isAuthReady) { // Double-check auth readiness before processing snapshot
+            if (!isAuthReady) {
                 console.log("onSnapshot triggered but auth not ready. Skipping update.");
                 return;
             }
@@ -174,30 +178,31 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 id: doc.id,
                 ...doc.data()
             }));
-            setTransactions(fetchedTransactions); // Update component state with fetched data
-            setLoading(false); // Set loading to false after data is fetched
+            setTransactions(fetchedTransactions);
+            setLoading(false);
             console.log("Fetched transactions:", fetchedTransactions.length);
         }, (firestoreError) => {
-            // Handle any errors during data fetching
             console.error("Error fetching transactions from Firestore:", firestoreError);
             setError(`Failed to load financial data: ${firestoreError.message}. Please check your internet connection or Firestore security rules.`);
-            setLoading(false); // Stop loading on error
+            setLoading(false);
         });
 
-        // Cleanup the Firestore listener when the component unmounts or dependencies change
         return () => {
             console.log("Unsubscribing from Firestore listener.");
             unsubscribe();
         };
-    }, [db, isAuthReady]); // Re-run this effect when 'db' or 'isAuthReady' changes
+    }, [db, isAuthReady]);
 
-    // Handle adding a new transaction to Firestore
     const handleAddTransaction = async (e) => {
-        e.preventDefault(); // Prevent default form submission behavior
+        e.preventDefault();
 
-        // Basic form validation
         if (!db || !userId) {
             setError("Database not ready or user not authenticated. Cannot add transaction.");
+            return;
+        }
+        // Only allow commish to add transactions
+        if (!isCommish) {
+            setError("You do not have permission to add transactions.");
             return;
         }
         if (isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
@@ -212,60 +217,88 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         let finalAmount = parseFloat(amount);
         let finalTeamName = teamName;
 
-        // If "All Teams" is selected, multiply the amount by the number of unique teams
         if (teamName === 'ALL_TEAMS_MULTIPLIER') {
-            // Filter out 'ALL_TEAMS_MULTIPLIER' itself from the count if it somehow gets included
             const activeTeamsCount = uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').length;
             if (activeTeamsCount === 0) {
                 setError("Cannot process 'All Teams' transaction: No active teams found.");
                 return;
             }
             finalAmount = finalAmount * activeTeamsCount;
-            finalTeamName = 'All Teams'; // Store a readable string in Firestore
+            finalTeamName = 'All Teams';
         }
 
-
-        // Prepare the new transaction object
         const newTransaction = {
-            amount: finalAmount, // Use the calculated finalAmount
+            amount: finalAmount,
             description: description.trim(),
             type: type,
-            teamName: finalTeamName, // Use the determined finalTeamName
-            date: serverTimestamp(), // Use Firestore's server timestamp for consistent ordering
-            userId: userId, // Include the user ID for tracking who added it (if applicable)
+            teamName: finalTeamName,
+            date: serverTimestamp(),
+            userId: userId,
         };
 
         try {
-            // Get the app ID for constructing the public collection path
-            const appId = process.env.REACT_APP_APP_ID || 'default-app-id'; // Use REACT_APP_APP_ID here too
-            // Add the new document to the public financial transactions collection
+            const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
             const transactionCollectionRef = collection(db, `/artifacts/${appId}/public/data/financial_transactions`);
             await addDoc(transactionCollectionRef, newTransaction);
             
-            // Clear form fields on successful addition
             setAmount('');
             setDescription('');
-            setTeamName(''); // Reset team name to default (or empty string)
-            setError(null); // Clear any previous errors
+            setTeamName('');
+            setError(null);
             console.log("Transaction added to Firestore successfully.");
         } catch (addError) {
-            // Handle errors during adding transaction
             console.error("Error adding transaction:", addError);
             setError(`Failed to add transaction: ${addError.message}. Please try again.`);
         }
     };
 
-    // Calculate total fees collected
+    // Function to initiate deletion, opens confirmation modal
+    const confirmDelete = (transaction) => {
+        setTransactionToDelete(transaction);
+        setShowConfirmDelete(true);
+    };
+
+    // Function to execute deletion after confirmation
+    const executeDelete = async () => {
+        setShowConfirmDelete(false); // Close the modal
+        if (!transactionToDelete || !db || !userId) {
+            setError("Cannot delete: Invalid transaction or not authenticated.");
+            return;
+        }
+        // Only allow commish to delete transactions
+        if (!isCommish) {
+            setError("You do not have permission to delete transactions.");
+            return;
+        }
+
+        try {
+            const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
+            const transactionDocRef = doc(db, `/artifacts/${appId}/public/data/financial_transactions`, transactionToDelete.id);
+            await deleteDoc(transactionDocRef);
+            setError(null);
+            console.log("Transaction deleted successfully.");
+            setTransactionToDelete(null); // Clear the transaction from state
+        } catch (deleteError) {
+            console.error("Error deleting transaction:", deleteError);
+            setError(`Failed to delete transaction: ${deleteError.message}. Please check your permissions.`);
+        }
+    };
+
+    // Function to cancel deletion
+    const cancelDelete = () => {
+        setShowConfirmDelete(false);
+        setTransactionToDelete(null);
+    };
+
+
     const totalFees = transactions
         .filter(t => t.type === 'fee')
         .reduce((sum, t) => sum + (t.amount || 0), 0);
 
-    // Calculate total payouts made
     const totalPayouts = transactions
         .filter(t => t.type === 'payout')
         .reduce((sum, t) => sum + (t.amount || 0), 0);
 
-    // Calculate the net balance
     const netBalance = totalFees - totalPayouts;
 
     return (
@@ -274,9 +307,60 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 League Financial Tracker
             </h2>
 
-            {/* User ID Display - Mandatory for multi-user apps */}
+            {/* User ID Display and Login/Logout UI */}
             <div className="mb-4 text-center text-sm text-gray-600 p-2 bg-blue-50 rounded">
-                Your User ID: <span className="font-mono text-blue-700 break-all">{userId || "Loading..."}</span>
+                Your User ID: <span className="font-mono text-blue-700 break-all">{userId || "Not logged in"}</span><br/>
+                {COMMISH_UID && (
+                    <span className="font-semibold mt-1">
+                        {isCommish ? "You are logged in as the Commish." : "You are not the Commish."}
+                    </span>
+                )}
+                {!COMMISH_UID && (
+                    <span className="text-red-600 mt-1">
+                        REACT_APP_COMMISH_UID not set in Vercel. Commish access not configured.
+                    </span>
+                )}
+                
+                {/* Login/Logout UI */}
+                {isAuthReady && ( // Only show login/logout options once Firebase Auth is ready
+                    <div className="mt-4">
+                        {userId ? ( // If logged in
+                            <button
+                                onClick={handleLogout}
+                                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-bold rounded-md transition-colors"
+                            >
+                                Logout
+                            </button>
+                        ) : ( // If not logged in
+                            <form onSubmit={handleLogin} className="flex flex-col items-center space-y-2">
+                                <p className="text-gray-700 font-semibold mb-2">Commish Login</p>
+                                <input
+                                    type="email"
+                                    placeholder="Commish Email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    required
+                                    className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 w-full max-w-xs"
+                                />
+                                <input
+                                    type="password"
+                                    placeholder="Password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    required
+                                    className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 w-full max-w-xs"
+                                />
+                                <button
+                                    type="submit"
+                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-md transition-colors w-full max-w-xs"
+                                >
+                                    Login
+                                </button>
+                                {loginError && <p className="text-red-500 text-sm mt-2">{loginError}</p>}
+                            </form>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* Display loading or error messages */}
@@ -302,75 +386,80 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                         </div>
                     </div>
 
-                    {/* Add New Transaction Form */}
-                    <section className="mb-8 p-6 bg-gray-50 rounded-lg shadow-inner">
-                        <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">Add New Transaction</h3>
-                        <form onSubmit={handleAddTransaction} className="space-y-4">
-                            <div className="flex flex-col md:flex-row gap-4">
-                                <div className="flex-1">
-                                    <label htmlFor="amount" className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
+                    {/* Add New Transaction Form (Conditionally rendered) */}
+                    {isCommish ? (
+                        <section className="mb-8 p-6 bg-gray-50 rounded-lg shadow-inner">
+                            <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">Add New Transaction</h3>
+                            <form onSubmit={handleAddTransaction} className="space-y-4">
+                                <div className="flex flex-col md:flex-row gap-4">
+                                    <div className="flex-1">
+                                        <label htmlFor="amount" className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
+                                        <input
+                                            type="number"
+                                            id="amount"
+                                            value={amount}
+                                            onChange={(e) => setAmount(e.target.value)}
+                                            placeholder="e.g., 50.00"
+                                            step="0.01"
+                                            min="0.01"
+                                            required
+                                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                        />
+                                    </div>
+                                    <div className="flex-1">
+                                        <label htmlFor="type" className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                                        <select
+                                            id="type"
+                                            value={type}
+                                            onChange={(e) => setType(e.target.value)}
+                                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                        >
+                                            <option value="fee">Fee (Money In)</option>
+                                            <option value="payout">Payout (Money Out)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                                     <input
-                                        type="number"
-                                        id="amount"
-                                        value={amount}
-                                        onChange={(e) => setAmount(e.target.value)}
-                                        placeholder="e.g., 50.00"
-                                        step="0.01"
-                                        min="0.01"
+                                        type="text"
+                                        id="description"
+                                        value={description}
+                                        onChange={(e) => setDescription(e.target.value)}
+                                        placeholder="e.g., Annual League Fee, Playoff Winner Bonus"
+                                        maxLength="100"
                                         required
                                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                     />
                                 </div>
-                                <div className="flex-1">
-                                    <label htmlFor="type" className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                                <div>
+                                    <label htmlFor="teamName" className="block text-sm font-medium text-gray-700 mb-1">Associated Team (Optional)</label>
                                     <select
-                                        id="type"
-                                        value={type}
-                                        onChange={(e) => setType(e.target.value)}
+                                        id="teamName"
+                                        value={teamName}
+                                        onChange={(e) => setTeamName(e.target.value)}
                                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                     >
-                                        <option value="fee">Fee (Money In)</option>
-                                        <option value="payout">Payout (Money Out)</option>
+                                        <option value="">Select Team (Optional)</option>
+                                        <option value="ALL_TEAMS_MULTIPLIER">All Teams (Multiplied)</option>
+                                        {uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').map(team => (
+                                            <option key={team} value={team}>{team}</option>
+                                        ))}
                                     </select>
                                 </div>
-                            </div>
-                            <div>
-                                <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                                <input
-                                    type="text"
-                                    id="description"
-                                    value={description}
-                                    onChange={(e) => setDescription(e.target.value)}
-                                    placeholder="e.g., Annual League Fee, Playoff Winner Bonus"
-                                    maxLength="100"
-                                    required
-                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                />
-                            </div>
-                            <div>
-                                <label htmlFor="teamName" className="block text-sm font-medium text-gray-700 mb-1">Associated Team (Optional)</label>
-                                {/* Replaced input with select dropdown for team names */}
-                                <select
-                                    id="teamName"
-                                    value={teamName}
-                                    onChange={(e) => setTeamName(e.target.value)}
-                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                <button
+                                    type="submit"
+                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md shadow-md transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                                 >
-                                    <option value="">Select Team (Optional)</option> {/* Optional blank option */}
-                                    <option value="ALL_TEAMS_MULTIPLIER">All Teams (Multiplied)</option> {/* New option for all teams */}
-                                    {uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').map(team => ( // Filter out the special option if it's accidentally in uniqueTeams
-                                        <option key={team} value={team}>{team}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <button
-                                type="submit"
-                                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md shadow-md transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                            >
-                                Add Transaction
-                            </button>
-                        </form>
-                    </section>
+                                    Add Transaction
+                                </button>
+                            </form>
+                        </section>
+                    ) : (
+                        <p className="text-center text-gray-600 p-4 bg-gray-100 rounded-lg shadow-inner mb-8">
+                            Only the league commissioner can add and remove transactions. Please log in with the commish account.
+                        </p>
+                    )}
 
                     {/* Transaction History Table */}
                     <section>
@@ -387,6 +476,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
                                             <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Amount</th>
                                             <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Type</th>
+                                            {isCommish && <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Actions</th>}
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -409,6 +499,17 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                         {t.type === 'fee' ? 'Fee' : 'Payout'}
                                                     </span>
                                                 </td>
+                                                {isCommish && ( // Conditionally render delete button for commish
+                                                    <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
+                                                        <button
+                                                            onClick={() => confirmDelete(t)}
+                                                            className="bg-red-500 hover:bg-red-600 text-white text-xs px-2 py-1 rounded-md shadow-sm transition-colors duration-200"
+                                                            title="Delete Transaction"
+                                                        >
+                                                            Delete
+                                                        </button>
+                                                    </td>
+                                                )}
                                             </tr>
                                         ))}
                                     </tbody>
@@ -417,6 +518,32 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                         )}
                     </section>
                 </>
+            )}
+
+            {/* Custom Confirmation Modal for Deletion */}
+            {showConfirmDelete && (
+                <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50">
+                    <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full text-center">
+                        <h3 className="text-lg font-bold text-gray-800 mb-4">Confirm Deletion</h3>
+                        <p className="text-gray-600 mb-6">
+                            Are you sure you want to delete this transaction? This action cannot be undone.
+                        </p>
+                        <div className="flex justify-center space-x-4">
+                            <button
+                                onClick={cancelDelete}
+                                className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-md transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={executeDelete}
+                                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors"
+                            >
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
