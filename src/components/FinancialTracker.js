@@ -829,7 +829,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').forEach(team => {
                 if (teamSummary[team]) { 
                     teamSummary[team].totalDebits += perTeamAmount;
-                    if (t.category !== 'entry_fee') { // Updated category check
+                    // FIX: Ensure 'entry_fee' category is correctly excluded
+                    if (t.category !== 'entry_fee') { 
                         teamSummary[team].totalDebitsLessEntryFee += perTeamAmount;
                     }
                 }
@@ -837,7 +838,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         } else if (teamSummary[t.teamName]) { 
             if (t.type === 'debit') {
                 teamSummary[t.teamName].totalDebits += (t.amount || 0);
-                if (t.category !== 'entry_fee') { // Updated category check
+                // FIX: Ensure 'entry_fee' category is correctly excluded
+                if (t.category !== 'entry_fee') { 
                     teamSummary[t.teamName].totalDebitsLessEntryFee += (t.amount || 0);
                 }
             } else if (t.type === 'credit') {
