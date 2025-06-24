@@ -16,14 +16,14 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [transactions, setTransactions] = useState([]);
     const [amount, setAmount] = useState('');
     const [description, setDescription] = useState('');
-    const [type, setType] = useState('fee'); // 'fee' or 'payout'
+    const [type, setType] = useState('debit'); // 'debit' or 'credit'
     const [category, setCategory] = useState('general_fee'); 
     const [weeklyPointsWeek, setWeeklyPointsWeek] = useState('');
     const [sidePotName, setSidePotName] = useState('');
-    const [isCompleted, setIsCompleted] = useState(false); // New state for completion status
+    const [isCompleted, setIsCompleted] = useState(false); 
 
-    const [teamName, setTeamName] = useState(''); // For single team transactions
-    const [tradeTeams, setTradeTeams] = useState(['', '']); // For trade fees, initially two empty selections
+    const [teamName, setTeamName] = useState(''); 
+    const [tradeTeams, setTradeTeams] = useState(['', '']); 
     
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null); 
@@ -36,7 +36,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [currentSeason, setCurrentSeason] = useState(0); 
     const [activeTeamsCount, setActiveTeamsCount] = useState(0); 
     
-    const [isTeamAutoPopulated, setIsTeamAutoPopulated] = useState(false);
+    const [isTeamAutoPopulated, setIsTeamAutoPopulated] = useState(null); 
     const [autoPopulateWarning, setAutoPopulateWarning] = useState(null); 
     
     const [showConfirmDelete, setShowConfirmDelete] = useState(false);
@@ -48,9 +48,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     const [filterTeam, setFilterTeam] = useState(''); 
 
-    // State for editable structure
-    const [feeStructureData, setFeeStructureData] = useState([]);
-    const [payoutStructureData, setPayoutStructureData] = useState([]);
+    // State for editable structure (now Debits/Credits)
+    const [debitStructureData, setDebitStructureData] = useState([]);
+    const [creditStructureData, setCreditStructureData] = useState([]);
     const [isEditingStructure, setIsEditingStructure] = useState(false);
     const [loadingStructure, setLoadingStructure] = useState(true);
 
@@ -62,16 +62,16 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     // Define categories based on type for form selection
     const getCategoriesForType = (currentType) => {
-        if (currentType === 'fee') {
+        if (currentType === 'debit') {
             return [
-                { value: 'general_fee', label: 'General Fee' },
-                { value: 'annual_fee', label: 'Annual League Fee' },
+                { value: 'general_fee', label: 'General Debit' },
+                { value: 'annual_fee', label: 'Annual League Entry Fee' },
                 { value: 'trade_fee', label: 'Trade Fee' },
                 { value: 'waiver_pickup_fee', label: 'Waiver Pickup Fee' },
             ];
-        } else if (currentType === 'payout') {
+        } else if (currentType === 'credit') {
             return [
-                { value: 'general_payout', label: 'General Payout' },
+                { value: 'general_payout', label: 'General Credit' },
                 { value: 'highest_weekly_points', label: 'Highest Weekly Points' },
                 { value: 'second_highest_weekly_points', label: 'Second Highest Weekly Points' },
                 { value: 'side_pot', label: 'Side Pot' },
@@ -81,13 +81,13 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     };
 
     // Hardcoded default structure (used if no data in Firebase)
-    const defaultFeeStructure = [
+    const defaultDebitStructure = [
         { name: 'League Entry Fee', amount: '$70', description: 'Paid per team for entry.' },
         { name: 'Waivers/Free Agents', amount: '$1', description: 'Per transaction.' },
         { name: 'Trades', amount: '$2', description: 'Per team involved.' },
     ];
 
-    const defaultPayoutStructure = [
+    const defaultCreditStructure = [
         { name: 'Weekly 1st Place (Points)', amount: '$10' },
         { name: 'Weekly 2nd Place (Points)', amount: '$5' },
         { name: 'Sween Bowl Champion', amount: '$100' },
@@ -112,7 +112,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setCategory('');
         }
         // When type changes, reset tradeTeams as it's specific to trade fees
-        if (type !== 'fee' || category !== 'trade_fee') {
+        if (type !== 'debit' || category !== 'trade_fee') {
             setTradeTeams(['', '']);
         }
     }, [type, category]); 
@@ -199,11 +199,11 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         setIsTeamAutoPopulated(false); 
 
         // Reset tradeTeams if not a trade fee category
-        if (!(type === 'fee' && category === 'trade_fee')) {
+        if (!(type === 'debit' || category === 'trade_fee')) {
             setTradeTeams(['', '']); 
         }
 
-        if (type === 'payout' && 
+        if (type === 'credit' && 
             (category === 'highest_weekly_points' || category === 'second_highest_weekly_points') &&
             weeklyPointsWeek) 
         {
@@ -213,11 +213,11 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             if (weekData) {
                 if (category === 'highest_weekly_points' && weekData.highest) {
                     setTeamName(weekData.highest.team);
-                    setDescription(`Payout: Highest Weekly Points - ${weekData.highest.team} (${weekData.highest.score} pts)`);
+                    setDescription(`Credit: Highest Weekly Points - ${weekData.highest.team} (${weekData.highest.score} pts)`);
                     setIsTeamAutoPopulated(true);
                 } else if (category === 'second_highest_weekly_points' && weekData.secondHighest) {
                     setTeamName(weekData.secondHighest.team);
-                    setDescription(`Payout: Second Highest Weekly Points - ${weekData.secondHighest.team} (${weekData.secondHighest.score} pts)`);
+                    setDescription(`Credit: Second Highest Weekly Points - ${weekData.secondHighest.team} (${weekData.secondHighest.score} pts)`);
                     setIsTeamAutoPopulated(true);
                 } else {
                     setAutoPopulateWarning(`No ${category.replace(/_/g, ' ')} winner found for Week ${weeklyPointsWeek} in the current season.`);
@@ -225,10 +225,10 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             } else {
                 setAutoPopulateWarning(`No score data found for Week ${weeklyPointsWeek} in the current season.`);
             }
-        } else if (type === 'payout' && category === 'side_pot') {
+        } else if (type === 'credit' && category === 'side_pot') {
             setTeamName(''); 
-            setDescription(`Payout: Side Pot`);
-        } else if (type === 'fee' && (category === 'trade_fee' || category === 'waiver_pickup_fee')) {
+            setDescription(`Credit: Side Pot`);
+        } else if (type === 'debit' && (category === 'trade_fee' || category === 'waiver_pickup_fee')) {
             setTeamName(''); 
             setDescription('');
         } else {
@@ -358,14 +358,15 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             }
             const fetchedTransactions = snapshot.docs.map(doc => ({
                 id: doc.id,
+                // Ensure isCompleted defaults to false if not present in Firestore
+                isCompleted: doc.data().isCompleted ?? false, 
                 ...doc.data()
             }));
             setTransactions(fetchedTransactions);
 
-            // Calculate transaction pot from all transactions for the current season
             const currentSeasonTransactionPot = fetchedTransactions
                 .filter(t => 
-                    (currentSeason === 0 || t.season === currentSeason) && // Only current season transactions
+                    (currentSeason === 0 || t.season === currentSeason) && 
                     (t.category === 'waiver_pickup_fee' || t.category === 'trade_fee')
                 )
                 .reduce((sum, t) => sum + (t.amount || 0), 0);
@@ -385,7 +386,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         };
     }, [db, isAuthReady, currentSeason]); 
 
-    // Fetch and listen for updates to the fee/payout structure
+    // Fetch and listen for updates to the Debit/Credit structure
     useEffect(() => {
         if (!db || !isAuthReady) {
             console.log("Firestore not ready or Auth not ready. Waiting for db and isAuthReady for structure...");
@@ -399,12 +400,14 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         const unsubscribe = onSnapshot(structureDocRef, (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
-                setFeeStructureData(data.fees || defaultFeeStructure);
-                setPayoutStructureData(data.payouts || defaultPayoutStructure);
+                // Use stored data or default if not present
+                setDebitStructureData(data.fees || defaultDebitStructure);
+                setCreditStructureData(data.payouts || defaultCreditStructure);
                 console.log("Fetched league structure from Firestore.");
             } else {
-                setFeeStructureData(defaultFeeStructure);
-                setPayoutStructureData(defaultPayoutStructure);
+                // If document doesn't exist, use default hardcoded data
+                setDebitStructureData(defaultDebitStructure);
+                setCreditStructureData(defaultCreditStructure);
                 console.log("League structure document not found, using defaults.");
             }
             setLoadingStructure(false);
@@ -412,8 +415,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             console.error("Error fetching league structure:", firestoreError);
             setError(`Failed to load league structure: ${firestoreError.message}`);
             setLoadingStructure(false);
-            setFeeStructureData(defaultFeeStructure);
-            setPayoutStructureData(defaultPayoutStructure);
+            // Fallback to default in case of error
+            setDebitStructureData(defaultDebitStructure);
+            setCreditStructureData(defaultCreditStructure);
         });
 
         return () => {
@@ -448,7 +452,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         
         let transactionsToAdd = [];
 
-        if (type === 'fee' && category === 'trade_fee') {
+        if (type === 'debit' && category === 'trade_fee') {
             const validTradeTeams = tradeTeams.filter(team => team.trim() !== '');
             if (validTradeTeams.length < 2) {
                 setError("Please select at least two teams for a trade fee.");
@@ -463,7 +467,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 transactionsToAdd.push({
                     amount: parseFloat(amount), 
                     description: description.trim(),
-                    type: type,
+                    type: type, // 'debit'
                     teamName: team,
                     date: serverTimestamp(),
                     userId: userId,
@@ -483,7 +487,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             let finalTeamName = teamName; 
             let teamsInvolved = 1; 
 
-            if (type === 'fee' && teamName === 'ALL_TEAMS_MULTIPLIER') {
+            if (type === 'debit' && teamName === 'ALL_TEAMS_MULTIPLIER') {
                 if (activeTeamsCount === 0) {
                     setError("Cannot process 'All Teams' transaction: No active teams found in the current season.");
                     return;
@@ -491,14 +495,14 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 finalAmount = finalAmount * activeTeamsCount;
                 finalTeamName = 'All Teams'; 
                 teamsInvolved = activeTeamsCount; 
-            } else if (type === 'payout' && teamName === 'ALL_TEAMS_MULTIPLIER') {
+            } else if (type === 'credit' && teamName === 'ALL_TEAMS_MULTIPLIER') {
                 finalTeamName = 'All Teams';
             }
 
             transactionsToAdd.push({
                 amount: finalAmount,
                 description: description.trim(),
-                type: type,
+                type: type, // 'debit' or 'credit'
                 teamName: finalTeamName, 
                 date: serverTimestamp(),
                 userId: userId,
@@ -508,10 +512,10 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 isCompleted: isCompleted 
             });
 
-            if (type === 'payout') {
+            if (type === 'credit') {
                 if (category === 'highest_weekly_points' || category === 'second_highest_weekly_points') {
                     if (!weeklyPointsWeek || isNaN(parseInt(weeklyPointsWeek))) {
-                        setError("Please enter a valid week number for weekly points payouts.");
+                        setError("Please enter a valid week number for weekly points credits.");
                         return;
                     }
                     const weekNum = parseInt(weeklyPointsWeek);
@@ -521,10 +525,10 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     if (weekData) {
                         if (category === 'highest_weekly_points' && weekData.highest) {
                             transactionsToAdd[0].teamName = weekData.highest.team;
-                            transactionsToAdd[0].description = `Payout: Highest Weekly Points - ${weekData.highest.team} (${weekData.highest.score} pts)`;
+                            transactionsToAdd[0].description = `Credit: Highest Weekly Points - ${weekData.highest.team} (${weekData.highest.score} pts)`;
                         } else if (category === 'second_highest_weekly_points' && weekData.secondHighest) {
                             transactionsToAdd[0].teamName = weekData.secondHighest.team;
-                            transactionsToAdd[0].description = `Payout: Second Highest Weekly Points - ${weekData.secondHighest.team} (${weekData.secondHighest.score} pts)`;
+                            transactionsToAdd[0].description = `Credit: Second Highest Weekly Points - ${weekData.secondHighest.team} (${weekData.secondHighest.score} pts)`;
                         } else {
                             setError(`Could not find a winning team for ${category.replace(/_/g, ' ')} in Week ${weekNum} for the current season. Transaction not added.`);
                             return; 
@@ -553,13 +557,13 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             
             setAmount('');
             setDescription('');
-            setType('fee'); 
+            setType('debit'); 
             setCategory('general_fee'); 
             setTeamName(''); 
             setTradeTeams(['', '']); 
             setWeeklyPointsWeek(''); 
             setSidePotName(''); 
-            setIsCompleted(false); // Reset completion status
+            setIsCompleted(false); 
             setError(null); 
             setAutoPopulateWarning(null); 
             console.log("Transaction(s) added to Firestore successfully.");
@@ -603,7 +607,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         setTransactionToDelete(null);
     };
 
-    const isTeamSelectionDisabled = isTeamAutoPopulated || (type === 'fee' && category === 'trade_fee');
+    const isTeamSelectionDisabled = isTeamAutoPopulated || (type === 'debit' && category === 'trade_fee');
 
     const filteredTransactions = transactions.filter(t => {
         const isCurrentSeason = (currentSeason === 0 || t.season === currentSeason);
@@ -613,13 +617,13 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         } else if (filterTeam === 'All Teams') {
             return isCurrentSeason && t.teamName === 'All Teams';
         } else {
-            return isCurrentSeason && (t.teamName === filterTeam || (t.teamName === 'All Teams' && t.type === 'fee'));
+            return isCurrentSeason && (t.teamName === filterTeam || (t.teamName === 'All Teams' && t.type === 'debit'));
         }
     });
 
-    // Calculate totals including completion status
-    const totalFees = filteredTransactions
-        .filter(t => t.type === 'fee')
+    // Calculate totals for Debits and Credits
+    const totalDebits = filteredTransactions
+        .filter(t => t.type === 'debit')
         .reduce((sum, t) => {
             if (filterTeam !== '' && filterTeam !== 'All Teams' && t.teamName === 'All Teams' && t.teamsInvolvedCount > 0) {
                 return sum + (t.amount / t.teamsInvolvedCount || 0);
@@ -627,15 +631,15 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             return sum + (t.amount || 0);
         }, 0);
 
-    const totalPayouts = filteredTransactions
-        .filter(t => t.type === 'payout')
+    const totalCredits = filteredTransactions
+        .filter(t => t.type === 'credit')
         .reduce((sum, t) => sum + (t.amount || 0), 0);
 
-    const netBalance = totalFees - totalPayouts; // Overall net balance
+    const netBalance = totalDebits - totalCredits; 
 
-    // New calculations for completed and pending
-    const completedFees = filteredTransactions
-        .filter(t => t.type === 'fee' && t.isCompleted)
+    // New calculations for completed and pending Debits and Credits
+    const completedDebits = filteredTransactions
+        .filter(t => t.type === 'debit' && t.isCompleted)
         .reduce((sum, t) => {
             if (filterTeam !== '' && filterTeam !== 'All Teams' && t.teamName === 'All Teams' && t.teamsInvolvedCount > 0) {
                 return sum + (t.amount / t.teamsInvolvedCount || 0);
@@ -643,12 +647,12 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             return sum + (t.amount || 0);
         }, 0);
 
-    const completedPayouts = filteredTransactions
-        .filter(t => t.type === 'payout' && t.isCompleted)
+    const completedCredits = filteredTransactions
+        .filter(t => t.type === 'credit' && t.isCompleted)
         .reduce((sum, t) => sum + (t.amount || 0), 0);
     
-    const pendingFees = filteredTransactions
-        .filter(t => t.type === 'fee' && !t.isCompleted)
+    const pendingDebits = filteredTransactions
+        .filter(t => t.type === 'debit' && !t.isCompleted)
         .reduce((sum, t) => {
             if (filterTeam !== '' && filterTeam !== 'All Teams' && t.teamName === 'All Teams' && t.teamsInvolvedCount > 0) {
                 return sum + (t.amount / t.teamsInvolvedCount || 0);
@@ -656,65 +660,65 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             return sum + (t.amount || 0);
         }, 0);
 
-    const pendingPayouts = filteredTransactions
-        .filter(t => t.type === 'payout' && !t.isCompleted)
+    const pendingCredits = filteredTransactions
+        .filter(t => t.type === 'credit' && !t.isCompleted)
         .reduce((sum, t) => sum + (t.amount || 0), 0);
 
-    const netCompletedBalance = completedFees - completedPayouts;
-    const netPendingBalance = pendingFees - pendingPayouts;
+    const netCompletedBalance = completedDebits - completedCredits;
+    const netPendingBalance = pendingDebits - pendingCredits;
 
     // Calculate team summary data
     const teamSummary = {};
     uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').forEach(team => {
         teamSummary[team] = {
-            totalFees: 0,
-            totalPayouts: 0,
+            totalDebits: 0,
+            totalCredits: 0,
             netBalance: 0,
-            completedFees: 0,
-            pendingFees: 0,
-            completedPayouts: 0,
-            pendingPayouts: 0,
+            completedDebits: 0,
+            pendingDebits: 0,
+            completedCredits: 0,
+            pendingCredits: 0,
             netCompletedBalance: 0,
             netPendingBalance: 0
         };
     });
 
     transactions.filter(t => currentSeason === 0 || t.season === currentSeason).forEach(t => { 
-        if (t.teamName === 'All Teams' && t.type === 'fee' && t.teamsInvolvedCount > 0) {
+        if (t.teamName === 'All Teams' && t.type === 'debit' && t.teamsInvolvedCount > 0) {
             const perTeamAmount = t.amount / t.teamsInvolvedCount;
             uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').forEach(team => {
                 if (teamSummary[team]) { 
-                    teamSummary[team].totalFees += perTeamAmount;
+                    teamSummary[team].totalDebits += perTeamAmount;
                     if (t.isCompleted) {
-                        teamSummary[team].completedFees += perTeamAmount;
+                        teamSummary[team].completedDebits += perTeamAmount;
                     } else {
-                        teamSummary[team].pendingFees += perTeamAmount;
+                        teamSummary[team].pendingDebits += perTeamAmount;
                     }
                 }
             });
         } else if (teamSummary[t.teamName]) { 
-            if (t.type === 'fee') {
-                teamSummary[t.teamName].totalFees += (t.amount || 0);
+            if (t.type === 'debit') {
+                teamSummary[t.teamName].totalDebits += (t.amount || 0);
                 if (t.isCompleted) {
-                    teamSummary[t.teamName].completedFees += (t.amount || 0);
+                    teamSummary[t.teamName].completedDebits += (t.amount || 0);
                 } else {
-                    teamSummary[t.teamName].pendingFees += (t.amount || 0);
+                    teamSummary[t.teamName].pendingDebits += (t.amount || 0);
                 }
-            } else if (t.type === 'payout') {
-                teamSummary[t.teamName].totalPayouts += (t.amount || 0);
+            } else if (t.type === 'credit') {
+                teamSummary[t.teamName].totalCredits += (t.amount || 0);
                 if (t.isCompleted) {
-                    teamSummary[t.teamName].completedPayouts += (t.amount || 0);
+                    teamSummary[t.teamName].completedCredits += (t.amount || 0);
                 } else {
-                    teamSummary[t.teamName].pendingPayouts += (t.amount || 0);
+                    teamSummary[t.teamName].pendingCredits += (t.amount || 0);
                 }
             }
         }
     });
 
     Object.keys(teamSummary).forEach(team => {
-        teamSummary[team].netBalance = teamSummary[team].totalFees - teamSummary[team].totalPayouts;
-        teamSummary[team].netCompletedBalance = teamSummary[team].completedFees - teamSummary[team].completedPayouts;
-        teamSummary[team].netPendingBalance = teamSummary[team].pendingFees - teamSummary[team].pendingPayouts;
+        teamSummary[team].netBalance = teamSummary[team].totalDebits - teamSummary[team].totalCredits;
+        teamSummary[team].netCompletedBalance = teamSummary[team].completedDebits - teamSummary[team].completedCredits;
+        teamSummary[team].netPendingBalance = teamSummary[team].pendingDebits - teamSummary[team].pendingCredits;
     });
 
     const handleAddTradeTeam = () => {
@@ -733,33 +737,33 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     const nonAllTeams = uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER');
 
-    // Functions for editing fee/payout structure
-    const handleFeeStructureChange = (index, field, value) => {
-        const newStructure = [...feeStructureData];
+    // Functions for editing Debit/Credit structure
+    const handleDebitStructureChange = (index, field, value) => {
+        const newStructure = [...debitStructureData];
         newStructure[index][field] = value;
-        setFeeStructureData(newStructure);
+        setDebitStructureData(newStructure);
     };
 
-    const handlePayoutStructureChange = (index, field, value) => {
-        const newStructure = [...payoutStructureData];
+    const handleCreditStructureChange = (index, field, value) => {
+        const newStructure = [...creditStructureData];
         newStructure[index][field] = value;
-        setPayoutStructureData(newStructure);
+        setCreditStructureData(newStructure);
     };
 
-    const handleAddFeeItem = () => {
-        setFeeStructureData([...feeStructureData, { name: '', amount: '', description: '' }]);
+    const handleAddDebitItem = () => {
+        setDebitStructureData([...debitStructureData, { name: '', amount: '', description: '' }]);
     };
 
-    const handleRemoveFeeItem = (indexToRemove) => {
-        setFeeStructureData(feeStructureData.filter((_, index) => index !== indexToRemove));
+    const handleRemoveDebitItem = (indexToRemove) => {
+        setDebitStructureData(debitStructureData.filter((_, index) => index !== indexToRemove));
     };
 
-    const handleAddPayoutItem = () => {
-        setPayoutStructureData([...payoutStructureData, { name: '', amount: '', description: '' }]);
+    const handleAddCreditItem = () => {
+        setCreditStructureData([...creditStructureData, { name: '', amount: '', description: '' }]);
     };
 
-    const handleRemovePayoutItem = (indexToRemove) => {
-        setPayoutStructureData(payoutStructureData.filter((_, index) => index !== indexToRemove));
+    const handleRemoveCreditItem = (indexToRemove) => {
+        setCreditStructureData(creditStructureData.filter((_, index) => index !== indexToRemove));
     };
 
     const handleSaveStructure = async () => {
@@ -772,8 +776,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
             const structureDocRef = doc(db, `/artifacts/${appId}/public/data/league_structure/current_structure`);
             await setDoc(structureDocRef, {
-                fees: feeStructureData,
-                payouts: payoutStructureData,
+                fees: debitStructureData, // Still using 'fees' field name for compatibility if needed
+                payouts: creditStructureData, // Still using 'payouts' field name for compatibility if needed
                 lastUpdated: serverTimestamp()
             });
             setIsEditingStructure(false);
@@ -879,12 +883,12 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     {/* Financial Summary */}
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
                         <div className="bg-red-50 p-4 rounded-lg shadow-sm text-center">
-                            <h3 className="text-lg font-semibold text-red-700">Total Fees Collected</h3>
-                            <p className="text-2xl font-bold text-red-900">${totalFees.toFixed(2)}</p>
+                            <h3 className="text-lg font-semibold text-red-700">Total Debits Collected</h3>
+                            <p className="text-2xl font-bold text-red-900">${totalDebits.toFixed(2)}</p>
                         </div>
                         <div className="bg-green-50 p-4 rounded-lg shadow-sm text-center">
-                            <h3 className="text-lg font-semibold text-green-700">Total Payouts Made</h3>
-                            <p className="text-2xl font-bold text-green-900">${totalPayouts.toFixed(2)}</p>
+                            <h3 className="text-lg font-semibold text-green-700">Total Credits Paid</h3>
+                            <p className="text-2xl font-bold text-green-900">${totalCredits.toFixed(2)}</p>
                         </div>
                         <div className={`p-4 rounded-lg shadow-sm text-center ${netBalance >= 0 ? 'bg-blue-50' : 'bg-red-100'}`}>
                             <h3 className="text-lg font-semibold text-blue-700">Overall Net Balance</h3>
@@ -897,12 +901,12 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
                         {/* New rows for Completed and Pending Balances */}
                         <div className="bg-green-50 p-4 rounded-lg shadow-sm text-center">
-                            <h3 className="text-lg font-semibold text-green-700">Completed Fees</h3>
-                            <p className="text-xl font-bold text-green-900">${completedFees.toFixed(2)}</p>
+                            <h3 className="text-lg font-semibold text-green-700">Completed Debits</h3>
+                            <p className="text-xl font-bold text-green-900">${completedDebits.toFixed(2)}</p>
                         </div>
                         <div className="bg-red-50 p-4 rounded-lg shadow-sm text-center">
-                            <h3 className="text-lg font-semibold text-red-700">Completed Payouts</h3>
-                            <p className="text-xl font-bold text-red-900">${completedPayouts.toFixed(2)}</p>
+                            <h3 className="text-lg font-semibold text-red-700">Completed Credits</h3>
+                            <p className="text-xl font-bold text-red-900">${completedCredits.toFixed(2)}</p>
                         </div>
                         <div className={`p-4 rounded-lg shadow-sm text-center ${netCompletedBalance >= 0 ? 'bg-blue-50' : 'bg-red-100'}`}>
                             <h3 className="text-lg font-semibold text-blue-700">Net Completed</h3>
@@ -911,12 +915,12 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                         <div>{/* Empty space for alignment */}</div> 
 
                         <div className="bg-purple-50 p-4 rounded-lg shadow-sm text-center">
-                            <h3 className="text-lg font-semibold text-purple-700">Pending Fees</h3>
-                            <p className="text-xl font-bold text-purple-900">${pendingFees.toFixed(2)}</p>
+                            <h3 className="text-lg font-semibold text-purple-700">Pending Debits</h3>
+                            <p className="text-xl font-bold text-purple-900">${pendingDebits.toFixed(2)}</p>
                         </div>
                         <div className="bg-orange-50 p-4 rounded-lg shadow-sm text-center">
-                            <h3 className="text-lg font-semibold text-orange-700">Pending Payouts</h3>
-                            <p className="text-xl font-bold text-orange-900">${pendingPayouts.toFixed(2)}</p>
+                            <h3 className="text-lg font-semibold text-orange-700">Pending Credits</h3>
+                            <p className="text-xl font-bold text-orange-900">${pendingCredits.toFixed(2)}</p>
                         </div>
                         <div className={`p-4 rounded-lg shadow-sm text-center ${netPendingBalance >= 0 ? 'bg-blue-50' : 'bg-red-100'}`}>
                             <h3 className="text-lg font-semibold text-blue-700">Net Pending</h3>
@@ -946,15 +950,15 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                         />
                                     </div>
                                     <div className="flex-1">
-                                        <label htmlFor="type" className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                                        <label htmlFor="type" className="block text-sm font-medium text-gray-700 mb-1">Transaction Type</label>
                                         <select
                                             id="type"
                                             value={type}
                                             onChange={(e) => setType(e.target.value)}
                                             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                         >
-                                            <option value="fee">Fee (Money In)</option>
-                                            <option value="payout">Payout (Money Out)</option>
+                                            <option value="debit">Debit (Money In)</option>
+                                            <option value="credit">Credit (Money Out)</option>
                                         </select>
                                     </div>
                                 </div>
@@ -965,7 +969,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                         id="description"
                                         value={description}
                                         onChange={(e) => setDescription(e.target.value)}
-                                        placeholder="e.g., Annual League Fee, Playoff Winner Bonus"
+                                        placeholder="e.g., Annual League Entry, Weekly Winnings"
                                         maxLength="100"
                                         required
                                         readOnly={isTeamAutoPopulated} 
@@ -1023,7 +1027,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                     </div>
                                 )}
                                 
-                                {type === 'fee' && category === 'trade_fee' ? (
+                                {type === 'debit' && category === 'trade_fee' ? (
                                     // Multiple team selectors for trade fees
                                     <div className="space-y-2">
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Teams Involved in Trade (Min 2)</label>
@@ -1040,7 +1044,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                         <option key={optionTeam} value={optionTeam}>{optionTeam}</option>
                                                     ))}
                                                 </select>
-                                                {tradeTeams.length > 2 && ( // Allow removing if more than 2 teams
+                                                {tradeTeams.length > 2 && ( 
                                                     <button
                                                         type="button"
                                                         onClick={() => handleRemoveTradeTeam(index)}
@@ -1076,7 +1080,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none ${isTeamSelectionDisabled ? 'bg-gray-200 cursor-not-allowed' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'} sm:text-sm`}
                                         >
                                             <option value="">Select Team</option> 
-                                            {type === 'fee' && ( 
+                                            {type === 'debit' && ( 
                                                 <option value="ALL_TEAMS_MULTIPLIER">All Teams (Multiplied)</option>
                                             )}
                                             {nonAllTeams.map(team => ( 
@@ -1152,7 +1156,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Amount</th>
                                             <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Type</th>
                                             <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Category</th> 
-                                            <th className="py-3 px-4 text-center text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Completed</th> {/* New column */}
+                                            <th className="py-3 px-4 text-center text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Completed</th> 
                                             {isCommish && <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Actions</th>}
                                         </tr>
                                     </thead>
@@ -1161,7 +1165,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             let displayAmount = (t.amount || 0).toFixed(2);
                                             const effectiveTeamsCount = t.teamsInvolvedCount > 0 ? t.teamsInvolvedCount : activeTeamsCount;
 
-                                            if (filterTeam !== '' && filterTeam !== 'All Teams' && t.teamName === 'All Teams' && t.type === 'fee' && effectiveTeamsCount > 0) {
+                                            if (filterTeam !== '' && filterTeam !== 'All Teams' && t.teamName === 'All Teams' && t.type === 'debit' && effectiveTeamsCount > 0) {
                                                 displayAmount = (t.amount / effectiveTeamsCount).toFixed(2);
                                             }
                                             return (
@@ -1175,26 +1179,25 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                     </td>
                                                     <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{t.teamName || '-'}</td>
                                                     <td className="py-2 px-4 text-sm text-right border-b border-gray-200">
-                                                        <span className={`${t.type === 'fee' ? 'text-red-700' : 'text-green-700'} font-medium`}>
+                                                        <span className={`${t.type === 'debit' ? 'text-red-700' : 'text-green-700'} font-medium`}>
                                                             ${displayAmount}
                                                         </span>
                                                     </td>
                                                     <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
                                                         <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                                                            t.type === 'fee' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+                                                            t.type === 'debit' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
                                                         }`}>
-                                                            {t.type === 'fee' ? 'Fee' : 'Payout'}
+                                                            {t.type === 'debit' ? 'Debit' : 'Credit'}
                                                         </span>
                                                     </td>
                                                     <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200 capitalize">
                                                         {t.category ? t.category.replace(/_/g, ' ') : 'General'}
                                                     </td> 
                                                     <td className="py-2 px-4 text-center text-sm border-b border-gray-200">
-                                                        {/* Display checkmark or X for completion status */}
                                                         {t.isCompleted ? (
-                                                            <span className="text-green-500 font-bold">&#10003;</span> // Checkmark
+                                                            <span className="text-green-500 font-bold">&#10003;</span> 
                                                         ) : (
-                                                            <span className="text-gray-400">&#10005;</span> // X mark
+                                                            <span className="text-gray-400">&#10005;</span> 
                                                         )}
                                                     </td>
                                                     {isCommish && ( 
@@ -1226,12 +1229,12 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                     <thead className="bg-blue-100">
                                         <tr>
                                             <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team Name</th>
-                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Total Fees</th>
-                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Completed Fees</th>
-                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Pending Fees</th>
-                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Total Payouts</th>
-                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Completed Payouts</th>
-                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Pending Payouts</th>
+                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Total Debits</th>
+                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Completed Debits</th>
+                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Pending Debits</th>
+                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Total Credits</th>
+                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Completed Credits</th>
+                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Pending Credits</th>
                                             <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Net Completed</th>
                                             <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Net Pending</th>
                                             <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Overall Net Balance</th>
@@ -1241,12 +1244,12 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                         {Object.entries(teamSummary).sort(([teamA], [teamB]) => teamA.localeCompare(teamB)).map(([team, data], index) => (
                                             <tr key={team} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                                                 <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{team}</td>
-                                                <td className="py-2 px-4 text-sm text-right text-red-700 font-medium border-b border-gray-200">${data.totalFees.toFixed(2)}</td>
-                                                <td className="py-2 px-4 text-sm text-right text-green-700 font-medium border-b border-gray-200">${data.completedFees.toFixed(2)}</td>
-                                                <td className="py-2 px-4 text-sm text-right text-purple-700 font-medium border-b border-gray-200">${data.pendingFees.toFixed(2)}</td>
-                                                <td className="py-2 px-4 text-sm text-right text-green-700 font-medium border-b border-gray-200">${data.totalPayouts.toFixed(2)}</td>
-                                                <td className="py-2 px-4 text-sm text-right text-green-700 font-medium border-b border-gray-200">${data.completedPayouts.toFixed(2)}</td>
-                                                <td className="py-2 px-4 text-sm text-right text-orange-700 font-medium border-b border-gray-200">${data.pendingPayouts.toFixed(2)}</td>
+                                                <td className="py-2 px-4 text-sm text-right text-red-700 font-medium border-b border-gray-200">${data.totalDebits.toFixed(2)}</td>
+                                                <td className="py-2 px-4 text-sm text-right text-green-700 font-medium border-b border-gray-200">${data.completedDebits.toFixed(2)}</td>
+                                                <td className="py-2 px-4 text-sm text-right text-purple-700 font-medium border-b border-gray-200">${data.pendingDebits.toFixed(2)}</td>
+                                                <td className="py-2 px-4 text-sm text-right text-green-700 font-medium border-b border-gray-200">${data.totalCredits.toFixed(2)}</td>
+                                                <td className="py-2 px-4 text-sm text-right text-green-700 font-medium border-b border-gray-200">${data.completedCredits.toFixed(2)}</td>
+                                                <td className="py-2 px-4 text-sm text-right text-orange-700 font-medium border-b border-gray-200">${data.pendingCredits.toFixed(2)}</td>
                                                 <td className={`py-2 px-4 text-sm text-right font-bold border-b border-gray-200 ${data.netCompletedBalance >= 0 ? 'text-blue-900' : 'text-red-900'}`}>
                                                     ${data.netCompletedBalance.toFixed(2)}
                                                 </td>
@@ -1264,9 +1267,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                         </section>
                     )}
 
-                    {/* Fee and Payout Structure Section */}
+                    {/* Debit and Credit Structure Section */}
                     <section className="mt-8 p-6 bg-gray-50 rounded-lg shadow-inner">
-                        <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">League Fee & Payout Structure</h3>
+                        <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">League Debit & Credit Structure</h3>
                         {isCommish && !isEditingStructure && (
                             <div className="text-center mb-4">
                                 <button
@@ -1284,33 +1287,33 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                             // Edit mode for structure
                             <div className="space-y-6">
                                 <div>
-                                    <h4 className="text-xl font-semibold text-red-700 mb-3">Fees (Money In)</h4>
-                                    {feeStructureData.map((item, index) => (
+                                    <h4 className="text-xl font-semibold text-red-700 mb-3">Debits (Money In)</h4>
+                                    {debitStructureData.map((item, index) => (
                                         <div key={index} className="flex flex-col md:flex-row gap-2 mb-2 items-center">
                                             <input
                                                 type="text"
                                                 value={item.name}
-                                                onChange={(e) => handleFeeStructureChange(index, 'name', e.target.value)}
-                                                placeholder="Fee Name"
+                                                onChange={(e) => handleDebitStructureChange(index, 'name', e.target.value)}
+                                                placeholder="Debit Name"
                                                 className="flex-1 px-3 py-2 border rounded-md"
                                             />
                                             <input
                                                 type="text" 
                                                 value={item.amount}
-                                                onChange={(e) => handleFeeStructureChange(index, 'amount', e.target.value)}
+                                                onChange={(e) => handleDebitStructureChange(index, 'amount', e.target.value)}
                                                 placeholder="Amount"
                                                 className="w-24 px-3 py-2 border rounded-md"
                                             />
                                             <input
                                                 type="text"
                                                 value={item.description}
-                                                onChange={(e) => handleFeeStructureChange(index, 'description', e.target.value)}
+                                                onChange={(e) => handleDebitStructureChange(index, 'description', e.target.value)}
                                                 placeholder="Description (optional)"
                                                 className="flex-1 px-3 py-2 border rounded-md"
                                             />
                                             <button
                                                 type="button"
-                                                onClick={() => handleRemoveFeeItem(index)}
+                                                onClick={() => handleRemoveDebitItem(index)}
                                                 className="p-2 bg-red-400 text-white rounded-md hover:bg-red-500"
                                             >
                                                 Remove
@@ -1319,41 +1322,41 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                     ))}
                                     <button
                                         type="button"
-                                        onClick={handleAddFeeItem}
+                                        onClick={handleAddDebitItem}
                                         className="mt-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md"
                                     >
-                                        Add Fee Item
+                                        Add Debit Item
                                     </button>
                                 </div>
 
                                 <div>
-                                    <h4 className="text-xl font-semibold text-green-700 mb-3">Payouts (Money Out)</h4>
-                                    {payoutStructureData.map((item, index) => (
+                                    <h4 className="text-xl font-semibold text-green-700 mb-3">Credits (Money Out)</h4>
+                                    {creditStructureData.map((item, index) => (
                                         <div key={index} className="flex flex-col md:flex-row gap-2 mb-2 items-center">
                                             <input
                                                 type="text"
                                                 value={item.name}
-                                                onChange={(e) => handlePayoutStructureChange(index, 'name', e.target.value)}
-                                                placeholder="Payout Name"
+                                                onChange={(e) => handleCreditStructureChange(index, 'name', e.target.value)}
+                                                placeholder="Credit Name"
                                                 className="flex-1 px-3 py-2 border rounded-md"
                                             />
                                             <input
                                                 type="text" 
                                                 value={item.amount}
-                                                onChange={(e) => handlePayoutStructureChange(index, 'amount', e.target.value)}
+                                                onChange={(e) => handleCreditStructureChange(index, 'amount', e.target.value)}
                                                 placeholder="Amount (optional)"
                                                 className="w-24 px-3 py-2 border rounded-md"
                                             />
                                             <input
                                                 type="text"
                                                 value={item.description}
-                                                onChange={(e) => handlePayoutStructureChange(index, 'description', e.target.value)}
+                                                onChange={(e) => handleCreditStructureChange(index, 'description', e.target.value)}
                                                 placeholder="Description (optional)"
                                                 className="flex-1 px-3 py-2 border rounded-md"
                                             />
                                             <button
                                                 type="button"
-                                                onClick={() => handleRemovePayoutItem(index)}
+                                                onClick={() => handleRemoveCreditItem(index)}
                                                 className="p-2 bg-red-400 text-white rounded-md hover:bg-red-500"
                                             >
                                                 Remove
@@ -1362,10 +1365,10 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                     ))}
                                     <button
                                         type="button"
-                                        onClick={handleAddPayoutItem}
+                                        onClick={handleAddCreditItem}
                                         className="mt-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md"
                                     >
-                                        Add Payout Item
+                                        Add Credit Item
                                     </button>
                                 </div>
                                 <div className="flex justify-center space-x-4 mt-6">
@@ -1389,21 +1392,21 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                             // Display mode for structure
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
-                                    <h4 className="text-xl font-semibold text-red-700 mb-3">Fees (Money In)</h4>
+                                    <h4 className="text-xl font-semibold text-red-700 mb-3">Debits (Money In)</h4>
                                     <ul className="list-disc list-inside space-y-1 text-gray-700">
-                                        {feeStructureData.map((fee, index) => (
+                                        {debitStructureData.map((item, index) => (
                                             <li key={index}>
-                                                <strong>{fee.name}:</strong> {fee.amount}{fee.description && ` - ${fee.description}`}
+                                                <strong>{item.name}:</strong> {item.amount}{item.description && ` - ${item.description}`}
                                             </li>
                                         ))}
                                     </ul>
                                 </div>
                                 <div>
-                                    <h4 className="text-xl font-semibold text-green-700 mb-3">Payouts (Money Out)</h4>
+                                    <h4 className="text-xl font-semibold text-green-700 mb-3">Credits (Money Out)</h4>
                                     <ul className="list-disc list-inside space-y-1 text-gray-700">
-                                        {payoutStructureData.map((payout, index) => (
+                                        {creditStructureData.map((item, index) => (
                                             <li key={index}>
-                                                <strong>{payout.name}:</strong> {payout.amount}{payout.description && ` - ${payout.description}`}
+                                                <strong>{item.name}:</strong> {item.amount}{item.description && ` - ${item.description}`}
                                             </li>
                                         ))}
                                     </ul>
