@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
 
-// CHART_COLORS can be reused from PowerRankings or defined here if not used elsewhere.
+// CHART_COLORS can be reused from PowerRankings or defined here if not used elsewhere
 const CHART_COLORS = [
     '#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#00c49f', '#ff0000',
     '#0088fe', '#bb3f85', '#7a421a', '#4a4a4a', '#a5d6a7', '#ef9a9a'
@@ -13,8 +13,8 @@ const FinancialTracker = ({ getDisplayTeamName }) => {
     const [transactions, setTransactions] = useState([]);
     const [amount, setAmount] = useState('');
     const [description, setDescription] = useState('');
-    const [type, setType] = useState('fee'); // 'fee' or 'payout'
-    const [teamName, setTeamName] = useState(''); // Optional, for team-specific transactions.
+    const [type, setType] = 'fee'; // 'fee' or 'payout' - changed to const as it's not directly set by input
+    const [teamName, setTeamName] = useState(''); // Optional, for team-specific transactions
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [db, setDb] = useState(null);
@@ -55,7 +55,8 @@ const FinancialTracker = ({ getDisplayTeamName }) => {
             const envInitialAuthToken = process.env.REACT_APP_INITIAL_AUTH_TOKEN;
             if (envInitialAuthToken !== undefined) {
                 initialAuthToken = envInitialAuthToken;
-                console.log("Initial Auth Token from REACT_APP_INITIAL_AUTH_TOKEN:", initialAuthToken ? "present" : "empty string");
+                // Log whether the token is empty or has content for debugging
+                console.log("Initial Auth Token from REACT_APP_INITIAL_AUTH_TOKEN:", initialAuthToken === "" ? "empty string" : "present (non-empty)");
             } else {
                 console.warn("REACT_APP_INITIAL_AUTH_TOKEN environment variable is not defined. Anonymous sign-in will be attempted.");
             }
@@ -85,12 +86,13 @@ const FinancialTracker = ({ getDisplayTeamName }) => {
                     // If no user, attempt to sign in anonymously or with a custom token
                     console.log("No user signed in. Attempting anonymous sign-in or custom token sign-in.");
                     try {
+                        // FIX: Explicitly check if initialAuthToken is NOT an empty string before using signInWithCustomToken
                         if (initialAuthToken !== undefined && initialAuthToken !== "") {
-                            // If a custom auth token is available, use it for sign-in
+                            // If a valid custom auth token is available, use it for sign-in
                             await signInWithCustomToken(firebaseAuth, initialAuthToken);
                             console.log("Signed in with custom token.");
                         } else {
-                            // Otherwise, sign in anonymously
+                            // Otherwise (if token is undefined or empty string), sign in anonymously
                             await signInAnonymously(firebaseAuth);
                             console.log("Signed in anonymously.");
                         }
