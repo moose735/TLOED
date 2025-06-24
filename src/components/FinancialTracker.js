@@ -14,7 +14,7 @@ const FinancialTracker = ({ getDisplayTeamName }) => {
     const [amount, setAmount] = useState('');
     const [description, setDescription] = useState('');
     const [type, setType] = useState('fee'); // 'fee' or 'payout'
-    const [teamName, setTeamName] = useState(''); // Optional, for team-specific transactions
+    const [teamName, setTeamName] = useState(''); // Optional, for team-specific transactions.
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [db, setDb] = useState(null);
