@@ -37,8 +37,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [availableSeasons, setAvailableSeasons] = useState([]); // All seasons available in historicalMatchups
     const [activeTeamsCount, setActiveTeamsCount] = useState(0); 
     
-    const [isTeamAutoPopulated, setIsTeamAutoPopulated] = null; 
-    const [autoPopulateWarning, setAutoPopulateWarning] = null; 
+    // CORRECTED: Initialized with useState hook
+    const [isTeamAutoPopulated, setIsTeamAutoPopulated] = useState(false); 
+    const [autoPopulateWarning, setAutoPopulateWarning] = useState(null); 
     
     const [showConfirmDelete, setShowConfirmDelete] = useState(false);
     const [transactionToDelete, setTransactionToDelete] = useState(null);
