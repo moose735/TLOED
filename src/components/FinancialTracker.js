@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
 
-// CHART_COLORS can be reused from PowerRankings or defined here if not used elsewhere
+// CHART_COLORS can be reused from PowerRankings or defined here if not used elsewhere.
 const CHART_COLORS = [
     '#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#00c49f', '#ff0000',
     '#0088fe', '#bb3f85', '#7a421a', '#4a4a4a', '#a5d6a7', '#ef9a9a'
