@@ -29,7 +29,8 @@ const CHART_COLORS = [
 
 const CustomDPRRankTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
-        const sortedPayload = [...payload].sort((a, b) => b.payload.dprValues[a.name] - b.payload.dprValues[b.name]);
+        // Change this line to sort in ascending order of rank (entry.value)
+        const sortedPayload = [...payload].sort((a, b) => a.value - b.value); // Flipped sorting order
         return (
             <div className="bg-white p-3 border border-gray-300 rounded-md shadow-lg text-sm">
                 <p className="font-bold text-gray-800 mb-2">Week: {label}</p>
@@ -118,9 +119,9 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
 
                 rankedTeamsForWeek.forEach((rankedTeam, index) => {
                     if (rankedTeam.dpr > 0 || (weeklyCumulativeSeasonalMetrics[week][rankedTeam.team] && weeklyCumulativeSeasonalMetrics[week][rankedTeam.team].gamesPlayed > 0)) {
-                         weeklyEntry[rankedTeam.team] = index + 1; // This is the RANK
+                            weeklyEntry[rankedTeam.team] = index + 1; // This is the RANK
                     } else {
-                         weeklyEntry[rankedTeam.team] = undefined; // No rank if no games played/DPR is 0
+                            weeklyEntry[rankedTeam.team] = undefined; // No rank if no games played/DPR is 0
                     }
                     weeklyEntry.dprValues[rankedTeam.team] = rankedTeam.dpr; // Actual DPR value for tooltip
                 });
@@ -164,7 +165,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                     if (currentRankInChart !== 0 && previousRankInChart !== 0) {
                         // Movement is previous rank minus current rank (e.g., if previous was 5, current is 3, movement is +2)
                         movement = previousRankInChart - currentRankInChart;
-                    } 
+                    }   
                     // If currentRank is 0, it means the team has no data for the latest week, so no movement.
                     // If previousRank is 0 and currentRank is not 0, it's considered a "new" entry for comparison,
                     // so we keep movement as 0 (or could add a "NEW" indicator if desired in the UI).
