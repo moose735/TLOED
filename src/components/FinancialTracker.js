@@ -24,17 +24,43 @@ const FinancialTracker = ({ getDisplayTeamName }) => {
 
     // Initialize Firebase and set up authentication
     useEffect(() => {
+        let firebaseConfig = {};
+        let appId = 'default-app-id'; // Default value if __app_id is not set
+        let initialAuthToken = undefined;
+
         try {
-            // Retrieve Firebase config and app ID from the global environment variables
-            const firebaseConfig = typeof __firebase_config !== 'undefined'
-                ? JSON.parse(__firebase_config)
-                : {}; 
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            // Attempt to retrieve and parse __firebase_config
+            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                try {
+                    firebaseConfig = JSON.parse(__firebase_config);
+                    console.log("Parsed firebaseConfig from __firebase_config:", firebaseConfig);
+                } catch (parseError) {
+                    throw new Error(`Failed to parse __firebase_config environment variable. It might not be valid JSON. Error: ${parseError.message}`);
+                }
+            } else {
+                throw new Error("__firebase_config environment variable is not defined or is empty. Please ensure it's set in your Vercel project settings.");
+            }
+
+            // Attempt to retrieve __app_id
+            if (typeof __app_id !== 'undefined' && __app_id) {
+                appId = __app_id;
+                console.log("App ID from __app_id:", appId);
+            } else {
+                console.warn("__app_id environment variable is not defined or is empty. Using 'default-app-id'.");
+            }
+
+            // Attempt to retrieve __initial_auth_token
+            if (typeof __initial_auth_token !== 'undefined') {
+                initialAuthToken = __initial_auth_token;
+                console.log("Initial Auth Token from __initial_auth_token:", initialAuthToken ? "present" : "empty string");
+            } else {
+                console.warn("__initial_auth_token environment variable is not defined. Anonymous sign-in will be attempted.");
+            }
 
             // Essential check: Ensure projectId and apiKey are provided for Firebase initialization
             if (!firebaseConfig.projectId || !firebaseConfig.apiKey) {
                 // If config is missing, set an error and stop loading
-                throw new Error("Firebase configuration missing projectId or apiKey. Please ensure __firebase_config is correctly provided by the environment for persistent data storage.");
+                throw new Error("Firebase configuration missing projectId or apiKey. Please ensure your __firebase_config environment variable contains these properties.");
             }
 
             // Initialize Firebase app with the provided configuration and app ID
@@ -56,9 +82,9 @@ const FinancialTracker = ({ getDisplayTeamName }) => {
                     // If no user, attempt to sign in anonymously or with a custom token
                     console.log("No user signed in. Attempting anonymous sign-in or custom token sign-in.");
                     try {
-                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        if (initialAuthToken !== undefined && initialAuthToken !== "") {
                             // If a custom auth token is available, use it for sign-in
-                            await signInWithCustomToken(firebaseAuth, __initial_auth_token);
+                            await signInWithCustomToken(firebaseAuth, initialAuthToken);
                             console.log("Signed in with custom token.");
                         } else {
                             // Otherwise, sign in anonymously
