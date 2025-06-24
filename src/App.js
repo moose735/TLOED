@@ -401,11 +401,13 @@ const App = () => {
              />
            )}
            {/* NEW: Render FinancialTracker */}
-           {activeTab === TABS.FINANCIALS && (
-             <FinancialTracker
-               getDisplayTeamName={getMappedTeamName} // Pass if needed, or remove from prop if not used in FinancialTracker
-             />
-           )}
+          // Inside your App.js render method:
+{activeTab === TABS.FINANCIALS && (
+    <FinancialTracker
+        getDisplayTeamName={getMappedTeamName}
+        historicalMatchups={historicalMatchups} // <--- Ensure this prop is present and correctly linked
+    />
+)}
           </div>
         )}
       </main>
