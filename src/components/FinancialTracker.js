@@ -61,6 +61,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [currentPage, setCurrentPage] = useState(1);
     const transactionsPerPage = 10;
 
+    // State for expanded team rows in the summary table
+    const [expandedTeams, setExpandedTeams] = useState({});
+
     const COMMISH_UID = process.env.REACT_APP_COMMISH_UID;
     const isCommish = userId && COMMISH_UID && userId === COMMISH_UID; 
 
@@ -822,6 +825,13 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         }
     };
 
+    // Toggle for team summary dropdown
+    const toggleTeamExpansion = (teamName) => {
+        setExpandedTeams(prevState => ({
+            ...prevState,
+            [teamName]: !prevState[teamName]
+        }));
+    };
 
     return (
         <div className="w-full max-w-4xl bg-white p-8 rounded-lg shadow-md mt-4 mx-auto">
@@ -1268,36 +1278,61 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                         <tr>
                                             <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team Name</th>
                                             <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Total Debits</th>
-                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Completed Debits</th>
-                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Pending Debits</th>
                                             <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Total Credits</th>
-                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Completed Credits</th>
-                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Pending Credits</th>
-                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Net Completed</th>
-                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Net Pending</th>
-                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Overall Net Balance</th>
+                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Net Balance</th>
+                                            <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Details</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {Object.entries(teamSummary).sort(([teamA], [teamB]) => teamA.localeCompare(teamB)).map(([team, data], index) => (
-                                            <tr key={team} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                                <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{team}</td>
-                                                <td className="py-2 px-4 text-sm text-right text-gray-700 font-medium border-b border-gray-200">${data.totalDebits.toFixed(2)}</td>
-                                                <td className="py-2 px-4 text-sm text-right text-gray-700 font-medium border-b border-gray-200">${data.completedDebits.toFixed(2)}</td>
-                                                <td className="py-2 px-4 text-sm text-right text-gray-700 font-medium border-b border-gray-200">${data.pendingDebits.toFixed(2)}</td>
-                                                <td className="py-2 px-4 text-sm text-right text-gray-700 font-medium border-b border-gray-200">${data.totalCredits.toFixed(2)}</td>
-                                                <td className="py-2 px-4 text-sm text-right text-gray-700 font-medium border-b border-gray-200">${data.completedCredits.toFixed(2)}</td>
-                                                <td className="py-2 px-4 text-sm text-right text-gray-700 font-medium border-b border-gray-200">${data.pendingCredits.toFixed(2)}</td>
-                                                <td className={`py-2 px-4 text-sm text-right font-bold border-b border-gray-200 ${data.netCompletedBalance >= 0 ? 'text-blue-900' : 'text-red-900'}`}>
-                                                    ${data.netCompletedBalance.toFixed(2)}
-                                                </td>
-                                                <td className={`py-2 px-4 text-sm text-right font-bold border-b border-gray-200 ${data.netPendingBalance >= 0 ? 'text-blue-900' : 'text-red-900'}`}>
-                                                    ${data.netPendingBalance.toFixed(2)}
-                                                </td>
-                                                <td className={`py-2 px-4 text-sm text-right font-bold border-b border-gray-200 ${data.netBalance >= 0 ? 'text-blue-900' : 'text-red-900'}`}>
-                                                    ${data.netBalance.toFixed(2)}
-                                                </td>
-                                            </tr>
+                                            <React.Fragment key={team}>
+                                                <tr className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                                                    <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{team}</td>
+                                                    <td className="py-2 px-4 text-sm text-right text-gray-700 font-medium border-b border-gray-200">${data.totalDebits.toFixed(2)}</td>
+                                                    <td className="py-2 px-4 text-sm text-right text-gray-700 font-medium border-b border-gray-200">${data.totalCredits.toFixed(2)}</td>
+                                                    <td className={`py-2 px-4 text-sm text-right font-bold border-b border-gray-200 ${data.netBalance >= 0 ? 'text-blue-900' : 'text-red-900'}`}>
+                                                        ${data.netBalance.toFixed(2)}
+                                                    </td>
+                                                    <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
+                                                        <button
+                                                            onClick={() => toggleTeamExpansion(team)}
+                                                            className="text-blue-500 hover:text-blue-700 focus:outline-none"
+                                                        >
+                                                            {expandedTeams[team] ? (
+                                                                <svg className="w-5 h-5 inline-block transform rotate-180 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7"></path></svg>
+                                                            ) : (
+                                                                <svg className="w-5 h-5 inline-block transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                                                            )}
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                                {expandedTeams[team] && (
+                                                    <tr className={index % 2 === 0 ? 'bg-gray-100' : 'bg-gray-50'}>
+                                                        <td colSpan="5" className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
+                                                            <div className="grid grid-cols-2 gap-2 pl-8">
+                                                                <div>
+                                                                    <strong>Completed Debits:</strong> <span className="font-medium">${data.completedDebits.toFixed(2)}</span>
+                                                                </div>
+                                                                <div>
+                                                                    <strong>Pending Debits:</strong> <span className="font-medium">${data.pendingDebits.toFixed(2)}</span>
+                                                                </div>
+                                                                <div>
+                                                                    <strong>Completed Credits:</strong> <span className="font-medium">${data.completedCredits.toFixed(2)}</span>
+                                                                </div>
+                                                                <div>
+                                                                    <strong>Pending Credits:</strong> <span className="font-medium">${data.pendingCredits.toFixed(2)}</span>
+                                                                </div>
+                                                                <div>
+                                                                    <strong>Net Completed:</strong> <span className={`font-bold ${data.netCompletedBalance >= 0 ? 'text-blue-800' : 'text-red-800'}`}>${data.netCompletedBalance.toFixed(2)}</span>
+                                                                </div>
+                                                                <div>
+                                                                    <strong>Net Pending:</strong> <span className={`font-bold ${data.netPendingBalance >= 0 ? 'text-blue-800' : 'text-red-800'}`}>${data.netPendingBalance.toFixed(2)}</span>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </React.Fragment>
                                         ))}
                                     </tbody>
                                 </table>
