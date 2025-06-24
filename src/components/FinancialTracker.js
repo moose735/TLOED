@@ -20,6 +20,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [category, setCategory] = useState('general_fee'); 
     const [weeklyPointsWeek, setWeeklyPointsWeek] = useState('');
     const [sidePotName, setSidePotName] = useState('');
+    const [isCompleted, setIsCompleted] = useState(false); // New state for completion status
 
     const [teamName, setTeamName] = useState(''); // For single team transactions
     const [tradeTeams, setTradeTeams] = useState(['', '']); // For trade fees, initially two empty selections
@@ -132,7 +133,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             console.log("Determined Current Season:", maxSeason);
 
             if (maxSeason === 0) {
-                // If no season data, don't set error, just proceed with all transactions
                 return; 
             }
 
@@ -383,7 +383,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             console.log("Unsubscribing from Firestore listener (transactions).");
             unsubscribe();
         };
-    }, [db, isAuthReady, currentSeason]); // Add currentSeason to dependencies to re-calculate pot if season changes
+    }, [db, isAuthReady, currentSeason]); 
 
     // Fetch and listen for updates to the fee/payout structure
     useEffect(() => {
@@ -403,7 +403,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 setPayoutStructureData(data.payouts || defaultPayoutStructure);
                 console.log("Fetched league structure from Firestore.");
             } else {
-                // If document doesn't exist, use default hardcoded data
                 setFeeStructureData(defaultFeeStructure);
                 setPayoutStructureData(defaultPayoutStructure);
                 console.log("League structure document not found, using defaults.");
@@ -413,7 +412,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             console.error("Error fetching league structure:", firestoreError);
             setError(`Failed to load league structure: ${firestoreError.message}`);
             setLoadingStructure(false);
-            // Fallback to default in case of error
             setFeeStructureData(defaultFeeStructure);
             setPayoutStructureData(defaultPayoutStructure);
         });
@@ -471,7 +469,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     userId: userId,
                     category: category,
                     season: currentSeason,
-                    teamsInvolvedCount: 1 
+                    teamsInvolvedCount: 1,
+                    isCompleted: isCompleted // Include completion status
                 });
             }
         } else {
@@ -505,7 +504,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 userId: userId,
                 category: category, 
                 season: currentSeason,
-                teamsInvolvedCount: teamsInvolved 
+                teamsInvolvedCount: teamsInvolved,
+                isCompleted: isCompleted // Include completion status
             });
 
             if (type === 'payout') {
@@ -559,6 +559,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setTradeTeams(['', '']); 
             setWeeklyPointsWeek(''); 
             setSidePotName(''); 
+            setIsCompleted(false); // Reset completion status
             setError(null); 
             setAutoPopulateWarning(null); 
             console.log("Transaction(s) added to Firestore successfully.");
@@ -616,6 +617,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         }
     });
 
+    // Calculate totals including completion status
     const totalFees = filteredTransactions
         .filter(t => t.type === 'fee')
         .reduce((sum, t) => {
@@ -629,7 +631,37 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         .filter(t => t.type === 'payout')
         .reduce((sum, t) => sum + (t.amount || 0), 0);
 
-    const netBalance = totalFees - totalPayouts;
+    const netBalance = totalFees - totalPayouts; // Overall net balance
+
+    // New calculations for completed and pending
+    const completedFees = filteredTransactions
+        .filter(t => t.type === 'fee' && t.isCompleted)
+        .reduce((sum, t) => {
+            if (filterTeam !== '' && filterTeam !== 'All Teams' && t.teamName === 'All Teams' && t.teamsInvolvedCount > 0) {
+                return sum + (t.amount / t.teamsInvolvedCount || 0);
+            }
+            return sum + (t.amount || 0);
+        }, 0);
+
+    const completedPayouts = filteredTransactions
+        .filter(t => t.type === 'payout' && t.isCompleted)
+        .reduce((sum, t) => sum + (t.amount || 0), 0);
+    
+    const pendingFees = filteredTransactions
+        .filter(t => t.type === 'fee' && !t.isCompleted)
+        .reduce((sum, t) => {
+            if (filterTeam !== '' && filterTeam !== 'All Teams' && t.teamName === 'All Teams' && t.teamsInvolvedCount > 0) {
+                return sum + (t.amount / t.teamsInvolvedCount || 0);
+            }
+            return sum + (t.amount || 0);
+        }, 0);
+
+    const pendingPayouts = filteredTransactions
+        .filter(t => t.type === 'payout' && !t.isCompleted)
+        .reduce((sum, t) => sum + (t.amount || 0), 0);
+
+    const netCompletedBalance = completedFees - completedPayouts;
+    const netPendingBalance = pendingFees - pendingPayouts;
 
     // Calculate team summary data
     const teamSummary = {};
@@ -733,7 +765,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     };
 
     const handleCancelEditStructure = () => {
-        // Re-fetch from Firebase to revert changes, or use a cached version if preferred
         setIsEditingStructure(false);
         setError(null); 
     };
@@ -823,7 +854,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             {!loading && !error && (
                 <>
                     {/* Financial Summary */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8"> {/* Adjusted to 4 columns */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
                         <div className="bg-red-50 p-4 rounded-lg shadow-sm text-center">
                             <h3 className="text-lg font-semibold text-red-700">Total Fees Collected</h3>
                             <p className="text-2xl font-bold text-red-900">${totalFees.toFixed(2)}</p>
@@ -833,14 +864,42 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                             <p className="text-2xl font-bold text-green-900">${totalPayouts.toFixed(2)}</p>
                         </div>
                         <div className={`p-4 rounded-lg shadow-sm text-center ${netBalance >= 0 ? 'bg-blue-50' : 'bg-red-100'}`}>
-                            <h3 className="text-lg font-semibold text-blue-700">Net Balance</h3>
+                            <h3 className="text-lg font-semibold text-blue-700">Overall Net Balance</h3>
                             <p className={`text-2xl font-bold ${netBalance >= 0 ? 'text-blue-900' : 'text-red-900'}`}>${netBalance.toFixed(2)}</p>
                         </div>
-                        {/* Transaction Pot Counter */}
                         <div className="bg-yellow-50 p-4 rounded-lg shadow-sm text-center">
                             <h3 className="text-lg font-semibold text-yellow-700">Transaction Pot</h3>
                             <p className="text-2xl font-bold text-yellow-900">${transactionPot.toFixed(2)}</p>
                         </div>
+
+                        {/* New rows for Completed and Pending Balances */}
+                        <div className="bg-green-50 p-4 rounded-lg shadow-sm text-center">
+                            <h3 className="text-lg font-semibold text-green-700">Completed Fees</h3>
+                            <p className="text-xl font-bold text-green-900">${completedFees.toFixed(2)}</p>
+                        </div>
+                        <div className="bg-red-50 p-4 rounded-lg shadow-sm text-center">
+                            <h3 className="text-lg font-semibold text-red-700">Completed Payouts</h3>
+                            <p className="text-xl font-bold text-red-900">${completedPayouts.toFixed(2)}</p>
+                        </div>
+                        <div className={`p-4 rounded-lg shadow-sm text-center ${netCompletedBalance >= 0 ? 'bg-blue-50' : 'bg-red-100'}`}>
+                            <h3 className="text-lg font-semibold text-blue-700">Net Completed</h3>
+                            <p className={`text-xl font-bold ${netCompletedBalance >= 0 ? 'text-blue-900' : 'text-red-900'}`}>${netCompletedBalance.toFixed(2)}</p>
+                        </div>
+                        <div>{/* Empty space for alignment */}</div> 
+
+                        <div className="bg-purple-50 p-4 rounded-lg shadow-sm text-center">
+                            <h3 className="text-lg font-semibold text-purple-700">Pending Fees</h3>
+                            <p className="text-xl font-bold text-purple-900">${pendingFees.toFixed(2)}</p>
+                        </div>
+                        <div className="bg-orange-50 p-4 rounded-lg shadow-sm text-center">
+                            <h3 className="text-lg font-semibold text-orange-700">Pending Payouts</h3>
+                            <p className="text-xl font-bold text-orange-900">${pendingPayouts.toFixed(2)}</p>
+                        </div>
+                        <div className={`p-4 rounded-lg shadow-sm text-center ${netPendingBalance >= 0 ? 'bg-blue-50' : 'bg-red-100'}`}>
+                            <h3 className="text-lg font-semibold text-blue-700">Net Pending</h3>
+                            <p className={`text-xl font-bold ${netPendingBalance >= 0 ? 'text-blue-900' : 'text-red-900'}`}>${netPendingBalance.toFixed(2)}</p>
+                        </div>
+                        <div>{/* Empty space for alignment */}</div> 
                     </div>
 
                     {/* Add New Transaction Form (Conditionally rendered) */}
@@ -1010,6 +1069,20 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                     </div>
                                 )}
 
+                                {/* Completed Transaction Checkbox */}
+                                <div className="flex items-center mt-4">
+                                    <input
+                                        type="checkbox"
+                                        id="isCompleted"
+                                        checked={isCompleted}
+                                        onChange={(e) => setIsCompleted(e.target.checked)}
+                                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                    />
+                                    <label htmlFor="isCompleted" className="ml-2 block text-sm text-gray-900">
+                                        Completed Transaction
+                                    </label>
+                                </div>
+
                                 <button
                                     type="submit"
                                     className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md shadow-md transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
@@ -1056,6 +1129,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Amount</th>
                                             <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Type</th>
                                             <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Category</th> 
+                                            <th className="py-3 px-4 text-center text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Completed</th> {/* New column */}
                                             {isCommish && <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Actions</th>}
                                         </tr>
                                     </thead>
@@ -1092,6 +1166,14 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                     <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200 capitalize">
                                                         {t.category ? t.category.replace(/_/g, ' ') : 'General'}
                                                     </td> 
+                                                    <td className="py-2 px-4 text-center text-sm border-b border-gray-200">
+                                                        {/* Display checkmark or X for completion status */}
+                                                        {t.isCompleted ? (
+                                                            <span className="text-green-500 font-bold">&#10003;</span> // Checkmark
+                                                        ) : (
+                                                            <span className="text-gray-400">&#10005;</span> // X mark
+                                                        )}
+                                                    </td>
                                                     {isCommish && ( 
                                                         <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
                                                             <button
