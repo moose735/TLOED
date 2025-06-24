@@ -195,36 +195,41 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                 weeklyDPRsChartData.some(weekData => weekData[team] !== undefined)
             );
             setChartTeams(activeChartTeams);
-            setMaxTeamsInChart(activeChartTeams.length > 0 ? activeChartTeams.length : 1);
+            // maxTeamsInChart should be the total number of unique teams in the league
+            setMaxTeamsInChart(uniqueTeamsInNewestYear.length > 0 ? uniqueTeamsInNewestYear.length : 1);
+
 
             // --- Prepare data for the Power Rankings Table (including Rank and Movement) ---
-            const lastWeekChartData = weeklyDPRsChartData[weeklyDPRsChartData.length - 1];
-            
+            // Get the data for the most recent week entered
+            const latestWeekIndex = weeklyDPRsChartData.length - 1;
+            const lastWeekChartData = weeklyDPRsChartData[latestWeekIndex];
+
             const finalPowerRankingsForTable = uniqueTeamsInNewestYear
                 .map(teamName => {
                     const cumulativeTeamStatsForTable = yearData[teamName]; // Use the full season metrics
+
+                    // Current rank is always from the last available week's chart data
                     const currentRankInChart = lastWeekChartData ? (lastWeekChartData[teamName] || 0) : 0;
 
-                    // Find the rank for the *previous* week where the team had a rank
                     let previousRankInChart = 0;
-                    if (weeklyDPRsChartData.length > 1) {
-                        // Iterate backwards from the second-to-last week
-                        for (let i = weeklyDPRsChartData.length - 2; i >= 0; i--) {
-                            if (weeklyDPRsChartData[i][teamName] !== undefined) {
-                                previousRankInChart = weeklyDPRsChartData[i][teamName];
-                                break; // Found the last known rank, exit loop
-                            }
+                    // Only calculate movement if there's data for at least two weeks
+                    if (weeklyDPRsChartData.length >= 2) {
+                        // Look specifically at the second-to-last week's data
+                        const secondToLastWeekData = weeklyDPRsChartData[latestWeekIndex - 1];
+                        if (secondToLastWeekData) {
+                            previousRankInChart = secondToLastWeekData[teamName] || 0;
                         }
                     }
 
                     let movement = 0;
                     if (currentRankInChart !== 0 && previousRankInChart !== 0) {
+                        // Movement is previous rank minus current rank (e.g., 5th to 3rd is +2)
                         movement = previousRankInChart - currentRankInChart;
-                    } else if (currentRankInChart !== 0 && previousRankInChart === 0 && weeklyDPRsChartData.length > 1) {
-                        // If the team has a current rank but no previous recorded rank, it's a "NEW" entry.
-                        // You can represent this as 0 movement or a special indicator.
-                        movement = 0; // Keeping it 0 as discussed for now, but could be enhanced.
-                    }
+                    } 
+                    // If currentRank is 0, it means the team has no data for the latest week, so no movement.
+                    // If previousRank is 0 and currentRank is not 0, it's a "new" entry, movement is 0.
+                    // This handles cases where a team might appear for the first time in the chart, or had no score in prev week.
+
 
                     return {
                         team: teamName,
@@ -240,6 +245,8 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                         year: newestYear,
                     };
                 })
+                // Filter out teams that have no rank in the current week (rank === 0) if you only want ranked teams in the table
+                .filter(team => team.rank !== 0)
                 .sort((a, b) => a.rank - b.rank); // Sort by the 'rank' derived from the chart data
 
             setPowerRankings(finalPowerRankingsForTable);
