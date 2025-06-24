@@ -25,42 +25,45 @@ const FinancialTracker = ({ getDisplayTeamName }) => {
     // Initialize Firebase and set up authentication
     useEffect(() => {
         let firebaseConfig = {};
-        let appId = 'default-app-id'; // Default value if __app_id is not set
+        let appId = 'default-app-id'; // Default value if not set via env
         let initialAuthToken = undefined;
 
         try {
-            // Attempt to retrieve and parse __firebase_config
-            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+            // Attempt to retrieve and parse REACT_APP_FIREBASE_CONFIG
+            const rawFirebaseConfig = process.env.REACT_APP_FIREBASE_CONFIG;
+            if (rawFirebaseConfig) {
                 try {
-                    firebaseConfig = JSON.parse(__firebase_config);
-                    console.log("Parsed firebaseConfig from __firebase_config:", firebaseConfig);
+                    firebaseConfig = JSON.parse(rawFirebaseConfig);
+                    console.log("Parsed firebaseConfig from REACT_APP_FIREBASE_CONFIG:", firebaseConfig);
                 } catch (parseError) {
-                    throw new Error(`Failed to parse __firebase_config environment variable. It might not be valid JSON. Error: ${parseError.message}`);
+                    throw new Error(`Failed to parse REACT_APP_FIREBASE_CONFIG environment variable. It might not be valid JSON. Error: ${parseError.message}`);
                 }
             } else {
-                throw new Error("__firebase_config environment variable is not defined or is empty. Please ensure it's set in your Vercel project settings.");
+                throw new Error("REACT_APP_FIREBASE_CONFIG environment variable is not defined or is empty. Please ensure it's set in your Vercel project settings with the 'REACT_APP_' prefix.");
             }
 
-            // Attempt to retrieve __app_id
-            if (typeof __app_id !== 'undefined' && __app_id) {
-                appId = __app_id;
-                console.log("App ID from __app_id:", appId);
+            // Attempt to retrieve REACT_APP_APP_ID
+            const envAppId = process.env.REACT_APP_APP_ID;
+            if (envAppId) {
+                appId = envAppId;
+                console.log("App ID from REACT_APP_APP_ID:", appId);
             } else {
-                console.warn("__app_id environment variable is not defined or is empty. Using 'default-app-id'.");
+                console.warn("REACT_APP_APP_ID environment variable is not defined or is empty. Using 'default-app-id'.");
             }
 
-            // Attempt to retrieve __initial_auth_token
-            if (typeof __initial_auth_token !== 'undefined') {
-                initialAuthToken = __initial_auth_token;
-                console.log("Initial Auth Token from __initial_auth_token:", initialAuthToken ? "present" : "empty string");
+            // Attempt to retrieve REACT_APP_INITIAL_AUTH_TOKEN
+            const envInitialAuthToken = process.env.REACT_APP_INITIAL_AUTH_TOKEN;
+            if (envInitialAuthToken !== undefined) {
+                initialAuthToken = envInitialAuthToken;
+                console.log("Initial Auth Token from REACT_APP_INITIAL_AUTH_TOKEN:", initialAuthToken ? "present" : "empty string");
             } else {
-                console.warn("__initial_auth_token environment variable is not defined. Anonymous sign-in will be attempted.");
+                console.warn("REACT_APP_INITIAL_AUTH_TOKEN environment variable is not defined. Anonymous sign-in will be attempted.");
             }
 
             // Essential check: Ensure projectId and apiKey are provided for Firebase initialization
             if (!firebaseConfig.projectId || !firebaseConfig.apiKey) {
                 // If config is missing, set an error and stop loading
-                throw new Error("Firebase configuration missing projectId or apiKey. Please ensure your __firebase_config environment variable contains these properties.");
+                throw new Error("Firebase configuration missing projectId or apiKey. Please ensure your REACT_APP_FIREBASE_CONFIG environment variable contains these properties and is correctly formatted JSON.");
             }
 
             // Initialize Firebase app with the provided configuration and app ID
@@ -126,7 +129,7 @@ const FinancialTracker = ({ getDisplayTeamName }) => {
         setError(null); // Clear previous errors
 
         // Define the public collection path as per Firestore security rules for shared data
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const appId = process.env.REACT_APP_APP_ID || 'default-app-id'; // Use REACT_APP_APP_ID here too
         // Data for everyone to see should be in a public collection
         const transactionCollectionPath = `/artifacts/${appId}/public/data/financial_transactions`;
         
@@ -192,7 +195,7 @@ const FinancialTracker = ({ getDisplayTeamName }) => {
 
         try {
             // Get the app ID for constructing the public collection path
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const appId = process.env.REACT_APP_APP_ID || 'default-app-id'; // Use REACT_APP_APP_ID here too
             // Add the new document to the public financial transactions collection
             const transactionCollectionRef = collection(db, `/artifacts/${appId}/public/data/financial_transactions`);
             await addDoc(transactionCollectionRef, newTransaction);
