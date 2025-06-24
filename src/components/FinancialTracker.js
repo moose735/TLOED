@@ -68,8 +68,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
             if (maxSeason === 0) {
                 setError("No historical matchup data with a valid 'year' property found to determine the current season. Showing all transactions.");
-                // We'll proceed without a currentSeason filter in this case, but still show the error.
-                // The transaction list will then show ALL transactions regardless of season.
                 return; 
             }
 
@@ -135,8 +133,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     // Effect to automatically set teamName and description when payoutCategory and weeklyPointsWeek change
     useEffect(() => {
-        setAutoPopulateWarning(null); // Clear auto-populate warning at the start of this effect
-        setIsTeamAutoPopulated(false); // Reset auto-population flag
+        setAutoPopulateWarning(null); 
+        setIsTeamAutoPopulated(false); 
 
         if (type === 'payout' && 
             (payoutCategory === 'highest_weekly_points' || payoutCategory === 'second_highest_weekly_points') &&
@@ -155,21 +153,15 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     setDescription(`Payout: Second Highest Weekly Points (Week ${weeklyPointsWeek}) - ${weekData.secondHighest.team} (${weekData.secondHighest.score} pts)`);
                     setIsTeamAutoPopulated(true);
                 } else {
-                    // No winner found for specific category in this week
                     setAutoPopulateWarning(`No ${payoutCategory.replace(/_/g, ' ')} winner found for Week ${weeklyPointsWeek} in the current season.`);
-                    // DO NOT clear teamName or description here. Let user fill manually or keep previous.
                 }
             } else {
-                // No data found for the week at all
                 setAutoPopulateWarning(`No score data found for Week ${weeklyPointsWeek} in the current season.`);
-                // DO NOT clear teamName or description here.
             }
         } else if (type === 'payout' && payoutCategory === 'side_pot') {
             setTeamName(''); 
             setDescription(`Payout: Side Pot`);
-            // Side pot team is manually selected, not auto-populated
         } else {
-            // Reset to default behavior if not an automated payout type
             setTeamName('');
             setDescription('');
         }
@@ -343,7 +335,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             }
             finalAmount = finalAmount * activeTeamsCount;
             finalTeamName = 'All Teams'; 
-            teamsInvolved = activeTeamsCount; // Store the count of teams involved
+            teamsInvolved = activeTeamsCount; 
         } else if (type === 'payout' && teamName === 'ALL_TEAMS_MULTIPLIER') {
             finalTeamName = 'All Teams';
             setError("Warning: 'All Teams' selected for a payout. Amount will not be multiplied. Ensure this is intentional.");
@@ -359,7 +351,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             userId: userId,
             category: payoutCategory, 
             season: currentSeason,
-            teamsInvolvedCount: teamsInvolved // Store the number of teams for division logic
+            teamsInvolvedCount: teamsInvolved 
         };
 
         if (type === 'payout') {
@@ -453,10 +445,20 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     const isTeamSelectionDisabled = isTeamAutoPopulated;
 
-    const filteredTransactions = transactions.filter(t => 
-        (currentSeason === null || t.season === currentSeason) && 
-        (filterTeam === '' || t.teamName === filterTeam || (filterTeam === 'ALL_TEAMS_MULTIPLIER' && t.teamName === 'All Teams'))
-    );
+    const filteredTransactions = transactions.filter(t => {
+        const isCurrentSeason = (currentSeason === null || t.season === currentSeason);
+
+        if (filterTeam === '') {
+            return isCurrentSeason; // Show all transactions for the current season
+        } else if (filterTeam === 'All Teams') {
+            // Show only transactions specifically marked as 'All Teams'
+            return isCurrentSeason && t.teamName === 'All Teams';
+        } else {
+            // If filterTeam is a specific individual team name
+            // Show transactions for that specific team OR for 'All Teams'
+            return isCurrentSeason && (t.teamName === filterTeam || t.teamName === 'All Teams');
+        }
+    });
 
     const totalFees = filteredTransactions
         .filter(t => t.type === 'fee')
