@@ -20,7 +20,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [category, setCategory] = useState('general_fee'); 
     const [weeklyPointsWeek, setWeeklyPointsWeek] = useState('');
     const [sidePotName, setSidePotName] = useState('');
-    const [isCompleted, setIsCompleted] = useState(false); 
+    // const [isCompleted, setIsCompleted] = useState(false); // Removed
 
     const [teamName, setTeamName] = useState(''); 
     const [tradeTeams, setTradeTeams] = useState(['', '']); 
@@ -365,8 +365,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             }
             const fetchedTransactions = snapshot.docs.map(doc => ({
                 id: doc.id,
-                // Ensure isCompleted defaults to false if not present in Firestore
-                isCompleted: doc.data().isCompleted ?? false, 
+                // isCompleted: doc.data().isCompleted ?? false, // Removed
                 ...doc.data()
             }));
             setTransactions(fetchedTransactions);
@@ -481,7 +480,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     category: category,
                     season: currentSeason,
                     teamsInvolvedCount: 1,
-                    isCompleted: isCompleted 
+                    // isCompleted: isCompleted // Removed
                 });
             }
         } else {
@@ -516,7 +515,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 category: category, 
                 season: currentSeason,
                 teamsInvolvedCount: teamsInvolved,
-                isCompleted: isCompleted 
+                // isCompleted: isCompleted // Removed
             });
 
             if (type === 'credit') {
@@ -570,7 +569,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setTradeTeams(['', '']); 
             setWeeklyPointsWeek(''); 
             setSidePotName(''); 
-            setIsCompleted(false); 
+            // setIsCompleted(false); // Removed
             setError(null); 
             setAutoPopulateWarning(null); 
             console.log("Transaction(s) added to Firestore successfully.");
@@ -644,9 +643,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     const netBalance = totalDebits - totalCredits; 
 
-    // New calculations for completed and pending Debits and Credits
-    const completedDebits = filteredTransactions
-        .filter(t => t.type === 'debit' && t.isCompleted)
+    // Re-added for summary cards as per user's previous request.
+    const totalCollected = filteredTransactions
+        .filter(t => t.type === 'debit' /* && t.isCompleted */) // Keep the 'isCompleted' if you want to differentiate collected later, but remove condition for now
         .reduce((sum, t) => {
             if (filterTeam !== '' && filterTeam !== 'All Teams' && t.teamName === 'All Teams' && t.teamsInvolvedCount > 0) {
                 return sum + (t.amount / t.teamsInvolvedCount || 0);
@@ -654,25 +653,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             return sum + (t.amount || 0);
         }, 0);
 
-    const completedCredits = filteredTransactions
-        .filter(t => t.type === 'credit' && t.isCompleted)
+    const totalPayout = filteredTransactions
+        .filter(t => t.type === 'credit' /* && t.isCompleted */) // Keep the 'isCompleted' if you want to differentiate payout later, but remove condition for now
         .reduce((sum, t) => sum + (t.amount || 0), 0);
-    
-    const pendingDebits = filteredTransactions
-        .filter(t => t.type === 'debit' && !t.isCompleted)
-        .reduce((sum, t) => {
-            if (filterTeam !== '' && filterTeam !== 'All Teams' && t.teamName === 'All Teams' && t.teamsInvolvedCount > 0) {
-                return sum + (t.amount / t.teamsInvolvedCount || 0);
-            }
-            return sum + (t.amount || 0);
-        }, 0);
-
-    const pendingCredits = filteredTransactions
-        .filter(t => t.type === 'credit' && !t.isCompleted)
-        .reduce((sum, t) => sum + (t.amount || 0), 0);
-
-    const netCompletedBalance = completedDebits - completedCredits;
-    const netPendingBalance = pendingDebits - pendingCredits;
 
     // Calculate team summary data
     const teamSummary = {};
@@ -681,12 +664,12 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             totalDebits: 0,
             totalCredits: 0,
             netBalance: 0,
-            completedDebits: 0,
-            pendingDebits: 0,
-            completedCredits: 0,
-            pendingCredits: 0,
-            netCompletedBalance: 0,
-            netPendingBalance: 0
+            // completedDebits: 0, // Removed
+            // pendingDebits: 0, // Removed
+            // completedCredits: 0, // Removed
+            // pendingCredits: 0, // Removed
+            // netCompletedBalance: 0, // Removed
+            // netPendingBalance: 0 // Removed
         };
     });
 
@@ -697,36 +680,24 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').forEach(team => {
                 if (teamSummary[team]) { 
                     teamSummary[team].totalDebits += perTeamAmount;
-                    if (t.isCompleted) {
-                        teamSummary[team].completedDebits += perTeamAmount;
-                    } else {
-                        teamSummary[team].pendingDebits += perTeamAmount;
-                    }
+                    // if (t.isCompleted) { teamSummary[team].completedDebits += perTeamAmount; } else { teamSummary[team].pendingDebits += perTeamAmount; } // Removed
                 }
             });
         } else if (teamSummary[t.teamName]) { 
             if (t.type === 'debit') {
                 teamSummary[t.teamName].totalDebits += (t.amount || 0);
-                if (t.isCompleted) {
-                    teamSummary[t.teamName].completedDebits += (t.amount || 0);
-                } else {
-                    teamSummary[t.teamName].pendingDebits += (t.amount || 0);
-                }
+                // if (t.isCompleted) { teamSummary[t.teamName].completedDebits += (t.amount || 0); } else { teamSummary[t.teamName].pendingDebits += (t.amount || 0); } // Removed
             } else if (t.type === 'credit') {
                 teamSummary[t.teamName].totalCredits += (t.amount || 0);
-                if (t.isCompleted) {
-                    teamSummary[t.teamName].completedCredits += (t.amount || 0);
-                } else {
-                    teamSummary[t.teamName].pendingCredits += (t.amount || 0);
-                }
+                // if (t.isCompleted) { teamSummary[t.teamName].completedCredits += (t.amount || 0); } else { teamSummary[t.teamName].pendingCredits += (t.amount || 0); } // Removed
             }
         }
     });
 
     Object.keys(teamSummary).forEach(team => {
         teamSummary[team].netBalance = teamSummary[team].totalDebits - teamSummary[team].totalCredits;
-        teamSummary[team].netCompletedBalance = teamSummary[team].completedDebits - teamSummary[team].completedCredits;
-        teamSummary[team].netPendingBalance = teamSummary[team].pendingDebits - teamSummary[team].pendingCredits;
+        // teamSummary[team].netCompletedBalance = teamSummary[team].completedDebits - teamSummary[team].completedCredits; // Removed
+        // teamSummary[team].netPendingBalance = teamSummary[team].pendingDebits - teamSummary[team].pendingCredits; // Removed
     });
 
     const handleAddTradeTeam = () => {
@@ -932,11 +903,11 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                         </div>
                         <div className="bg-green-50 p-4 rounded-lg shadow-sm text-center">
                             <h3 className="text-lg font-semibold text-green-700">Total Collected</h3>
-                            <p className="text-2xl font-bold text-green-900">${completedDebits.toFixed(2)}</p>
+                            <p className="text-2xl font-bold text-green-900">${totalCollected.toFixed(2)}</p>
                         </div>
                         <div className="bg-red-50 p-4 rounded-lg shadow-sm text-center">
                             <h3 className="text-lg font-semibold text-red-700">Total Payout</h3>
-                            <p className="text-2xl font-bold text-red-900">${completedCredits.toFixed(2)}</p>
+                            <p className="text-2xl font-bold text-red-900">${totalPayout.toFixed(2)}</p>
                         </div>
                         <div className="bg-yellow-50 p-4 rounded-lg shadow-sm text-center">
                             <h3 className="text-lg font-semibold text-yellow-700">Transaction Pot</h3>
@@ -1111,8 +1082,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                     </div>
                                 )}
 
-                                {/* Completed Transaction Checkbox */}
-                                <div className="flex items-center mt-4">
+                                {/* Completed Transaction Checkbox - Removed */}
+                                {/* <div className="flex items-center mt-4">
                                     <input
                                         type="checkbox"
                                         id="isCompleted"
@@ -1123,7 +1094,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                     <label htmlFor="isCompleted" className="ml-2 block text-sm text-gray-900">
                                         Completed Transaction
                                     </label>
-                                </div>
+                                </div> */}
 
                                 <button
                                     type="submit"
@@ -1174,7 +1145,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Amount</th>
                                             <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Type</th>
                                             <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Category</th> 
-                                            <th className="py-3 px-4 text-center text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Completed</th> 
+                                            {/* <th className="py-3 px-4 text-center text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Completed</th> */} {/* Removed */}
                                             {isCommish && <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Actions</th>}
                                         </tr>
                                     </thead>
@@ -1211,13 +1182,13 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                     <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200 capitalize">
                                                         {t.category ? t.category.replace(/_/g, ' ') : 'General'}
                                                     </td> 
-                                                    <td className="py-2 px-4 text-center text-sm border-b border-gray-200">
+                                                    {/* <td className="py-2 px-4 text-center text-sm border-b border-gray-200">
                                                         {t.isCompleted ? (
                                                             <span className="text-green-500 font-bold">&#10003;</span> 
                                                         ) : (
                                                             <span className="text-gray-400">&#10005;</span> 
                                                         )}
-                                                    </td>
+                                                    </td> */} {/* Removed */}
                                                     {isCommish && ( 
                                                         <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
                                                             <button
@@ -1310,23 +1281,15 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                     <tr className={index % 2 === 0 ? 'bg-gray-100' : 'bg-gray-50'}>
                                                         <td colSpan="5" className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
                                                             <div className="grid grid-cols-2 gap-2 pl-8">
+                                                                {/* Removed completed/pending details */}
                                                                 <div>
-                                                                    <strong>Completed Debits:</strong> <span className="font-medium">${data.completedDebits.toFixed(2)}</span>
+                                                                    <strong>Total Debits:</strong> <span className="font-medium">${data.totalDebits.toFixed(2)}</span>
                                                                 </div>
                                                                 <div>
-                                                                    <strong>Pending Debits:</strong> <span className="font-medium">${data.pendingDebits.toFixed(2)}</span>
+                                                                    <strong>Total Credits:</strong> <span className="font-medium">${data.totalCredits.toFixed(2)}</span>
                                                                 </div>
                                                                 <div>
-                                                                    <strong>Completed Credits:</strong> <span className="font-medium">${data.completedCredits.toFixed(2)}</span>
-                                                                </div>
-                                                                <div>
-                                                                    <strong>Pending Credits:</strong> <span className="font-medium">${data.pendingCredits.toFixed(2)}</span>
-                                                                </div>
-                                                                <div>
-                                                                    <strong>Net Completed:</strong> <span className={`font-bold ${data.netCompletedBalance >= 0 ? 'text-blue-800' : 'text-red-800'}`}>${data.netCompletedBalance.toFixed(2)}</span>
-                                                                </div>
-                                                                <div>
-                                                                    <strong>Net Pending:</strong> <span className={`font-bold ${data.netPendingBalance >= 0 ? 'text-blue-800' : 'text-red-800'}`}>${data.netPendingBalance.toFixed(2)}</span>
+                                                                    <strong>Net Balance:</strong> <span className={`font-bold ${data.netBalance >= 0 ? 'text-blue-800' : 'text-red-800'}`}>${data.netBalance.toFixed(2)}</span>
                                                                 </div>
                                                             </div>
                                                         </td>
