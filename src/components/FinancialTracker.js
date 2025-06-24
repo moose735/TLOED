@@ -34,7 +34,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [uniqueTeams, setUniqueTeams] = useState([]);
     const [weeklyHighScores, setWeeklyHighScores] = useState({});
-    const [currentSeason, setCurrentSeason] = useState(null); 
+    const [currentSeason, setCurrentSeason] = useState(0); // Initialize with 0 or null
     const [activeTeamsCount, setActiveTeamsCount] = useState(0); 
     
     const [isTeamAutoPopulated, setIsTeamAutoPopulated] = useState(false);
@@ -100,7 +100,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     }
                 }
             });
-            setCurrentSeason(maxSeason > 0 ? maxSeason : null);
+            setCurrentSeason(maxSeason > 0 ? maxSeason : 0); // Use 0 for no season found
             console.log("Determined Current Season:", maxSeason);
 
             if (maxSeason === 0) {
@@ -529,7 +529,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const isTeamSelectionDisabled = isTeamAutoPopulated || (type === 'fee' && category === 'trade_fee');
 
     const filteredTransactions = transactions.filter(t => {
-        const isCurrentSeason = (currentSeason === null || t.season === currentSeason);
+        const isCurrentSeason = (currentSeason === 0 || t.season === currentSeason);
 
         if (filterTeam === '') {
             return isCurrentSeason; 
@@ -565,7 +565,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         };
     });
 
-    transactions.filter(t => currentSeason === null || t.season === currentSeason).forEach(t => { 
+    transactions.filter(t => currentSeason === 0 || t.season === currentSeason).forEach(t => { 
         if (t.teamName === 'All Teams' && t.type === 'fee' && t.teamsInvolvedCount > 0) {
             const perTeamAmount = t.amount / t.teamsInvolvedCount;
             uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').forEach(team => {
@@ -668,12 +668,12 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 )}
             </div>
 
-            {currentSeason && (
+            {currentSeason !== 0 && ( // Conditionally render if currentSeason is determined
                 <div className="text-center text-sm text-blue-700 font-semibold mb-4">
                     Displaying Data for: Season {currentSeason}
                 </div>
             )}
-            {!currentSeason && !loading && (
+            {currentSeason === 0 && !loading && ( // Show error if currentSeason is 0 and not loading
                  <div className="text-center text-orange-600 text-sm font-semibold mb-4">
                     Could not determine current season from historical data. Showing all available transactions.
                  </div>
@@ -1003,6 +1003,29 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                             </div>
                         </section>
                     )}
+
+                    {/* Fee and Payout Structure Section */}
+                    <section className="mt-8 p-6 bg-gray-50 rounded-lg shadow-inner">
+                        <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">League Fee & Payout Structure</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <h4 className="text-xl font-semibold text-red-700 mb-3">Fees (Money In)</h4>
+                                <ul className="list-disc list-inside space-y-1 text-gray-700">
+                                    {getCategoriesForType('fee').map(cat => (
+                                        <li key={cat.value}>{cat.label}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                            <div>
+                                <h4 className="text-xl font-semibold text-green-700 mb-3">Payouts (Money Out)</h4>
+                                <ul className="list-disc list-inside space-y-1 text-gray-700">
+                                    {getCategoriesForType('payout').map(cat => (
+                                        <li key={cat.value}>{cat.label}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        </div>
+                    </section>
                 </>
             )}
 
