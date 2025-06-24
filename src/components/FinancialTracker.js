@@ -32,6 +32,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [userId, setUserId] = useState(null);
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [uniqueTeams, setUniqueTeams] = useState([]);
+    // New state to store calculated weekly high scores
+    const [weeklyHighScores, setWeeklyHighScores] = useState({});
     
     const [showConfirmDelete, setShowConfirmDelete] = useState(false);
     const [transactionToDelete, setTransactionToDelete] = useState(null);
@@ -45,25 +47,109 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const COMMISH_UID = process.env.REACT_APP_COMMISH_UID;
     const isCommish = userId && COMMISH_UID && userId === COMMISH_UID; 
 
-    // Derive unique teams from historicalMatchups whenever it changes
+    // Derive unique teams and calculate weekly high scores from historicalMatchups
     useEffect(() => {
         if (historicalMatchups && Array.isArray(historicalMatchups)) {
             const teamsSet = new Set();
+            const weeklyScores = {}; // To store { week: [{ team, score }] }
+
             historicalMatchups.forEach(match => {
                 const team1 = getDisplayTeamName(match.team1);
                 const team2 = getDisplayTeamName(match.team2);
                 if (team1) teamsSet.add(team1);
                 if (team2) teamsSet.add(team2);
+
+                const week = match.week; // Assuming 'week' property exists in match object
+                if (week) {
+                    if (!weeklyScores[week]) {
+                        weeklyScores[week] = [];
+                    }
+                    if (team1 && match.team1Score != null) {
+                        weeklyScores[week].push({ team: team1, score: parseFloat(match.team1Score) });
+                    }
+                    if (team2 && match.team2Score != null) {
+                        weeklyScores[week].push({ team: team2, score: parseFloat(match.team2Score) });
+                    }
+                }
             });
+
+            // Calculate highest and second highest for each week
+            const calculatedHighScores = {};
+            Object.keys(weeklyScores).forEach(week => {
+                const scoresInWeek = weeklyScores[week];
+                if (scoresInWeek.length > 0) {
+                    // Sort scores in descending order
+                    scoresInWeek.sort((a, b) => b.score - a.score);
+
+                    calculatedHighScores[week] = {
+                        highest: scoresInWeek[0], // Highest score
+                        secondHighest: scoresInWeek.length > 1 && scoresInWeek[0].score !== scoresInWeek[1].score
+                                       ? scoresInWeek[1] // Second highest if different from highest
+                                       : (scoresInWeek.length > 2 && scoresInWeek[0].score === scoresInWeek[1].score && scoresInWeek[1].score !== scoresInWeek[2].score
+                                          ? scoresInWeek[2] // Handle ties for first if there's a distinct second
+                                          : null) // No distinct second highest
+                    };
+
+                    // Handle ties for highest: if multiple teams have the same highest score, only list one.
+                    // This logic ensures `secondHighest` is truly the second highest *distinct* score.
+                    if (calculatedHighScores[week].secondHighest && calculatedHighScores[week].secondHighest.score === calculatedHighScores[week].highest.score) {
+                        // If secondHighest is a tie for the highest score, find the next distinct score
+                        const distinctScores = Array.from(new Set(scoresInWeek.map(s => s.score))).sort((a, b) => b - a);
+                        if (distinctScores.length > 1) {
+                            const secondDistinctScore = distinctScores[1];
+                            calculatedHighScores[week].secondHighest = scoresInWeek.find(s => s.score === secondDistinctScore);
+                        } else {
+                            calculatedHighScores[week].secondHighest = null; // No distinct second highest
+                        }
+                    }
+                }
+            });
+            setWeeklyHighScores(calculatedHighScores);
+            console.log("Calculated Weekly High Scores:", calculatedHighScores);
+
+
             const sortedTeams = Array.from(teamsSet).sort();
-            
-            setUniqueTeams(['ALL_TEAMS_MULTIPLIER', ...sortedTeams]); // Keep special value for 'All Teams' option
-            
+            setUniqueTeams(['ALL_TEAMS_MULTIPLIER', ...sortedTeams]); 
             if (sortedTeams.length > 0) {
                 setTeamName(''); 
             }
         }
     }, [historicalMatchups, getDisplayTeamName]);
+
+    // Effect to automatically set teamName when payoutCategory and weeklyPointsWeek change
+    useEffect(() => {
+        if (type === 'payout' && 
+            (payoutCategory === 'highest_weekly_points' || payoutCategory === 'second_highest_weekly_points') &&
+            weeklyPointsWeek) 
+        {
+            const weekData = weeklyHighScores[weeklyPointsWeek];
+            if (weekData) {
+                if (payoutCategory === 'highest_weekly_points' && weekData.highest) {
+                    setTeamName(weekData.highest.team);
+                    setDescription(`Payout: Highest Weekly Points (Week ${weeklyPointsWeek}) - ${weekData.highest.team} (${weekData.highest.score} pts)`);
+                } else if (payoutCategory === 'second_highest_weekly_points' && weekData.secondHighest) {
+                    setTeamName(weekData.secondHighest.team);
+                    setDescription(`Payout: Second Highest Weekly Points (Week ${weeklyPointsWeek}) - ${weekData.secondHighest.team} (${weekData.secondHighest.score} pts)`);
+                } else {
+                    setTeamName('');
+                    setDescription('');
+                    setError(`No data found for ${payoutCategory.replace(/_/g, ' ')} in Week ${weeklyPointsWeek}.`);
+                }
+            } else {
+                setTeamName('');
+                setDescription('');
+                setError(`No score data found for Week ${weeklyPointsWeek}.`);
+            }
+        } else if (type === 'payout' && payoutCategory === 'side_pot') {
+            setTeamName(''); // Clear team name for side pot, as it's manually selected
+            setDescription(`Payout: Side Pot`);
+        } else {
+            // Clear team name and description if not an automated payout type
+            setTeamName('');
+            setDescription('');
+        }
+    }, [payoutCategory, weeklyPointsWeek, weeklyHighScores, type]); // Dependencies for this effect
+
 
     // Initialize Firebase and set up authentication
     useEffect(() => {
@@ -102,7 +188,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setDb(firestore);
             setAuth(firebaseAuth);
 
-            const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
+            const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => { 
                 if (user) {
                     setUserId(user.uid);
                     console.log("Firebase Auth Ready. User ID:", user.uid);
@@ -222,7 +308,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         }
         
         let finalAmount = parseFloat(amount);
-        let finalTeamName = teamName;
+        let finalTeamName = teamName; // This will be pre-populated for auto-payouts
 
         // "All Teams" multiplier only applies to 'fee' type
         if (teamName === 'ALL_TEAMS_MULTIPLIER' && type === 'fee') {
@@ -236,6 +322,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         } else if (teamName === 'ALL_TEAMS_MULTIPLIER' && type === 'payout') {
             // If "All Teams" is selected for a payout, store it as "All Teams" but don't multiply
             finalTeamName = 'All Teams';
+            // Optionally, remove this setError if the user understands this is just a label for payouts
             setError("Warning: 'All Teams' selected for a payout. Amount will not be multiplied.");
         }
 
@@ -247,7 +334,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             teamName: finalTeamName, 
             date: serverTimestamp(),
             userId: userId,
-            // New fields for structured payouts
             category: payoutCategory, 
         };
 
@@ -258,7 +344,26 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     setError("Please enter a valid week number for weekly points payouts.");
                     return;
                 }
-                newTransaction.weekNumber = parseInt(weeklyPointsWeek);
+                const weekNum = parseInt(weeklyPointsWeek);
+                newTransaction.weekNumber = weekNum;
+
+                // AUTOMATION: Set teamName based on calculated high scores
+                const weekData = weeklyHighScores[weekNum];
+                if (weekData) {
+                    if (payoutCategory === 'highest_weekly_points' && weekData.highest) {
+                        newTransaction.teamName = weekData.highest.team;
+                        newTransaction.description = `Payout: Highest Weekly Points (Week ${weekNum}) - ${weekData.highest.team} (${weekData.highest.score} pts)`;
+                    } else if (payoutCategory === 'second_highest_weekly_points' && weekData.secondHighest) {
+                        newTransaction.teamName = weekData.secondHighest.team;
+                        newTransaction.description = `Payout: Second Highest Weekly Points (Week ${weekNum}) - ${weekData.secondHighest.team} (${weekData.secondHighest.score} pts)`;
+                    } else {
+                        setError(`Could not find a winning team for ${payoutCategory.replace(/_/g, ' ')} in Week ${weekNum}. Transaction not added.`);
+                        return; // Prevent adding transaction if team cannot be determined
+                    }
+                } else {
+                    setError(`No score data found for Week ${weekNum}. Transaction not added.`);
+                    return; // Prevent adding transaction if no data
+                }
             } else if (payoutCategory === 'side_pot') {
                 if (!sidePotName.trim()) {
                     setError("Please enter a name for the side pot.");
@@ -275,11 +380,11 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             
             setAmount('');
             setDescription('');
-            setType('fee'); // Reset type to default
+            setType('fee'); 
             setTeamName(''); 
-            setPayoutCategory('general'); // Reset payout category
-            setWeeklyPointsWeek(''); // Reset weekly points week
-            setSidePotName(''); // Reset side pot name
+            setPayoutCategory('general'); 
+            setWeeklyPointsWeek(''); 
+            setSidePotName(''); 
             setError(null);
             console.log("Transaction added to Firestore successfully.");
         } catch (addError) {
@@ -322,9 +427,17 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         setTransactionToDelete(null);
     };
 
+    // Determine if team dropdown should be disabled/read-only
+    const isTeamSelectionAutomated = type === 'payout' && (
+        payoutCategory === 'highest_weekly_points' || 
+        payoutCategory === 'second_highest_weekly_points'
+    );
+
     // Filtered transactions for display based on selected team
     const filteredTransactions = transactions.filter(t => 
-        filterTeam === '' || t.teamName === filterTeam || (filterTeam === 'ALL_TEAMS_MULTIPLIER' && t.teamName === 'All Teams')
+        filterTeam === '' || 
+        t.teamName === filterTeam || 
+        (filterTeam === 'ALL_TEAMS_MULTIPLIER' && t.teamName === 'All Teams')
     );
 
     const totalFees = filteredTransactions
@@ -524,17 +637,22 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                         id="teamName"
                                         value={teamName}
                                         onChange={(e) => setTeamName(e.target.value)}
-                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                        // Disable if team selection is automated
+                                        disabled={isTeamSelectionAutomated}
+                                        className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none ${isTeamSelectionAutomated ? 'bg-gray-200 cursor-not-allowed' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'} sm:text-sm`}
                                     >
                                         <option value="">Select Team (Optional)</option>
-                                        {/* "All Teams" option visible only for 'fee' type, or always if you want */}
-                                        {type === 'fee' && ( // Only show "All Teams" option for fees
+                                        {/* "All Teams" option visible only for 'fee' type */}
+                                        {type === 'fee' && ( 
                                             <option value="ALL_TEAMS_MULTIPLIER">All Teams (Multiplied)</option>
                                         )}
                                         {uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').map(team => ( 
                                             <option key={team} value={team}>{team}</option>
                                         ))}
                                     </select>
+                                    {isTeamSelectionAutomated && teamName && (
+                                        <p className="text-xs text-gray-500 mt-1">Automatically determined: {teamName}</p>
+                                    )}
                                 </div>
                                 <button
                                     type="submit"
@@ -566,7 +684,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                 {uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').map(team => (
                                     <option key={team} value={team}>{team}</option>
                                 ))}
-                                <option value="All Teams">Transactions for 'All Teams'</option> {/* Option to specifically filter for "All Teams" transactions */}
+                                <option value="All Teams">Transactions for 'All Teams'</option> 
                             </select>
                         </div>
                         {filteredTransactions.length === 0 ? (
@@ -581,7 +699,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
                                             <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Amount</th>
                                             <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Type</th>
-                                            <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Category</th> {/* New column */}
+                                            <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Category</th> 
                                             {isCommish && <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Actions</th>}
                                         </tr>
                                     </thead>
@@ -612,7 +730,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                 </td>
                                                 <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200 capitalize">
                                                     {t.category ? t.category.replace(/_/g, ' ') : 'General'}
-                                                </td> {/* Display category */}
+                                                </td> 
                                                 {isCommish && ( 
                                                     <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
                                                         <button
