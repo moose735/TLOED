@@ -1282,12 +1282,12 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                         {Object.entries(teamSummary).sort(([teamA], [teamB]) => teamA.localeCompare(teamB)).map(([team, data], index) => (
                                             <tr key={team} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                                                 <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{team}</td>
-                                                <td className="py-2 px-4 text-sm text-right text-red-700 font-medium border-b border-gray-200">${data.totalDebits.toFixed(2)}</td>
-                                                <td className="py-2 px-4 text-sm text-right text-green-700 font-medium border-b border-gray-200">${data.completedDebits.toFixed(2)}</td>
-                                                <td className="py-2 px-4 text-sm text-right text-purple-700 font-medium border-b border-gray-200">${data.pendingDebits.toFixed(2)}</td>
-                                                <td className="py-2 px-4 text-sm text-right text-green-700 font-medium border-b border-gray-200">${data.totalCredits.toFixed(2)}</td>
-                                                <td className="py-2 px-4 text-sm text-right text-green-700 font-medium border-b border-gray-200">${data.completedCredits.toFixed(2)}</td>
-                                                <td className="py-2 px-4 text-sm text-right text-orange-700 font-medium border-b border-gray-200">${data.pendingCredits.toFixed(2)}</td>
+                                                <td className="py-2 px-4 text-sm text-right text-gray-700 font-medium border-b border-gray-200">${data.totalDebits.toFixed(2)}</td>
+                                                <td className="py-2 px-4 text-sm text-right text-gray-700 font-medium border-b border-gray-200">${data.completedDebits.toFixed(2)}</td>
+                                                <td className="py-2 px-4 text-sm text-right text-gray-700 font-medium border-b border-gray-200">${data.pendingDebits.toFixed(2)}</td>
+                                                <td className="py-2 px-4 text-sm text-right text-gray-700 font-medium border-b border-gray-200">${data.totalCredits.toFixed(2)}</td>
+                                                <td className="py-2 px-4 text-sm text-right text-gray-700 font-medium border-b border-gray-200">${data.completedCredits.toFixed(2)}</td>
+                                                <td className="py-2 px-4 text-sm text-right text-gray-700 font-medium border-b border-gray-200">${data.pendingCredits.toFixed(2)}</td>
                                                 <td className={`py-2 px-4 text-sm text-right font-bold border-b border-gray-200 ${data.netCompletedBalance >= 0 ? 'text-blue-900' : 'text-red-900'}`}>
                                                     ${data.netCompletedBalance.toFixed(2)}
                                                 </td>
