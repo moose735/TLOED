@@ -32,7 +32,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [uniqueTeams, setUniqueTeams] = useState([]);
     const [weeklyHighScores, setWeeklyHighScores] = useState({});
-    const [currentSeason, setCurrentSeason] = useState(0); 
+    const [currentSeason, setCurrentSeason] = useState(0); // Latest season from historicalMatchups, used for new transactions
+    const [selectedSeason, setSelectedSeason] = useState(null); // Season currently being viewed/filtered
+    const [availableSeasons, setAvailableSeasons] = useState([]); // All seasons available in historicalMatchups
     const [activeTeamsCount, setActiveTeamsCount] = useState(0); 
     
     const [isTeamAutoPopulated, setIsTeamAutoPopulated] = useState(null); 
@@ -121,19 +123,31 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     }, [type, category]); 
 
 
-    // Derive unique teams and calculate weekly high scores from historicalMatchups
+    // Derive unique teams, calculate weekly high scores, and determine available/current/selected seasons
     useEffect(() => {
         if (historicalMatchups && Array.isArray(historicalMatchups)) {
+            const yearsSet = new Set();
             let maxSeason = 0;
+
             historicalMatchups.forEach(match => {
                 if (match.year && typeof match.year === 'number') {
+                    yearsSet.add(match.year);
                     if (match.year > maxSeason) {
                         maxSeason = match.year;
                     }
                 }
             });
-            setCurrentSeason(maxSeason > 0 ? maxSeason : 0); 
+
+            const sortedYears = Array.from(yearsSet).sort((a, b) => b - a); // Descending order
+            setAvailableSeasons(sortedYears);
+            
+            // Set currentSeason to the latest, and selectedSeason to the latest (default view)
+            setCurrentSeason(maxSeason > 0 ? maxSeason : 0);
+            if (maxSeason > 0 && selectedSeason === null) { // Only set default on initial load
+                setSelectedSeason(maxSeason);
+            }
             console.log("Determined Current Season:", maxSeason);
+            console.log("Available Seasons:", sortedYears);
 
             if (maxSeason === 0) {
                 return; 
@@ -143,6 +157,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             const weeklyScores = {}; 
 
             historicalMatchups.forEach(match => {
+                // Only consider data for the determined current (latest) season for team list and weekly high scores
                 if (match.year === maxSeason) { 
                     const team1 = getDisplayTeamName(match.team1);
                     const team2 = getDisplayTeamName(match.team2);
@@ -194,7 +209,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setActiveTeamsCount(sortedTeams.length); 
             
         }
-    }, [historicalMatchups, getDisplayTeamName]);
+    }, [historicalMatchups, getDisplayTeamName, selectedSeason]); // Added selectedSeason as dependency to allow initial setting
 
     // Effect to automatically set teamName and description when category and weeklyPointsWeek change
     useEffect(() => {
@@ -349,8 +364,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     // Fetch transaction history
     useEffect(() => {
-        if (!db || !isAuthReady) {
-            console.log("Firestore not ready or Auth not ready. Waiting for db and isAuthReady...");
+        if (!db || !isAuthReady || selectedSeason === null) { // Wait for selectedSeason to be set
+            console.log("Firestore not ready, Auth not ready, or selectedSeason not set. Waiting for db, isAuthReady, and selectedSeason...");
             return;
         }
 
@@ -360,9 +375,13 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
         const transactionCollectionPath = `/artifacts/${appId}/public/data/financial_transactions`;
         
-        const q = query(collection(db, transactionCollectionPath), orderBy('date', 'desc'));
+        // Filter by selectedSeason
+        const q = query(
+            collection(db, transactionCollectionPath), 
+            orderBy('date', 'desc')
+        );
 
-        console.log("Attempting to listen to Firestore collection:", transactionCollectionPath);
+        console.log(`Attempting to listen to Firestore collection: ${transactionCollectionPath} for season: ${selectedSeason}`);
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
             if (!isAuthReady) {
@@ -373,18 +392,23 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 id: doc.id,
                 ...doc.data()
             }));
-            setTransactions(fetchedTransactions);
+            
+            // Client-side filtering by selectedSeason
+            const filteredBySeason = fetchedTransactions.filter(t => 
+                selectedSeason === 0 || t.season === selectedSeason
+            );
+            setTransactions(filteredBySeason);
 
-            const currentSeasonTransactionPot = fetchedTransactions
+            // Calculate transaction pot for the selected season
+            const currentSeasonTransactionPot = filteredBySeason
                 .filter(t => 
-                    (currentSeason === 0 || t.season === currentSeason) && 
                     (t.category === 'waiver_pickup_fee' || t.category === 'trade_fee')
                 )
                 .reduce((sum, t) => sum + (t.amount || 0), 0);
             setTransactionPot(currentSeasonTransactionPot);
 
             setLoading(false);
-            console.log("Fetched transactions:", fetchedTransactions.length);
+            console.log(`Fetched and filtered transactions for season ${selectedSeason}:`, filteredBySeason.length);
         }, (firestoreError) => {
             console.error("Error fetching transactions from Firestore:", firestoreError);
             setError(`Failed to load financial data: ${firestoreError.message}. Please check your internet connection or Firestore security rules.`);
@@ -395,9 +419,10 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             console.log("Unsubscribing from Firestore listener (transactions).");
             unsubscribe();
         };
-    }, [db, isAuthReady, currentSeason]); 
+    }, [db, isAuthReady, selectedSeason]); // Add selectedSeason to dependencies
 
-    // Fetch and listen for updates to the Debit/Credit structure
+
+    // Fetch and listen for updates to the Fee/Payout structure
     useEffect(() => {
         if (!db || !isAuthReady) {
             console.log("Firestore not ready or Auth not ready. Waiting for db and isAuthReady for structure...");
@@ -483,7 +508,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     date: serverTimestamp(),
                     userId: userId,
                     category: category,
-                    season: currentSeason,
+                    season: currentSeason, // Always use currentSeason for new transactions
                     teamsInvolvedCount: 1,
                 });
             }
@@ -517,7 +542,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 date: serverTimestamp(),
                 userId: userId,
                 category: category, 
-                season: currentSeason,
+                season: currentSeason, // Always use currentSeason for new transactions
                 teamsInvolvedCount: teamsInvolved,
             });
 
@@ -619,42 +644,43 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     // Filter transactions for history table and pagination
     const filteredTransactions = transactions.filter(t => {
-        const isCurrentSeason = (currentSeason === 0 || t.season === currentSeason);
+        // Now `transactions` state already holds data for the selectedSeason from Firestore fetch
+        // So, no need to filter by season again here.
+        // Just filter by team if selected.
         if (filterTeam === '') {
-            return isCurrentSeason; 
+            return true; 
         } else if (filterTeam === 'All Teams') {
-            return isCurrentSeason && t.teamName === 'All Teams';
+            return t.teamName === 'All Teams';
         } else {
-            return isCurrentSeason && (t.teamName === filterTeam || (t.teamName === 'All Teams' && t.type === 'debit'));
+            return (t.teamName === filterTeam || (t.teamName === 'All Teams' && t.type === 'debit'));
         }
     });
 
-    // Calculate OVERALL totals for Debits and Credits (for summary cards)
-    const overallDebits = transactions
-        .filter(t => (currentSeason === 0 || t.season === currentSeason) && t.type === 'debit')
-        .reduce((sum, t) => sum + (t.amount || 0), 0); // Always sum full amount for overall stats
-
-    const overallCredits = transactions
-        .filter(t => (currentSeason === 0 || t.season === currentSeason) && t.type === 'credit')
+    // Calculate OVERALL totals for Fees and Payouts (for summary cards)
+    const overallDebits = transactions // Use `transactions` which are already filtered by selectedSeason
+        .filter(t => t.type === 'debit')
         .reduce((sum, t) => sum + (t.amount || 0), 0);
 
-    // Changed to Debits - Credits for "League Bank"
+    const overallCredits = transactions // Use `transactions` which are already filtered by selectedSeason
+        .filter(t => t.type === 'credit')
+        .reduce((sum, t) => sum + (t.amount || 0), 0);
+
     const overallNetBalance = overallDebits - overallCredits; 
 
     // Calculate team summary data
     const teamSummary = {};
     uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').forEach(team => {
         teamSummary[team] = {
-            totalDebits: 0,
-            totalCredits: 0,
+            totalDebits: 0, // Internal name
+            totalCredits: 0, // Internal name
             netBalance: 0, // This will be Payouts - Fees for team summary
             totalDebitsLessEntryFee: 0, 
             winningsExtraFees: 0, 
         };
     });
 
-    // Populate team summary data based on all transactions (for current season)
-    transactions.filter(t => currentSeason === 0 || t.season === currentSeason).forEach(t => { 
+    // Populate team summary data based on transactions (already filtered by selectedSeason)
+    transactions.forEach(t => { 
         if (t.teamName === 'All Teams' && t.type === 'debit' && t.teamsInvolvedCount > 0) {
             const perTeamAmount = t.amount / t.teamsInvolvedCount;
             uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').forEach(team => {
@@ -668,6 +694,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         } else if (teamSummary[t.teamName]) { 
             if (t.type === 'debit') {
                 teamSummary[t.teamName].totalDebits += (t.amount || 0);
+                if (t.category !== 'annual_fee') {
+                    teamSummary[t.teamName].totalDebitsLessEntryFee += (t.amount || 0);
+                }
             } else if (t.type === 'credit') {
                 teamSummary[t.teamName].totalCredits += (t.amount || 0);
             }
@@ -697,7 +726,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     const nonAllTeams = uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER');
 
-    // Functions for editing Debit/Credit structure
+    // Functions for editing Fee/Payout structure
     const handleDebitStructureChange = (index, field, value) => {
         const newStructure = [...debitStructureData];
         newStructure[index][field] = value;
@@ -843,16 +872,37 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 )}
             </div>
 
-            {currentSeason !== 0 && ( 
-                <div className="text-center text-sm text-blue-700 font-semibold mb-4">
-                    Displaying Data for: Season {currentSeason}
-                </div>
-            )}
-            {currentSeason === 0 && !loading && ( 
-                 <div className="text-center text-orange-600 text-sm font-semibold mb-4">
-                    Could not determine current season from historical data. Showing all available transactions.
-                 </div>
-            )}
+            {/* Season Selector */}
+            <div className="flex justify-center items-center mb-4 p-2 bg-blue-50 rounded-lg shadow-sm">
+                <label htmlFor="seasonFilter" className="mr-2 font-semibold text-blue-700">View Season:</label>
+                <select
+                    id="seasonFilter"
+                    value={selectedSeason || ''} // Handle null initial state
+                    onChange={(e) => {
+                        const newSeason = parseInt(e.target.value);
+                        setSelectedSeason(isNaN(newSeason) ? null : newSeason);
+                        setCurrentPage(1); // Reset pagination on season change
+                        setFilterTeam(''); // Also reset team filter
+                    }}
+                    className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                >
+                    {/* Optionally add an "All Seasons" option if filtering transactions in the query. 
+                        For now, assuming specific year selection is desired.*/}
+                    {availableSeasons.length > 0 ? (
+                        availableSeasons.map(year => (
+                            <option key={year} value={year}>{year}</option>
+                        ))
+                    ) : (
+                        <option value="">No Seasons Available</option>
+                    )}
+                </select>
+                {selectedSeason !== null && (
+                    <p className="ml-4 text-sm text-gray-600">
+                        Viewing data for: <span className="font-bold">{selectedSeason}</span>
+                        {selectedSeason === currentSeason && " (Current)"}
+                    </p>
+                )}
+            </div>
 
 
             {loading && <p className="text-center text-blue-600 font-semibold">Loading financial data...</p>}
@@ -1102,6 +1152,10 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                     <tbody>
                                         {currentTransactions.map((t, index) => {
                                             let displayAmount = (t.amount || 0).toFixed(2);
+                                            // The effectiveTeamsCount logic might need review if `transactions` is always filtered by selectedSeason
+                                            // and `activeTeamsCount` is based on `currentSeason`.
+                                            // For now, assuming activeTeamsCount is relevant only to the currentSeason for new debits,
+                                            // and for display, it applies to the 'All Teams' transaction amount.
                                             const effectiveTeamsCount = t.teamsInvolvedCount > 0 ? t.teamsInvolvedCount : activeTeamsCount;
 
                                             if (filterTeam !== '' && filterTeam !== 'All Teams' && t.teamName === 'All Teams' && t.type === 'debit' && effectiveTeamsCount > 0) {
