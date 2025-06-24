@@ -37,8 +37,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [availableSeasons, setAvailableSeasons] = useState([]); // All seasons available in historicalMatchups
     const [activeTeamsCount, setActiveTeamsCount] = useState(0); 
     
-    const [isTeamAutoPopulated, setIsTeamAutoPopulated] = useState(null); 
-    const [autoPopulateWarning, setAutoPopulateWarning] = useState(null); 
+    const [isTeamAutoPopulated, setIsTeamAutoPopulated] = null; 
+    const [autoPopulateWarning, setAutoPopulateWarning] = null; 
     
     const [showConfirmDelete, setShowConfirmDelete] = useState(false);
     const [transactionToDelete, setTransactionToDelete] = useState(null);
@@ -828,19 +828,15 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             </h2>
 
             <div className="mb-4 text-center text-sm text-gray-600 p-2 bg-blue-50 rounded">
-                {COMMISH_UID ? (
+                {COMMISH_UID && isCommish && (
                     <span className="font-semibold mt-1">
-                        {isCommish ? "You are logged in as the Commish." : "You are not the Commish."}
-                    </span>
-                ) : (
-                    <span className="text-red-600 mt-1">
-                        REACT_APP_COMMISH_UID not set in Vercel. Commish access not configured.
+                        You are logged in as the Commish.
                     </span>
                 )}
                 
                 {isAuthReady && ( 
                     <div className="mt-4">
-                        {userId && isCommish ? ( // If commish is logged in
+                        {isCommish ? ( // If commish is logged in
                             <button
                                 onClick={handleLogout}
                                 className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-bold rounded-md transition-colors"
@@ -924,18 +920,12 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                     <option key={year} value={year}>{year}</option>
                                 ))}
                             </select>
-                            {selectedSeason !== null && (
-                                <p className="ml-4 text-sm text-gray-600">
-                                    Viewing data for: <span className="font-bold">{selectedSeason}</span>
-                                    {selectedSeason === currentSeason && " (Current)"}
-                                </p>
-                            )}
                         </div>
                     )}
 
 
                     {/* Financial Summary */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8"> {/* Changed to responsive grid */}
                         <div className="bg-red-50 p-4 rounded-lg shadow-sm text-center">
                             <h3 className="text-lg font-semibold text-red-700">Total Fees</h3>
                             <p className="text-2xl font-bold text-red-900">${overallDebits.toFixed(2)}</p>
