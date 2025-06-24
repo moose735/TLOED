@@ -7,12 +7,10 @@ import {
     signOut,
     signInAnonymously 
 } from 'firebase/auth';
-import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
-
-const CHART_COLORS = [
-    '#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#00c49f', '#ff0000',
-    '#0088fe', '#bb3f85', '#7a421a', '#4a4a4a', '#a5d6a7', '#ef9a9a'
-];
+import { 
+    getFirestore, collection, addDoc, query, orderBy, onSnapshot, 
+    serverTimestamp, deleteDoc, doc, setDoc, getDoc 
+} from 'firebase/firestore';
 
 const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [transactions, setTransactions] = useState([]);
@@ -34,7 +32,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [uniqueTeams, setUniqueTeams] = useState([]);
     const [weeklyHighScores, setWeeklyHighScores] = useState({});
-    const [currentSeason, setCurrentSeason] = useState(0); // Initialize with 0 or null
+    const [currentSeason, setCurrentSeason] = useState(0); 
     const [activeTeamsCount, setActiveTeamsCount] = useState(0); 
     
     const [isTeamAutoPopulated, setIsTeamAutoPopulated] = useState(false);
@@ -49,10 +47,16 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     const [filterTeam, setFilterTeam] = useState(''); 
 
+    // State for editable structure
+    const [feeStructureData, setFeeStructureData] = useState([]);
+    const [payoutStructureData, setPayoutStructureData] = useState([]);
+    const [isEditingStructure, setIsEditingStructure] = useState(false);
+    const [loadingStructure, setLoadingStructure] = useState(true);
+
     const COMMISH_UID = process.env.REACT_APP_COMMISH_UID;
     const isCommish = userId && COMMISH_UID && userId === COMMISH_UID; 
 
-    // Define categories based on type
+    // Define categories based on type for form selection
     const getCategoriesForType = (currentType) => {
         if (currentType === 'fee') {
             return [
@@ -71,6 +75,27 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         }
         return [];
     };
+
+    // Hardcoded default structure (used if no data in Firebase)
+    const defaultFeeStructure = [
+        { name: 'League Entry Fee', amount: '$70', description: 'Paid per team for entry.' },
+        { name: 'Waivers/Free Agents', amount: '$1', description: 'Per transaction.' },
+        { name: 'Trades', amount: '$2', description: 'Per team involved.' },
+    ];
+
+    const defaultPayoutStructure = [
+        { name: 'Weekly 1st Place (Points)', amount: '$10' },
+        { name: 'Weekly 2nd Place (Points)', amount: '$5' },
+        { name: 'Sween Bowl Champion', amount: '$100' },
+        { name: 'Sween Bowl Runner Up', amount: '$70' },
+        { name: 'Playoff 3rd Place', amount: '$50' },
+        { name: '1st Place Overall Points', amount: '$60' },
+        { name: '2nd Place Overall Points', amount: '$40' },
+        { name: '3rd Place Overall Points', amount: '$25' },
+        { name: '1st-3rd Place Points Transaction Split', description: 'Pot divided by 3.' },
+        { name: 'Side Pots', description: 'Vary in amount and criteria.' },
+    ];
+
 
     // Effect to update category when type changes
     useEffect(() => {
@@ -100,11 +125,11 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     }
                 }
             });
-            setCurrentSeason(maxSeason > 0 ? maxSeason : 0); // Use 0 for no season found
+            setCurrentSeason(maxSeason > 0 ? maxSeason : 0); 
             console.log("Determined Current Season:", maxSeason);
 
             if (maxSeason === 0) {
-                setError("No historical matchup data with a valid 'year' property found to determine the current season. Showing all transactions.");
+                // If no season data, don't set error, just proceed with all transactions
                 return; 
             }
 
@@ -185,11 +210,11 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             if (weekData) {
                 if (category === 'highest_weekly_points' && weekData.highest) {
                     setTeamName(weekData.highest.team);
-                    setDescription(`Payout: Highest Weekly Points (Week ${weeklyPointsWeek}) - ${weekData.highest.team} (${weekData.highest.score} pts)`);
+                    setDescription(`Payout: Highest Weekly Points - ${weekData.highest.team} (${weekData.highest.score} pts)`);
                     setIsTeamAutoPopulated(true);
                 } else if (category === 'second_highest_weekly_points' && weekData.secondHighest) {
                     setTeamName(weekData.secondHighest.team);
-                    setDescription(`Payout: Second Highest Weekly Points (Week ${weeklyPointsWeek}) - ${weekData.secondHighest.team} (${weekData.secondHighest.score} pts)`);
+                    setDescription(`Payout: Second Highest Weekly Points - ${weekData.secondHighest.team} (${weekData.secondHighest.score} pts)`);
                     setIsTeamAutoPopulated(true);
                 } else {
                     setAutoPopulateWarning(`No ${category.replace(/_/g, ' ')} winner found for Week ${weeklyPointsWeek} in the current season.`);
@@ -306,6 +331,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         }
     };
 
+    // Fetch transaction history
     useEffect(() => {
         if (!db || !isAuthReady) {
             console.log("Firestore not ready or Auth not ready. Waiting for db and isAuthReady...");
@@ -341,10 +367,50 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         });
 
         return () => {
-            console.log("Unsubscribing from Firestore listener.");
+            console.log("Unsubscribing from Firestore listener (transactions).");
             unsubscribe();
         };
     }, [db, isAuthReady]);
+
+    // Fetch and listen for updates to the fee/payout structure
+    useEffect(() => {
+        if (!db || !isAuthReady) {
+            console.log("Firestore not ready or Auth not ready. Waiting for db and isAuthReady for structure...");
+            return;
+        }
+
+        setLoadingStructure(true);
+        const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
+        const structureDocRef = doc(db, `/artifacts/${appId}/public/data/league_structure/current_structure`);
+
+        const unsubscribe = onSnapshot(structureDocRef, (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                setFeeStructureData(data.fees || defaultFeeStructure);
+                setPayoutStructureData(data.payouts || defaultPayoutStructure);
+                console.log("Fetched league structure from Firestore.");
+            } else {
+                // If document doesn't exist, use default hardcoded data
+                setFeeStructureData(defaultFeeStructure);
+                setPayoutStructureData(defaultPayoutStructure);
+                console.log("League structure document not found, using defaults.");
+            }
+            setLoadingStructure(false);
+        }, (firestoreError) => {
+            console.error("Error fetching league structure:", firestoreError);
+            setError(`Failed to load league structure: ${firestoreError.message}`);
+            setLoadingStructure(false);
+            // Fallback to default in case of error
+            setFeeStructureData(defaultFeeStructure);
+            setPayoutStructureData(defaultPayoutStructure);
+        });
+
+        return () => {
+            console.log("Unsubscribing from Firestore listener (structure).");
+            unsubscribe();
+        };
+    }, [db, isAuthReady]);
+
 
     const handleAddTransaction = async (e) => {
         e.preventDefault();
@@ -372,7 +438,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         let transactionsToAdd = [];
 
         if (type === 'fee' && category === 'trade_fee') {
-            // Validate trade teams
             const validTradeTeams = tradeTeams.filter(team => team.trim() !== '');
             if (validTradeTeams.length < 2) {
                 setError("Please select at least two teams for a trade fee.");
@@ -385,7 +450,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
             for (const team of validTradeTeams) {
                 transactionsToAdd.push({
-                    amount: parseFloat(amount), // Amount is per team for trades
+                    amount: parseFloat(amount), 
                     description: description.trim(),
                     type: type,
                     teamName: team,
@@ -393,11 +458,10 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     userId: userId,
                     category: category,
                     season: currentSeason,
-                    teamsInvolvedCount: 1 // Each is an individual transaction for a single team
+                    teamsInvolvedCount: 1 
                 });
             }
         } else {
-            // Handle single team or "All Teams" transactions
             if (!teamName.trim() && teamName !== 'ALL_TEAMS_MULTIPLIER') { 
                 setError("Please select an Associated Team.");
                 return;
@@ -417,7 +481,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 teamsInvolved = activeTeamsCount; 
             } else if (type === 'payout' && teamName === 'ALL_TEAMS_MULTIPLIER') {
                 finalTeamName = 'All Teams';
-                // No explicit error, but a warning if user misinterprets 'All Teams' for payout
             }
 
             transactionsToAdd.push({
@@ -445,10 +508,10 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     if (weekData) {
                         if (category === 'highest_weekly_points' && weekData.highest) {
                             transactionsToAdd[0].teamName = weekData.highest.team;
-                            transactionsToAdd[0].description = `Payout: Highest Weekly Points (Week ${weekNum}) - ${weekData.highest.team} (${weekData.highest.score} pts)`;
+                            transactionsToAdd[0].description = `Payout: Highest Weekly Points - ${weekData.highest.team} (${weekData.highest.score} pts)`;
                         } else if (category === 'second_highest_weekly_points' && weekData.secondHighest) {
                             transactionsToAdd[0].teamName = weekData.secondHighest.team;
-                            transactionsToAdd[0].description = `Payout: Second Highest Weekly Points (Week ${weekNum}) - ${weekData.secondHighest.team} (${weekData.secondHighest.score} pts)`;
+                            transactionsToAdd[0].description = `Payout: Second Highest Weekly Points - ${weekData.secondHighest.team} (${weekData.secondHighest.score} pts)`;
                         } else {
                             setError(`Could not find a winning team for ${category.replace(/_/g, ' ')} in Week ${weekNum} for the current season. Transaction not added.`);
                             return; 
@@ -602,6 +665,68 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     const nonAllTeams = uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER');
 
+    // Functions for editing fee/payout structure
+    const handleFeeStructureChange = (index, field, value) => {
+        const newStructure = [...feeStructureData];
+        newStructure[index][field] = value;
+        setFeeStructureData(newStructure);
+    };
+
+    const handlePayoutStructureChange = (index, field, value) => {
+        const newStructure = [...payoutStructureData];
+        newStructure[index][field] = value;
+        setPayoutStructureData(newStructure);
+    };
+
+    const handleAddFeeItem = () => {
+        setFeeStructureData([...feeStructureData, { name: '', amount: '', description: '' }]);
+    };
+
+    const handleRemoveFeeItem = (indexToRemove) => {
+        setFeeStructureData(feeStructureData.filter((_, index) => index !== indexToRemove));
+    };
+
+    const handleAddPayoutItem = () => {
+        setPayoutStructureData([...payoutStructureData, { name: '', amount: '', description: '' }]);
+    };
+
+    const handleRemovePayoutItem = (indexToRemove) => {
+        setPayoutStructureData(payoutStructureData.filter((_, index) => index !== indexToRemove));
+    };
+
+    const handleSaveStructure = async () => {
+        if (!db || !isCommish) {
+            setError("Cannot save structure: Not authenticated as commish or database not ready.");
+            return;
+        }
+        setLoadingStructure(true);
+        try {
+            const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
+            const structureDocRef = doc(db, `/artifacts/${appId}/public/data/league_structure/current_structure`);
+            await setDoc(structureDocRef, {
+                fees: feeStructureData,
+                payouts: payoutStructureData,
+                lastUpdated: serverTimestamp()
+            });
+            setIsEditingStructure(false);
+            setError(null);
+            console.log("League structure saved to Firestore.");
+        } catch (saveError) {
+            console.error("Error saving league structure:", saveError);
+            setError(`Failed to save league structure: ${saveError.message}`);
+        } finally {
+            setLoadingStructure(false);
+        }
+    };
+
+    const handleCancelEditStructure = () => {
+        // Re-fetch from Firebase to revert changes, or use a cached version if preferred
+        // For simplicity, just set editing to false and the useEffect will re-sync
+        setIsEditingStructure(false);
+        setError(null); // Clear any errors from editing
+    };
+
+
     return (
         <div className="w-full max-w-4xl bg-white p-8 rounded-lg shadow-md mt-4 mx-auto">
             <h2 className="text-3xl font-extrabold text-blue-800 mb-6 text-center">
@@ -668,12 +793,12 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 )}
             </div>
 
-            {currentSeason !== 0 && ( // Conditionally render if currentSeason is determined
+            {currentSeason !== 0 && ( 
                 <div className="text-center text-sm text-blue-700 font-semibold mb-4">
                     Displaying Data for: Season {currentSeason}
                 </div>
             )}
-            {currentSeason === 0 && !loading && ( // Show error if currentSeason is 0 and not loading
+            {currentSeason === 0 && !loading && ( 
                  <div className="text-center text-orange-600 text-sm font-semibold mb-4">
                     Could not determine current season from historical data. Showing all available transactions.
                  </div>
@@ -687,12 +812,10 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 <>
                     {/* Financial Summary */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                        {/* Total Fees Collected - Now Red */}
                         <div className="bg-red-50 p-4 rounded-lg shadow-sm text-center">
                             <h3 className="text-lg font-semibold text-red-700">Total Fees Collected</h3>
                             <p className="text-2xl font-bold text-red-900">${totalFees.toFixed(2)}</p>
                         </div>
-                        {/* Total Payouts Made - Now Green */}
                         <div className="bg-green-50 p-4 rounded-lg shadow-sm text-center">
                             <h3 className="text-lg font-semibold text-green-700">Total Payouts Made</h3>
                             <p className="text-2xl font-bold text-green-900">${totalPayouts.toFixed(2)}</p>
@@ -933,7 +1056,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                         {t.date?.toDate ? t.date.toDate().toLocaleDateString() : 'N/A'}
                                                     </td>
                                                     <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
-                                                        {/* Display description as is, remove redundant week display */}
                                                         {t.description}
                                                         {t.category === 'side_pot' && t.potName && ` (${t.potName})`}
                                                     </td>
@@ -1007,24 +1129,149 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     {/* Fee and Payout Structure Section */}
                     <section className="mt-8 p-6 bg-gray-50 rounded-lg shadow-inner">
                         <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">League Fee & Payout Structure</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div>
-                                <h4 className="text-xl font-semibold text-red-700 mb-3">Fees (Money In)</h4>
-                                <ul className="list-disc list-inside space-y-1 text-gray-700">
-                                    {getCategoriesForType('fee').map(cat => (
-                                        <li key={cat.value}>{cat.label}</li>
-                                    ))}
-                                </ul>
+                        {isCommish && !isEditingStructure && (
+                            <div className="text-center mb-4">
+                                <button
+                                    onClick={() => setIsEditingStructure(true)}
+                                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-md shadow-md transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                                >
+                                    Edit Structure
+                                </button>
                             </div>
-                            <div>
-                                <h4 className="text-xl font-semibold text-green-700 mb-3">Payouts (Money Out)</h4>
-                                <ul className="list-disc list-inside space-y-1 text-gray-700">
-                                    {getCategoriesForType('payout').map(cat => (
-                                        <li key={cat.value}>{cat.label}</li>
+                        )}
+
+                        {loadingStructure ? (
+                            <p className="text-center text-blue-600">Loading structure...</p>
+                        ) : isEditingStructure ? (
+                            // Edit mode for structure
+                            <div className="space-y-6">
+                                <div>
+                                    <h4 className="text-xl font-semibold text-red-700 mb-3">Fees (Money In)</h4>
+                                    {feeStructureData.map((item, index) => (
+                                        <div key={index} className="flex flex-col md:flex-row gap-2 mb-2 items-center">
+                                            <input
+                                                type="text"
+                                                value={item.name}
+                                                onChange={(e) => handleFeeStructureChange(index, 'name', e.target.value)}
+                                                placeholder="Fee Name"
+                                                className="flex-1 px-3 py-2 border rounded-md"
+                                            />
+                                            <input
+                                                type="text" // Keep as text to allow '$' or other symbols
+                                                value={item.amount}
+                                                onChange={(e) => handleFeeStructureChange(index, 'amount', e.target.value)}
+                                                placeholder="Amount"
+                                                className="w-24 px-3 py-2 border rounded-md"
+                                            />
+                                            <input
+                                                type="text"
+                                                value={item.description}
+                                                onChange={(e) => handleFeeStructureChange(index, 'description', e.target.value)}
+                                                placeholder="Description (optional)"
+                                                className="flex-1 px-3 py-2 border rounded-md"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRemoveFeeItem(index)}
+                                                className="p-2 bg-red-400 text-white rounded-md hover:bg-red-500"
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
                                     ))}
-                                </ul>
+                                    <button
+                                        type="button"
+                                        onClick={handleAddFeeItem}
+                                        className="mt-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md"
+                                    >
+                                        Add Fee Item
+                                    </button>
+                                </div>
+
+                                <div>
+                                    <h4 className="text-xl font-semibold text-green-700 mb-3">Payouts (Money Out)</h4>
+                                    {payoutStructureData.map((item, index) => (
+                                        <div key={index} className="flex flex-col md:flex-row gap-2 mb-2 items-center">
+                                            <input
+                                                type="text"
+                                                value={item.name}
+                                                onChange={(e) => handlePayoutStructureChange(index, 'name', e.target.value)}
+                                                placeholder="Payout Name"
+                                                className="flex-1 px-3 py-2 border rounded-md"
+                                            />
+                                            <input
+                                                type="text" // Keep as text to allow '$' or other symbols
+                                                value={item.amount}
+                                                onChange={(e) => handlePayoutStructureChange(index, 'amount', e.target.value)}
+                                                placeholder="Amount (optional)"
+                                                className="w-24 px-3 py-2 border rounded-md"
+                                            />
+                                            <input
+                                                type="text"
+                                                value={item.description}
+                                                onChange={(e) => handlePayoutStructureChange(index, 'description', e.target.value)}
+                                                placeholder="Description (optional)"
+                                                className="flex-1 px-3 py-2 border rounded-md"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRemovePayoutItem(index)}
+                                                className="p-2 bg-red-400 text-white rounded-md hover:bg-red-500"
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
+                                    ))}
+                                    <button
+                                        type="button"
+                                        onClick={handleAddPayoutItem}
+                                        className="mt-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md"
+                                    >
+                                        Add Payout Item
+                                    </button>
+                                </div>
+                                <div className="flex justify-center space-x-4 mt-6">
+                                    <button
+                                        type="button"
+                                        onClick={handleSaveStructure}
+                                        className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-md shadow-md"
+                                    >
+                                        Save Structure
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleCancelEditStructure}
+                                        className="px-6 py-2 bg-gray-400 hover:bg-gray-500 text-gray-800 font-bold rounded-md shadow-md"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
                             </div>
-                        </div>
+                        ) : (
+                            // Display mode for structure
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <h4 className="text-xl font-semibold text-red-700 mb-3">Fees (Money In)</h4>
+                                    <ul className="list-disc list-inside space-y-1 text-gray-700">
+                                        {feeStructureData.map((fee, index) => (
+                                            <li key={index}>
+                                                <strong>{fee.name}:</strong> {fee.amount}{fee.description && ` - ${fee.description}`}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                                <div>
+                                    <h4 className="text-xl font-semibold text-green-700 mb-3">Payouts (Money Out)</h4>
+                                    <ul className="list-disc list-inside space-y-1 text-gray-700">
+                                        {payoutStructureData.map((payout, index) => (
+                                            <li key={index}>
+                                                <strong>{payout.name}:</strong> {payout.amount}{payout.description && ` - ${payout.description}`}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            </div>
+                        )}
                     </section>
                 </>
             )}
