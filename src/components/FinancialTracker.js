@@ -631,7 +631,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         .filter(t => (currentSeason === 0 || t.season === currentSeason) && t.type === 'credit')
         .reduce((sum, t) => sum + (t.amount || 0), 0);
 
-    const overallNetBalance = overallCredits - overallDebits; // Changed to Credits - Debits
+    // Changed to Debits - Credits for "League Bank"
+    const overallNetBalance = overallDebits - overallCredits; 
 
     // Calculate team summary data
     const teamSummary = {};
@@ -639,9 +640,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         teamSummary[team] = {
             totalDebits: 0,
             totalCredits: 0,
-            netBalance: 0,
+            netBalance: 0, // This will be Credits - Debits for team summary
             totalDebitsLessEntryFee: 0, 
-            winningsExtraFees: 0, // Renamed from netBalanceLessEntryFee
+            winningsExtraFees: 0, 
         };
     });
 
@@ -670,7 +671,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     });
 
     Object.keys(teamSummary).forEach(team => {
-        teamSummary[team].netBalance = teamSummary[team].totalDebits - teamSummary[team].totalCredits;
+        // Net balance for team summary is Credits - Debits
+        teamSummary[team].netBalance = teamSummary[team].totalCredits - teamSummary[team].totalDebits;
         // Calculate Winnings/(Extra Fees) as Credits - Debits (excluding entry fee)
         teamSummary[team].winningsExtraFees = teamSummary[team].totalCredits - teamSummary[team].totalDebitsLessEntryFee;
     });
@@ -858,15 +860,15 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
                         <div className="bg-red-50 p-4 rounded-lg shadow-sm text-center">
                             <h3 className="text-lg font-semibold text-red-700">Total Debits</h3>
-                            <p className="text-2xl font-bold text-red-900">${overallDebits.toFixed(2)}</p> {/* Changed to overallDebits */}
+                            <p className="text-2xl font-bold text-red-900">${overallDebits.toFixed(2)}</p>
                         </div>
                         <div className="bg-green-50 p-4 rounded-lg shadow-sm text-center">
                             <h3 className="text-lg font-semibold text-green-700">Total Credits</h3>
-                            <p className="text-2xl font-bold text-green-900">${overallCredits.toFixed(2)}</p> {/* Changed to overallCredits */}
+                            <p className="text-2xl font-bold text-green-900">${overallCredits.toFixed(2)}</p>
                         </div>
-                        <div className={`p-4 rounded-lg shadow-sm text-center ${overallNetBalance >= 0 ? 'bg-green-100' : 'bg-red-100'}`}> {/* Adjusted color logic */}
-                            <h3 className="text-lg font-semibold text-blue-700">Net Total</h3>
-                            <p className={`text-2xl font-bold ${overallNetBalance >= 0 ? 'text-green-900' : 'text-red-900'}`}>${overallNetBalance.toFixed(2)}</p> {/* Changed to overallNetBalance and adjusted color */}
+                        <div className={`p-4 rounded-lg shadow-sm text-center ${overallNetBalance >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
+                            <h3 className="text-lg font-semibold text-blue-700">League Bank</h3> {/* Changed label to League Bank */}
+                            <p className={`text-2xl font-bold ${overallNetBalance >= 0 ? 'text-green-900' : 'text-red-900'}`}>${overallNetBalance.toFixed(2)}</p>
                         </div>
                         <div className="bg-yellow-50 p-4 rounded-lg shadow-sm text-center">
                             <h3 className="text-lg font-semibold text-yellow-700">Transaction Pot</h3>
@@ -1197,10 +1199,10 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                 <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{team}</td>
                                                 <td className="py-2 px-4 text-sm text-right text-red-700 font-medium border-b border-gray-200">${data.totalDebits.toFixed(2)}</td>
                                                 <td className="py-2 px-4 text-sm text-right text-green-700 font-medium border-b border-gray-200">${data.totalCredits.toFixed(2)}</td>
-                                                <td className={`py-2 px-4 text-sm text-right font-bold border-b border-gray-200 ${data.netBalance >= 0 ? 'text-blue-900' : 'text-red-900'}`}>
+                                                <td className={`py-2 px-4 text-sm text-right font-bold border-b border-gray-200 ${data.netBalance >= 0 ? 'text-green-900' : 'text-red-900'}`}> {/* Adjusted color logic for Credits - Debits */}
                                                     ${data.netBalance.toFixed(2)}
                                                 </td>
-                                                <td className={`py-2 px-4 text-sm text-right font-bold border-b border-gray-200 ${data.winningsExtraFees >= 0 ? 'text-green-900' : 'text-red-900'}`}> {/* Adjusted color logic */}
+                                                <td className={`py-2 px-4 text-sm text-right font-bold border-b border-gray-200 ${data.winningsExtraFees >= 0 ? 'text-green-900' : 'text-red-900'}`}>
                                                     ${data.winningsExtraFees.toFixed(2)}
                                                 </td>
                                             </tr>
