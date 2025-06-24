@@ -33,8 +33,12 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [uniqueTeams, setUniqueTeams] = useState([]);
     const [weeklyHighScores, setWeeklyHighScores] = useState({});
-    const [currentSeason, setCurrentSeason] = useState(null); // New state for the current season
-
+    const [currentSeason, setCurrentSeason] = useState(null); 
+    const [activeTeamsCount, setActiveTeamsCount] = useState(0); // New state for count of active teams
+    
+    // State to manage automatic population of teamName field
+    const [isTeamAutoPopulated, setIsTeamAutoPopulated] = useState(false);
+    
     const [showConfirmDelete, setShowConfirmDelete] = useState(false);
     const [transactionToDelete, setTransactionToDelete] = useState(null);
 
@@ -51,10 +55,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     useEffect(() => {
         if (historicalMatchups && Array.isArray(historicalMatchups)) {
             let maxSeason = 0;
-            // First pass: Determine the most current season/year
             historicalMatchups.forEach(match => {
-                // Assuming 'year' is the property that indicates the season.
-                // Adjust 'match.year' if your data uses a different property (e.g., 'season').
                 if (match.year && typeof match.year === 'number') {
                     if (match.year > maxSeason) {
                         maxSeason = match.year;
@@ -65,16 +66,15 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             console.log("Determined Current Season:", maxSeason);
 
             if (maxSeason === 0) {
-                setError("No historical matchup data with a valid 'year' property found to determine the current season.");
-                return; // Exit if no season can be determined
+                setError("No historical matchup data with a valid 'year' property found to determine the current season. Showing all transactions.");
+                return; 
             }
 
             const teamsSet = new Set();
-            const weeklyScores = {}; // To store { week: [{ team, score }] }
+            const weeklyScores = {}; 
 
-            // Second pass: Filter data for the current season and process it
             historicalMatchups.forEach(match => {
-                if (match.year === maxSeason) { // Only process data for the current season
+                if (match.year === maxSeason) { 
                     const team1 = getDisplayTeamName(match.team1);
                     const team2 = getDisplayTeamName(match.team2);
                     if (team1) teamsSet.add(team1);
@@ -103,15 +103,14 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
                     calculatedHighScores[week] = {
                         highest: scoresInWeek[0],
-                        secondHighest: null // Initialize secondHighest to null
+                        secondHighest: null 
                     };
 
-                    // Find the second highest distinct score
                     let secondHighestScore = null;
                     for (let i = 1; i < scoresInWeek.length; i++) {
                         if (scoresInWeek[i].score < scoresInWeek[0].score) {
                             secondHighestScore = scoresInWeek[i];
-                            break; // Found the first distinct second highest
+                            break; 
                         }
                     }
                     calculatedHighScores[week].secondHighest = secondHighestScore;
@@ -123,6 +122,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
             const sortedTeams = Array.from(teamsSet).sort();
             setUniqueTeams(['ALL_TEAMS_MULTIPLIER', ...sortedTeams]); 
+            setActiveTeamsCount(sortedTeams.length); // Set the count of active teams
+            
             if (sortedTeams.length > 0) {
                 setTeamName(''); 
             }
@@ -131,31 +132,44 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     // Effect to automatically set teamName and description when payoutCategory and weeklyPointsWeek change
     useEffect(() => {
+        setError(null); // Clear errors related to previous auto-population attempts
+        setIsTeamAutoPopulated(false); // Reset auto-population flag
+
         if (type === 'payout' && 
             (payoutCategory === 'highest_weekly_points' || payoutCategory === 'second_highest_weekly_points') &&
             weeklyPointsWeek) 
         {
-            const weekData = weeklyHighScores[weeklyPointsWeek];
+            const weekNum = parseInt(weeklyPointsWeek);
+            const weekData = weeklyHighScores[weekNum];
+
             if (weekData) {
                 if (payoutCategory === 'highest_weekly_points' && weekData.highest) {
                     setTeamName(weekData.highest.team);
                     setDescription(`Payout: Highest Weekly Points (Week ${weeklyPointsWeek}) - ${weekData.highest.team} (${weekData.highest.score} pts)`);
+                    setIsTeamAutoPopulated(true);
                 } else if (payoutCategory === 'second_highest_weekly_points' && weekData.secondHighest) {
                     setTeamName(weekData.secondHighest.team);
                     setDescription(`Payout: Second Highest Weekly Points (Week ${weeklyPointsWeek}) - ${weekData.secondHighest.team} (${weekData.secondHighest.score} pts)`);
+                    setIsTeamAutoPopulated(true);
                 } else {
                     setTeamName('');
-                    setDescription('');
-                    setError(`No data found for ${payoutCategory.replace(/_/g, ' ')} in Week ${weeklyPointsWeek}. Ensure data is available for this week in the current season.`);
+                    // Only set a specific error if data is explicitly missing for the selected category
+                    if (payoutCategory === 'highest_weekly_points' && !weekData.highest) {
+                        setError(`No Highest Weekly Points winner found for Week ${weeklyPointsWeek} in the current season.`);
+                    } else if (payoutCategory === 'second_highest_weekly_points' && !weekData.secondHighest) {
+                        setError(`No Second Highest Weekly Points winner found for Week ${weeklyPointsWeek} in the current season.`);
+                    }
+                    setDescription(''); // Clear description if automated team not found
                 }
             } else {
                 setTeamName('');
                 setDescription('');
-                setError(`No score data found for Week ${weeklyPointsWeek} in the current season. Please check the week number or historical data.`);
+                setError(`No score data found for Week ${weeklyPointsWeek} in the current season. Please ensure data is available for this week.`);
             }
         } else if (type === 'payout' && payoutCategory === 'side_pot') {
             setTeamName(''); 
             setDescription(`Payout: Side Pot`);
+            // Side pot team is manually selected, so not auto-populated
         } else {
             setTeamName('');
             setDescription('');
@@ -271,7 +285,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
         const transactionCollectionPath = `/artifacts/${appId}/public/data/financial_transactions`;
         
-        // Fetch all transactions, then filter by season in frontend if needed
         const q = query(collection(db, transactionCollectionPath), orderBy('date', 'desc'));
 
         console.log("Attempting to listen to Firestore collection:", transactionCollectionPath);
@@ -323,16 +336,14 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         let finalAmount = parseFloat(amount);
         let finalTeamName = teamName; 
 
-        if (teamName === 'ALL_TEAMS_MULTIPLIER' && type === 'fee') {
-            // Filter uniqueTeams to only include actual team names (exclude 'ALL_TEAMS_MULTIPLIER')
-            const activeTeamsCount = uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').length;
+        if (type === 'fee' && teamName === 'ALL_TEAMS_MULTIPLIER') {
             if (activeTeamsCount === 0) {
                 setError("Cannot process 'All Teams' transaction: No active teams found in the current season.");
                 return;
             }
             finalAmount = finalAmount * activeTeamsCount;
             finalTeamName = 'All Teams'; 
-        } else if (teamName === 'ALL_TEAMS_MULTIPLIER' && type === 'payout') {
+        } else if (type === 'payout' && teamName === 'ALL_TEAMS_MULTIPLIER') {
             finalTeamName = 'All Teams';
             setError("Warning: 'All Teams' selected for a payout. Amount will not be multiplied. Ensure this is intentional.");
         }
@@ -346,7 +357,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             date: serverTimestamp(),
             userId: userId,
             category: payoutCategory, 
-            season: currentSeason // Store the current season with the transaction
+            season: currentSeason 
         };
 
         if (type === 'payout') {
@@ -437,14 +448,11 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         setTransactionToDelete(null);
     };
 
-    const isTeamSelectionAutomated = type === 'payout' && (
-        payoutCategory === 'highest_weekly_points' || 
-        payoutCategory === 'second_highest_weekly_points'
-    );
+    // Determine if team dropdown should be disabled/read-only. Now depends on isTeamAutoPopulated.
+    const isTeamSelectionDisabled = isTeamAutoPopulated;
 
     // Filtered transactions for display based on selected team AND current season
     const filteredTransactions = transactions.filter(t => 
-        // Only show transactions for the current season
         t.season === currentSeason && 
         (filterTeam === '' || t.teamName === filterTeam || (filterTeam === 'ALL_TEAMS_MULTIPLIER' && t.teamName === 'All Teams'))
     );
@@ -601,7 +609,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                         placeholder="e.g., Annual League Fee, Playoff Winner Bonus"
                                         maxLength="100"
                                         required
-                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                        // Make description read-only if team is auto-populated
+                                        readOnly={isTeamAutoPopulated}
+                                        className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none ${isTeamAutoPopulated ? 'bg-gray-200 cursor-not-allowed' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'} sm:text-sm`}
                                     />
                                 </div>
 
@@ -611,7 +621,12 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                         <select
                                             id="payoutCategory"
                                             value={payoutCategory}
-                                            onChange={(e) => setPayoutCategory(e.target.value)}
+                                            onChange={(e) => {
+                                                setPayoutCategory(e.target.value);
+                                                // Reset weeklyPointsWeek and sidePotName when category changes
+                                                setWeeklyPointsWeek(''); 
+                                                setSidePotName('');
+                                            }}
                                             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                         >
                                             <option value="general">General Payout</option>
@@ -658,8 +673,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                         id="teamName"
                                         value={teamName}
                                         onChange={(e) => setTeamName(e.target.value)}
-                                        disabled={isTeamSelectionAutomated}
-                                        className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none ${isTeamSelectionAutomated ? 'bg-gray-200 cursor-not-allowed' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'} sm:text-sm`}
+                                        disabled={isTeamSelectionDisabled} // Use new state here
+                                        className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none ${isTeamSelectionDisabled ? 'bg-gray-200 cursor-not-allowed' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'} sm:text-sm`}
                                     >
                                         <option value="">Select Team (Optional)</option>
                                         {type === 'fee' && ( 
@@ -669,7 +684,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             <option key={team} value={team}>{team}</option>
                                         ))}
                                     </select>
-                                    {isTeamSelectionAutomated && teamName && (
+                                    {isTeamAutoPopulated && teamName && ( // Show message only if auto-populated
                                         <p className="text-xs text-gray-500 mt-1">Automatically determined: {teamName}</p>
                                     )}
                                 </div>
@@ -723,46 +738,54 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {filteredTransactions.map((t, index) => (
-                                            <tr key={t.id} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                                <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
-                                                    {t.date?.toDate ? t.date.toDate().toLocaleDateString() : 'N/A'}
-                                                </td>
-                                                <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
-                                                    {t.description}
-                                                    {t.category === 'highest_weekly_points' && t.weekNumber && ` (Week ${t.weekNumber})`}
-                                                    {t.category === 'second_highest_weekly_points' && t.weekNumber && ` (Week ${t.weekNumber})`}
-                                                    {t.category === 'side_pot' && t.potName && ` (${t.potName})`}
-                                                </td>
-                                                <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{t.teamName || '-'}</td>
-                                                <td className="py-2 px-4 text-sm text-right border-b border-gray-200">
-                                                    <span className={`${t.type === 'fee' ? 'text-green-700' : 'text-red-700'} font-medium`}>
-                                                        ${(t.amount || 0).toFixed(2)}
-                                                    </span>
-                                                </td>
-                                                <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
-                                                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                                                        t.type === 'fee' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                                                    }`}>
-                                                        {t.type === 'fee' ? 'Fee' : 'Payout'}
-                                                    </span>
-                                                </td>
-                                                <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200 capitalize">
-                                                    {t.category ? t.category.replace(/_/g, ' ') : 'General'}
-                                                </td> 
-                                                {isCommish && ( 
+                                        {filteredTransactions.map((t, index) => {
+                                            let displayAmount = (t.amount || 0).toFixed(2);
+                                            // Apply division logic only if filtering by a specific team,
+                                            // transaction is a fee for 'All Teams', and activeTeamsCount is valid.
+                                            if (filterTeam !== '' && filterTeam !== 'All Teams' && t.teamName === 'All Teams' && t.type === 'fee' && activeTeamsCount > 0) {
+                                                displayAmount = (t.amount / activeTeamsCount).toFixed(2);
+                                            }
+                                            return (
+                                                <tr key={t.id} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                                                     <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
-                                                        <button
-                                                            onClick={() => confirmDelete(t)}
-                                                            className="bg-red-500 hover:bg-red-600 text-white text-xs px-2 py-1 rounded-md shadow-sm transition-colors duration-200"
-                                                            title="Delete Transaction"
-                                                        >
-                                                            Delete
-                                                        </button>
+                                                        {t.date?.toDate ? t.date.toDate().toLocaleDateString() : 'N/A'}
                                                     </td>
-                                                )}
-                                            </tr>
-                                        ))}
+                                                    <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
+                                                        {t.description}
+                                                        {t.category === 'highest_weekly_points' && t.weekNumber && ` (Week ${t.weekNumber})`}
+                                                        {t.category === 'second_highest_weekly_points' && t.weekNumber && ` (Week ${t.weekNumber})`}
+                                                        {t.category === 'side_pot' && t.potName && ` (${t.potName})`}
+                                                    </td>
+                                                    <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{t.teamName || '-'}</td>
+                                                    <td className="py-2 px-4 text-sm text-right border-b border-gray-200">
+                                                        <span className={`${t.type === 'fee' ? 'text-green-700' : 'text-red-700'} font-medium`}>
+                                                            ${displayAmount}
+                                                        </span>
+                                                    </td>
+                                                    <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
+                                                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                                                            t.type === 'fee' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                                        }`}>
+                                                            {t.type === 'fee' ? 'Fee' : 'Payout'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200 capitalize">
+                                                        {t.category ? t.category.replace(/_/g, ' ') : 'General'}
+                                                    </td> 
+                                                    {isCommish && ( 
+                                                        <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
+                                                            <button
+                                                                onClick={() => confirmDelete(t)}
+                                                                className="bg-red-500 hover:bg-red-600 text-white text-xs px-2 py-1 rounded-md shadow-sm transition-colors duration-200"
+                                                                title="Delete Transaction"
+                                                            >
+                                                                Delete
+                                                            </button>
+                                                        </td>
+                                                    )}
+                                                </tr>
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>
