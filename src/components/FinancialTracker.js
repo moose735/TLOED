@@ -295,28 +295,22 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     setUserId(user.uid);
                     console.log("Firebase Auth Ready. User ID:", user.uid);
                 } else {
-                    console.log("No user signed in. Attempting anonymous sign-in to allow read access.");
-                    try {
-                        // Using __initial_auth_token if available for custom token sign-in
-                        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-                        if (initialAuthToken) {
-                            // This part of the code is not fully defined in the provided snippet
-                            // Assuming signInWithCustomToken is imported or defined elsewhere if used
-                            // For a standard setup, you'd typically handle this within a build process
-                            // or secure server environment. For client-side, anonymous is common.
-                            // If `signInWithCustomToken` is not defined, this will cause an error.
-                            // For now, I'll comment it out to prevent errors if not defined.
-                            // await signInWithCustomToken(firebaseAuth, initialAuthToken);
-                            await signInAnonymously(firebaseAuth); // Fallback to anonymous
-                        } else {
-                            await signInAnonymously(firebaseAuth);
+                    // Do NOT sign in anonymously here by default.
+                    // Only use __initial_auth_token for Canvas environment auto-login if available.
+                    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+                    if (initialAuthToken) {
+                        try {
+                            await signInWithCustomToken(firebaseAuth, initialAuthToken);
+                            setUserId(firebaseAuth.currentUser?.uid); 
+                            console.log("Signed in with custom token. User ID:", firebaseAuth.currentUser?.uid);
+                        } catch (tokenSignInError) {
+                            console.error("Error signing in with custom token:", tokenSignInError);
+                            setError(`Failed to auto-sign in: ${tokenSignInError.message}. Please log in manually.`);
+                            setUserId(null); 
                         }
-                        setUserId(firebaseAuth.currentUser?.uid); 
-                        console.log("Signed in. User ID:", firebaseAuth.currentUser?.uid);
-                    } catch (anonSignInError) {
-                        console.error("Error during sign-in:", anonSignInError);
-                        setError(`Failed to sign in: ${anonSignInError.message}. Read access may be affected.`);
-                        setUserId(null); 
+                    } else {
+                        setUserId(null); // Explicitly set userId to null if no one is logged in
+                        console.log("No user signed in. Awaiting manual login for Commish access.");
                     }
                 }
                 setIsAuthReady(true); 
@@ -356,6 +350,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             await signOut(auth);
             console.log("Logged out successfully!");
             setLoginError(null);
+            // Optionally clear error messages related to data fetching after logout
+            setError(null);
         } catch (error) {
             console.error("Logout Error:", error);
             setLoginError(`Logout failed: ${error.message}`);
@@ -364,8 +360,21 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     // Fetch transaction history
     useEffect(() => {
-        if (!db || !isAuthReady || selectedSeason === null) { // Wait for selectedSeason to be set
-            console.log("Firestore not ready, Auth not ready, or selectedSeason not set. Waiting for db, isAuthReady, and selectedSeason...");
+        // Only fetch transactions if commish is logged in AND auth is ready AND selectedSeason is set
+        if (!db || !isAuthReady || selectedSeason === null || !isCommish) { 
+            console.log("Firestore not ready, Auth not ready, selectedSeason not set, or user is not commish. Skipping transaction fetch.");
+            setTransactions([]); // Clear existing transactions
+            setTransactionPot(0); // Clear pot
+            setLoading(false); // Stop loading
+            if (isAuthReady && !isCommish && userId) { // If a non-commish user is logged in via custom token
+                 setError("You are logged in, but not as the Commissioner. Financial data is only viewable by the Commissioner.");
+            } else if (isAuthReady && !userId) { // If no one is logged in
+                // Do not set a persistent error here, as the login form handles it
+                // setError("Please log in as the Commissioner to view financial data."); // This will be handled by UI directly
+                setError(null); // Clear error if it's just initial waiting
+            } else {
+                setError(null); // Clear error if it's just initial waiting
+            }
             return;
         }
 
@@ -419,13 +428,16 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             console.log("Unsubscribing from Firestore listener (transactions).");
             unsubscribe();
         };
-    }, [db, isAuthReady, selectedSeason]); // Add selectedSeason to dependencies
+    }, [db, isAuthReady, selectedSeason, isCommish]); // Add isCommish to dependencies
 
 
     // Fetch and listen for updates to the Fee/Payout structure
     useEffect(() => {
-        if (!db || !isAuthReady) {
-            console.log("Firestore not ready or Auth not ready. Waiting for db and isAuthReady for structure...");
+        if (!db || !isAuthReady || !isCommish) { // Also restrict structure fetch to commish
+            console.log("Firestore not ready, Auth not ready, or user is not commish. Skipping structure fetch.");
+            setLoadingStructure(false);
+            setDebitStructureData(defaultDebitStructure); // Default to empty if not commish
+            setCreditStructureData(defaultCreditStructure); // Default to empty if not commish
             return;
         }
 
@@ -460,7 +472,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             console.log("Unsubscribing from Firestore listener (structure).");
             unsubscribe();
         };
-    }, [db, isAuthReady]);
+    }, [db, isAuthReady, isCommish]); // Add isCommish to dependencies
 
 
     const handleAddTransaction = async (e) => {
@@ -826,21 +838,14 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 
                 {isAuthReady && ( 
                     <div className="mt-4">
-                        {userId && !isCommish ? ( 
-                             <button
-                                onClick={handleLogout}
-                                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-bold rounded-md transition-colors"
-                            >
-                                Logout (Currently Viewing Only)
-                            </button>
-                        ) : (userId && isCommish ? ( 
+                        {userId && isCommish ? ( // If commish is logged in
                             <button
                                 onClick={handleLogout}
                                 className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-bold rounded-md transition-colors"
                             >
-                            Logout (Commish)
+                                Logout (Commish)
                             </button>
-                        ) : ( 
+                        ) : ( // If not commish or not logged in
                             <form onSubmit={handleLogin} className="flex flex-col items-center space-y-2">
                                 <p className="text-gray-700 font-semibold mb-2">Commish Login</p>
                                 <input
@@ -863,53 +868,54 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                     type="submit"
                                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-md transition-colors w-full max-w-xs"
                                 >
-                                    Login
+                                    Login (Commish Only)
                                 </button>
                                 {loginError && <p className="text-red-500 text-sm mt-2">{loginError}</p>}
+                                {userId && !isCommish && (
+                                    <p className="text-orange-600 text-sm mt-2">
+                                        You are logged in, but not as the Commissioner. View-only access is not available. Please log in with the Commish account for full access.
+                                    </p>
+                                )}
                             </form>
-                        ))}
+                        )}
                     </div>
                 )}
             </div>
 
-            {/* Season Selector */}
-            <div className="flex justify-center items-center mb-4 p-2 bg-blue-50 rounded-lg shadow-sm">
-                <label htmlFor="seasonFilter" className="mr-2 font-semibold text-blue-700">View Season:</label>
-                <select
-                    id="seasonFilter"
-                    value={selectedSeason || ''} // Handle null initial state
-                    onChange={(e) => {
-                        const newSeason = parseInt(e.target.value);
-                        setSelectedSeason(isNaN(newSeason) ? null : newSeason);
-                        setCurrentPage(1); // Reset pagination on season change
-                        setFilterTeam(''); // Also reset team filter
-                    }}
-                    className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                >
-                    {/* Optionally add an "All Seasons" option if filtering transactions in the query. 
-                        For now, assuming specific year selection is desired.*/}
-                    {availableSeasons.length > 0 ? (
-                        availableSeasons.map(year => (
-                            <option key={year} value={year}>{year}</option>
-                        ))
-                    ) : (
-                        <option value="">No Seasons Available</option>
-                    )}
-                </select>
-                {selectedSeason !== null && (
-                    <p className="ml-4 text-sm text-gray-600">
-                        Viewing data for: <span className="font-bold">{selectedSeason}</span>
-                        {selectedSeason === currentSeason && " (Current)"}
-                    </p>
-                )}
-            </div>
-
-
-            {loading && <p className="text-center text-blue-600 font-semibold">Loading financial data...</p>}
-            {error && <p className="text-center text-red-600 font-semibold mb-4">{error}</p>}
-
-            {!loading && !error && (
+            {/* Conditionally render main content based on commish status */}
+            {isCommish && !loading && !error ? (
                 <>
+                    {/* Season Selector */}
+                    <div className="flex justify-center items-center mb-4 p-2 bg-blue-50 rounded-lg shadow-sm">
+                        <label htmlFor="seasonFilter" className="mr-2 font-semibold text-blue-700">View Season:</label>
+                        <select
+                            id="seasonFilter"
+                            value={selectedSeason || ''} // Handle null initial state
+                            onChange={(e) => {
+                                const newSeason = parseInt(e.target.value);
+                                setSelectedSeason(isNaN(newSeason) ? null : newSeason);
+                                setCurrentPage(1); // Reset pagination on season change
+                                setFilterTeam(''); // Also reset team filter
+                            }}
+                            className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        >
+                            {availableSeasons.length > 0 ? (
+                                availableSeasons.map(year => (
+                                    <option key={year} value={year}>{year}</option>
+                                ))
+                            ) : (
+                                <option value="">No Seasons Available</option>
+                            )}
+                        </select>
+                        {selectedSeason !== null && (
+                            <p className="ml-4 text-sm text-gray-600">
+                                Viewing data for: <span className="font-bold">{selectedSeason}</span>
+                                {selectedSeason === currentSeason && " (Current)"}
+                            </p>
+                        )}
+                    </div>
+
+
                     {/* Financial Summary */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
                         <div className="bg-red-50 p-4 rounded-lg shadow-sm text-center">
@@ -1418,6 +1424,19 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                             </div>
                         )}
                     </section>
+                </>
+            ) : (
+                // Display messages if not commish or still loading
+                <>
+                    {loading && <p className="text-center text-blue-600 font-semibold">Loading authentication...</p>}
+                    {error && !loading && (
+                        <p className="text-center text-red-600 font-semibold mb-4">{error}</p>
+                    )}
+                    {!isCommish && !loading && !error && (
+                        <p className="text-center text-gray-600 p-4 bg-gray-100 rounded-lg shadow-inner mb-8">
+                            Please log in as the league commissioner to view financial data and manage transactions.
+                        </p>
+                    )}
                 </>
             )}
 
