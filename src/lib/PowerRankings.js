@@ -51,6 +51,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
     const [weeklyChartData, setWeeklyChartData] = useState([]);
     const [chartTeams, setChartTeams] = useState([]);
     const [maxTeamsInChart, setMaxTeamsInChart] = useState(1);
+    const [currentWeek, setCurrentWeek] = useState(0); // New state for current week
 
     useEffect(() => {
         if (!historicalMatchups || historicalMatchups.length === 0) {
@@ -59,6 +60,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
             setChartTeams([]);
             setLoading(false);
             setError("No historical matchup data available to calculate power rankings or chart data.");
+            setCurrentWeek(0); // Reset current week
             return;
         }
 
@@ -74,6 +76,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
             if (!newestYear) {
                 setError("No valid years found in historical data to determine the season for power rankings.");
                 setLoading(false);
+                setCurrentWeek(0); // Reset current week
                 return;
             }
 
@@ -83,6 +86,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
             )).filter(teamName => teamName && teamName.trim() !== '');
 
             const maxWeek = newestYearMatchups.reduce((max, match) => Math.max(max, parseInt(match.week)), 0);
+            setCurrentWeek(maxWeek); // Set the current week here
 
             const weeklyDPRsChartData = [];
             const weeklyCumulativeSeasonalMetrics = {}; // Store full seasonalMetrics per week
@@ -93,7 +97,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                 // Recalculate seasonal metrics for the league up to this week
                 const { seasonalMetrics: currentWeekSeasonalMetrics } = calculateAllLeagueMetrics(matchupsUpToCurrentWeek, getDisplayTeamName);
                 
-                // Store the full metrics for this week for later access (e.g., for table data or debugging)
+                // Store these complete weekly metrics for later access (e.g., for table data or debugging)
                 weeklyCumulativeSeasonalMetrics[week] = currentWeekSeasonalMetrics[newestYear] || {};
 
                 const weeklyEntry = { week: week, dprValues: {} };
@@ -113,7 +117,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                 const rankedTeamsForWeek = teamsDPRsForThisWeek.sort((a, b) => b.dpr - a.dpr);
 
                 rankedTeamsForWeek.forEach((rankedTeam, index) => {
-                    if (rankedTeam.dpr > 0 || weeklyCumulativeSeasonalMetrics[week][rankedTeam.team]?.gamesPlayed > 0) {
+                    if (rankedTeam.dpr > 0 || (weeklyCumulativeSeasonalMetrics[week][rankedTeam.team] && weeklyCumulativeSeasonalMetrics[week][rankedTeam.team].gamesPlayed > 0)) {
                          weeklyEntry[rankedTeam.team] = index + 1; // This is the RANK
                     } else {
                          weeklyEntry[rankedTeam.team] = undefined; // No rank if no games played/DPR is 0
@@ -216,7 +220,9 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
     return (
         <div className="w-full max-w-4xl bg-white p-8 rounded-lg shadow-md mt-4">
             <h2 className="text-2xl font-bold text-blue-700 mb-4 text-center">
-                {powerRankings.length > 0 ? `Power Rankings (DPR) - ${powerRankings[0].year} Season` : 'Current Power Rankings'}
+                {powerRankings.length > 0
+                    ? `Power Rankings (DPR) - ${powerRankings[0].year} Season (Week ${currentWeek})`
+                    : 'Current Power Rankings'}
             </h2>
             {loading ? (
                 <p className="text-center text-gray-600">Calculating power rankings...</p>
