@@ -13,7 +13,7 @@ import DPRAnalysis from './lib/DPRAnalysis';
 import LuckRatingAnalysis from './lib/LuckRatingAnalysis';
 import TeamDetailPage from './lib/TeamDetailPage';
 import Head2HeadGrid from './lib/Head2HeadGrid'; // Stays for its own tab
-import FinancialTracker from './components/FinancialTracker'; // <--- NEW IMPORT
+import FinancialTracker from './lib/FinancialTracker'; // <--- NEW IMPORT
 
 // Define the available tabs and their categories for the dropdown
 const NAV_CATEGORIES = {
