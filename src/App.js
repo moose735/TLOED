@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   HISTORICAL_MATCHUPS_API_URL,
   GOOGLE_SHEET_POWER_RANKINGS_API_URL, // Still imported, but PowerRankings.js no longer uses it directly
-} from '../config'; // Corrected import path for config.js
+} from './config'; // Corrected import path for config.js to be within src/
 
 // Import existing components from your provided App.js
 import PowerRankings from './lib/PowerRankings';
@@ -13,7 +13,7 @@ import DPRAnalysis from './lib/DPRAnalysis';
 import LuckRatingAnalysis from './lib/LuckRatingAnalysis';
 import TeamDetailPage from './lib/TeamDetailPage';
 import Head2HeadGrid from './lib/Head2HeadGrid'; // Stays for its own tab
-import FinancialTracker from './lib/FinancialTracker'; // <--- NEW IMPORT
+import FinancialTracker from './components/FinancialTracker'; // <--- NEW IMPORT
 
 // Define the available tabs and their categories for the dropdown
 const NAV_CATEGORIES = {
