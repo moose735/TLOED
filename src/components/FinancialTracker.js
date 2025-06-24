@@ -57,6 +57,10 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     // State for transaction pot
     const [transactionPot, setTransactionPot] = useState(0);
 
+    // Pagination states
+    const [currentPage, setCurrentPage] = useState(1);
+    const transactionsPerPage = 10;
+
     const COMMISH_UID = process.env.REACT_APP_COMMISH_UID;
     const isCommish = userId && COMMISH_UID && userId === COMMISH_UID; 
 
@@ -683,6 +687,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         };
     });
 
+    // Ensure team summary calculations use the full transaction list, not just filtered for display
     transactions.filter(t => currentSeason === 0 || t.season === currentSeason).forEach(t => { 
         if (t.teamName === 'All Teams' && t.type === 'debit' && t.teamsInvolvedCount > 0) {
             const perTeamAmount = t.amount / t.teamsInvolvedCount;
@@ -776,8 +781,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
             const structureDocRef = doc(db, `/artifacts/${appId}/public/data/league_structure/current_structure`);
             await setDoc(structureDocRef, {
-                fees: debitStructureData, // Still using 'fees' field name for compatibility if needed
-                payouts: creditStructureData, // Still using 'payouts' field name for compatibility if needed
+                fees: debitStructureData, 
+                payouts: creditStructureData, 
                 lastUpdated: serverTimestamp()
             });
             setIsEditingStructure(false);
@@ -794,6 +799,27 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const handleCancelEditStructure = () => {
         setIsEditingStructure(false);
         setError(null); 
+    };
+
+    // Pagination logic
+    const indexOfLastTransaction = currentPage * transactionsPerPage;
+    const indexOfFirstTransaction = indexOfLastTransaction - transactionsPerPage;
+    const currentTransactions = filteredTransactions.slice(indexOfFirstTransaction, indexOfLastTransaction);
+
+    const totalPages = Math.ceil(filteredTransactions.length / transactionsPerPage);
+
+    const paginate = (pageNumber) => setCurrentPage(pageNumber);
+
+    const handleNextPage = () => {
+        if (currentPage < totalPages) {
+            setCurrentPage(currentPage + 1);
+        }
+    };
+
+    const handlePreviousPage = () => {
+        if (currentPage > 1) {
+            setCurrentPage(currentPage - 1);
+        }
     };
 
 
@@ -883,50 +909,21 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     {/* Financial Summary */}
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
                         <div className="bg-red-50 p-4 rounded-lg shadow-sm text-center">
-                            <h3 className="text-lg font-semibold text-red-700">Total Debits Collected</h3>
+                            <h3 className="text-lg font-semibold text-red-700">Total Debits</h3>
                             <p className="text-2xl font-bold text-red-900">${totalDebits.toFixed(2)}</p>
                         </div>
                         <div className="bg-green-50 p-4 rounded-lg shadow-sm text-center">
-                            <h3 className="text-lg font-semibold text-green-700">Total Credits Paid</h3>
+                            <h3 className="text-lg font-semibold text-green-700">Total Credits</h3>
                             <p className="text-2xl font-bold text-green-900">${totalCredits.toFixed(2)}</p>
                         </div>
                         <div className={`p-4 rounded-lg shadow-sm text-center ${netBalance >= 0 ? 'bg-blue-50' : 'bg-red-100'}`}>
-                            <h3 className="text-lg font-semibold text-blue-700">Overall Net Balance</h3>
+                            <h3 className="text-lg font-semibold text-blue-700">Net Total</h3>
                             <p className={`text-2xl font-bold ${netBalance >= 0 ? 'text-blue-900' : 'text-red-900'}`}>${netBalance.toFixed(2)}</p>
                         </div>
                         <div className="bg-yellow-50 p-4 rounded-lg shadow-sm text-center">
                             <h3 className="text-lg font-semibold text-yellow-700">Transaction Pot</h3>
                             <p className="text-2xl font-bold text-yellow-900">${transactionPot.toFixed(2)}</p>
                         </div>
-
-                        {/* New rows for Completed and Pending Balances */}
-                        <div className="bg-green-50 p-4 rounded-lg shadow-sm text-center">
-                            <h3 className="text-lg font-semibold text-green-700">Completed Debits</h3>
-                            <p className="text-xl font-bold text-green-900">${completedDebits.toFixed(2)}</p>
-                        </div>
-                        <div className="bg-red-50 p-4 rounded-lg shadow-sm text-center">
-                            <h3 className="text-lg font-semibold text-red-700">Completed Credits</h3>
-                            <p className="text-xl font-bold text-red-900">${completedCredits.toFixed(2)}</p>
-                        </div>
-                        <div className={`p-4 rounded-lg shadow-sm text-center ${netCompletedBalance >= 0 ? 'bg-blue-50' : 'bg-red-100'}`}>
-                            <h3 className="text-lg font-semibold text-blue-700">Net Completed</h3>
-                            <p className={`text-xl font-bold ${netCompletedBalance >= 0 ? 'text-blue-900' : 'text-red-900'}`}>${netCompletedBalance.toFixed(2)}</p>
-                        </div>
-                        <div>{/* Empty space for alignment */}</div> 
-
-                        <div className="bg-purple-50 p-4 rounded-lg shadow-sm text-center">
-                            <h3 className="text-lg font-semibold text-purple-700">Pending Debits</h3>
-                            <p className="text-xl font-bold text-purple-900">${pendingDebits.toFixed(2)}</p>
-                        </div>
-                        <div className="bg-orange-50 p-4 rounded-lg shadow-sm text-center">
-                            <h3 className="text-lg font-semibold text-orange-700">Pending Credits</h3>
-                            <p className="text-xl font-bold text-orange-900">${pendingCredits.toFixed(2)}</p>
-                        </div>
-                        <div className={`p-4 rounded-lg shadow-sm text-center ${netPendingBalance >= 0 ? 'bg-blue-50' : 'bg-red-100'}`}>
-                            <h3 className="text-lg font-semibold text-blue-700">Net Pending</h3>
-                            <p className={`text-xl font-bold ${netPendingBalance >= 0 ? 'text-blue-900' : 'text-red-900'}`}>${netPendingBalance.toFixed(2)}</p>
-                        </div>
-                        <div>{/* Empty space for alignment */}</div> 
                     </div>
 
                     {/* Add New Transaction Form (Conditionally rendered) */}
@@ -1133,7 +1130,10 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                             <select
                                 id="filterTeam"
                                 value={filterTeam}
-                                onChange={(e) => setFilterTeam(e.target.value)}
+                                onChange={(e) => {
+                                    setFilterTeam(e.target.value);
+                                    setCurrentPage(1); // Reset to first page on filter change
+                                }}
                                 className="mt-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                             >
                                 <option value="">Show All Teams</option>
@@ -1161,7 +1161,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {filteredTransactions.map((t, index) => {
+                                        {currentTransactions.map((t, index) => {
                                             let displayAmount = (t.amount || 0).toFixed(2);
                                             const effectiveTeamsCount = t.teamsInvolvedCount > 0 ? t.teamsInvolvedCount : activeTeamsCount;
 
@@ -1216,6 +1216,36 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                         })}
                                     </tbody>
                                 </table>
+                                {/* Pagination Controls */}
+                                {totalPages > 1 && (
+                                    <div className="flex justify-center items-center space-x-2 mt-4">
+                                        <button
+                                            onClick={handlePreviousPage}
+                                            disabled={currentPage === 1}
+                                            className="px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            Previous
+                                        </button>
+                                        {[...Array(totalPages)].map((_, index) => (
+                                            <button
+                                                key={index + 1}
+                                                onClick={() => paginate(index + 1)}
+                                                className={`px-3 py-1 rounded-md ${
+                                                    currentPage === index + 1 ? 'bg-blue-700 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                                }`}
+                                            >
+                                                {index + 1}
+                                            </button>
+                                        ))}
+                                        <button
+                                            onClick={handleNextPage}
+                                            disabled={currentPage === totalPages}
+                                            className="px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            Next
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </section>
