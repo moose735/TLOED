@@ -20,7 +20,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [category, setCategory] = useState('general_fee'); 
     const [weeklyPointsWeek, setWeeklyPointsWeek] = useState('');
     const [sidePotName, setSidePotName] = useState('');
-    // const [isCompleted, setIsCompleted] = useState(false); // Removed
 
     const [teamName, setTeamName] = useState(''); 
     const [tradeTeams, setTradeTeams] = useState(['', '']); 
@@ -61,8 +60,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [currentPage, setCurrentPage] = useState(1);
     const transactionsPerPage = 10;
 
-    // State for expanded team rows in the summary table
-    const [expandedTeams, setExpandedTeams] = useState({});
+    // Removed: State for expanded team rows in the summary table
+    // const [expandedTeams, setExpandedTeams] = useState({});
 
     const COMMISH_UID = process.env.REACT_APP_COMMISH_UID;
     const isCommish = userId && COMMISH_UID && userId === COMMISH_UID; 
@@ -235,9 +234,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         } else if (type === 'credit' && category === 'side_pot') {
             setTeamName(''); 
             setDescription(`Credit: Side Pot`);
-        } else if (type === 'debit' && (category === 'trade_fee' || category === 'waiver_pickup_fee')) {
-            setTeamName(''); 
-            setDescription('');
         } else {
             setTeamName('');
             setDescription('');
@@ -365,7 +361,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             }
             const fetchedTransactions = snapshot.docs.map(doc => ({
                 id: doc.id,
-                // isCompleted: doc.data().isCompleted ?? false, // Removed
                 ...doc.data()
             }));
             setTransactions(fetchedTransactions);
@@ -480,7 +475,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     category: category,
                     season: currentSeason,
                     teamsInvolvedCount: 1,
-                    // isCompleted: isCompleted // Removed
                 });
             }
         } else {
@@ -515,7 +509,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 category: category, 
                 season: currentSeason,
                 teamsInvolvedCount: teamsInvolved,
-                // isCompleted: isCompleted // Removed
             });
 
             if (type === 'credit') {
@@ -569,7 +562,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setTradeTeams(['', '']); 
             setWeeklyPointsWeek(''); 
             setSidePotName(''); 
-            // setIsCompleted(false); // Removed
             setError(null); 
             setAutoPopulateWarning(null); 
             console.log("Transaction(s) added to Firestore successfully.");
@@ -643,19 +635,19 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     const netBalance = totalDebits - totalCredits; 
 
-    // Re-added for summary cards as per user's previous request.
-    const totalCollected = filteredTransactions
-        .filter(t => t.type === 'debit' /* && t.isCompleted */) // Keep the 'isCompleted' if you want to differentiate collected later, but remove condition for now
-        .reduce((sum, t) => {
-            if (filterTeam !== '' && filterTeam !== 'All Teams' && t.teamName === 'All Teams' && t.teamsInvolvedCount > 0) {
-                return sum + (t.amount / t.teamsInvolvedCount || 0);
-            }
-            return sum + (t.amount || 0);
-        }, 0);
+    // Removed Total Collected and Total Payout from summary calculations
+    // const totalCollected = filteredTransactions
+    //     .filter(t => t.type === 'debit')
+    //     .reduce((sum, t) => {
+    //         if (filterTeam !== '' && filterTeam !== 'All Teams' && t.teamName === 'All Teams' && t.teamsInvolvedCount > 0) {
+    //             return sum + (t.amount / t.teamsInvolvedCount || 0);
+    //         }
+    //         return sum + (t.amount || 0);
+    //     }, 0);
 
-    const totalPayout = filteredTransactions
-        .filter(t => t.type === 'credit' /* && t.isCompleted */) // Keep the 'isCompleted' if you want to differentiate payout later, but remove condition for now
-        .reduce((sum, t) => sum + (t.amount || 0), 0);
+    // const totalPayout = filteredTransactions
+    //     .filter(t => t.type === 'credit')
+    //     .reduce((sum, t) => sum + (t.amount || 0), 0);
 
     // Calculate team summary data
     const teamSummary = {};
@@ -664,12 +656,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             totalDebits: 0,
             totalCredits: 0,
             netBalance: 0,
-            // completedDebits: 0, // Removed
-            // pendingDebits: 0, // Removed
-            // completedCredits: 0, // Removed
-            // pendingCredits: 0, // Removed
-            // netCompletedBalance: 0, // Removed
-            // netPendingBalance: 0 // Removed
         };
     });
 
@@ -680,24 +666,19 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').forEach(team => {
                 if (teamSummary[team]) { 
                     teamSummary[team].totalDebits += perTeamAmount;
-                    // if (t.isCompleted) { teamSummary[team].completedDebits += perTeamAmount; } else { teamSummary[team].pendingDebits += perTeamAmount; } // Removed
                 }
             });
         } else if (teamSummary[t.teamName]) { 
             if (t.type === 'debit') {
                 teamSummary[t.teamName].totalDebits += (t.amount || 0);
-                // if (t.isCompleted) { teamSummary[t.teamName].completedDebits += (t.amount || 0); } else { teamSummary[t.teamName].pendingDebits += (t.amount || 0); } // Removed
             } else if (t.type === 'credit') {
                 teamSummary[t.teamName].totalCredits += (t.amount || 0);
-                // if (t.isCompleted) { teamSummary[t.teamName].completedCredits += (t.amount || 0); } else { teamSummary[t.teamName].pendingCredits += (t.amount || 0); } // Removed
             }
         }
     });
 
     Object.keys(teamSummary).forEach(team => {
         teamSummary[team].netBalance = teamSummary[team].totalDebits - teamSummary[team].totalCredits;
-        // teamSummary[team].netCompletedBalance = teamSummary[team].completedDebits - teamSummary[team].completedCredits; // Removed
-        // teamSummary[team].netPendingBalance = teamSummary[team].pendingDebits - teamSummary[team].pendingCredits; // Removed
     });
 
     const handleAddTradeTeam = () => {
@@ -796,13 +777,13 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         }
     };
 
-    // Toggle for team summary dropdown
-    const toggleTeamExpansion = (teamName) => {
-        setExpandedTeams(prevState => ({
-            ...prevState,
-            [teamName]: !prevState[teamName]
-        }));
-    };
+    // Removed: Toggle for team summary dropdown
+    // const toggleTeamExpansion = (teamName) => {
+    //     setExpandedTeams(prevState => ({
+    //         ...prevState,
+    //         [teamName]: !prevState[teamName]
+    //     }));
+    // };
 
     return (
         <div className="w-full max-w-4xl bg-white p-8 rounded-lg shadow-md mt-4 mx-auto">
@@ -901,14 +882,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                             <h3 className="text-lg font-semibold text-blue-700">Net Total</h3>
                             <p className={`text-2xl font-bold ${netBalance >= 0 ? 'text-blue-900' : 'text-red-900'}`}>${netBalance.toFixed(2)}</p>
                         </div>
-                        <div className="bg-green-50 p-4 rounded-lg shadow-sm text-center">
-                            <h3 className="text-lg font-semibold text-green-700">Total Collected</h3>
-                            <p className="text-2xl font-bold text-green-900">${totalCollected.toFixed(2)}</p>
-                        </div>
-                        <div className="bg-red-50 p-4 rounded-lg shadow-sm text-center">
-                            <h3 className="text-lg font-semibold text-red-700">Total Payout</h3>
-                            <p className="text-2xl font-bold text-red-900">${totalPayout.toFixed(2)}</p>
-                        </div>
+                        {/* Removed Total Collected and Total Payout cards */}
                         <div className="bg-yellow-50 p-4 rounded-lg shadow-sm text-center">
                             <h3 className="text-lg font-semibold text-yellow-700">Transaction Pot</h3>
                             <p className="text-2xl font-bold text-yellow-900">${transactionPot.toFixed(2)}</p>
@@ -1082,20 +1056,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                     </div>
                                 )}
 
-                                {/* Completed Transaction Checkbox - Removed */}
-                                {/* <div className="flex items-center mt-4">
-                                    <input
-                                        type="checkbox"
-                                        id="isCompleted"
-                                        checked={isCompleted}
-                                        onChange={(e) => setIsCompleted(e.target.checked)}
-                                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                                    />
-                                    <label htmlFor="isCompleted" className="ml-2 block text-sm text-gray-900">
-                                        Completed Transaction
-                                    </label>
-                                </div> */}
-
                                 <button
                                     type="submit"
                                     className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md shadow-md transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
@@ -1145,7 +1105,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Amount</th>
                                             <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Type</th>
                                             <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Category</th> 
-                                            {/* <th className="py-3 px-4 text-center text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Completed</th> */} {/* Removed */}
                                             {isCommish && <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Actions</th>}
                                         </tr>
                                     </thead>
@@ -1182,13 +1141,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                     <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200 capitalize">
                                                         {t.category ? t.category.replace(/_/g, ' ') : 'General'}
                                                     </td> 
-                                                    {/* <td className="py-2 px-4 text-center text-sm border-b border-gray-200">
-                                                        {t.isCompleted ? (
-                                                            <span className="text-green-500 font-bold">&#10003;</span> 
-                                                        ) : (
-                                                            <span className="text-gray-400">&#10005;</span> 
-                                                        )}
-                                                    </td> */} {/* Removed */}
                                                     {isCommish && ( 
                                                         <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
                                                             <button
@@ -1251,51 +1203,18 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Total Debits</th>
                                             <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Total Credits</th>
                                             <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Net Balance</th>
-                                            <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Details</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {Object.entries(teamSummary).sort(([teamA], [teamB]) => teamA.localeCompare(teamB)).map(([team, data], index) => (
-                                            <React.Fragment key={team}>
-                                                <tr className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                                    <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{team}</td>
-                                                    <td className="py-2 px-4 text-sm text-right text-gray-700 font-medium border-b border-gray-200">${data.totalDebits.toFixed(2)}</td>
-                                                    <td className="py-2 px-4 text-sm text-right text-gray-700 font-medium border-b border-gray-200">${data.totalCredits.toFixed(2)}</td>
-                                                    <td className={`py-2 px-4 text-sm text-right font-bold border-b border-gray-200 ${data.netBalance >= 0 ? 'text-blue-900' : 'text-red-900'}`}>
-                                                        ${data.netBalance.toFixed(2)}
-                                                    </td>
-                                                    <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
-                                                        <button
-                                                            onClick={() => toggleTeamExpansion(team)}
-                                                            className="text-blue-500 hover:text-blue-700 focus:outline-none"
-                                                        >
-                                                            {expandedTeams[team] ? (
-                                                                <svg className="w-5 h-5 inline-block transform rotate-180 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7"></path></svg>
-                                                            ) : (
-                                                                <svg className="w-5 h-5 inline-block transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-                                                            )}
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                                {expandedTeams[team] && (
-                                                    <tr className={index % 2 === 0 ? 'bg-gray-100' : 'bg-gray-50'}>
-                                                        <td colSpan="5" className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
-                                                            <div className="grid grid-cols-2 gap-2 pl-8">
-                                                                {/* Removed completed/pending details */}
-                                                                <div>
-                                                                    <strong>Total Debits:</strong> <span className="font-medium">${data.totalDebits.toFixed(2)}</span>
-                                                                </div>
-                                                                <div>
-                                                                    <strong>Total Credits:</strong> <span className="font-medium">${data.totalCredits.toFixed(2)}</span>
-                                                                </div>
-                                                                <div>
-                                                                    <strong>Net Balance:</strong> <span className={`font-bold ${data.netBalance >= 0 ? 'text-blue-800' : 'text-red-800'}`}>${data.netBalance.toFixed(2)}</span>
-                                                                </div>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                )}
-                                            </React.Fragment>
+                                            <tr key={team} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                                                <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{team}</td>
+                                                <td className="py-2 px-4 text-sm text-right text-gray-700 font-medium border-b border-gray-200">${data.totalDebits.toFixed(2)}</td>
+                                                <td className="py-2 px-4 text-sm text-right text-gray-700 font-medium border-b border-gray-200">${data.totalCredits.toFixed(2)}</td>
+                                                <td className={`py-2 px-4 text-sm text-right font-bold border-b border-gray-200 ${data.netBalance >= 0 ? 'text-blue-900' : 'text-red-900'}`}>
+                                                    ${data.netBalance.toFixed(2)}
+                                                </td>
+                                            </tr>
                                         ))}
                                     </tbody>
                                 </table>
