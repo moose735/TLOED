@@ -470,7 +470,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     category: category,
                     season: currentSeason,
                     teamsInvolvedCount: 1,
-                    isCompleted: isCompleted // Include completion status
+                    isCompleted: isCompleted 
                 });
             }
         } else {
@@ -505,7 +505,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 category: category, 
                 season: currentSeason,
                 teamsInvolvedCount: teamsInvolved,
-                isCompleted: isCompleted // Include completion status
+                isCompleted: isCompleted 
             });
 
             if (type === 'payout') {
@@ -669,7 +669,13 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         teamSummary[team] = {
             totalFees: 0,
             totalPayouts: 0,
-            netBalance: 0
+            netBalance: 0,
+            completedFees: 0,
+            pendingFees: 0,
+            completedPayouts: 0,
+            pendingPayouts: 0,
+            netCompletedBalance: 0,
+            netPendingBalance: 0
         };
     });
 
@@ -679,19 +685,36 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').forEach(team => {
                 if (teamSummary[team]) { 
                     teamSummary[team].totalFees += perTeamAmount;
+                    if (t.isCompleted) {
+                        teamSummary[team].completedFees += perTeamAmount;
+                    } else {
+                        teamSummary[team].pendingFees += perTeamAmount;
+                    }
                 }
             });
         } else if (teamSummary[t.teamName]) { 
             if (t.type === 'fee') {
                 teamSummary[t.teamName].totalFees += (t.amount || 0);
+                if (t.isCompleted) {
+                    teamSummary[t.teamName].completedFees += (t.amount || 0);
+                } else {
+                    teamSummary[t.teamName].pendingFees += (t.amount || 0);
+                }
             } else if (t.type === 'payout') {
                 teamSummary[t.teamName].totalPayouts += (t.amount || 0);
+                if (t.isCompleted) {
+                    teamSummary[t.teamName].completedPayouts += (t.amount || 0);
+                } else {
+                    teamSummary[t.teamName].pendingPayouts += (t.amount || 0);
+                }
             }
         }
     });
 
     Object.keys(teamSummary).forEach(team => {
         teamSummary[team].netBalance = teamSummary[team].totalFees - teamSummary[team].totalPayouts;
+        teamSummary[team].netCompletedBalance = teamSummary[team].completedFees - teamSummary[team].completedPayouts;
+        teamSummary[team].netPendingBalance = teamSummary[team].pendingFees - teamSummary[team].pendingPayouts;
     });
 
     const handleAddTradeTeam = () => {
@@ -1203,9 +1226,15 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                     <thead className="bg-blue-100">
                                         <tr>
                                             <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team Name</th>
-                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Total Fees Paid</th>
-                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Total Payouts Received</th>
-                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Net Balance</th>
+                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Total Fees</th>
+                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Completed Fees</th>
+                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Pending Fees</th>
+                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Total Payouts</th>
+                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Completed Payouts</th>
+                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Pending Payouts</th>
+                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Net Completed</th>
+                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Net Pending</th>
+                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Overall Net Balance</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -1213,7 +1242,17 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             <tr key={team} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                                                 <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{team}</td>
                                                 <td className="py-2 px-4 text-sm text-right text-red-700 font-medium border-b border-gray-200">${data.totalFees.toFixed(2)}</td>
+                                                <td className="py-2 px-4 text-sm text-right text-green-700 font-medium border-b border-gray-200">${data.completedFees.toFixed(2)}</td>
+                                                <td className="py-2 px-4 text-sm text-right text-purple-700 font-medium border-b border-gray-200">${data.pendingFees.toFixed(2)}</td>
                                                 <td className="py-2 px-4 text-sm text-right text-green-700 font-medium border-b border-gray-200">${data.totalPayouts.toFixed(2)}</td>
+                                                <td className="py-2 px-4 text-sm text-right text-green-700 font-medium border-b border-gray-200">${data.completedPayouts.toFixed(2)}</td>
+                                                <td className="py-2 px-4 text-sm text-right text-orange-700 font-medium border-b border-gray-200">${data.pendingPayouts.toFixed(2)}</td>
+                                                <td className={`py-2 px-4 text-sm text-right font-bold border-b border-gray-200 ${data.netCompletedBalance >= 0 ? 'text-blue-900' : 'text-red-900'}`}>
+                                                    ${data.netCompletedBalance.toFixed(2)}
+                                                </td>
+                                                <td className={`py-2 px-4 text-sm text-right font-bold border-b border-gray-200 ${data.netPendingBalance >= 0 ? 'text-blue-900' : 'text-red-900'}`}>
+                                                    ${data.netPendingBalance.toFixed(2)}
+                                                </td>
                                                 <td className={`py-2 px-4 text-sm text-right font-bold border-b border-gray-200 ${data.netBalance >= 0 ? 'text-blue-900' : 'text-red-900'}`}>
                                                     ${data.netBalance.toFixed(2)}
                                                 </td>
