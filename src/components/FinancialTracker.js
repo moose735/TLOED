@@ -21,7 +21,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [weeklyPointsWeek, setWeeklyPointsWeek] = useState('');
     const [sidePotName, setSidePotName] = useState('');
 
-    const [teamName, setTeamName] = useState(''); // For single team transactions
+    const [teamName, setTeamName] = useState(''); // For single team transactions.
     const [tradeTeams, setTradeTeams] = useState(['', '']); // For trade fees, initially two empty selections
     
     const [loading, setLoading] = useState(true);
