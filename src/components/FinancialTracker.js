@@ -3,24 +3,45 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
 
-// CHART_COLORS can be reused from PowerRankings or defined here if not used elsewhere.
+// CHART_COLORS can be reused from PowerRankings or defined here if not used elsewhere
 const CHART_COLORS = [
     '#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#00c49f', '#ff0000',
     '#0088fe', '#bb3f85', '#7a421a', '#4a4a4a', '#a5d6a7', '#ef9a9a'
 ];
 
-const FinancialTracker = ({ getDisplayTeamName }) => {
+// Added historicalMatchups prop to receive data from App.js
+const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [transactions, setTransactions] = useState([]);
     const [amount, setAmount] = useState('');
     const [description, setDescription] = useState('');
-    const [type, setType] = 'fee'; // 'fee' or 'payout' - changed to const as it's not directly set by input
-    const [teamName, setTeamName] = useState(''); // Optional, for team-specific transactions
+    const [type, setType] = useState('fee'); // Corrected to useState, as it's a selectable input
+    const [teamName, setTeamName] = useState(''); // State for the selected team name
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [db, setDb] = useState(null);
     const [auth, setAuth] = useState(null);
     const [userId, setUserId] = useState(null);
     const [isAuthReady, setIsAuthReady] = useState(false);
+    const [uniqueTeams, setUniqueTeams] = useState([]); // New state for unique team names
+
+    // Derive unique teams from historicalMatchups whenever it changes
+    useEffect(() => {
+        if (historicalMatchups && Array.isArray(historicalMatchups)) {
+            const teamsSet = new Set();
+            historicalMatchups.forEach(match => {
+                const team1 = getDisplayTeamName(match.team1);
+                const team2 = getDisplayTeamName(match.team2);
+                if (team1) teamsSet.add(team1);
+                if (team2) teamsSet.add(team2);
+            });
+            const sortedTeams = Array.from(teamsSet).sort();
+            setUniqueTeams(sortedTeams);
+            if (sortedTeams.length > 0) {
+                setTeamName(''); // Set initial value for the dropdown to empty/placeholder
+            }
+        }
+    }, [historicalMatchups, getDisplayTeamName]);
+
 
     // Initialize Firebase and set up authentication
     useEffect(() => {
@@ -184,13 +205,19 @@ const FinancialTracker = ({ getDisplayTeamName }) => {
             setError("Description cannot be empty.");
             return;
         }
+        // If team name is required, add validation here
+        // if (!teamName.trim()) {
+        //     setError("Please select or enter a team name.");
+        //     return;
+        // }
+
 
         // Prepare the new transaction object
         const newTransaction = {
             amount: parseFloat(amount),
             description: description.trim(),
             type: type,
-            teamName: teamName.trim(), // Keep team name even if empty
+            teamName: teamName, // Use the selected team name directly
             date: serverTimestamp(), // Use Firestore's server timestamp for consistent ordering
             userId: userId, // Include the user ID for tracking who added it (if applicable)
         };
@@ -205,7 +232,7 @@ const FinancialTracker = ({ getDisplayTeamName }) => {
             // Clear form fields on successful addition
             setAmount('');
             setDescription('');
-            setTeamName('');
+            setTeamName(''); // Reset team name to default (or empty string)
             setError(null); // Clear any previous errors
             console.log("Transaction added to Firestore successfully.");
         } catch (addError) {
@@ -309,14 +336,18 @@ const FinancialTracker = ({ getDisplayTeamName }) => {
                             </div>
                             <div>
                                 <label htmlFor="teamName" className="block text-sm font-medium text-gray-700 mb-1">Associated Team (Optional)</label>
-                                <input
-                                    type="text"
+                                {/* Replaced input with select dropdown for team names */}
+                                <select
                                     id="teamName"
                                     value={teamName}
                                     onChange={(e) => setTeamName(e.target.value)}
-                                    placeholder="e.g., Team Alpha"
                                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                />
+                                >
+                                    <option value="">Select Team (Optional)</option> {/* Optional blank option */}
+                                    {uniqueTeams.map(team => (
+                                        <option key={team} value={team}>{team}</option>
+                                    ))}
+                                </select>
                             </div>
                             <button
                                 type="submit"
