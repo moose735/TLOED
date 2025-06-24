@@ -35,6 +35,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [uniqueTeams, setUniqueTeams] = useState([]);
     const [weeklyHighScores, setWeeklyHighScores] = useState({});
     const [currentSeason, setCurrentSeason] = useState(0); // Latest season from historicalMatchups, used for new transactions
+    const [currentWeek, setCurrentWeek] = useState(0); // New state for the latest week in the current season
     const [selectedSeason, setSelectedSeason] = useState(null); // Season currently being viewed/filtered
     const [availableSeasons, setAvailableSeasons] = useState([]); // All seasons available in historicalMatchups
     const [activeTeamsCount, setActiveTeamsCount] = useState(0); 
@@ -143,6 +144,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         if (historicalMatchups && Array.isArray(historicalMatchups)) {
             const yearsSet = new Set();
             let maxSeason = 0;
+            let maxWeekInCurrentSeason = 0; // Track the maximum week for the latest season
 
             historicalMatchups.forEach(match => {
                 if (match.year && typeof match.year === 'number') {
@@ -190,9 +192,14 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                         if (team2 && match.team2Score != null) {
                             weeklyScores[week].push({ team: team2, score: parseFloat(match.team2Score) });
                         }
+                        if (week > maxWeekInCurrentSeason) {
+                            maxWeekInCurrentSeason = week;
+                        }
                     }
                 }
             });
+            setCurrentWeek(maxWeekInCurrentSeason); // Set the latest week for the current season
+            console.log("Determined Current Week for Current Season:", maxWeekInCurrentSeason);
 
             const calculatedHighScores = {};
             Object.keys(weeklyScores).forEach(week => {
@@ -426,7 +433,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 ...doc.data()
             }));
             
-            // Client-side filtering by selectedSeason
+            // Client-client filtering by selectedSeason
             const filteredBySeason = fetchedTransactions.filter(t => 
                 selectedSeason === 0 || t.season === selectedSeason
             );
@@ -544,6 +551,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     userId: userId,
                     category: category,
                     season: currentSeason, // Always use currentSeason for new transactions
+                    weekNumber: currentWeek, // Assign current week
                     teamsInvolvedCount: 1,
                 });
             }
@@ -565,6 +573,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                         userId: userId,
                         category: category,
                         season: currentSeason,
+                        weekNumber: currentWeek, // Assign current week
                         numPickups: entry.numPickups, // Store number of pickups
                     });
                 }
@@ -605,6 +614,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 userId: userId,
                 category: category, 
                 season: currentSeason, // Always use currentSeason for new transactions
+                weekNumber: currentWeek, // Assign current week by default
                 teamsInvolvedCount: teamsInvolved,
             });
 
@@ -615,7 +625,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                         return;
                     }
                     const weekNum = parseInt(weeklyPointsWeek);
-                    transactionsToAdd[0].weekNumber = weekNum; 
+                    transactionsToAdd[0].weekNumber = weekNum; // Override currentWeek for specific weekly payouts
 
                     const weekData = weeklyHighScores[weekNum];
                     if (weekData) {
@@ -1149,7 +1159,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
                                 {(category === 'weekly_1st_points' || category === 'weekly_2nd_points') && (
                                     <div>
-                                        <label htmlFor="weeklyPointsWeek" className="block text-sm font-medium text-gray-700 mb-1">Week Number</label>
+                                        <label htmlFor="weeklyPointsWeek" className="block text-sm font-medium text-gray-700 mb-1">Week Number (Override current week)</label>
                                         <input
                                             type="number"
                                             id="weeklyPointsWeek"
@@ -1272,7 +1282,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             }}
                                             required 
                                             disabled={isTeamSelectionDisabled} 
-                                            className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none ${isTeamSelectionDisabled ? 'bg-gray-200 cursor-not-allowed' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'} sm:text-sm`}
+                                            className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none ${isTeamAutoPopulated ? 'bg-gray-200 cursor-not-allowed' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'} sm:text-sm`}
                                         >
                                             <option value="">Select Team</option> 
                                             {type === 'debit' && ( 
@@ -1360,6 +1370,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Amount</th>
                                             <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Type</th>
                                             <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Category</th> 
+                                            <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Week</th> {/* New Week Column */}
                                             {isCommish && <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Actions</th>}
                                         </tr>
                                     </thead>
@@ -1406,6 +1417,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                     <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200 capitalize">
                                                         {t.category ? t.category.replace(/_/g, ' ') : 'General'}
                                                     </td> 
+                                                    <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
+                                                        {t.weekNumber || '-'} {/* Display Week Number */}
+                                                    </td>
                                                     {isCommish && ( 
                                                         <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
                                                             <button
