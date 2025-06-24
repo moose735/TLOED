@@ -199,23 +199,31 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
 
             // --- Prepare data for the Power Rankings Table (including Rank and Movement) ---
             const lastWeekChartData = weeklyDPRsChartData[weeklyDPRsChartData.length - 1];
-            const secondToLastWeekChartData = weeklyDPRsChartData.length > 1 ? weeklyDPRsChartData[weeklyDPRsChartData.length - 2] : null;
-
+            
             const finalPowerRankingsForTable = uniqueTeamsInNewestYear
                 .map(teamName => {
                     const cumulativeTeamStatsForTable = yearData[teamName]; // Use the full season metrics
                     const currentRankInChart = lastWeekChartData ? (lastWeekChartData[teamName] || 0) : 0;
-                    const previousRankInChart = secondToLastWeekChartData ? (secondToLastWeekChartData[teamName] || 0) : 0;
+
+                    // Find the rank for the *previous* week where the team had a rank
+                    let previousRankInChart = 0;
+                    if (weeklyDPRsChartData.length > 1) {
+                        // Iterate backwards from the second-to-last week
+                        for (let i = weeklyDPRsChartData.length - 2; i >= 0; i--) {
+                            if (weeklyDPRsChartData[i][teamName] !== undefined) {
+                                previousRankInChart = weeklyDPRsChartData[i][teamName];
+                                break; // Found the last known rank, exit loop
+                            }
+                        }
+                    }
 
                     let movement = 0;
                     if (currentRankInChart !== 0 && previousRankInChart !== 0) {
                         movement = previousRankInChart - currentRankInChart;
-                    } else if (currentRankInChart !== 0 && previousRankInChart === 0 && weeklyChartData.length > 1) {
-                        // This case handles a team appearing in the rankings for the first time
-                        // or having a rank in the latest week but no rank in the previous (e.g., bye week effect)
-                        // For a clean display, we'll indicate "NEW" or 0 movement if they just appeared.
-                        // For now, let's keep it 0 as per previous discussion, but this is where you'd customize.
-                        movement = 0;
+                    } else if (currentRankInChart !== 0 && previousRankInChart === 0 && weeklyDPRsChartData.length > 1) {
+                        // If the team has a current rank but no previous recorded rank, it's a "NEW" entry.
+                        // You can represent this as 0 movement or a special indicator.
+                        movement = 0; // Keeping it 0 as discussed for now, but could be enhanced.
                     }
 
                     return {
