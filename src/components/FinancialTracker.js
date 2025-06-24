@@ -1166,7 +1166,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             value={weeklyPointsWeek}
                                             onChange={(e) => setWeeklyPointsWeek(e.target.value)}
                                             placeholder="e.g., 1, 5, 14"
-                                            min="1"
+                                            min="0" // Allow 0 for "Pre"
                                             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                         />
                                     </div>
@@ -1418,7 +1418,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                         {t.category ? t.category.replace(/_/g, ' ') : 'General'}
                                                     </td> 
                                                     <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
-                                                        {t.weekNumber || '-'} {/* Display Week Number */}
+                                                        {t.weekNumber === 0 ? 'Pre' : (t.weekNumber || '-')} {/* Display Week Number, 'Pre' if 0 */}
                                                     </td>
                                                     {isCommish && ( 
                                                         <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
