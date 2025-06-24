@@ -35,7 +35,10 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 if (team2) teamsSet.add(team2);
             });
             const sortedTeams = Array.from(teamsSet).sort();
-            setUniqueTeams(sortedTeams);
+            
+            // Add the "All Teams" option to the beginning of the list
+            setUniqueTeams(['ALL_TEAMS_MULTIPLIER', ...sortedTeams]); // Use a special value for "All Teams"
+            
             if (sortedTeams.length > 0) {
                 setTeamName(''); // Set initial value for the dropdown to empty/placeholder
             }
@@ -205,19 +208,29 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setError("Description cannot be empty.");
             return;
         }
-        // If team name is required, add validation here
-        // if (!teamName.trim()) {
-        //     setError("Please select or enter a team name.");
-        //     return;
-        // }
+        
+        let finalAmount = parseFloat(amount);
+        let finalTeamName = teamName;
+
+        // If "All Teams" is selected, multiply the amount by the number of unique teams
+        if (teamName === 'ALL_TEAMS_MULTIPLIER') {
+            // Filter out 'ALL_TEAMS_MULTIPLIER' itself from the count if it somehow gets included
+            const activeTeamsCount = uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').length;
+            if (activeTeamsCount === 0) {
+                setError("Cannot process 'All Teams' transaction: No active teams found.");
+                return;
+            }
+            finalAmount = finalAmount * activeTeamsCount;
+            finalTeamName = 'All Teams'; // Store a readable string in Firestore
+        }
 
 
         // Prepare the new transaction object
         const newTransaction = {
-            amount: parseFloat(amount),
+            amount: finalAmount, // Use the calculated finalAmount
             description: description.trim(),
             type: type,
-            teamName: teamName, // Use the selected team name directly
+            teamName: finalTeamName, // Use the determined finalTeamName
             date: serverTimestamp(), // Use Firestore's server timestamp for consistent ordering
             userId: userId, // Include the user ID for tracking who added it (if applicable)
         };
@@ -344,7 +357,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                 >
                                     <option value="">Select Team (Optional)</option> {/* Optional blank option */}
-                                    {uniqueTeams.map(team => (
+                                    <option value="ALL_TEAMS_MULTIPLIER">All Teams (Multiplied)</option> {/* New option for all teams */}
+                                    {uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').map(team => ( // Filter out the special option if it's accidentally in uniqueTeams
                                         <option key={team} value={team}>{team}</option>
                                     ))}
                                 </select>
