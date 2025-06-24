@@ -96,7 +96,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
             const newestYear = allYears.length > 0 ? Math.max(...allYears) : null;
 
             if (!newestYear) {
-                setError("No valid years found in historical data to determine the  season for power rankings.");
+                setError("No valid years found in historical data to determine the season for power rankings.");
                 setLoading(false);
                 return;
             }
@@ -109,7 +109,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                 return;
             }
 
-            const yearData = seasonalMetrics[newestYear]; // This was missing in the previous snippet, crucial for initialCalculatedRankings
+            const yearData = seasonalMetrics[newestYear];
             let initialCalculatedRankings = Object.keys(yearData)
                 .map(teamName => ({
                     team: teamName,
@@ -122,7 +122,6 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                     luckRating: yearData[teamName].luckRating || 0,
                     year: newestYear,
                 }));
-
 
             // --- Chart Data Preparation (Weekly Cumulative Adjusted DPR and Rank) ---
             const newestYearMatchups = historicalMatchups.filter(match => parseInt(match.year) === newestYear);
@@ -219,79 +218,58 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                     .sort((a, b) => b.dpr - a.dpr);
 
                 rankedTeamsForWeek.forEach((rankedTeam, index) => {
-                    weeklyEntry[rankedTeam.team] = index + 1;
-                    weeklyEntry.dprValues[rankedTeam.team] = rankedTeam.dpr;
+                    // Store the rank (index + 1) and actual DPR value
+                    weeklyEntry[rankedTeam.team] = index + 1; // This is the rank
+                    weeklyEntry.dprValues[rankedTeam.team] = rankedTeam.dpr; // This is the actual DPR value
                 });
                 
                 weeklyDPRsChartData.push(weeklyEntry);
             }
 
-            // --- DEBUG LOGS START ---
-            console.log("--- DEBUG: weeklyDPRsChartData ---");
-            console.log(weeklyDPRsChartData);
-            console.log("-----------------------------------");
-            // --- DEBUG LOGS END ---
-
-
             setWeeklyChartData(weeklyDPRsChartData);
             
             const activeChartTeams = uniqueTeamsInNewestYear.filter(team =>
-                weeklyDPRsChartData.some(weekData => weekData[team] !== 0)
+                weeklyDPRsChartData.some(weekData => weekData[team] !== undefined) // Check if team has data (even if rank is 0)
             );
             setChartTeams(activeChartTeams);
             setMaxTeamsInChart(activeChartTeams.length > 0 ? activeChartTeams.length : 1);
 
             // --- Calculate Movement for the Power Rankings Table ---
-                       const currentWeekDataForTable = weeklyDPRsChartData[weeklyDPRsChartData.length - 1];
+            const currentWeekDataForTable = weeklyDPRsChartData[weeklyDPRsChartData.length - 1];
             const previousWeekDataForTable = weeklyDPRsChartData.length > 1 ? weeklyDPRsChartData[weeklyDPRsChartData.length - 2] : null;
 
-            // --- DEBUG LOGS START ---
-            console.log("--- DEBUG: currentWeekDataForTable ---");
-            console.log(currentWeekDataForTable);
-            console.log("--- DEBUG: previousWeekDataForTable ---");
-            console.log(previousWeekDataForTable);
-            console.log("--------------------------------------");
-            // --- DEBUG LOGS END ---
-
-            const currentRanksMap = {};
+            const currentWeekRanksMap = {};
             if (currentWeekDataForTable) {
+                // Populate currentWeekRanksMap with the ranks from the *latest* week in weeklyDPRsChartData
                 uniqueTeamsInNewestYear.forEach(team => {
-                    // Ensure currentRank defaults to 0 if not found, or is converted to a number
-                    currentRanksMap[team] = parseFloat(currentWeekDataForTable[team]) || 0;
+                    currentWeekRanksMap[team] = currentWeekDataForTable[team] || 0; // Use the rank directly
                 });
             }
 
-            // Re-map initialCalculatedRankings to add current rank and movement
+            const previousWeekRanksMap = {};
+            if (previousWeekDataForTable) {
+                // Populate previousWeekRanksMap with the ranks from the *previous* week in weeklyDPRsChartData
+                uniqueTeamsInNewestYear.forEach(team => {
+                    previousWeekRanksMap[team] = previousWeekDataForTable[team] || 0; // Use the rank directly
+                });
+            }
+
             const finalCalculatedRankings = initialCalculatedRankings
                 .map(team => {
-                    // Get current rank, defaulting to 0 if not found
-                    const currentRank = currentRanksMap[team.team] || 0;
-                    let movement = 0; // Default movement to 0
+                    const currentRank = currentWeekRanksMap[team.team] || 0;
+                    const previousRank = previousWeekRanksMap[team.team] || 0;
+                    let movement = 0;
 
-                    // --- DEBUG LOGS START FOR EACH TEAM (for final check) ---
-                    console.log(`--- FINAL DEBUG: Team: ${team.team} ---`);
-                    console.log(`  Current Rank (from map): ${currentRank}`);
-                    // --- DEBUG LOGS END ---
-
-                    if (previousWeekDataForTable) { // Only calculate movement if a previous week exists
-                        // Get previous rank, ensuring it's a number, default to 0 if not found or invalid
-                        const previousRank = parseFloat(previousWeekDataForTable[team.team]) || 0;
-
-                        // --- DEBUG LOGS START FOR EACH TEAM ---
-                        console.log(`  Previous Rank (from map): ${previousRank}`);
-                        // --- DEBUG LOGS END ---
-
-                        // Calculate movement only if both ranks are valid numbers (and not zero for initial state)
-                        if (currentRank !== 0 && previousRank !== 0) { // Only calculate if both ranks are meaningful
-                            movement = previousRank - currentRank;
-                        }
-                        // If currentRank or previousRank is 0 (meaning no rank, or initial state), movement remains 0
+                    if (currentRank !== 0 && previousRank !== 0) {
+                        movement = previousRank - currentRank; // Movement is previous rank minus current rank
+                    } else if (currentRank !== 0 && previousRank === 0 && weeklyChartData.length > 1) {
+                        // If a team just appeared in the rankings (has a current rank but no previous rank)
+                        // and there was a previous week, denote it as 'new' or a large positive movement if desired.
+                        // For simplicity, let's keep it 0 or a special value for 'new'.
+                        // Here, we'll keep it 0 as the problem implies movement from existing ranks.
+                        movement = 0; // Or a special value if you want to indicate 'newly ranked'
                     }
                     
-                    // --- DEBUG LOGS START FOR EACH TEAM ---
-                    console.log(`  Calculated Movement: ${movement}`);
-                    // --- DEBUG LOGS END ---
-
                     return { ...team, currentRank: currentRank, movement: movement };
                 })
                 .sort((a, b) => b.dpr - a.dpr); // Still sort by DPR for the table display
