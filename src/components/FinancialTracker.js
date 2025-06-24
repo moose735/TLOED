@@ -25,78 +25,93 @@ const FinancialTracker = ({ getDisplayTeamName }) => {
     // Initialize Firebase and set up authentication
     useEffect(() => {
         try {
-            // Ensure __firebase_config and __app_id are available
+            // Retrieve Firebase config and app ID from the global environment variables
             const firebaseConfig = typeof __firebase_config !== 'undefined'
                 ? JSON.parse(__firebase_config)
                 : {}; 
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
-            // IMPORTANT: Ensure projectId, apiKey, and appId are present for initialization.
-            // These should be provided by the Canvas environment.
+            // Essential check: Ensure projectId and apiKey are provided for Firebase initialization
             if (!firebaseConfig.projectId || !firebaseConfig.apiKey) {
-                throw new Error("Firebase configuration missing projectId or apiKey. Please ensure __firebase_config is correctly provided by the environment.");
+                // If config is missing, set an error and stop loading
+                throw new Error("Firebase configuration missing projectId or apiKey. Please ensure __firebase_config is correctly provided by the environment for persistent data storage.");
             }
 
+            // Initialize Firebase app with the provided configuration and app ID
             const app = initializeApp(firebaseConfig, appId);
             const firestore = getFirestore(app);
             const firebaseAuth = getAuth(app);
 
+            // Store initialized Firebase instances in state
             setDb(firestore);
             setAuth(firebaseAuth);
 
-            // Listen for auth state changes
+            // Set up an authentication state listener
             const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
                 if (user) {
+                    // If a user is logged in (authenticated), set their UID
                     setUserId(user.uid);
-                    setIsAuthReady(true);
                     console.log("Firebase Auth Ready. User ID:", user.uid);
                 } else {
-                    console.log("No user signed in. Attempting anonymous sign-in.");
+                    // If no user, attempt to sign in anonymously or with a custom token
+                    console.log("No user signed in. Attempting anonymous sign-in or custom token sign-in.");
                     try {
                         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            // If a custom auth token is available, use it for sign-in
                             await signInWithCustomToken(firebaseAuth, __initial_auth_token);
                             console.log("Signed in with custom token.");
                         } else {
+                            // Otherwise, sign in anonymously
                             await signInAnonymously(firebaseAuth);
                             console.log("Signed in anonymously.");
                         }
+                        // After successful sign-in (anonymous or custom), update the userId state
+                        setUserId(firebaseAuth.currentUser?.uid || crypto.randomUUID()); // Fallback to random if no UID for some reason
                     } catch (signInError) {
                         console.error("Error during initial Firebase sign-in:", signInError);
-                        setError(`Authentication failed: ${signInError.message}`);
-                    } finally {
-                        setIsAuthReady(true); // Always set ready to stop loading, even if there's an auth error
+                        setError(`Authentication failed: ${signInError.message}. Data persistence may be affected.`);
+                        // Even on sign-in error, proceed as the app might still display public data
+                        setUserId(crypto.randomUUID()); // Use a random ID if auth fails for client-side ops
                     }
                 }
+                setIsAuthReady(true); // Mark authentication as ready, regardless of success or failure
             });
 
-            return () => unsubscribe(); // Cleanup auth listener on unmount
+            // Cleanup the authentication listener when the component unmounts
+            return () => unsubscribe();
         } catch (initError) {
+            // Catch and display any errors during Firebase initialization
             console.error("Error initializing Firebase:", initError);
             setError(`Firebase initialization failed: ${initError.message}`);
             setLoading(false);
-            setIsAuthReady(true); // Mark ready to display error
+            setIsAuthReady(true); // Mark ready to display the error
         }
-    }, []);
+    }, []); // Empty dependency array ensures this runs only once on component mount
 
-    // Fetch transactions when auth and db are ready
+    // Fetch transactions from Firestore once Firebase and authentication are ready
     useEffect(() => {
-        if (!db || !auth || !userId || !isAuthReady) {
-            console.log("Firestore not ready. Waiting for db, auth, userId, and isAuthReady...");
+        if (!db || !isAuthReady) {
+            // Wait until Firestore instance and authentication state are ready
+            console.log("Firestore not ready or Auth not ready. Waiting for db and isAuthReady...");
             return;
         }
 
-        setLoading(true);
-        setError(null);
+        setLoading(true); // Set loading to true while fetching data
+        setError(null); // Clear previous errors
 
-        // Define the collection path based on user ID for private data
-        // For public data, it would be `/artifacts/${appId}/public/data/financial_transactions`
-        const transactionCollectionPath = `/artifacts/${typeof __app_id !== 'undefined' ? __app_id : 'default-app-id'}/users/${userId}/financial_transactions`;
+        // Define the public collection path as per Firestore security rules for shared data
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        // Data for everyone to see should be in a public collection
+        const transactionCollectionPath = `/artifacts/${appId}/public/data/financial_transactions`;
+        
+        // Create a query to order transactions by date (most recent first)
         const q = query(collection(db, transactionCollectionPath), orderBy('date', 'desc'));
 
         console.log("Attempting to listen to Firestore collection:", transactionCollectionPath);
 
+        // Set up a real-time listener for changes in the transactions collection
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            if (!isAuthReady) {
+            if (!isAuthReady) { // Double-check auth readiness before processing snapshot
                 console.log("onSnapshot triggered but auth not ready. Skipping update.");
                 return;
             }
@@ -104,26 +119,30 @@ const FinancialTracker = ({ getDisplayTeamName }) => {
                 id: doc.id,
                 ...doc.data()
             }));
-            setTransactions(fetchedTransactions);
-            setLoading(false);
+            setTransactions(fetchedTransactions); // Update component state with fetched data
+            setLoading(false); // Set loading to false after data is fetched
             console.log("Fetched transactions:", fetchedTransactions.length);
         }, (firestoreError) => {
+            // Handle any errors during data fetching
             console.error("Error fetching transactions from Firestore:", firestoreError);
-            setError(`Failed to load financial data: ${firestoreError.message}`);
-            setLoading(false);
+            setError(`Failed to load financial data: ${firestoreError.message}. Please check your internet connection or Firestore security rules.`);
+            setLoading(false); // Stop loading on error
         });
 
-        // Cleanup listener on unmount
+        // Cleanup the Firestore listener when the component unmounts or dependencies change
         return () => {
             console.log("Unsubscribing from Firestore listener.");
             unsubscribe();
         };
-    }, [db, auth, userId, isAuthReady]); // Re-run when db, auth, userId, or auth ready state changes
+    }, [db, isAuthReady]); // Re-run this effect when 'db' or 'isAuthReady' changes
 
+    // Handle adding a new transaction to Firestore
     const handleAddTransaction = async (e) => {
-        e.preventDefault();
+        e.preventDefault(); // Prevent default form submission behavior
+
+        // Basic form validation
         if (!db || !userId) {
-            setError("Database not ready or user not authenticated. Please try again.");
+            setError("Database not ready or user not authenticated. Cannot add transaction.");
             return;
         }
         if (isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
@@ -135,37 +154,47 @@ const FinancialTracker = ({ getDisplayTeamName }) => {
             return;
         }
 
+        // Prepare the new transaction object
         const newTransaction = {
             amount: parseFloat(amount),
             description: description.trim(),
             type: type,
             teamName: teamName.trim(), // Keep team name even if empty
-            date: serverTimestamp(), // Firestore timestamp
-            userId: userId, // Store userId with the document (redundant if using user-specific collections, but good for verification)
+            date: serverTimestamp(), // Use Firestore's server timestamp for consistent ordering
+            userId: userId, // Include the user ID for tracking who added it (if applicable)
         };
 
         try {
-            const transactionCollectionPath = `/artifacts/${typeof __app_id !== 'undefined' ? __app_id : 'default-app-id'}/users/${userId}/financial_transactions`;
-            await addDoc(collection(db, transactionCollectionPath), newTransaction);
+            // Get the app ID for constructing the public collection path
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            // Add the new document to the public financial transactions collection
+            const transactionCollectionRef = collection(db, `/artifacts/${appId}/public/data/financial_transactions`);
+            await addDoc(transactionCollectionRef, newTransaction);
+            
+            // Clear form fields on successful addition
             setAmount('');
             setDescription('');
             setTeamName('');
             setError(null); // Clear any previous errors
-            console.log("Transaction added successfully.");
+            console.log("Transaction added to Firestore successfully.");
         } catch (addError) {
+            // Handle errors during adding transaction
             console.error("Error adding transaction:", addError);
-            setError(`Failed to add transaction: ${addError.message}`);
+            setError(`Failed to add transaction: ${addError.message}. Please try again.`);
         }
     };
 
+    // Calculate total fees collected
     const totalFees = transactions
         .filter(t => t.type === 'fee')
         .reduce((sum, t) => sum + (t.amount || 0), 0);
 
+    // Calculate total payouts made
     const totalPayouts = transactions
         .filter(t => t.type === 'payout')
         .reduce((sum, t) => sum + (t.amount || 0), 0);
 
+    // Calculate the net balance
     const netBalance = totalFees - totalPayouts;
 
     return (
@@ -179,9 +208,11 @@ const FinancialTracker = ({ getDisplayTeamName }) => {
                 Your User ID: <span className="font-mono text-blue-700 break-all">{userId || "Loading..."}</span>
             </div>
 
+            {/* Display loading or error messages */}
             {loading && <p className="text-center text-blue-600 font-semibold">Loading financial data...</p>}
             {error && <p className="text-center text-red-600 font-semibold mb-4">{error}</p>}
 
+            {/* Render content only when not loading and no major errors */}
             {!loading && !error && (
                 <>
                     {/* Financial Summary */}
