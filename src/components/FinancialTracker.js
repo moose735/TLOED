@@ -282,12 +282,18 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 } else {
                     console.log("No user signed in. Attempting anonymous sign-in to allow read access.");
                     try {
-                        await signInAnonymously(firebaseAuth);
+                        // Using __initial_auth_token if available for custom token sign-in
+                        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+                        if (initialAuthToken) {
+                            await signInWithCustomToken(firebaseAuth, initialAuthToken);
+                        } else {
+                            await signInAnonymously(firebaseAuth);
+                        }
                         setUserId(firebaseAuth.currentUser?.uid); 
-                        console.log("Signed in anonymously. User ID:", firebaseAuth.currentUser?.uid);
+                        console.log("Signed in. User ID:", firebaseAuth.currentUser?.uid);
                     } catch (anonSignInError) {
-                        console.error("Error during anonymous sign-in:", anonSignInError);
-                        setError(`Failed to sign in anonymously: ${anonSignInError.message}. Read access may be affected.`);
+                        console.error("Error during sign-in:", anonSignInError);
+                        setError(`Failed to sign in: ${anonSignInError.message}. Read access may be affected.`);
                         setUserId(null); 
                     }
                 }
@@ -604,9 +610,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     const isTeamSelectionDisabled = isTeamAutoPopulated || (type === 'debit' && category === 'trade_fee');
 
+    // Filter transactions for history table and pagination
     const filteredTransactions = transactions.filter(t => {
         const isCurrentSeason = (currentSeason === 0 || t.season === currentSeason);
-
         if (filterTeam === '') {
             return isCurrentSeason; 
         } else if (filterTeam === 'All Teams') {
@@ -616,21 +622,16 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         }
     });
 
-    // Calculate totals for Debits and Credits
-    const totalDebits = filteredTransactions
-        .filter(t => t.type === 'debit')
-        .reduce((sum, t) => {
-            if (filterTeam !== '' && filterTeam !== 'All Teams' && t.teamName === 'All Teams' && t.teamsInvolvedCount > 0) {
-                return sum + (t.amount / t.teamsInvolvedCount || 0);
-            }
-            return sum + (t.amount || 0);
-        }, 0);
+    // Calculate OVERALL totals for Debits and Credits (for summary cards)
+    const overallDebits = transactions
+        .filter(t => (currentSeason === 0 || t.season === currentSeason) && t.type === 'debit')
+        .reduce((sum, t) => sum + (t.amount || 0), 0); // Always sum full amount for overall stats
 
-    const totalCredits = filteredTransactions
-        .filter(t => t.type === 'credit')
+    const overallCredits = transactions
+        .filter(t => (currentSeason === 0 || t.season === currentSeason) && t.type === 'credit')
         .reduce((sum, t) => sum + (t.amount || 0), 0);
 
-    const netBalance = totalDebits - totalCredits; 
+    const overallNetBalance = overallDebits - overallCredits; 
 
     // Calculate team summary data
     const teamSummary = {};
@@ -640,18 +641,17 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             totalCredits: 0,
             netBalance: 0,
             totalDebitsLessEntryFee: 0, 
-            netBalanceLessEntryFee: 0, 
+            winningsExtraFees: 0, // Renamed from netBalanceLessEntryFee
         };
     });
 
-    // Ensure team summary calculations use the full transaction list, not just filtered for display
+    // Populate team summary data based on all transactions (for current season)
     transactions.filter(t => currentSeason === 0 || t.season === currentSeason).forEach(t => { 
         if (t.teamName === 'All Teams' && t.type === 'debit' && t.teamsInvolvedCount > 0) {
             const perTeamAmount = t.amount / t.teamsInvolvedCount;
             uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').forEach(team => {
                 if (teamSummary[team]) { 
                     teamSummary[team].totalDebits += perTeamAmount;
-                    // Add to totalDebitsLessEntryFee only if not annual_fee
                     if (t.category !== 'annual_fee') {
                         teamSummary[team].totalDebitsLessEntryFee += perTeamAmount;
                     }
@@ -660,7 +660,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         } else if (teamSummary[t.teamName]) { 
             if (t.type === 'debit') {
                 teamSummary[t.teamName].totalDebits += (t.amount || 0);
-                // Add to totalDebitsLessEntryFee only if not annual_fee
                 if (t.category !== 'annual_fee') {
                     teamSummary[t.teamName].totalDebitsLessEntryFee += (t.amount || 0);
                 }
@@ -672,8 +671,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     Object.keys(teamSummary).forEach(team => {
         teamSummary[team].netBalance = teamSummary[team].totalDebits - teamSummary[team].totalCredits;
-        // Calculate netBalanceLessEntryFee
-        teamSummary[team].netBalanceLessEntryFee = teamSummary[team].totalDebitsLessEntryFee - teamSummary[team].totalCredits;
+        // Calculate Winnings/(Extra Fees) as Credits - Debits (excluding entry fee)
+        teamSummary[team].winningsExtraFees = teamSummary[team].totalCredits - teamSummary[team].totalDebitsLessEntryFee;
     });
 
     const handleAddTradeTeam = () => {
@@ -859,15 +858,15 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
                         <div className="bg-red-50 p-4 rounded-lg shadow-sm text-center">
                             <h3 className="text-lg font-semibold text-red-700">Total Debits</h3>
-                            <p className="text-2xl font-bold text-red-900">${totalDebits.toFixed(2)}</p>
+                            <p className="text-2xl font-bold text-red-900">${overallDebits.toFixed(2)}</p> {/* Changed to overallDebits */}
                         </div>
                         <div className="bg-green-50 p-4 rounded-lg shadow-sm text-center">
                             <h3 className="text-lg font-semibold text-green-700">Total Credits</h3>
-                            <p className="text-2xl font-bold text-green-900">${totalCredits.toFixed(2)}</p>
+                            <p className="text-2xl font-bold text-green-900">${overallCredits.toFixed(2)}</p> {/* Changed to overallCredits */}
                         </div>
-                        <div className={`p-4 rounded-lg shadow-sm text-center ${netBalance >= 0 ? 'bg-blue-50' : 'bg-red-100'}`}>
+                        <div className={`p-4 rounded-lg shadow-sm text-center ${overallNetBalance >= 0 ? 'bg-blue-50' : 'bg-red-100'}`}>
                             <h3 className="text-lg font-semibold text-blue-700">Net Total</h3>
-                            <p className={`text-2xl font-bold ${netBalance >= 0 ? 'text-blue-900' : 'text-red-900'}`}>${netBalance.toFixed(2)}</p>
+                            <p className={`text-2xl font-bold ${overallNetBalance >= 0 ? 'text-blue-900' : 'text-red-900'}`}>${overallNetBalance.toFixed(2)}</p> {/* Changed to overallNetBalance */}
                         </div>
                         <div className="bg-yellow-50 p-4 rounded-lg shadow-sm text-center">
                             <h3 className="text-lg font-semibold text-yellow-700">Transaction Pot</h3>
@@ -1189,7 +1188,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Total Debits</th>
                                             <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Total Credits</th>
                                             <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Net Balance</th>
-                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Balance less Entry Fee</th>
+                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Winnings/(Extra Fees)</th> {/* Renamed column */}
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -1201,8 +1200,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                 <td className={`py-2 px-4 text-sm text-right font-bold border-b border-gray-200 ${data.netBalance >= 0 ? 'text-blue-900' : 'text-red-900'}`}>
                                                     ${data.netBalance.toFixed(2)}
                                                 </td>
-                                                <td className={`py-2 px-4 text-sm text-right font-bold border-b border-gray-200 ${data.netBalanceLessEntryFee >= 0 ? 'text-blue-900' : 'text-red-900'}`}>
-                                                    ${data.netBalanceLessEntryFee.toFixed(2)}
+                                                <td className={`py-2 px-4 text-sm text-right font-bold border-b border-gray-200 ${data.winningsExtraFees >= 0 ? 'text-green-900' : 'text-red-900'}`}> {/* Adjusted color logic */}
+                                                    ${data.winningsExtraFees.toFixed(2)}
                                                 </td>
                                             </tr>
                                         ))}
