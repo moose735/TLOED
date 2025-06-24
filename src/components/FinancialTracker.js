@@ -21,7 +21,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [weeklyPointsWeek, setWeeklyPointsWeek] = useState('');
     const [sidePotName, setSidePotName] = useState('');
 
-    const [teamName, setTeamName] = useState(''); // For single team transactions.
+    const [teamName, setTeamName] = useState(''); // For single team transactions
     const [tradeTeams, setTradeTeams] = useState(['', '']); // For trade fees, initially two empty selections
     
     const [loading, setLoading] = useState(true);
@@ -52,6 +52,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [payoutStructureData, setPayoutStructureData] = useState([]);
     const [isEditingStructure, setIsEditingStructure] = useState(false);
     const [loadingStructure, setLoadingStructure] = useState(true);
+
+    // State for transaction pot
+    const [transactionPot, setTransactionPot] = useState(0);
 
     const COMMISH_UID = process.env.REACT_APP_COMMISH_UID;
     const isCommish = userId && COMMISH_UID && userId === COMMISH_UID; 
@@ -358,6 +361,16 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 ...doc.data()
             }));
             setTransactions(fetchedTransactions);
+
+            // Calculate transaction pot from all transactions for the current season
+            const currentSeasonTransactionPot = fetchedTransactions
+                .filter(t => 
+                    (currentSeason === 0 || t.season === currentSeason) && // Only current season transactions
+                    (t.category === 'waiver_pickup_fee' || t.category === 'trade_fee')
+                )
+                .reduce((sum, t) => sum + (t.amount || 0), 0);
+            setTransactionPot(currentSeasonTransactionPot);
+
             setLoading(false);
             console.log("Fetched transactions:", fetchedTransactions.length);
         }, (firestoreError) => {
@@ -370,7 +383,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             console.log("Unsubscribing from Firestore listener (transactions).");
             unsubscribe();
         };
-    }, [db, isAuthReady]);
+    }, [db, isAuthReady, currentSeason]); // Add currentSeason to dependencies to re-calculate pot if season changes
 
     // Fetch and listen for updates to the fee/payout structure
     useEffect(() => {
@@ -721,9 +734,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     const handleCancelEditStructure = () => {
         // Re-fetch from Firebase to revert changes, or use a cached version if preferred
-        // For simplicity, just set editing to false and the useEffect will re-sync
         setIsEditingStructure(false);
-        setError(null); // Clear any errors from editing
+        setError(null); 
     };
 
 
@@ -811,7 +823,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             {!loading && !error && (
                 <>
                     {/* Financial Summary */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8"> {/* Adjusted to 4 columns */}
                         <div className="bg-red-50 p-4 rounded-lg shadow-sm text-center">
                             <h3 className="text-lg font-semibold text-red-700">Total Fees Collected</h3>
                             <p className="text-2xl font-bold text-red-900">${totalFees.toFixed(2)}</p>
@@ -823,6 +835,11 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                         <div className={`p-4 rounded-lg shadow-sm text-center ${netBalance >= 0 ? 'bg-blue-50' : 'bg-red-100'}`}>
                             <h3 className="text-lg font-semibold text-blue-700">Net Balance</h3>
                             <p className={`text-2xl font-bold ${netBalance >= 0 ? 'text-blue-900' : 'text-red-900'}`}>${netBalance.toFixed(2)}</p>
+                        </div>
+                        {/* Transaction Pot Counter */}
+                        <div className="bg-yellow-50 p-4 rounded-lg shadow-sm text-center">
+                            <h3 className="text-lg font-semibold text-yellow-700">Transaction Pot</h3>
+                            <p className="text-2xl font-bold text-yellow-900">${transactionPot.toFixed(2)}</p>
                         </div>
                     </div>
 
@@ -1157,7 +1174,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                 className="flex-1 px-3 py-2 border rounded-md"
                                             />
                                             <input
-                                                type="text" // Keep as text to allow '$' or other symbols
+                                                type="text" 
                                                 value={item.amount}
                                                 onChange={(e) => handleFeeStructureChange(index, 'amount', e.target.value)}
                                                 placeholder="Amount"
@@ -1200,7 +1217,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                 className="flex-1 px-3 py-2 border rounded-md"
                                             />
                                             <input
-                                                type="text" // Keep as text to allow '$' or other symbols
+                                                type="text" 
                                                 value={item.amount}
                                                 onChange={(e) => handlePayoutStructureChange(index, 'amount', e.target.value)}
                                                 placeholder="Amount (optional)"
