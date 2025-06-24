@@ -25,10 +25,17 @@ const FinancialTracker = ({ getDisplayTeamName }) => {
     // Initialize Firebase and set up authentication
     useEffect(() => {
         try {
+            // Ensure __firebase_config and __app_id are available
             const firebaseConfig = typeof __firebase_config !== 'undefined'
                 ? JSON.parse(__firebase_config)
-                : {}; // Fallback for local development if __firebase_config isn't present
+                : {}; 
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+            // IMPORTANT: Ensure projectId, apiKey, and appId are present for initialization.
+            // These should be provided by the Canvas environment.
+            if (!firebaseConfig.projectId || !firebaseConfig.apiKey) {
+                throw new Error("Firebase configuration missing projectId or apiKey. Please ensure __firebase_config is correctly provided by the environment.");
+            }
 
             const app = initializeApp(firebaseConfig, appId);
             const firestore = getFirestore(app);
@@ -56,7 +63,8 @@ const FinancialTracker = ({ getDisplayTeamName }) => {
                     } catch (signInError) {
                         console.error("Error during initial Firebase sign-in:", signInError);
                         setError(`Authentication failed: ${signInError.message}`);
-                        setIsAuthReady(true); // Still set ready to stop loading, even if error
+                    } finally {
+                        setIsAuthReady(true); // Always set ready to stop loading, even if there's an auth error
                     }
                 }
             });
