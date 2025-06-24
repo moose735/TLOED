@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   HISTORICAL_MATCHUPS_API_URL,
   GOOGLE_SHEET_POWER_RANKINGS_API_URL, // Still imported, but PowerRankings.js no longer uses it directly
-} from './config';
+} from '../config'; // Corrected import path for config.js
 
 // Import existing components from your provided App.js
 import PowerRankings from './lib/PowerRankings';
@@ -13,7 +13,7 @@ import DPRAnalysis from './lib/DPRAnalysis';
 import LuckRatingAnalysis from './lib/LuckRatingAnalysis';
 import TeamDetailPage from './lib/TeamDetailPage';
 import Head2HeadGrid from './lib/Head2HeadGrid'; // Stays for its own tab
-
+import FinancialTracker from './components/FinancialTracker'; // <--- NEW IMPORT
 
 // Define the available tabs and their categories for the dropdown
 const NAV_CATEGORIES = {
@@ -31,7 +31,8 @@ const NAV_CATEGORIES = {
   TEAMS: { // New category for individual team pages
     label: 'Teams',
     subTabs: [], // This will be populated dynamically from historicalMatchups
-  }
+  },
+  FINANCIALS: { label: 'Financials', tab: 'financials' }, // <--- NEW CATEGORY
 };
 
 // Flattened list of all possible tabs for conditional rendering
@@ -43,6 +44,7 @@ const TABS = {
   DPR_ANALYSIS: 'dprAnalysis',
   LUCK_RATING: 'luckRating',
   TEAM_DETAIL: 'teamDetail',
+  FINANCIALS: 'financials', // <--- NEW TAB CONSTANT
 };
 
 const App = () => {
@@ -124,7 +126,7 @@ const App = () => {
         NAV_CATEGORIES.TEAMS.subTabs = uniqueTeams.map(team => ({
           label: team,
           tab: TABS.TEAM_DETAIL, // All team links go to the team detail tab
-          teamName: team,         // Pass the team name for rendering
+          teamName: team,           // Pass the team name for rendering
         }));
 
       } catch (error) {
@@ -213,6 +215,14 @@ const App = () => {
               </div>
             </div>
           )}
+
+          {/* NEW: Financials Link */}
+          <button
+            onClick={() => handleTabChange(TABS.FINANCIALS)}
+            className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${activeTab === TABS.FINANCIALS ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
+          >
+            {NAV_CATEGORIES.FINANCIALS.label}
+          </button>
         </nav>
 
         {/* Mobile Hamburger Icon */}
@@ -308,6 +318,14 @@ const App = () => {
                 )}
               </div>
             )}
+
+            {/* NEW: Financials Link (Mobile) */}
+            <button
+              onClick={() => handleTabChange(TABS.FINANCIALS)}
+              className={`block w-full text-left py-3 px-4 text-lg font-semibold rounded-md transition-colors duration-200 ${activeTab === TABS.FINANCIALS ? 'bg-blue-100 text-blue-700' : 'text-gray-800 hover:bg-gray-100'}`}
+            >
+              {NAV_CATEGORIES.FINANCIALS.label}
+            </button>
           </nav>
         </div>
       )}
@@ -376,12 +394,18 @@ const App = () => {
 
            {/* Render TeamDetailPage when selected */}
            {activeTab === TABS.TEAM_DETAIL && selectedTeam && (
-              <TeamDetailPage
-                teamName={selectedTeam}
-                historicalMatchups={historicalMatchups}
-                getMappedTeamName={getMappedTeamName}
-              />
-            )}
+             <TeamDetailPage
+               teamName={selectedTeam}
+               historicalMatchups={historicalMatchups}
+               getMappedTeamName={getMappedTeamName}
+             />
+           )}
+           {/* NEW: Render FinancialTracker */}
+           {activeTab === TABS.FINANCIALS && (
+             <FinancialTracker
+               getDisplayTeamName={getMappedTeamName} // Pass if needed, or remove from prop if not used in FinancialTracker
+             />
+           )}
           </div>
         )}
       </main>
