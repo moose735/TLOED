@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } = 'react';
 import { initializeApp } from 'firebase/app';
 import { 
     getAuth, 
@@ -34,7 +34,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [uniqueTeams, setUniqueTeams] = useState([]);
     const [weeklyHighScores, setWeeklyHighScores] = useState({});
     const [currentSeason, setCurrentSeason] = useState(null); 
-    const [activeTeamsCount, setActiveTeamsCount] = useState(0); 
+    const [activeTeamsCount, setActiveTeamsCount] = useState(0); // Count of active teams in the CURRENT season
     
     // State to manage automatic population of teamName field and associated warning
     const [isTeamAutoPopulated, setIsTeamAutoPopulated] = useState(false);
@@ -334,6 +334,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         
         let finalAmount = parseFloat(amount);
         let finalTeamName = teamName; 
+        let teamsInvolved = 1; // Default to 1 for individual transactions
 
         if (type === 'fee' && teamName === 'ALL_TEAMS_MULTIPLIER') {
             if (activeTeamsCount === 0) {
@@ -342,6 +343,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             }
             finalAmount = finalAmount * activeTeamsCount;
             finalTeamName = 'All Teams'; 
+            teamsInvolved = activeTeamsCount; // Store the count of teams involved
         } else if (type === 'payout' && teamName === 'ALL_TEAMS_MULTIPLIER') {
             finalTeamName = 'All Teams';
             setError("Warning: 'All Teams' selected for a payout. Amount will not be multiplied. Ensure this is intentional.");
@@ -356,7 +358,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             date: serverTimestamp(),
             userId: userId,
             category: payoutCategory, 
-            season: currentSeason 
+            season: currentSeason,
+            teamsInvolvedCount: teamsInvolved // Store the number of teams for division logic
         };
 
         if (type === 'payout') {
@@ -377,12 +380,10 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                         newTransaction.teamName = weekData.secondHighest.team;
                         newTransaction.description = `Payout: Second Highest Weekly Points (Week ${weekNum}) - ${weekData.secondHighest.team} (${weekData.secondHighest.score} pts)`;
                     } else {
-                        // This case means week data exists but no winner for the specific category
                         setError(`Could not find a winning team for ${payoutCategory.replace(/_/g, ' ')} in Week ${weekNum} for the current season. Transaction not added.`);
                         return; 
                     }
                 } else {
-                    // This case means no historical data for the selected week
                     setError(`No score data found for Week ${weekNum} in the current season. Transaction not added.`);
                     return; 
                 }
@@ -407,8 +408,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setPayoutCategory('general'); 
             setWeeklyPointsWeek(''); 
             setSidePotName(''); 
-            setError(null); // Clear any general errors on successful add
-            setAutoPopulateWarning(null); // Clear auto-populate warning on successful add
+            setError(null); 
+            setAutoPopulateWarning(null); 
             console.log("Transaction added to Firestore successfully.");
         } catch (addError) {
             console.error("Error adding transaction:", addError);
@@ -450,12 +451,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         setTransactionToDelete(null);
     };
 
-    // Team selection dropdown is disabled if it's auto-populated
     const isTeamSelectionDisabled = isTeamAutoPopulated;
 
-    // Filtered transactions for display based on selected team AND current season
     const filteredTransactions = transactions.filter(t => 
-        // If currentSeason is null (e.g., no 'year' in data), show all transactions. Otherwise, filter by season.
         (currentSeason === null || t.season === currentSeason) && 
         (filterTeam === '' || t.teamName === filterTeam || (filterTeam === 'ALL_TEAMS_MULTIPLIER' && t.teamName === 'All Teams'))
     );
@@ -612,7 +610,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                         placeholder="e.g., Annual League Fee, Playoff Winner Bonus"
                                         maxLength="100"
                                         required
-                                        readOnly={isTeamAutoPopulated} // Read-only only if auto-populated
+                                        readOnly={isTeamAutoPopulated} 
                                         className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none ${isTeamAutoPopulated ? 'bg-gray-200 cursor-not-allowed' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'} sm:text-sm`}
                                     />
                                 </div>
@@ -675,9 +673,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                         value={teamName}
                                         onChange={(e) => {
                                             setTeamName(e.target.value);
-                                            // If user manually changes teamName, it's no longer auto-populated
                                             setIsTeamAutoPopulated(false);
-                                            setAutoPopulateWarning(null); // Clear any auto-populate warnings
+                                            setAutoPopulateWarning(null); 
                                         }}
                                         disabled={isTeamSelectionDisabled} 
                                         className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none ${isTeamSelectionDisabled ? 'bg-gray-200 cursor-not-allowed' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'} sm:text-sm`}
@@ -690,10 +687,10 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             <option key={team} value={team}>{team}</option>
                                         ))}
                                     </select>
-                                    {autoPopulateWarning && ( // Display warning if auto-population failed
+                                    {autoPopulateWarning && ( 
                                         <p className="text-xs text-orange-600 mt-1">{autoPopulateWarning}</p>
                                     )}
-                                    {isTeamAutoPopulated && teamName && ( // Show message only if successfully auto-populated
+                                    {isTeamAutoPopulated && teamName && ( 
                                         <p className="text-xs text-gray-500 mt-1">Automatically determined: {teamName}</p>
                                     )}
                                 </div>
@@ -749,10 +746,13 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                     <tbody>
                                         {filteredTransactions.map((t, index) => {
                                             let displayAmount = (t.amount || 0).toFixed(2);
-                                            // Apply division logic only if filtering by a specific team,
-                                            // transaction is a fee for 'All Teams', and activeTeamsCount is valid.
-                                            if (filterTeam !== '' && filterTeam !== 'All Teams' && t.teamName === 'All Teams' && t.type === 'fee' && activeTeamsCount > 0) {
-                                                displayAmount = (t.amount / activeTeamsCount).toFixed(2);
+                                            // Apply division logic only if filtering by a specific team AND
+                                            // transaction is a fee for 'All Teams'.
+                                            // Use t.teamsInvolvedCount if available, otherwise fallback to current activeTeamsCount.
+                                            const effectiveTeamsCount = t.teamsInvolvedCount > 0 ? t.teamsInvolvedCount : activeTeamsCount;
+
+                                            if (filterTeam !== '' && filterTeam !== 'All Teams' && t.teamName === 'All Teams' && t.type === 'fee' && effectiveTeamsCount > 0) {
+                                                displayAmount = (t.amount / effectiveTeamsCount).toFixed(2);
                                             }
                                             return (
                                                 <tr key={t.id} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
