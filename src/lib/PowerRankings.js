@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { calculateAllLeagueMetrics } from '../utils/calculations';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { CURRENT_LEAGUE_ID, fetchUsersData, getSleeperAvatarUrl } from '../utils/sleeperApi'; // Import Sleeper API functions
+import { CURRENT_LEAGUE_ID, fetchUsersData, getSleeperAvatarUrl, TEAM_NAME_TO_SLEEPER_ID_MAP, RETIRED_MANAGERS } from '../utils/sleeperApi'; // Import Sleeper API functions and maps
 
 const formatDPR = (dpr) => {
     if (typeof dpr !== 'number' || isNaN(dpr)) return 'N/A';
@@ -55,13 +55,6 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
     const [currentWeek, setCurrentWeek] = useState(0);
     const [sleeperUsersMap, setSleeperUsersMap] = useState({}); // Stores Sleeper user data by userId
 
-    // This map links your historical team names (e.g., "Irwin") to Sleeper User IDs.
-    // YOU WILL NEED TO EXPAND THIS MAP FOR ALL YOUR TEAMS.
-    const teamNameToSleeperIdMap = {
-      'Irwin': '467074573125283840', // Example: 'Historical Name' -> 'Sleeper User ID'
-      // Add other team mappings here: 'Another Team Name': 'another_sleeper_user_id',
-    };
-
     useEffect(() => {
         const loadPowerRankingsAndSleeperData = async () => {
             if (!historicalMatchups || historicalMatchups.length === 0) {
@@ -101,7 +94,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                 const newestYearMatchups = historicalMatchups.filter(match => parseInt(match.year) === newestYear);
                 const uniqueTeamsInNewestYear = Array.from(new Set(
                     newestYearMatchups.flatMap(match => [getDisplayTeamName(match.team1), getDisplayTeamName(match.team2)])
-                )).filter(teamName => teamName && teamName.trim() !== '');
+                )).filter(teamName => teamName && teamName.trim() !== '' && !RETIRED_MANAGERS.has(teamName)); // Filter out retired managers from current season
 
                 const maxWeek = newestYearMatchups.reduce((max, match) => Math.max(max, parseInt(match.week)), 0);
                 setCurrentWeek(maxWeek);
@@ -253,18 +246,10 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                             </thead>
                             <tbody>
                                 {powerRankings.map((row, rowIndex) => {
-                                    const sleeperUserId = teamNameToSleeperIdMap[row.team];
+                                    const sleeperUserId = TEAM_NAME_TO_SLEEPER_ID_MAP[row.team];
                                     const sleeperTeamData = sleeperUsersMap[sleeperUserId];
-                                    // Debugging logs - Check your browser console for these values!
-                                    console.log(`Processing team: ${row.team}`);
-                                    console.log(`  Mapped Sleeper User ID: ${sleeperUserId}`);
-                                    console.log(`  Sleeper Team Data (from map):`, sleeperTeamData);
-
                                     const displayTeamName = sleeperTeamData ? sleeperTeamData.teamName : row.team;
-                                    const avatarUrl = sleeperTeamData ? getSleeperAvatarUrl(sleeperTeamData.avatar) : getSleeperAvatarUrl(''); // Always get a URL, even if a placeholder
-                                    console.log(`  Display Team Name: ${displayTeamName}`);
-                                    console.log(`  Avatar URL: ${avatarUrl}`);
-
+                                    const avatarUrl = sleeperTeamData ? sleeperTeamData.avatar : getSleeperAvatarUrl(''); // Use sleeperTeamData.avatar directly
 
                                     return (
                                         <tr key={row.team} className={rowIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
