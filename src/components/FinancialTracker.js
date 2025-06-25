@@ -62,25 +62,36 @@ export const calculateFinancialDataForTeamDetailPage = (transactions, getMappedT
 };
 
 // New component for the Overall Financial History Tab
-const OverallFinancialHistoryTab = ({ allTransactions, getDisplayTeamName }) => {
+const OverallFinancialHistoryTab = ({ allTransactions, getDisplayTeamName, uniqueTeamsForOverallHistory }) => { // Added uniqueTeamsForOverallHistory
     // Calculate overall team financials across all seasons
     const overallTeamFinancials = useMemo(() => {
         const teamStats = {};
+
+        // Initialize teamStats for all unique teams to ensure all teams are listed
+        uniqueTeamsForOverallHistory.forEach(team => {
+            teamStats[team] = { name: team, totalDebits: 0, totalCredits: 0, netBalance: 0 };
+        });
 
         allTransactions.forEach(t => {
             const displayTeam = getDisplayTeamName(String(t.teamName || '').trim());
             const amount = parseFloat(t.amount);
 
-            if (!displayTeam || isNaN(amount)) return;
+            if (isNaN(amount)) return;
 
-            // Aggregate by team across all seasons
-            if (!teamStats[displayTeam]) {
-                teamStats[displayTeam] = { name: displayTeam, totalDebits: 0, totalCredits: 0, netBalance: 0 };
-            }
-            if (t.type === 'debit') {
-                teamStats[displayTeam].totalDebits += amount;
-            } else if (t.type === 'credit') {
-                teamStats[displayTeam].totalCredits += amount;
+            // Handle 'All Teams' debits by dividing among all active teams
+            if (t.teamName === 'All Teams' && t.type === 'debit' && t.teamsInvolvedCount > 0) {
+                const perTeamAmount = amount / t.teamsInvolvedCount;
+                uniqueTeamsForOverallHistory.forEach(individualTeam => {
+                    if (teamStats[individualTeam]) {
+                        teamStats[individualTeam].totalDebits += perTeamAmount;
+                    }
+                });
+            } else if (displayTeam && teamStats[displayTeam]) { // For specific team transactions
+                if (t.type === 'debit') {
+                    teamStats[displayTeam].totalDebits += amount;
+                } else if (t.type === 'credit') {
+                    teamStats[displayTeam].totalCredits += amount;
+                }
             }
         });
 
@@ -91,7 +102,7 @@ const OverallFinancialHistoryTab = ({ allTransactions, getDisplayTeamName }) => 
         
         // Sort by team name before returning for display
         return Object.values(teamStats).sort((a, b) => a.name.localeCompare(b.name));
-    }, [allTransactions, getDisplayTeamName]);
+    }, [allTransactions, getDisplayTeamName, uniqueTeamsForOverallHistory]);
 
     return (
         <section className="bg-white p-6 rounded-lg shadow-md mt-8">
@@ -1075,6 +1086,19 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         }
     };
 
+    // Derive all unique team names for the Overall History tab
+    const uniqueTeamsForOverallHistory = useMemo(() => {
+        const names = new Set();
+        allTransactions.forEach(t => {
+            const displayTeam = getDisplayTeamName(String(t.teamName || '').trim());
+            // Only add actual team names, not "All Teams" or empty
+            if (displayTeam && displayTeam !== 'All Teams') {
+                names.add(displayTeam);
+            }
+        });
+        return Array.from(names).sort();
+    }, [allTransactions, getDisplayTeamName]);
+
     return (
         <div className="w-full max-w-4xl bg-white p-8 rounded-lg shadow-md mt-4 mx-auto">
             <h2 className="text-3xl font-extrabold text-blue-800 mb-6 text-center">
@@ -1851,6 +1875,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                         <OverallFinancialHistoryTab 
                             allTransactions={allTransactions} 
                             getDisplayTeamName={getDisplayTeamName}
+                            uniqueTeamsForOverallHistory={uniqueTeamsForOverallHistory} // Pass this prop
                         />
                     )}
                 </>
