@@ -1544,10 +1544,12 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                         <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
                                                             <button
                                                                 onClick={() => confirmDelete(t)}
-                                                                className="bg-red-500 hover:bg-red-600 text-white text-xs px-2 py-1 rounded-md shadow-sm transition-colors duration-200"
-                                                                title="Delete Transaction"
+                                                                className="text-red-500 hover:text-red-700"
+                                                                title="Delete transaction"
                                                             >
-                                                                Delete
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm6 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" />
+                                                                </svg>
                                                             </button>
                                                         </td>
                                                     )}
@@ -1556,44 +1558,45 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                         })}
                                     </tbody>
                                 </table>
-                                {/* Pagination Controls */}
-                                {totalPages > 1 && (
-                                    <div className="flex justify-center items-center space-x-2 mt-4">
-                                        <button
-                                            onClick={handlePreviousPage}
-                                            disabled={currentPage === 1}
-                                            className="px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                            Previous
-                                        </button>
-                                        {[...Array(totalPages)].map((_, index) => (
-                                            <button
-                                                key={index + 1}
-                                                onClick={() => paginate(index + 1)}
-                                                className={`px-3 py-1 rounded-md ${
-                                                    currentPage === index + 1 ? 'bg-blue-700 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                                                }`}
-                                            >
-                                                {index + 1}
-                                            </button>
-                                        ))}
-                                        <button
-                                            onClick={handleNextPage}
-                                            disabled={currentPage === totalPages}
-                                            className="px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                            Next
-                                        </button>
-                                    </div>
-                                )}
+                            </div>
+                        )}
+                        
+                        {/* Pagination Controls */}
+                        {totalPages > 1 && (
+                            <div className="flex justify-center items-center mt-4 space-x-2">
+                                <button
+                                    onClick={handlePreviousPage}
+                                    disabled={currentPage === 1}
+                                    className="px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50"
+                                >
+                                    Previous
+                                </button>
+                                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                                    <button
+                                        key={page}
+                                        onClick={() => paginate(page)}
+                                        className={`px-3 py-1 rounded-md ${currentPage === page ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                                    >
+                                        {page}
+                                    </button>
+                                ))}
+                                <button
+                                    onClick={handleNextPage}
+                                    disabled={currentPage === totalPages}
+                                    className="px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50"
+                                >
+                                    Next
+                                </button>
                             </div>
                         )}
                     </section>
 
-                    {/* Team Financial Summary Section */}
-                    {Object.keys(teamSummary).length > 0 && (
-                        <section className="mt-8 p-6 bg-gray-50 rounded-lg shadow-inner">
-                            <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">Team Financial Summary (Current Season)</h3>
+                    {/* Team Summary Table */}
+                    <section className="mt-8">
+                        <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">Team Financial Summary (for {selectedSeason || 'selected'} season)</h3>
+                        {Object.keys(teamSummary).length === 0 ? (
+                            <p className="text-center text-gray-600">No team financial data available for this season.</p>
+                        ) : (
                             <div className="overflow-x-auto">
                                 <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
                                     <thead className="bg-blue-100">
@@ -1601,20 +1604,20 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team Name</th>
                                             <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Total Fees</th>
                                             <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Total Payouts</th>
-                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Net Balance</th>
+                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Net Balance (Payouts - Fees)</th>
                                             <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Winnings/(Extra Fees)</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {Object.entries(teamSummary).sort(([teamA], [teamB]) => teamA.localeCompare(teamB)).map(([team, data], index) => (
+                                        {Object.entries(teamSummary).sort(([,a], [,b]) => b.netBalance - a.netBalance).map(([team, data], index) => (
                                             <tr key={team} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                                <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{team}</td>
-                                                <td className="py-2 px-4 text-sm text-right text-gray-900 font-medium border-b border-gray-200">${data.totalDebits.toFixed(2)}</td>
-                                                <td className="py-2 px-4 text-sm text-right text-gray-900 font-medium border-b border-gray-200">${data.totalCredits.toFixed(2)}</td>
-                                                <td className={`py-2 px-4 text-sm text-right font-bold border-b border-gray-200 ${data.netBalance >= 0 ? 'text-green-900' : 'text-red-900'}`}>
+                                                <td className="py-2 px-4 text-sm font-medium text-gray-800 border-b border-gray-200">{team}</td>
+                                                <td className="py-2 px-4 text-sm text-right text-red-700 border-b border-gray-200">${data.totalDebits.toFixed(2)}</td>
+                                                <td className="py-2 px-4 text-sm text-right text-green-700 border-b border-gray-200">${data.totalCredits.toFixed(2)}</td>
+                                                <td className={`py-2 px-4 text-sm text-right border-b border-gray-200 ${data.netBalance >= 0 ? 'text-green-800' : 'text-red-800'} font-bold`}>
                                                     ${data.netBalance.toFixed(2)}
                                                 </td>
-                                                <td className={`py-2 px-4 text-sm text-right font-bold border-b border-gray-200 ${data.winningsExtraFees >= 0 ? 'text-green-900' : 'text-red-900'}`}>
+                                                <td className={`py-2 px-4 text-sm text-right border-b border-gray-200 ${data.winningsExtraFees >= 0 ? 'text-green-800' : 'text-red-800'} font-bold`}>
                                                     ${data.winningsExtraFees.toFixed(2)}
                                                 </td>
                                             </tr>
@@ -1622,167 +1625,140 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                     </tbody>
                                 </table>
                             </div>
-                        </section>
-                    )}
-
-                    {/* Fee and Payout Structure Section */}
-                    <section className="mt-8 p-6 bg-gray-50 rounded-lg shadow-inner">
-                        <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">League Fee & Payout Structure</h3>
-                        {isCommish && !isEditingStructure && (
-                            <div className="text-center mb-4">
-                                <button
-                                    onClick={() => setIsEditingStructure(true)}
-                                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-md shadow-md transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                                >
-                                    Edit Structure
-                                </button>
-                            </div>
-                        )}
-
-                        {loadingStructure ? (
-                            <p className="text-center text-blue-600">Loading structure...</p>
-                        ) : isEditingStructure ? (
-                            // Edit mode for structure - only if commish
-                            <div className="space-y-6">
-                                <div>
-                                    <h4 className="text-xl font-semibold text-red-700 mb-3">Fees (Money In)</h4>
-                                    {debitStructureData.map((item, index) => (
-                                        <div key={index} className="flex flex-col md:flex-row gap-2 mb-2 items-center">
-                                            <input
-                                                type="text"
-                                                value={item.name}
-                                                onChange={(e) => handleDebitStructureChange(index, 'name', e.target.value)}
-                                                placeholder="Fee Name"
-                                                className="flex-1 px-3 py-2 border rounded-md"
-                                            />
-                                            <input
-                                                type="text" 
-                                                value={item.amount}
-                                                onChange={(e) => handleDebitStructureChange(index, 'amount', e.target.value)}
-                                                placeholder="Amount"
-                                                className="w-24 px-3 py-2 border rounded-md"
-                                            />
-                                            <input
-                                                type="text"
-                                                onChange={(e) => handleDebitStructureChange(index, 'description', e.target.value)}
-                                                placeholder="Description (optional)"
-                                                className="flex-1 px-3 py-2 border rounded-md"
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={() => handleRemoveDebitItem(index)}
-                                                className="p-2 bg-red-400 text-white rounded-md hover:bg-red-500"
-                                            >
-                                                Remove
-                                            </button>
-                                        </div>
-                                    ))}
-                                    <button
-                                        type="button"
-                                        onClick={handleAddDebitItem}
-                                        className="mt-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md"
-                                    >
-                                        Add Fee Item
-                                    </button>
-                                </div>
-
-                                <div>
-                                    <h4 className="text-xl font-semibold text-green-700 mb-3">Payouts (Money Out)</h4>
-                                    {creditStructureData.map((item, index) => (
-                                        <div key={index} className="flex flex-col md:flex-row gap-2 mb-2 items-center">
-                                            <input
-                                                type="text"
-                                                value={item.name}
-                                                onChange={(e) => handleCreditStructureChange(index, 'name', e.target.value)}
-                                                placeholder="Payout Name"
-                                                className="flex-1 px-3 py-2 border rounded-md"
-                                            />
-                                            <input
-                                                type="text"
-                                                value={item.amount}
-                                                onChange={(e) => handleCreditStructureChange(index, 'amount', e.target.value)}
-                                                placeholder="Amount"
-                                                className="w-24 px-3 py-2 border rounded-md"
-                                            />
-                                            <input
-                                                type="text"
-                                                onChange={(e) => handleCreditStructureChange(index, 'description', e.target.value)}
-                                                placeholder="Description (optional)"
-                                                className="flex-1 px-3 py-2 border rounded-md"
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={() => handleRemoveCreditItem(index)}
-                                                className="p-2 bg-red-400 text-white rounded-md hover:bg-red-500"
-                                            >
-                                                Remove
-                                            </button>
-                                        </div>
-                                    ))}
-                                    <button
-                                        type="button"
-                                        onClick={handleAddCreditItem}
-                                        className="mt-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md"
-                                    >
-                                        Add Payout Item
-                                    </button>
-                                </div>
-
-                                <div className="flex justify-end space-x-3 mt-4">
-                                    <button
-                                        type="button"
-                                        onClick={handleCancelEditStructure}
-                                        className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-md transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={handleSaveStructure}
-                                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
-                                    >
-                                        Save Structure
-                                    </button>
-                                </div>
-                            </div>
-                        ) : (
-                            // View mode for structure
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                    <h4 className="text-xl font-semibold text-red-700 mb-3">Fees (Money In)</h4>
-                                    <ul className="list-disc pl-5 space-y-1 text-gray-700">
-                                        {debitStructureData.length > 0 ? (
-                                            debitStructureData.map((item, index) => (
-                                                <li key={index}>
-                                                    <span className="font-medium">{item.name}:</span> {item.amount} {item.description && `(${item.description})`}
-                                                </li>
-                                            ))
-                                        ) : (
-                                            <li>No fee structure defined.</li>
-                                        )}
-                                    </ul>
-                                </div>
-                                <div>
-                                    <h4 className="text-xl font-semibold text-green-700 mb-3">Payouts (Money Out)</h4>
-                                    <ul className="list-disc pl-5 space-y-1 text-gray-700">
-                                        {creditStructureData.length > 0 ? (
-                                            creditStructureData.map((item, index) => (
-                                                <li key={index}>
-                                                    <span className="font-medium">{item.name}:</span> {item.amount} {item.description && `(${item.description})`}
-                                                </li>
-                                            ))
-                                        ) : (
-                                            <li>No payout structure defined.</li>
-                                        )}
-                                    </ul>
-                                </div>
-                            </div>
                         )}
                     </section>
+                    
+                    {/* Fee/Payout Structure Management (Commish only) */}
+                    {isCommish && (
+                        <section className="mt-8 p-6 bg-gray-50 rounded-lg shadow-inner">
+                            <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">Manage League Structure (Fees & Payouts)</h3>
+                            {loadingStructure ? (
+                                <p className="text-center text-blue-600">Loading structure data...</p>
+                            ) : (
+                                <>
+                                    {!isEditingStructure ? (
+                                        <button
+                                            onClick={() => setIsEditingStructure(true)}
+                                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md shadow-md transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 mb-4"
+                                        >
+                                            Edit Structure
+                                        </button>
+                                    ) : (
+                                        <div>
+                                            {/* Fees (Debits) */}
+                                            <h4 className="text-xl font-semibold text-gray-700 mb-3">Fees (Debits)</h4>
+                                            <div className="space-y-4 mb-6">
+                                                {debitStructureData.map((item, index) => (
+                                                    <div key={index} className="flex flex-col md:flex-row gap-3 items-center p-3 border border-gray-200 rounded-md bg-white shadow-sm">
+                                                        <input
+                                                            type="text"
+                                                            value={item.name}
+                                                            onChange={(e) => handleDebitStructureChange(index, 'name', e.target.value)}
+                                                            placeholder="Fee Name"
+                                                            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                                        />
+                                                        <input
+                                                            type="text"
+                                                            value={item.amount}
+                                                            onChange={(e) => handleDebitStructureChange(index, 'amount', e.target.value)}
+                                                            placeholder="Amount (e.g., $50, $1/pickup)"
+                                                            className="w-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                                        />
+                                                        <input
+                                                            type="text"
+                                                            value={item.description}
+                                                            onChange={(e) => handleDebitStructureChange(index, 'description', e.target.value)}
+                                                            placeholder="Description"
+                                                            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleRemoveDebitItem(index)}
+                                                            className="p-2 bg-red-400 text-white rounded-md hover:bg-red-500 transition-colors text-sm"
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                                <button
+                                                    type="button"
+                                                    onClick={handleAddDebitItem}
+                                                    className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-md shadow-md transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2"
+                                                >
+                                                    Add New Fee Item
+                                                </button>
+                                            </div>
+
+                                            {/* Payouts (Credits) */}
+                                            <h4 className="text-xl font-semibold text-gray-700 mb-3">Payouts (Credits)</h4>
+                                            <div className="space-y-4 mb-6">
+                                                {creditStructureData.map((item, index) => (
+                                                    <div key={index} className="flex flex-col md:flex-row gap-3 items-center p-3 border border-gray-200 rounded-md bg-white shadow-sm">
+                                                        <input
+                                                            type="text"
+                                                            value={item.name}
+                                                            onChange={(e) => handleCreditStructureChange(index, 'name', e.target.value)}
+                                                            placeholder="Payout Name"
+                                                            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                                        />
+                                                        <input
+                                                            type="text"
+                                                            value={item.amount}
+                                                            onChange={(e) => handleCreditStructureChange(index, 'amount', e.target.value)}
+                                                            placeholder="Amount (e.g., $100)"
+                                                            className="w-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                                        />
+                                                        <input
+                                                            type="text"
+                                                            value={item.description}
+                                                            onChange={(e) => handleCreditStructureChange(index, 'description', e.target.value)}
+                                                            placeholder="Description"
+                                                            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleRemoveCreditItem(index)}
+                                                            className="p-2 bg-red-400 text-white rounded-md hover:bg-red-500 transition-colors text-sm"
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                                <button
+                                                    type="button"
+                                                    onClick={handleAddCreditItem}
+                                                    className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-md shadow-md transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2"
+                                                >
+                                                    Add New Payout Item
+                                                </button>
+                                            </div>
+
+                                            <div className="flex justify-end space-x-4">
+                                                <button
+                                                    type="button"
+                                                    onClick={handleCancelEditStructure}
+                                                    className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-md transition-colors"
+                                                >
+                                                    Cancel
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleSaveStructure}
+                                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
+                                                >
+                                                    Save Structure
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </section>
+                    )}
                 </>
             )}
 
-            {/* Confirmation Modals */}
+            {/* Confirmation Modal for Single Delete */}
             {showConfirmDelete && (
                 <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50">
                     <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full text-center">
@@ -1810,6 +1786,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 </div>
             )}
 
+            {/* Confirmation Modal for Bulk Delete */}
             {showConfirmBulkDelete && (
                 <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50">
                     <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full text-center">
