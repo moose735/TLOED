@@ -26,6 +26,10 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     // State for multiple waiver/FA entries
     const [waiverEntries, setWaiverEntries] = useState([{ team: '', numPickups: 1 }]); 
     
+    // New state for trade entry method: 'multi_team' or 'single_team'
+    const [tradeEntryMethod, setTradeEntryMethod] = useState('multi_team'); 
+    const [numTrades, setNumTrades] = useState(1); // For single team trade entry
+
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null); 
     const [db, setDb] = useState(null);
@@ -63,7 +67,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [debitStructureData, setDebitStructureData] = useState([]); // Internal name
     const [creditStructureData, setCreditStructureData] = useState([]); // Internal name
     const [isEditingStructure, setIsEditingStructure] = useState(false);
-    const [loadingStructure, setLoadingStructure] = useState(true); // FIX: Corrected syntax here
+    const [loadingStructure, setLoadingStructure] = useState(true); 
 
     // State for transaction pot
     const [transactionPot, setTransactionPot] = useState(0);
@@ -131,9 +135,11 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         } else {
             setCategory('');
         }
-        // When type changes, reset tradeTeams and waiverEntries as they are category specific
+        // When type changes, reset category-specific states
         if (!(type === 'debit' && category === 'trade_fee')) {
             setTradeTeams(['', '']);
+            setNumTrades(1); // Reset numTrades
+            setTradeEntryMethod('multi_team'); // Reset trade entry method
         }
         if (!(type === 'debit' && category === 'waiver_fa_fee')) {
             setWaiverEntries([{ team: '', numPickups: 1 }]);
@@ -247,11 +253,13 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         setAutoPopulateWarning(null); 
         setIsTeamAutoPopulated(false); 
 
-        // Reset tradeTeams and waiverEntries if not applicable
-        if (!(type === 'debit' && category === 'trade_fee')) {
+        // Reset category-specific states if not applicable
+        if (type !== 'debit' || category !== 'trade_fee') {
             setTradeTeams(['', '']);
+            setNumTrades(1); // Reset numTrades
+            setTradeEntryMethod('multi_team'); // Reset trade entry method
         }
-        if (!(type === 'debit' && category === 'waiver_fa_fee')) {
+        if (type !== 'debit' || category !== 'waiver_fa_fee') {
             setWaiverEntries([{ team: '', numPickups: 1 }]);
         }
 
@@ -538,7 +546,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setError("Please enter a valid positive amount.");
             return;
         }
-        if (!description.trim() && category !== 'waiver_fa_fee') { // Description can be auto-generated for waiver/FA
+        if (!description.trim() && category !== 'waiver_fa_fee' && !(category === 'trade_fee' && tradeEntryMethod === 'single_team')) { 
             setError("Description cannot be empty.");
             return;
         }
@@ -546,27 +554,51 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         let transactionsToAdd = [];
 
         if (type === 'debit' && category === 'trade_fee') {
-            const validTradeTeams = tradeTeams.filter(team => team.trim() !== '');
-            if (validTradeTeams.length < 2) {
-                setError("Please select at least two teams for a trade fee.");
-                return;
-            }
-            if (new Set(validTradeTeams).size !== validTradeTeams.length) {
-                setError("Duplicate teams detected for trade fee. Please select unique teams.");
-                return;
-            }
+            if (tradeEntryMethod === 'multi_team') {
+                const validTradeTeams = tradeTeams.filter(team => team.trim() !== '');
+                if (validTradeTeams.length < 2) {
+                    setError("Please select at least two teams for a trade fee.");
+                    return;
+                }
+                if (new Set(validTradeTeams).size !== validTradeTeams.length) {
+                    setError("Duplicate teams detected for trade fee. Please select unique teams.");
+                    return;
+                }
 
-            for (const team of validTradeTeams) {
+                for (const team of validTradeTeams) {
+                    transactionsToAdd.push({
+                        amount: parseFloat(amount), 
+                        description: description.trim(),
+                        type: type, // 'debit'
+                        teamName: team,
+                        date: serverTimestamp(),
+                        userId: userId,
+                        category: category,
+                        season: selectedSeason, // Use selectedSeason for new transactions
+                        weekNumber: currentWeekForSelectedSeason, // Assign current week for selected season
+                        teamsInvolvedCount: 1,
+                    });
+                }
+            } else if (tradeEntryMethod === 'single_team') {
+                if (!teamName.trim()) {
+                    setError("Please select a team for the single team trade entry.");
+                    return;
+                }
+                if (isNaN(numTrades) || numTrades <= 0) {
+                    setError("Please enter a valid positive number of trades.");
+                    return;
+                }
                 transactionsToAdd.push({
-                    amount: parseFloat(amount), 
-                    description: description.trim(),
-                    type: type, // 'debit'
-                    teamName: team,
+                    amount: parseFloat(amount) * numTrades, 
+                    description: `Trade Fee: ${teamName} - ${numTrades} trade(s)`,
+                    type: type, 
+                    teamName: teamName,
                     date: serverTimestamp(),
                     userId: userId,
                     category: category,
-                    season: selectedSeason, // Use selectedSeason for new transactions
-                    weekNumber: currentWeekForSelectedSeason, // Assign current week for selected season
+                    season: selectedSeason, 
+                    weekNumber: currentWeekForSelectedSeason,
+                    numTrades: numTrades, // Store number of trades
                     teamsInvolvedCount: 1,
                 });
             }
@@ -686,6 +718,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setWaiverEntries([{ team: '', numPickups: 1 }]); // Reset waiver entries
             setWeeklyPointsWeek(''); 
             setSidePotName(''); 
+            setNumTrades(1); // Reset numTrades
+            setTradeEntryMethod('multi_team'); // Reset trade entry method
             setError(null); 
             setAutoPopulateWarning(null); 
             console.log("Transaction(s) added to Firestore successfully.");
@@ -749,7 +783,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         setWaiverEntries(newWaiverEntries);
     };
 
-    const isTeamSelectionDisabled = isTeamAutoPopulated || (type === 'debit' && (category === 'trade_fee' || category === 'waiver_fa_fee'));
+    const isTeamSelectionDisabled = isTeamAutoPopulated || (type === 'debit' && (category === 'waiver_fa_fee'));
+    // Team selection for single-team trade fee is managed by its own conditional rendering.
 
     // Filter transactions for history table and pagination
     const filteredTransactions = transactions.filter(t => {
@@ -1112,7 +1147,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             id="amount"
                                             value={amount}
                                             onChange={(e) => setAmount(e.target.value)}
-                                            placeholder={category === 'waiver_fa_fee' ? "e.g., 1.00 (per pickup)" : "e.g., 50.00"}
+                                            placeholder={category === 'waiver_fa_fee' ? "e.g., 1.00 (per pickup)" : (category === 'trade_fee' && tradeEntryMethod === 'single_team' ? "e.g., 2.00 (per trade)" : "e.g., 50.00")}
                                             step="0.01"
                                             min="0.01"
                                             required
@@ -1146,6 +1181,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             setTradeTeams(['', '']); 
                                             setWaiverEntries([{ team: '', numPickups: 1 }]); 
                                             setDescription(''); 
+                                            setNumTrades(1); // Reset numTrades
+                                            setTradeEntryMethod('multi_team'); // Reset trade entry method
                                         }}
                                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                     >
@@ -1154,8 +1191,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                         ))}
                                     </select>
                                 </div>
-                                {/* Description field (conditionally rendered for waiver/FA) */}
-                                {!(type === 'debit' && category === 'waiver_fa_fee') && (
+                                {/* Description field (conditionally rendered for waiver/FA and single-team trade) */}
+                                {!(type === 'debit' && category === 'waiver_fa_fee') && !(type === 'debit' && category === 'trade_fee' && tradeEntryMethod === 'single_team') && (
                                     <div>
                                         <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                                         <input
@@ -1203,40 +1240,108 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                 )}
                                 
                                 {type === 'debit' && category === 'trade_fee' ? (
-                                    // Multiple team selectors for trade fees
-                                    <div className="space-y-2">
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Teams Involved in Trade (Min 2)</label>
-                                        {tradeTeams.map((team, index) => (
-                                            <div key={index} className="flex items-center space-x-2">
-                                                <select
-                                                    value={team}
-                                                    onChange={(e) => handleTradeTeamChange(index, e.target.value)}
-                                                    required
-                                                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                    // Trade Fee Entry Method Selection
+                                    <div className="space-y-4">
+                                        <label className="block text-sm font-medium text-gray-700">Trade Entry Method:</label>
+                                        <div className="flex space-x-4">
+                                            <label className="inline-flex items-center">
+                                                <input
+                                                    type="radio"
+                                                    className="form-radio text-blue-600"
+                                                    value="multi_team"
+                                                    checked={tradeEntryMethod === 'multi_team'}
+                                                    onChange={() => {
+                                                        setTradeEntryMethod('multi_team');
+                                                        setTeamName(''); 
+                                                        setNumTrades(1);
+                                                    }}
+                                                />
+                                                <span className="ml-2">Multiple Teams (Current Method)</span>
+                                            </label>
+                                            <label className="inline-flex items-center">
+                                                <input
+                                                    type="radio"
+                                                    className="form-radio text-blue-600"
+                                                    value="single_team"
+                                                    checked={tradeEntryMethod === 'single_team'}
+                                                    onChange={() => {
+                                                        setTradeEntryMethod('single_team');
+                                                        setTradeTeams(['', '']);
+                                                    }}
+                                                />
+                                                <span className="ml-2">Single Team (Enter Number of Trades)</span>
+                                            </label>
+                                        </div>
+
+                                        {tradeEntryMethod === 'multi_team' ? (
+                                            // Multiple team selectors for trade fees (existing logic)
+                                            <div className="space-y-2">
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Teams Involved in Trade (Min 2)</label>
+                                                {tradeTeams.map((team, index) => (
+                                                    <div key={index} className="flex items-center space-x-2">
+                                                        <select
+                                                            value={team}
+                                                            onChange={(e) => handleTradeTeamChange(index, e.target.value)}
+                                                            required
+                                                            className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                                        >
+                                                            <option value="">Select Team</option>
+                                                            {nonAllTeams.map(optionTeam => (
+                                                                <option key={optionTeam} value={optionTeam}>{optionTeam}</option>
+                                                            ))}
+                                                        </select>
+                                                        {tradeTeams.length > 1 && ( 
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleRemoveTradeTeam(index)}
+                                                                className="p-2 bg-red-400 text-white rounded-md hover:bg-red-500 transition-colors text-sm"
+                                                            >
+                                                                Remove
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                                <button
+                                                    type="button"
+                                                    onClick={handleAddTradeTeam}
+                                                    className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-md shadow-md transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2"
                                                 >
-                                                    <option value="">Select Team</option>
-                                                    {nonAllTeams.map(optionTeam => (
-                                                        <option key={optionTeam} value={optionTeam}>{optionTeam}</option>
-                                                    ))}
-                                                </select>
-                                                {tradeTeams.length > 1 && ( 
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleRemoveTradeTeam(index)}
-                                                        className="p-2 bg-red-400 text-white rounded-md hover:bg-red-500 transition-colors text-sm"
-                                                    >
-                                                        Remove
-                                                    </button>
-                                                )}
+                                                    Add Another Team
+                                                </button>
                                             </div>
-                                        ))}
-                                        <button
-                                            type="button"
-                                            onClick={handleAddTradeTeam}
-                                            className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-md shadow-md transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2"
-                                        >
-                                            Add Another Team
-                                        </button>
+                                        ) : (
+                                            // Single team trade entry
+                                            <div className="space-y-2">
+                                                <div>
+                                                    <label htmlFor="singleTeamTradeTeamName" className="block text-sm font-medium text-gray-700 mb-1">Associated Team</label>
+                                                    <select
+                                                        id="singleTeamTradeTeamName"
+                                                        value={teamName}
+                                                        onChange={(e) => setTeamName(e.target.value)}
+                                                        required
+                                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                                    >
+                                                        <option value="">Select Team</option>
+                                                        {nonAllTeams.map(team => (
+                                                            <option key={team} value={team}>{team}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label htmlFor="numTrades" className="block text-sm font-medium text-gray-700 mb-1">Number of Trades</label>
+                                                    <input
+                                                        type="number"
+                                                        id="numTrades"
+                                                        value={numTrades}
+                                                        onChange={(e) => setNumTrades(parseInt(e.target.value) || 0)}
+                                                        placeholder="e.g., 3"
+                                                        min="1"
+                                                        required
+                                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 ) : type === 'debit' && category === 'waiver_fa_fee' ? (
                                     // Multiple entries for waiver/FA fees
