@@ -296,7 +296,7 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
                     careerTeamStatsRaw[displayTeam1].ties++;
                 } else {
                     seasonalTeamStatsRaw[year][displayTeam1].losses++;
-                    careerTeamStatsRaw[year][displayTeam1].losses++;
+                    careerTeamStatsRaw[displayTeam1].losses++;
                 }
             }
             seasonalTeamStatsRaw[year][displayTeam1].highScore = Math.max(seasonalTeamStatsRaw[year][displayTeam1].highScore, team1Score);
@@ -352,7 +352,7 @@ export const calculateAllLeagueMetrics = (historicalMatchups, getMappedTeamName)
                     }
                 } else { // team1 won, so team2 lost
                     seasonalTeamStatsRaw[year][displayTeam2].losses++;
-                    careerTeamStatsRaw[year][displayTeam2].losses++;
+                    careerTeamStatsRaw[displayTeam2].losses++;
                 }
             }
             seasonalTeamStatsRaw[year][displayTeam2].highScore = Math.max(seasonalTeamStatsRaw[year][displayTeam2].highScore, team2Score);
