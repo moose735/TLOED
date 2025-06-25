@@ -3,6 +3,32 @@
 // Easily configurable current league ID
 export const CURRENT_LEAGUE_ID = '1181984921049018368'; // This is the CURRENT league ID for the 2025 season
 
+// Centralized map linking your internal team names (e.g., last names) to Sleeper User IDs.
+// YOU MUST POPULATE THIS MAP WITH ALL YOUR TEAM NAMES AND THEIR CORRESPONDING SLEEPER USER IDs.
+export const TEAM_NAME_TO_SLEEPER_ID_MAP = {
+  'Ainsworth': '783790952367169536',
+  'Bjarnar': '783761299275382784',
+  'Blumbergs': '783789717920534528',
+  'Boilard': '783789669597999104',
+  'Dembski': '783767734491127808',
+  'Irwin': '467074573125283840',
+  'Meer': '783778036578418688',
+  'Neufeglise': '783763304463147008',
+  'O\'Donoghue': '783758716272009216', // Fixed syntax: ensure commas between entries.
+  'ODonoghue': '783758716272009216', // Added alias for "ODonoghue"
+  'Randall': '783754997035876352',
+  'Schmitt': '783761892693905408',
+  'Tomczak': '787044291066380288',
+};
+
+// Set of internal team names for managers who are retired.
+// Teams listed here will generally be excluded from current season calculations
+// like Power Rankings, but their historical data will still be processed.
+export const RETIRED_MANAGERS = new Set([
+  // Add internal team names of retired managers here:
+  // For example: 'RetiredManagerName1', 'RetiredManagerName2'
+]);
+
 /**
  * Constructs the full URL for a Sleeper user avatar.
  * It intelligently handles both avatar hashes and full URLs found in metadata.
