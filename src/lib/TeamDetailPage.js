@@ -133,6 +133,12 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
             stats.totalDPRSum += m.adjustedDPR;
             stats.seasonsWithDPRData++;
           }
+          // --- START OF CHANGE ---
+          // Correctly count playoff appearances based on the 'isPlayoffTeam' flag
+          if (m.isPlayoffTeam) {
+            stats.playoffAppearancesCount++;
+          }
+          // --- END OF CHANGE ---
         }
       });
 
@@ -153,7 +159,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
         // Championships and playoff appearances for overall ranks are still calculated here
         // as they are cumulative totals that include the current year's data for ranking purposes,
         // but the *display of icons* will only count completed seasons.
-        playoffAppearancesCount: teamStats.playoffAppearancesCount, // This might include current season if m.isPlayoffTeam is true
+        playoffAppearancesCount: teamStats.playoffAppearancesCount, // This will now correctly reflect the sum from above
         totalLuckRating: teamStats.totalLuckRating,
         winRank: calculateRank(teamStats.wins, Object.values(allTeamsAggregatedStats).map(t => t.wins)),
         winPercentageRank: calculateRank((teamStats.wins + 0.5 * teamStats.ties) / teamStats.totalGamesPlayed, Object.values(allTeamsAggregatedStats).map(t => (t.wins + 0.5 * t.ties) / t.totalGamesPlayed)),
