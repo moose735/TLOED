@@ -133,12 +133,14 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
             stats.totalDPRSum += m.adjustedDPR;
             stats.seasonsWithDPRData++;
           }
-          // --- START OF CHANGE ---
           // Correctly count playoff appearances based on the 'isPlayoffTeam' flag
           if (m.isPlayoffTeam) {
             stats.playoffAppearancesCount++;
           }
-          // --- END OF CHANGE ---
+          // Fix: Correctly accumulate championships for ranking purposes
+          if (m.isChampion) {
+              stats.championships++;
+          }
         }
       });
 
