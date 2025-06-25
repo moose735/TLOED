@@ -1,7 +1,8 @@
 // PowerRankings.js
 import React, { useState, useEffect } from 'react';
-import { calculateAllLeagueMetrics, calculateRawDPR } from '../utils/calculations'; // Ensure these are correctly imported
+import { calculateAllLeagueMetrics } from '../utils/calculations';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { CURRENT_LEAGUE_ID, fetchUsersData, getSleeperAvatarUrl } from '../utils/sleeperApi'; // Import Sleeper API functions
 
 const formatDPR = (dpr) => {
     if (typeof dpr !== 'number' || isNaN(dpr)) return 'N/A';
@@ -29,8 +30,7 @@ const CHART_COLORS = [
 
 const CustomDPRRankTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
-        // Change this line to sort in ascending order of rank (entry.value)
-        const sortedPayload = [...payload].sort((a, b) => a.value - b.value); // Flipped sorting order
+        const sortedPayload = [...payload].sort((a, b) => a.value - b.value);
         return (
             <div className="bg-white p-3 border border-gray-300 rounded-md shadow-lg text-sm">
                 <p className="font-bold text-gray-800 mb-2">Week: {label}</p>
@@ -52,151 +52,157 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
     const [weeklyChartData, setWeeklyChartData] = useState([]);
     const [chartTeams, setChartTeams] = useState([]);
     const [maxTeamsInChart, setMaxTeamsInChart] = useState(1);
-    const [currentWeek, setCurrentWeek] = useState(0); // New state for current week
+    const [currentWeek, setCurrentWeek] = useState(0);
+    const [sleeperUsersMap, setSleeperUsersMap] = useState({}); // Stores Sleeper user data by userId
+
+    // This map links your historical team names (e.g., "Irwin") to Sleeper User IDs.
+    // YOU WILL NEED TO EXPAND THIS MAP FOR ALL YOUR TEAMS.
+    const teamNameToSleeperIdMap = {
+      'Irwin': '467074573125283840', // Example: 'Historical Name' -> 'Sleeper User ID'
+      // Add other team mappings here: 'Another Team Name': 'another_sleeper_user_id',
+    };
 
     useEffect(() => {
-        if (!historicalMatchups || historicalMatchups.length === 0) {
-            setPowerRankings([]);
-            setWeeklyChartData([]);
-            setChartTeams([]);
-            setLoading(false);
-            setError("No historical matchup data available to calculate power rankings or chart data.");
-            setCurrentWeek(0); // Reset current week
-            return;
-        }
-
-        setLoading(true);
-        setError(null);
-
-        try {
-            const allYears = historicalMatchups
-                .map(match => parseInt(match.year))
-                .filter(year => !isNaN(year));
-            const newestYear = allYears.length > 0 ? Math.max(...allYears) : null;
-
-            if (!newestYear) {
-                setError("No valid years found in historical data to determine the season for power rankings.");
+        const loadPowerRankingsAndSleeperData = async () => {
+            if (!historicalMatchups || historicalMatchups.length === 0) {
+                setPowerRankings([]);
+                setWeeklyChartData([]);
+                setChartTeams([]);
                 setLoading(false);
-                setCurrentWeek(0); // Reset current week
+                setError("No historical matchup data available to calculate power rankings or chart data.");
+                setCurrentWeek(0);
                 return;
             }
 
-            const newestYearMatchups = historicalMatchups.filter(match => parseInt(match.year) === newestYear);
-            const uniqueTeamsInNewestYear = Array.from(new Set(
-                newestYearMatchups.flatMap(match => [getDisplayTeamName(match.team1), getDisplayTeamName(match.team2)])
-            )).filter(teamName => teamName && teamName.trim() !== '');
+            setLoading(true);
+            setError(null);
 
-            const maxWeek = newestYearMatchups.reduce((max, match) => Math.max(max, parseInt(match.week)), 0);
-            setCurrentWeek(maxWeek); // Set the current week here
-
-            const weeklyDPRsChartData = [];
-            const weeklyCumulativeSeasonalMetrics = {}; // Store full seasonalMetrics per week
-
-            for (let week = 1; week <= maxWeek; week++) {
-                const matchupsUpToCurrentWeek = newestYearMatchups.filter(match => parseInt(match.week) <= week);
-                
-                // Recalculate seasonal metrics for the league up to this week
-                const { seasonalMetrics: currentWeekSeasonalMetrics } = calculateAllLeagueMetrics(matchupsUpToCurrentWeek, getDisplayTeamName);
-                
-                // Store these complete weekly metrics for later access (e.g., for table data or debugging)
-                weeklyCumulativeSeasonalMetrics[week] = currentWeekSeasonalMetrics[newestYear] || {};
-
-                const weeklyEntry = { week: week, dprValues: {} };
-                const teamsDPRsForThisWeek = [];
-
-                // Extract and rank DPRs for teams based on currentWeekSeasonalMetrics
-                uniqueTeamsInNewestYear.forEach(teamName => {
-                    const teamData = currentWeekSeasonalMetrics[newestYear] ? currentWeekSeasonalMetrics[newestYear][teamName] : null;
-                    if (teamData && teamData.adjustedDPR !== undefined && !isNaN(teamData.adjustedDPR)) {
-                        teamsDPRsForThisWeek.push({ team: teamName, dpr: teamData.adjustedDPR });
-                    } else {
-                        teamsDPRsForThisWeek.push({ team: teamName, dpr: 0 }); // Team might not have played yet or has no stats
-                    }
+            try {
+                // Fetch Sleeper user data
+                const users = await fetchUsersData(CURRENT_LEAGUE_ID);
+                const usersMap = {};
+                users.forEach(user => {
+                    usersMap[user.userId] = user;
                 });
+                setSleeperUsersMap(usersMap);
 
-                // Sort and assign ranks based on DPR for the current week's cumulative data
-                const rankedTeamsForWeek = teamsDPRsForThisWeek.sort((a, b) => b.dpr - a.dpr);
+                const allYears = historicalMatchups
+                    .map(match => parseInt(match.year))
+                    .filter(year => !isNaN(year));
+                const newestYear = allYears.length > 0 ? Math.max(...allYears) : null;
 
-                rankedTeamsForWeek.forEach((rankedTeam, index) => {
-                    if (rankedTeam.dpr > 0 || (weeklyCumulativeSeasonalMetrics[week][rankedTeam.team] && weeklyCumulativeSeasonalMetrics[week][rankedTeam.team].gamesPlayed > 0)) {
-                            weeklyEntry[rankedTeam.team] = index + 1; // This is the RANK
-                    } else {
-                            weeklyEntry[rankedTeam.team] = undefined; // No rank if no games played/DPR is 0
-                    }
-                    weeklyEntry.dprValues[rankedTeam.team] = rankedTeam.dpr; // Actual DPR value for tooltip
-                });
-                
-                weeklyDPRsChartData.push(weeklyEntry);
-            }
+                if (!newestYear) {
+                    setError("No valid years found in historical data to determine the season for power rankings.");
+                    setLoading(false);
+                    setCurrentWeek(0);
+                    return;
+                }
 
-            setWeeklyChartData(weeklyDPRsChartData);
-            
-            const activeChartTeams = uniqueTeamsInNewestYear.filter(team =>
-                weeklyDPRsChartData.some(weekData => weekData[team] !== undefined)
-            );
-            setChartTeams(activeChartTeams);
-            setMaxTeamsInChart(uniqueTeamsInNewestYear.length > 0 ? uniqueTeamsInNewestYear.length : 1);
+                const newestYearMatchups = historicalMatchups.filter(match => parseInt(match.year) === newestYear);
+                const uniqueTeamsInNewestYear = Array.from(new Set(
+                    newestYearMatchups.flatMap(match => [getDisplayTeamName(match.team1), getDisplayTeamName(match.team2)])
+                )).filter(teamName => teamName && teamName.trim() !== '');
+
+                const maxWeek = newestYearMatchups.reduce((max, match) => Math.max(max, parseInt(match.week)), 0);
+                setCurrentWeek(maxWeek);
+
+                const weeklyDPRsChartData = [];
+                const weeklyCumulativeSeasonalMetrics = {};
+
+                for (let week = 1; week <= maxWeek; week++) {
+                    const matchupsUpToCurrentWeek = newestYearMatchups.filter(match => parseInt(match.week) <= week);
+
+                    const { seasonalMetrics: currentWeekSeasonalMetrics } = calculateAllLeagueMetrics(matchupsUpToCurrentWeek, getDisplayTeamName);
+
+                    weeklyCumulativeSeasonalMetrics[week] = currentWeekSeasonalMetrics[newestYear] || {};
+
+                    const weeklyEntry = { week: week, dprValues: {} };
+                    const teamsDPRsForThisWeek = [];
+
+                    uniqueTeamsInNewestYear.forEach(teamName => {
+                        const teamData = currentWeekSeasonalMetrics[newestYear] ? currentWeekSeasonalMetrics[newestYear][teamName] : null;
+                        if (teamData && teamData.adjustedDPR !== undefined && !isNaN(teamData.adjustedDPR)) {
+                            teamsDPRsForThisWeek.push({ team: teamName, dpr: teamData.adjustedDPR });
+                        } else {
+                            teamsDPRsForThisWeek.push({ team: teamName, dpr: 0 });
+                        }
+                    });
+
+                    const rankedTeamsForWeek = teamsDPRsForThisWeek.sort((a, b) => b.dpr - a.dpr);
+
+                    rankedTeamsForWeek.forEach((rankedTeam, index) => {
+                        if (rankedTeam.dpr > 0 || (weeklyCumulativeSeasonalMetrics[week][rankedTeam.team] && weeklyCumulativeSeasonalMetrics[week][rankedTeam.team].gamesPlayed > 0)) {
+                            weeklyEntry[rankedTeam.team] = index + 1;
+                        } else {
+                            weeklyEntry[rankedTeam.team] = undefined;
+                        }
+                        weeklyEntry.dprValues[rankedTeam.team] = rankedTeam.dpr;
+                    });
+
+                    weeklyDPRsChartData.push(weeklyEntry);
+                }
+
+                setWeeklyChartData(weeklyDPRsChartData);
+
+                const activeChartTeams = uniqueTeamsInNewestYear.filter(team =>
+                    weeklyDPRsChartData.some(weekData => weekData[team] !== undefined)
+                );
+                setChartTeams(activeChartTeams);
+                setMaxTeamsInChart(uniqueTeamsInNewestYear.length > 0 ? uniqueTeamsInNewestYear.length : 1);
 
 
-            // --- Prepare data for the Power Rankings Table (including Rank and Movement) ---
-            const finalPowerRankingsForTable = uniqueTeamsInNewestYear
-                .map(teamName => {
-                    // Use the overall season metrics for the table's main stats
-                    const fullSeasonMetrics = weeklyCumulativeSeasonalMetrics[maxWeek] ? weeklyCumulativeSeasonalMetrics[maxWeek][teamName] : {};
+                const finalPowerRankingsForTable = uniqueTeamsInNewestYear
+                    .map(teamName => {
+                        const fullSeasonMetrics = weeklyCumulativeSeasonalMetrics[maxWeek] ? weeklyCumulativeSeasonalMetrics[maxWeek][teamName] : {};
 
-                    // Get the rank for the current (latest) week from weeklyDPRsChartData
-                    const currentRankInChart = weeklyDPRsChartData.length > 0
-                        ? (weeklyDPRsChartData[weeklyDPRsChartData.length - 1][teamName] || 0)
-                        : 0;
+                        const currentRankInChart = weeklyDPRsChartData.length > 0
+                            ? (weeklyDPRsChartData[weeklyDPRsChartData.length - 1][teamName] || 0)
+                            : 0;
 
-                    let previousRankInChart = 0;
-                    if (weeklyDPRsChartData.length > 1) {
-                        // Iterate backward from the second-to-last week's *index* in weeklyDPRsChartData
-                        for (let i = weeklyDPRsChartData.length - 2; i >= 0; i--) {
-                            // Check if the rank for the team exists and is a valid rank (not 0 or undefined/null)
-                            if (weeklyDPRsChartData[i][teamName] !== undefined && weeklyDPRsChartData[i][teamName] !== null && weeklyDPRsChartData[i][teamName] !== 0) {
-                                previousRankInChart = weeklyDPRsChartData[i][teamName];
-                                break; // Found the last valid rank before the current week
+                        let previousRankInChart = 0;
+                        if (weeklyDPRsChartData.length > 1) {
+                            for (let i = weeklyDPRsChartData.length - 2; i >= 0; i--) {
+                                if (weeklyDPRsChartData[i][teamName] !== undefined && weeklyDPRsChartData[i][teamName] !== null && weeklyDPRsChartData[i][teamName] !== 0) {
+                                    previousRankInChart = weeklyDPRsChartData[i][teamName];
+                                    break;
+                                }
                             }
                         }
-                    }
 
-                    let movement = 0;
-                    if (currentRankInChart !== 0 && previousRankInChart !== 0) {
-                        // Movement is previous rank minus current rank (e.g., if previous was 5, current is 3, movement is +2)
-                        movement = previousRankInChart - currentRankInChart;
-                    }   
-                    // If currentRank is 0, it means the team has no data for the latest week, so no movement.
-                    // If previousRank is 0 and currentRank is not 0, it's considered a "new" entry for comparison,
-                    // so we keep movement as 0 (or could add a "NEW" indicator if desired in the UI).
+                        let movement = 0;
+                        if (currentRankInChart !== 0 && previousRankInChart !== 0) {
+                            movement = previousRankInChart - currentRankInChart;
+                        }
 
-                    return {
-                        team: teamName,
-                        rank: currentRankInChart, // This is the current rank from the chart data
-                        movement: movement,
-                        dpr: fullSeasonMetrics.adjustedDPR || 0, // Overall season DPR for the table
-                        wins: fullSeasonMetrics.wins || 0,
-                        losses: fullSeasonMetrics.losses || 0,
-                        ties: fullSeasonMetrics.ties || 0,
-                        pointsFor: fullSeasonMetrics.pointsFor || 0,
-                        pointsAgainst: fullSeasonMetrics.pointsAgainst || 0,
-                        luckRating: fullSeasonMetrics.luckRating || 0,
-                        year: newestYear,
-                    };
-                })
-                // Filter out teams that have no rank in the current week (rank === 0 or undefined)
-                .filter(team => team.rank !== 0 && team.rank !== undefined)
-                .sort((a, b) => a.rank - b.rank); // Sort by the 'rank' derived from the chart data
+                        return {
+                            team: teamName, // This is the historical display name (e.g., "Irwin")
+                            rank: currentRankInChart,
+                            movement: movement,
+                            dpr: fullSeasonMetrics.adjustedDPR || 0,
+                            wins: fullSeasonMetrics.wins || 0,
+                            losses: fullSeasonMetrics.losses || 0,
+                            ties: fullSeasonMetrics.ties || 0,
+                            pointsFor: fullSeasonMetrics.pointsFor || 0,
+                            pointsAgainst: fullSeasonMetrics.pointsAgainst || 0,
+                            luckRating: fullSeasonMetrics.luckRating || 0,
+                            year: newestYear,
+                        };
+                    })
+                    .filter(team => team.rank !== 0 && team.rank !== undefined)
+                    .sort((a, b) => a.rank - b.rank);
 
-            setPowerRankings(finalPowerRankingsForTable);
-            setLoading(false);
+                setPowerRankings(finalPowerRankingsForTable);
+                setLoading(false);
 
-        } catch (err) {
-            console.error("Error calculating power rankings or chart data:", err);
-            setError(`Failed to calculate power rankings or chart data: ${err.message}. Ensure historical data is complete and accurate.`);
-            setLoading(false);
-        }
-    }, [historicalMatchups, getDisplayTeamName]);
+            } catch (err) {
+                console.error("Error calculating power rankings or chart data:", err);
+                setError(`Failed to calculate power rankings or chart data: ${err.message}. Ensure historical data is complete and accurate.`);
+                setLoading(false);
+            }
+        };
+
+        loadPowerRankingsAndSleeperData();
+    }, [historicalMatchups, getDisplayTeamName]); // Add sleeperUsersMap to dependencies if you want re-render on map change, though it's set once on load
 
     const renderMovement = (movement) => {
         if (movement === 0) {
@@ -237,7 +243,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                                 <tr>
                                     <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Rank</th>
                                     <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Movement</th>
-                                    <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
+                                    <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th> {/* This will now include avatar */}
                                     <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">DPR</th>
                                     <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record (W-L)</th>
                                     <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Points For</th>
@@ -246,18 +252,32 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {powerRankings.map((row, rowIndex) => (
-                                    <tr key={row.team} className={rowIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                        <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{row.rank}</td>
-                                        <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{renderMovement(row.movement)}</td>
-                                        <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{row.team}</td>
-                                        <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{formatDPR(row.dpr)}</td>
-                                        <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{renderRecordNoTies(row.wins, row.losses)}</td>
-                                        <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{formatPoints(row.pointsFor)}</td>
-                                        <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{formatPoints(row.pointsAgainst)}</td>
-                                        <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{formatLuckRating(row.luckRating)}</td>
-                                    </tr>
-                                ))}
+                                {powerRankings.map((row, rowIndex) => {
+                                    const sleeperUserId = teamNameToSleeperIdMap[row.team];
+                                    const sleeperTeamData = sleeperUsersMap[sleeperUserId];
+                                    const displayTeamName = sleeperTeamData ? sleeperTeamData.teamName : row.team;
+                                    const avatarUrl = sleeperTeamData ? getSleeperAvatarUrl(sleeperTeamData.avatar) : '';
+
+                                    return (
+                                        <tr key={row.team} className={rowIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                                            <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{row.rank}</td>
+                                            <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{renderMovement(row.movement)}</td>
+                                            <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
+                                                <div className="flex items-center space-x-2">
+                                                    {avatarUrl && (
+                                                        <img src={avatarUrl} alt={`${displayTeamName}'s avatar`} className="w-8 h-8 rounded-full object-cover" />
+                                                    )}
+                                                    <span>{displayTeamName}</span>
+                                                </div>
+                                            </td>
+                                            <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{formatDPR(row.dpr)}</td>
+                                            <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{renderRecordNoTies(row.wins, row.losses)}</td>
+                                            <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{formatPoints(row.pointsFor)}</td>
+                                            <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{formatPoints(row.pointsAgainst)}</td>
+                                            <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{formatLuckRating(row.luckRating)}</td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
