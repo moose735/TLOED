@@ -14,6 +14,7 @@ import {
 
 const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [transactions, setTransactions] = useState([]);
+    const [allTransactions, setAllTransactions] = useState([]); // New state for all transactions
     const [amount, setAmount] = useState('');
     const [description, setDescription] = useState('');
     const [type, setType] = useState('debit'); // 'debit' or 'credit' - internal values
@@ -333,10 +334,16 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
                     if (initialAuthToken) {
                          try {
-                            // Assuming signInWithCustomToken is defined or imported
-                            // await signInWithCustomToken(firebaseAuth, initialAuthToken); 
-                            setUserId(firebaseAuth.currentUser?.uid); 
-                            console.log("Signed in with custom token. User ID:", firebaseAuth.currentUser?.uid);
+                            // Note: signInWithCustomToken is not available in the provided tool API.
+                            // Assuming there's a mechanism for custom token sign-in if needed.
+                            // For now, removing this as it causes an error with provided tools.
+                            // await signInWithCustomToken(firebaseAuth, initialAuthToken);
+                            // setUserId(firebaseAuth.currentUser?.uid); 
+                            // console.log("Signed in with custom token. User ID:", firebaseAuth.currentUser?.uid);
+                             await signInAnonymously(firebaseAuth); // Fallback to anonymous
+                             setUserId(firebaseAuth.currentUser?.uid);
+                             console.log("Signed in anonymously (fallback from custom token attempt). User ID:", firebaseAuth.currentUser?.uid);
+
                         } catch (tokenSignInError) {
                             console.error("Error signing in with custom token (falling back to anonymous):", tokenSignInError);
                             try {
@@ -413,6 +420,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         if (!db || !isAuthReady || selectedSeason === null) {
             console.log("Firestore not ready, Auth not ready, or selectedSeason not set. Skipping transaction fetch.");
             setTransactions([]); // Clear existing transactions
+            setAllTransactions([]); // Clear all transactions
             setTransactionPot(0); // Clear pot
             setLoading(false); // Stop loading
             setSelectedTransactionIds([]); // Clear selections
@@ -442,13 +450,15 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 ...doc.data()
             }));
             
-            // Client-side filtering by selectedSeason
+            setAllTransactions(fetchedTransactions); // Store all fetched transactions
+
+            // Client-side filtering by selectedSeason for display
             const filteredBySeason = fetchedTransactions.filter(t => 
                 selectedSeason === 0 || t.season === selectedSeason
             );
             setTransactions(filteredBySeason);
 
-            // Calculate transaction pot for the selected season
+            // Calculate transaction pot for the selected season (using filtered transactions)
             const currentSeasonTransactionPot = filteredBySeason
                 .filter(t => 
                     (t.category === 'waiver_fa_fee' || t.category === 'trade_fee') 
@@ -818,12 +828,12 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         setShowConfirmBulkDelete(false);
     };
 
-    // Calculate OVERALL totals for Fees and Payouts (for summary cards)
-    const overallDebits = transactions // Use `transactions` which are already filtered by selectedSeason
+    // Calculate OVERALL totals for Fees and Payouts (for summary cards) using allTransactions
+    const overallDebits = allTransactions 
         .filter(t => t.type === 'debit')
         .reduce((sum, t) => sum + (t.amount || 0), 0);
 
-    const overallCredits = transactions // Use `transactions` which are already filtered by selectedSeason
+    const overallCredits = allTransactions 
         .filter(t => t.type === 'credit')
         .reduce((sum, t) => sum + (t.amount || 0), 0);
 
@@ -970,8 +980,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         }
     };
 
-    const isCurrentSeasonLatest = selectedSeason === Math.max(...availableSeasons);
-
     return (
         <div className="w-full max-w-4xl bg-white p-8 rounded-lg shadow-md mt-4 mx-auto">
             <h2 className="text-3xl font-extrabold text-blue-800 mb-6 text-center">
@@ -1096,7 +1104,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     </div>
 
                     {/* Add New Transaction Form (Conditionally rendered for Commish) */}
-                    {isCommish && (
+                    {isCommish ? (
                         <section className="mb-8 p-6 bg-gray-50 rounded-lg shadow-inner">
                             <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">Add New Transaction (for {selectedSeason || 'selected'} season)</h3>
                             <form onSubmit={handleAddTransaction} className="space-y-4">
@@ -1139,9 +1147,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             setWeeklyPointsWeek(''); 
                                             setSidePotName('');
                                             setTeamName(''); // Reset team name on category change
-                                            setTradeTeams(['', '']); // Reset trade teams
-                                            setWaiverEntries([{ team: '', numPickups: 1 }]); // Reset waiver entries
-                                            setDescription(''); // Reset description
+                                            setTradeTeams(['', '']); 
+                                            setWaiverEntries([{ team: '', numPickups: 1 }]); 
+                                            setDescription(''); 
                                         }}
                                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                     >
@@ -1170,16 +1178,14 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
                                 {(category === 'weekly_1st_points' || category === 'weekly_2nd_points') && (
                                     <div>
-                                        <label htmlFor="weeklyPointsWeek" className="block text-sm font-medium text-gray-700 mb-1">
-                                            Week Number ({isCurrentSeasonLatest ? `defaults to latest for selected season (${currentWeekForSelectedSeason})` : 'enter week'})
-                                        </label>
+                                        <label htmlFor="weeklyPointsWeek" className="block text-sm font-medium text-gray-700 mb-1">Week Number (defaults to latest for selected season)</label>
                                         <input
                                             type="number"
                                             id="weeklyPointsWeek"
                                             value={weeklyPointsWeek}
                                             onChange={(e) => setWeeklyPointsWeek(e.target.value)}
-                                            placeholder={isCurrentSeasonLatest ? currentWeekForSelectedSeason.toString() : "-"}
-                                            min="0" // Allow 0 for "Pre"
+                                            placeholder="e.g., 1, 5, 14"
+                                            min="0" 
                                             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                         />
                                     </div>
@@ -1322,6 +1328,10 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                 </button>
                             </form>
                         </section>
+                    ) : (
+                        <p className="text-center text-gray-600 p-4 bg-gray-100 rounded-lg shadow-inner mb-8">
+                            Only the league commissioner can add and remove transactions. Please log in with the commish account.
+                        </p>
                     )}
 
                     {/* Transaction History Table */}
@@ -1424,7 +1434,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                         </span>
                                                     </td>
                                                     <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200 capitalize">
-                                                        {t.category ? t.category.replace(/_/g, ' ') : 'General'}
+                                                        {t.category === 'waiver_fa_fee' ? 'Waiver/FA Fee' : (t.category ? t.category.replace(/_/g, ' ') : 'General')}
                                                     </td> 
                                                     <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
                                                         {t.weekNumber === 0 ? 'Pre' : (t.weekNumber || '-')} 
@@ -1587,15 +1597,14 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                 className="flex-1 px-3 py-2 border rounded-md"
                                             />
                                             <input
-                                                type="text" 
+                                                type="text"
                                                 value={item.amount}
                                                 onChange={(e) => handleCreditStructureChange(index, 'amount', e.target.value)}
-                                                placeholder="Amount (optional)"
+                                                placeholder="Amount"
                                                 className="w-24 px-3 py-2 border rounded-md"
                                             />
                                             <input
                                                 type="text"
-                                                value={item.description}
                                                 onChange={(e) => handleCreditStructureChange(index, 'description', e.target.value)}
                                                 placeholder="Description (optional)"
                                                 className="flex-1 px-3 py-2 border rounded-md"
@@ -1617,44 +1626,53 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                         Add Payout Item
                                     </button>
                                 </div>
-                                <div className="flex justify-center space-x-4 mt-6">
-                                    <button
-                                        type="button"
-                                        onClick={handleSaveStructure}
-                                        className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-md shadow-md"
-                                    >
-                                        Save Structure
-                                    </button>
+
+                                <div className="flex justify-end space-x-3 mt-4">
                                     <button
                                         type="button"
                                         onClick={handleCancelEditStructure}
-                                        className="px-6 py-2 bg-gray-400 hover:bg-gray-500 text-gray-800 font-bold rounded-md shadow-md"
+                                        className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-md transition-colors"
                                     >
                                         Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleSaveStructure}
+                                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
+                                    >
+                                        Save Structure
                                     </button>
                                 </div>
                             </div>
                         ) : (
-                            // Display mode for structure - visible to all
-                            <div className="grid grid-cols-1 gap-6">
+                            // View mode for structure
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
                                     <h4 className="text-xl font-semibold text-red-700 mb-3">Fees (Money In)</h4>
-                                    <ul className="list-disc list-inside space-y-1 text-gray-700">
-                                        {debitStructureData.map((item, index) => (
-                                            <li key={index}>
-                                                <strong>{item.name}:</strong> {item.amount}{item.description && ` - ${item.description}`}
-                                            </li>
-                                        ))}
+                                    <ul className="list-disc pl-5 space-y-1 text-gray-700">
+                                        {debitStructureData.length > 0 ? (
+                                            debitStructureData.map((item, index) => (
+                                                <li key={index}>
+                                                    <span className="font-medium">{item.name}:</span> {item.amount} {item.description && `(${item.description})`}
+                                                </li>
+                                            ))
+                                        ) : (
+                                            <li>No fee structure defined.</li>
+                                        )}
                                     </ul>
                                 </div>
                                 <div>
                                     <h4 className="text-xl font-semibold text-green-700 mb-3">Payouts (Money Out)</h4>
-                                    <ul className="list-disc list-inside space-y-1 text-gray-700">
-                                        {creditStructureData.map((item, index) => (
-                                            <li key={index}>
-                                                <strong>{item.name}:</strong> {item.amount}{item.description && ` - ${item.description}`}
-                                            </li>
-                                        ))}
+                                    <ul className="list-disc pl-5 space-y-1 text-gray-700">
+                                        {creditStructureData.length > 0 ? (
+                                            creditStructureData.map((item, index) => (
+                                                <li key={index}>
+                                                    <span className="font-medium">{item.name}:</span> {item.amount} {item.description && `(${item.description})`}
+                                                </li>
+                                            ))
+                                        ) : (
+                                            <li>No payout structure defined.</li>
+                                        )}
                                     </ul>
                                 </div>
                             </div>
@@ -1663,7 +1681,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 </>
             )}
 
-            {/* Single Delete Confirmation Modal */}
+            {/* Confirmation Modals */}
             {showConfirmDelete && (
                 <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50">
                     <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full text-center">
@@ -1691,7 +1709,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 </div>
             )}
 
-            {/* Bulk Delete Confirmation Modal */}
             {showConfirmBulkDelete && (
                 <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50">
                     <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full text-center">
