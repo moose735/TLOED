@@ -29,7 +29,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null); 
     const [db, setDb] = useState(null);
-    const [auth, setAuth] = useState(null); // FIX: Correctly initialize auth state using useState
+    const [auth, setAuth] = useState(null); 
     const [userId, setUserId] = useState(null);
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [uniqueTeams, setUniqueTeams] = useState([]);
@@ -63,7 +63,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [debitStructureData, setDebitStructureData] = useState([]); // Internal name
     const [creditStructureData, setCreditStructureData] = useState([]); // Internal name
     const [isEditingStructure, setIsEditingStructure] = useState(false);
-    const [loadingStructure, setLoadingStructure] = true);
+    const [loadingStructure, setLoadingStructure] = useState(true); // FIX: Corrected syntax here
 
     // State for transaction pot
     const [transactionPot, setTransactionPot] = useState(0);
