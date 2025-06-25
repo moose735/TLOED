@@ -26,14 +26,10 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     // State for multiple waiver/FA entries
     const [waiverEntries, setWaiverEntries] = useState([{ team: '', numPickups: 1 }]); 
     
-    // New state for trade entry method: 'multi_team' or 'single_team'
-    const [tradeEntryMethod, setTradeEntryMethod] = useState('multi_team'); 
-    const [numTrades, setNumTrades] = useState(1); // For single team trade entry
-
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null); 
     const [db, setDb] = useState(null);
-    const [auth, setAuth] = useState(null); 
+    const [auth, setAuth] = useState(null);
     const [userId, setUserId] = useState(null);
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [uniqueTeams, setUniqueTeams] = useState([]);
@@ -67,7 +63,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [debitStructureData, setDebitStructureData] = useState([]); // Internal name
     const [creditStructureData, setCreditStructureData] = useState([]); // Internal name
     const [isEditingStructure, setIsEditingStructure] = useState(false);
-    const [loadingStructure, setLoadingStructure] = useState(true); 
+    const [loadingStructure, setLoadingStructure] = useState(true);
 
     // State for transaction pot
     const [transactionPot, setTransactionPot] = useState(0);
@@ -135,11 +131,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         } else {
             setCategory('');
         }
-        // When type changes, reset category-specific states
+        // When type changes, reset tradeTeams and waiverEntries as they are category specific
         if (!(type === 'debit' && category === 'trade_fee')) {
             setTradeTeams(['', '']);
-            setNumTrades(1); // Reset numTrades
-            setTradeEntryMethod('multi_team'); // Reset trade entry method
         }
         if (!(type === 'debit' && category === 'waiver_fa_fee')) {
             setWaiverEntries([{ team: '', numPickups: 1 }]);
@@ -253,13 +247,11 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         setAutoPopulateWarning(null); 
         setIsTeamAutoPopulated(false); 
 
-        // Reset category-specific states if not applicable
-        if (type !== 'debit' || category !== 'trade_fee') {
+        // Reset tradeTeams and waiverEntries if not applicable
+        if (!(type === 'debit' && category === 'trade_fee')) {
             setTradeTeams(['', '']);
-            setNumTrades(1); // Reset numTrades
-            setTradeEntryMethod('multi_team'); // Reset trade entry method
         }
-        if (type !== 'debit' || category !== 'waiver_fa_fee') {
+        if (!(type === 'debit' && category === 'waiver_fa_fee')) {
             setWaiverEntries([{ team: '', numPickups: 1 }]);
         }
 
@@ -341,16 +333,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
                     if (initialAuthToken) {
                          try {
-                            // Note: signInWithCustomToken is not available in the provided tool API.
-                            // Assuming there's a mechanism for custom token sign-in if needed.
-                            // For now, removing this as it causes an error with provided tools.
-                            // await signInWithCustomToken(firebaseAuth, initialAuthToken);
-                            // setUserId(firebaseAuth.currentUser?.uid); 
-                            // console.log("Signed in with custom token. User ID:", firebaseAuth.currentUser?.uid);
-                             await signInAnonymously(firebaseAuth); // Fallback to anonymous
-                             setUserId(firebaseAuth.currentUser?.uid);
-                             console.log("Signed in anonymously (fallback from custom token attempt). User ID:", firebaseAuth.currentUser?.uid);
-
+                            await signInWithCustomToken(firebaseAuth, initialAuthToken);
+                            setUserId(firebaseAuth.currentUser?.uid); 
+                            console.log("Signed in with custom token. User ID:", firebaseAuth.currentUser?.uid);
                         } catch (tokenSignInError) {
                             console.error("Error signing in with custom token (falling back to anonymous):", tokenSignInError);
                             try {
@@ -456,13 +441,13 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 ...doc.data()
             }));
             
-            // Client-side filtering by selectedSeason for display
+            // Client-side filtering by selectedSeason
             const filteredBySeason = fetchedTransactions.filter(t => 
                 selectedSeason === 0 || t.season === selectedSeason
             );
             setTransactions(filteredBySeason);
 
-            // Calculate transaction pot for the selected season (using filtered transactions)
+            // Calculate transaction pot for the selected season
             const currentSeasonTransactionPot = filteredBySeason
                 .filter(t => 
                     (t.category === 'waiver_fa_fee' || t.category === 'trade_fee') 
@@ -546,7 +531,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setError("Please enter a valid positive amount.");
             return;
         }
-        if (!description.trim() && category !== 'waiver_fa_fee' && !(category === 'trade_fee' && tradeEntryMethod === 'single_team')) { 
+        if (!description.trim() && category !== 'waiver_fa_fee') { // Description can be auto-generated for waiver/FA
             setError("Description cannot be empty.");
             return;
         }
@@ -554,51 +539,27 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         let transactionsToAdd = [];
 
         if (type === 'debit' && category === 'trade_fee') {
-            if (tradeEntryMethod === 'multi_team') {
-                const validTradeTeams = tradeTeams.filter(team => team.trim() !== '');
-                if (validTradeTeams.length < 2) {
-                    setError("Please select at least two teams for a trade fee.");
-                    return;
-                }
-                if (new Set(validTradeTeams).size !== validTradeTeams.length) {
-                    setError("Duplicate teams detected for trade fee. Please select unique teams.");
-                    return;
-                }
+            const validTradeTeams = tradeTeams.filter(team => team.trim() !== '');
+            if (validTradeTeams.length < 2) {
+                setError("Please select at least two teams for a trade fee.");
+                return;
+            }
+            if (new Set(validTradeTeams).size !== validTradeTeams.length) {
+                setError("Duplicate teams detected for trade fee. Please select unique teams.");
+                return;
+            }
 
-                for (const team of validTradeTeams) {
-                    transactionsToAdd.push({
-                        amount: parseFloat(amount), 
-                        description: description.trim(),
-                        type: type, // 'debit'
-                        teamName: team,
-                        date: serverTimestamp(),
-                        userId: userId,
-                        category: category,
-                        season: selectedSeason, // Use selectedSeason for new transactions
-                        weekNumber: currentWeekForSelectedSeason, // Assign current week for selected season
-                        teamsInvolvedCount: 1,
-                    });
-                }
-            } else if (tradeEntryMethod === 'single_team') {
-                if (!teamName.trim()) {
-                    setError("Please select a team for the single team trade entry.");
-                    return;
-                }
-                if (isNaN(numTrades) || numTrades <= 0) {
-                    setError("Please enter a valid positive number of trades.");
-                    return;
-                }
+            for (const team of validTradeTeams) {
                 transactionsToAdd.push({
-                    amount: parseFloat(amount) * numTrades, 
-                    description: `Trade Fee: ${teamName} - ${numTrades} trade(s)`,
-                    type: type, 
-                    teamName: teamName,
+                    amount: parseFloat(amount), 
+                    description: description.trim(),
+                    type: type, // 'debit'
+                    teamName: team,
                     date: serverTimestamp(),
                     userId: userId,
                     category: category,
-                    season: selectedSeason, 
-                    weekNumber: currentWeekForSelectedSeason,
-                    numTrades: numTrades, // Store number of trades
+                    season: selectedSeason, // Use selectedSeason for new transactions
+                    weekNumber: currentWeekForSelectedSeason, // Assign current week for selected season
                     teamsInvolvedCount: 1,
                 });
             }
@@ -718,8 +679,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setWaiverEntries([{ team: '', numPickups: 1 }]); // Reset waiver entries
             setWeeklyPointsWeek(''); 
             setSidePotName(''); 
-            setNumTrades(1); // Reset numTrades
-            setTradeEntryMethod('multi_team'); // Reset trade entry method
             setError(null); 
             setAutoPopulateWarning(null); 
             console.log("Transaction(s) added to Firestore successfully.");
@@ -783,8 +742,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         setWaiverEntries(newWaiverEntries);
     };
 
-    const isTeamSelectionDisabled = isTeamAutoPopulated || (type === 'debit' && (category === 'waiver_fa_fee'));
-    // Team selection for single-team trade fee is managed by its own conditional rendering.
+    const isTeamSelectionDisabled = isTeamAutoPopulated || (type === 'debit' && (category === 'trade_fee' || category === 'waiver_fa_fee'));
 
     // Filter transactions for history table and pagination
     const filteredTransactions = transactions.filter(t => {
@@ -859,12 +817,12 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         setShowConfirmBulkDelete(false);
     };
 
-    // Calculate OVERALL totals for Fees and Payouts (for summary cards) using *transactions for selected season*
-    const overallDebits = transactions 
+    // Calculate OVERALL totals for Fees and Payouts (for summary cards)
+    const overallDebits = transactions // Use `transactions` which are already filtered by selectedSeason
         .filter(t => t.type === 'debit')
         .reduce((sum, t) => sum + (t.amount || 0), 0);
 
-    const overallCredits = transactions 
+    const overallCredits = transactions // Use `transactions` which are already filtered by selectedSeason
         .filter(t => t.type === 'credit')
         .reduce((sum, t) => sum + (t.amount || 0), 0);
 
@@ -1147,7 +1105,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             id="amount"
                                             value={amount}
                                             onChange={(e) => setAmount(e.target.value)}
-                                            placeholder={category === 'waiver_fa_fee' ? "e.g., 1.00 (per pickup)" : (category === 'trade_fee' && tradeEntryMethod === 'single_team' ? "e.g., 2.00 (per trade)" : "e.g., 50.00")}
+                                            placeholder={category === 'waiver_fa_fee' ? "e.g., 1.00 (per pickup)" : "e.g., 50.00"}
                                             step="0.01"
                                             min="0.01"
                                             required
@@ -1178,11 +1136,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             setWeeklyPointsWeek(''); 
                                             setSidePotName('');
                                             setTeamName(''); // Reset team name on category change
-                                            setTradeTeams(['', '']); 
-                                            setWaiverEntries([{ team: '', numPickups: 1 }]); 
-                                            setDescription(''); 
-                                            setNumTrades(1); // Reset numTrades
-                                            setTradeEntryMethod('multi_team'); // Reset trade entry method
+                                            setTradeTeams(['', '']); // Reset trade teams
+                                            setWaiverEntries([{ team: '', numPickups: 1 }]); // Reset waiver entries
+                                            setDescription(''); // Reset description
                                         }}
                                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                     >
@@ -1191,8 +1147,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                         ))}
                                     </select>
                                 </div>
-                                {/* Description field (conditionally rendered for waiver/FA and single-team trade) */}
-                                {!(type === 'debit' && category === 'waiver_fa_fee') && !(type === 'debit' && category === 'trade_fee' && tradeEntryMethod === 'single_team') && (
+                                {/* Description field (conditionally rendered for waiver/FA) */}
+                                {!(type === 'debit' && category === 'waiver_fa_fee') && (
                                     <div>
                                         <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                                         <input
@@ -1218,7 +1174,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             value={weeklyPointsWeek}
                                             onChange={(e) => setWeeklyPointsWeek(e.target.value)}
                                             placeholder="e.g., 1, 5, 14"
-                                            min="0" 
+                                            min="0" // Allow 0 for "Pre"
                                             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                         />
                                     </div>
@@ -1240,108 +1196,40 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                 )}
                                 
                                 {type === 'debit' && category === 'trade_fee' ? (
-                                    // Trade Fee Entry Method Selection
-                                    <div className="space-y-4">
-                                        <label className="block text-sm font-medium text-gray-700">Trade Entry Method:</label>
-                                        <div className="flex space-x-4">
-                                            <label className="inline-flex items-center">
-                                                <input
-                                                    type="radio"
-                                                    className="form-radio text-blue-600"
-                                                    value="multi_team"
-                                                    checked={tradeEntryMethod === 'multi_team'}
-                                                    onChange={() => {
-                                                        setTradeEntryMethod('multi_team');
-                                                        setTeamName(''); 
-                                                        setNumTrades(1);
-                                                    }}
-                                                />
-                                                <span className="ml-2">Multiple Teams (Current Method)</span>
-                                            </label>
-                                            <label className="inline-flex items-center">
-                                                <input
-                                                    type="radio"
-                                                    className="form-radio text-blue-600"
-                                                    value="single_team"
-                                                    checked={tradeEntryMethod === 'single_team'}
-                                                    onChange={() => {
-                                                        setTradeEntryMethod('single_team');
-                                                        setTradeTeams(['', '']);
-                                                    }}
-                                                />
-                                                <span className="ml-2">Single Team (Enter Number of Trades)</span>
-                                            </label>
-                                        </div>
-
-                                        {tradeEntryMethod === 'multi_team' ? (
-                                            // Multiple team selectors for trade fees (existing logic)
-                                            <div className="space-y-2">
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">Teams Involved in Trade (Min 2)</label>
-                                                {tradeTeams.map((team, index) => (
-                                                    <div key={index} className="flex items-center space-x-2">
-                                                        <select
-                                                            value={team}
-                                                            onChange={(e) => handleTradeTeamChange(index, e.target.value)}
-                                                            required
-                                                            className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                                        >
-                                                            <option value="">Select Team</option>
-                                                            {nonAllTeams.map(optionTeam => (
-                                                                <option key={optionTeam} value={optionTeam}>{optionTeam}</option>
-                                                            ))}
-                                                        </select>
-                                                        {tradeTeams.length > 1 && ( 
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleRemoveTradeTeam(index)}
-                                                                className="p-2 bg-red-400 text-white rounded-md hover:bg-red-500 transition-colors text-sm"
-                                                            >
-                                                                Remove
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                                <button
-                                                    type="button"
-                                                    onClick={handleAddTradeTeam}
-                                                    className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-md shadow-md transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2"
+                                    // Multiple team selectors for trade fees
+                                    <div className="space-y-2">
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Teams Involved in Trade (Min 2)</label>
+                                        {tradeTeams.map((team, index) => (
+                                            <div key={index} className="flex items-center space-x-2">
+                                                <select
+                                                    value={team}
+                                                    onChange={(e) => handleTradeTeamChange(index, e.target.value)}
+                                                    required
+                                                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                                 >
-                                                    Add Another Team
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            // Single team trade entry
-                                            <div className="space-y-2">
-                                                <div>
-                                                    <label htmlFor="singleTeamTradeTeamName" className="block text-sm font-medium text-gray-700 mb-1">Associated Team</label>
-                                                    <select
-                                                        id="singleTeamTradeTeamName"
-                                                        value={teamName}
-                                                        onChange={(e) => setTeamName(e.target.value)}
-                                                        required
-                                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                                    <option value="">Select Team</option>
+                                                    {nonAllTeams.map(optionTeam => (
+                                                        <option key={optionTeam} value={optionTeam}>{optionTeam}</option>
+                                                    ))}
+                                                </select>
+                                                {tradeTeams.length > 1 && ( 
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveTradeTeam(index)}
+                                                        className="p-2 bg-red-400 text-white rounded-md hover:bg-red-500 transition-colors text-sm"
                                                     >
-                                                        <option value="">Select Team</option>
-                                                        {nonAllTeams.map(team => (
-                                                            <option key={team} value={team}>{team}</option>
-                                                        ))}
-                                                    </select>
-                                                </div>
-                                                <div>
-                                                    <label htmlFor="numTrades" className="block text-sm font-medium text-gray-700 mb-1">Number of Trades</label>
-                                                    <input
-                                                        type="number"
-                                                        id="numTrades"
-                                                        value={numTrades}
-                                                        onChange={(e) => setNumTrades(parseInt(e.target.value) || 0)}
-                                                        placeholder="e.g., 3"
-                                                        min="1"
-                                                        required
-                                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                                    />
-                                                </div>
+                                                        Remove
+                                                    </button>
+                                                )}
                                             </div>
-                                        )}
+                                        ))}
+                                        <button
+                                            type="button"
+                                            onClick={handleAddTradeTeam}
+                                            className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-md shadow-md transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2"
+                                        >
+                                            Add Another Team
+                                        </button>
                                     </div>
                                 ) : type === 'debit' && category === 'waiver_fa_fee' ? (
                                     // Multiple entries for waiver/FA fees
@@ -1535,7 +1423,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                         </span>
                                                     </td>
                                                     <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200 capitalize">
-                                                        {t.category === 'waiver_fa_fee' ? 'Waiver/FA Fee' : (t.category ? t.category.replace(/_/g, ' ') : 'General')}
+                                                        {t.category ? t.category.replace(/_/g, ' ') : 'General'}
                                                     </td> 
                                                     <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
                                                         {t.weekNumber === 0 ? 'Pre' : (t.weekNumber || '-')} 
@@ -1544,12 +1432,10 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                         <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
                                                             <button
                                                                 onClick={() => confirmDelete(t)}
-                                                                className="text-red-500 hover:text-red-700"
-                                                                title="Delete transaction"
+                                                                className="bg-red-500 hover:bg-red-600 text-white text-xs px-2 py-1 rounded-md shadow-sm transition-colors duration-200"
+                                                                title="Delete Transaction"
                                                             >
-                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm6 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" />
-                                                                </svg>
+                                                                Delete
                                                             </button>
                                                         </td>
                                                     )}
@@ -1558,45 +1444,44 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                         })}
                                     </tbody>
                                 </table>
-                            </div>
-                        )}
-                        
-                        {/* Pagination Controls */}
-                        {totalPages > 1 && (
-                            <div className="flex justify-center items-center mt-4 space-x-2">
-                                <button
-                                    onClick={handlePreviousPage}
-                                    disabled={currentPage === 1}
-                                    className="px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50"
-                                >
-                                    Previous
-                                </button>
-                                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                                    <button
-                                        key={page}
-                                        onClick={() => paginate(page)}
-                                        className={`px-3 py-1 rounded-md ${currentPage === page ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-                                    >
-                                        {page}
-                                    </button>
-                                ))}
-                                <button
-                                    onClick={handleNextPage}
-                                    disabled={currentPage === totalPages}
-                                    className="px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50"
-                                >
-                                    Next
-                                </button>
+                                {/* Pagination Controls */}
+                                {totalPages > 1 && (
+                                    <div className="flex justify-center items-center space-x-2 mt-4">
+                                        <button
+                                            onClick={handlePreviousPage}
+                                            disabled={currentPage === 1}
+                                            className="px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            Previous
+                                        </button>
+                                        {[...Array(totalPages)].map((_, index) => (
+                                            <button
+                                                key={index + 1}
+                                                onClick={() => paginate(index + 1)}
+                                                className={`px-3 py-1 rounded-md ${
+                                                    currentPage === index + 1 ? 'bg-blue-700 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                                }`}
+                                            >
+                                                {index + 1}
+                                            </button>
+                                        ))}
+                                        <button
+                                            onClick={handleNextPage}
+                                            disabled={currentPage === totalPages}
+                                            className="px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            Next
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </section>
 
-                    {/* Team Summary Table */}
-                    <section className="mt-8">
-                        <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">Team Financial Summary (for {selectedSeason || 'selected'} season)</h3>
-                        {Object.keys(teamSummary).length === 0 ? (
-                            <p className="text-center text-gray-600">No team financial data available for this season.</p>
-                        ) : (
+                    {/* Team Financial Summary Section */}
+                    {Object.keys(teamSummary).length > 0 && (
+                        <section className="mt-8 p-6 bg-gray-50 rounded-lg shadow-inner">
+                            <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">Team Financial Summary (Current Season)</h3>
                             <div className="overflow-x-auto">
                                 <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
                                     <thead className="bg-blue-100">
@@ -1604,20 +1489,20 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team Name</th>
                                             <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Total Fees</th>
                                             <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Total Payouts</th>
-                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Net Balance (Payouts - Fees)</th>
+                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Net Balance</th>
                                             <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Winnings/(Extra Fees)</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {Object.entries(teamSummary).sort(([,a], [,b]) => b.netBalance - a.netBalance).map(([team, data], index) => (
+                                        {Object.entries(teamSummary).sort(([teamA], [teamB]) => teamA.localeCompare(teamB)).map(([team, data], index) => (
                                             <tr key={team} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                                <td className="py-2 px-4 text-sm font-medium text-gray-800 border-b border-gray-200">{team}</td>
-                                                <td className="py-2 px-4 text-sm text-right text-red-700 border-b border-gray-200">${data.totalDebits.toFixed(2)}</td>
-                                                <td className="py-2 px-4 text-sm text-right text-green-700 border-b border-gray-200">${data.totalCredits.toFixed(2)}</td>
-                                                <td className={`py-2 px-4 text-sm text-right border-b border-gray-200 ${data.netBalance >= 0 ? 'text-green-800' : 'text-red-800'} font-bold`}>
+                                                <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{team}</td>
+                                                <td className="py-2 px-4 text-sm text-right text-gray-900 font-medium border-b border-gray-200">${data.totalDebits.toFixed(2)}</td>
+                                                <td className="py-2 px-4 text-sm text-right text-gray-900 font-medium border-b border-gray-200">${data.totalCredits.toFixed(2)}</td>
+                                                <td className={`py-2 px-4 text-sm text-right font-bold border-b border-gray-200 ${data.netBalance >= 0 ? 'text-green-900' : 'text-red-900'}`}>
                                                     ${data.netBalance.toFixed(2)}
                                                 </td>
-                                                <td className={`py-2 px-4 text-sm text-right border-b border-gray-200 ${data.winningsExtraFees >= 0 ? 'text-green-800' : 'text-red-800'} font-bold`}>
+                                                <td className={`py-2 px-4 text-sm text-right font-bold border-b border-gray-200 ${data.winningsExtraFees >= 0 ? 'text-green-900' : 'text-red-900'}`}>
                                                     ${data.winningsExtraFees.toFixed(2)}
                                                 </td>
                                             </tr>
@@ -1625,140 +1510,159 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                     </tbody>
                                 </table>
                             </div>
-                        )}
-                    </section>
-                    
-                    {/* Fee/Payout Structure Management (Commish only) */}
-                    {isCommish && (
-                        <section className="mt-8 p-6 bg-gray-50 rounded-lg shadow-inner">
-                            <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">Manage League Structure (Fees & Payouts)</h3>
-                            {loadingStructure ? (
-                                <p className="text-center text-blue-600">Loading structure data...</p>
-                            ) : (
-                                <>
-                                    {!isEditingStructure ? (
-                                        <button
-                                            onClick={() => setIsEditingStructure(true)}
-                                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md shadow-md transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 mb-4"
-                                        >
-                                            Edit Structure
-                                        </button>
-                                    ) : (
-                                        <div>
-                                            {/* Fees (Debits) */}
-                                            <h4 className="text-xl font-semibold text-gray-700 mb-3">Fees (Debits)</h4>
-                                            <div className="space-y-4 mb-6">
-                                                {debitStructureData.map((item, index) => (
-                                                    <div key={index} className="flex flex-col md:flex-row gap-3 items-center p-3 border border-gray-200 rounded-md bg-white shadow-sm">
-                                                        <input
-                                                            type="text"
-                                                            value={item.name}
-                                                            onChange={(e) => handleDebitStructureChange(index, 'name', e.target.value)}
-                                                            placeholder="Fee Name"
-                                                            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                                        />
-                                                        <input
-                                                            type="text"
-                                                            value={item.amount}
-                                                            onChange={(e) => handleDebitStructureChange(index, 'amount', e.target.value)}
-                                                            placeholder="Amount (e.g., $50, $1/pickup)"
-                                                            className="w-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                                        />
-                                                        <input
-                                                            type="text"
-                                                            value={item.description}
-                                                            onChange={(e) => handleDebitStructureChange(index, 'description', e.target.value)}
-                                                            placeholder="Description"
-                                                            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                                        />
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleRemoveDebitItem(index)}
-                                                            className="p-2 bg-red-400 text-white rounded-md hover:bg-red-500 transition-colors text-sm"
-                                                        >
-                                                            Remove
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                                <button
-                                                    type="button"
-                                                    onClick={handleAddDebitItem}
-                                                    className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-md shadow-md transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2"
-                                                >
-                                                    Add New Fee Item
-                                                </button>
-                                            </div>
-
-                                            {/* Payouts (Credits) */}
-                                            <h4 className="text-xl font-semibold text-gray-700 mb-3">Payouts (Credits)</h4>
-                                            <div className="space-y-4 mb-6">
-                                                {creditStructureData.map((item, index) => (
-                                                    <div key={index} className="flex flex-col md:flex-row gap-3 items-center p-3 border border-gray-200 rounded-md bg-white shadow-sm">
-                                                        <input
-                                                            type="text"
-                                                            value={item.name}
-                                                            onChange={(e) => handleCreditStructureChange(index, 'name', e.target.value)}
-                                                            placeholder="Payout Name"
-                                                            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                                        />
-                                                        <input
-                                                            type="text"
-                                                            value={item.amount}
-                                                            onChange={(e) => handleCreditStructureChange(index, 'amount', e.target.value)}
-                                                            placeholder="Amount (e.g., $100)"
-                                                            className="w-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                                        />
-                                                        <input
-                                                            type="text"
-                                                            value={item.description}
-                                                            onChange={(e) => handleCreditStructureChange(index, 'description', e.target.value)}
-                                                            placeholder="Description"
-                                                            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                                        />
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleRemoveCreditItem(index)}
-                                                            className="p-2 bg-red-400 text-white rounded-md hover:bg-red-500 transition-colors text-sm"
-                                                        >
-                                                            Remove
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                                <button
-                                                    type="button"
-                                                    onClick={handleAddCreditItem}
-                                                    className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-md shadow-md transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2"
-                                                >
-                                                    Add New Payout Item
-                                                </button>
-                                            </div>
-
-                                            <div className="flex justify-end space-x-4">
-                                                <button
-                                                    type="button"
-                                                    onClick={handleCancelEditStructure}
-                                                    className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-md transition-colors"
-                                                >
-                                                    Cancel
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={handleSaveStructure}
-                                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
-                                                >
-                                                    Save Structure
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
-                                </>
-                            )}
                         </section>
                     )}
+
+                    {/* Fee and Payout Structure Section */}
+                    <section className="mt-8 p-6 bg-gray-50 rounded-lg shadow-inner">
+                        <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">League Fee & Payout Structure</h3>
+                        {isCommish && !isEditingStructure && (
+                            <div className="text-center mb-4">
+                                <button
+                                    onClick={() => setIsEditingStructure(true)}
+                                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-md shadow-md transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                                >
+                                    Edit Structure
+                                </button>
+                            </div>
+                        )}
+
+                        {loadingStructure ? (
+                            <p className="text-center text-blue-600">Loading structure...</p>
+                        ) : isEditingStructure ? (
+                            // Edit mode for structure - only if commish
+                            <div className="space-y-6">
+                                <div>
+                                    <h4 className="text-xl font-semibold text-red-700 mb-3">Fees (Money In)</h4>
+                                    {debitStructureData.map((item, index) => (
+                                        <div key={index} className="flex flex-col md:flex-row gap-2 mb-2 items-center">
+                                            <input
+                                                type="text"
+                                                value={item.name}
+                                                onChange={(e) => handleDebitStructureChange(index, 'name', e.target.value)}
+                                                placeholder="Fee Name"
+                                                className="flex-1 px-3 py-2 border rounded-md"
+                                            />
+                                            <input
+                                                type="text" 
+                                                value={item.amount}
+                                                onChange={(e) => handleDebitStructureChange(index, 'amount', e.target.value)}
+                                                placeholder="Amount"
+                                                className="w-24 px-3 py-2 border rounded-md"
+                                            />
+                                            <input
+                                                type="text"
+                                                onChange={(e) => handleDebitStructureChange(index, 'description', e.target.value)}
+                                                placeholder="Description (optional)"
+                                                className="flex-1 px-3 py-2 border rounded-md"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRemoveDebitItem(index)}
+                                                className="p-2 bg-red-400 text-white rounded-md hover:bg-red-500"
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
+                                    ))}
+                                    <button
+                                        type="button"
+                                        onClick={handleAddDebitItem}
+                                        className="mt-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md"
+                                    >
+                                        Add Fee Item
+                                    </button>
+                                </div>
+
+                                <div>
+                                    <h4 className="text-xl font-semibold text-green-700 mb-3">Payouts (Money Out)</h4>
+                                    {creditStructureData.map((item, index) => (
+                                        <div key={index} className="flex flex-col md:flex-row gap-2 mb-2 items-center">
+                                            <input
+                                                type="text"
+                                                value={item.name}
+                                                onChange={(e) => handleCreditStructureChange(index, 'name', e.target.value)}
+                                                placeholder="Payout Name"
+                                                className="flex-1 px-3 py-2 border rounded-md"
+                                            />
+                                            <input
+                                                type="text" 
+                                                value={item.amount}
+                                                onChange={(e) => handleCreditStructureChange(index, 'amount', e.target.value)}
+                                                placeholder="Amount (optional)"
+                                                className="w-24 px-3 py-2 border rounded-md"
+                                            />
+                                            <input
+                                                type="text"
+                                                value={item.description}
+                                                onChange={(e) => handleCreditStructureChange(index, 'description', e.target.value)}
+                                                placeholder="Description (optional)"
+                                                className="flex-1 px-3 py-2 border rounded-md"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRemoveCreditItem(index)}
+                                                className="p-2 bg-red-400 text-white rounded-md hover:bg-red-500"
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
+                                    ))}
+                                    <button
+                                        type="button"
+                                        onClick={handleAddCreditItem}
+                                        className="mt-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md"
+                                    >
+                                        Add Payout Item
+                                    </button>
+                                </div>
+                                <div className="flex justify-center space-x-4 mt-6">
+                                    <button
+                                        type="button"
+                                        onClick={handleSaveStructure}
+                                        className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-md shadow-md"
+                                    >
+                                        Save Structure
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleCancelEditStructure}
+                                        className="px-6 py-2 bg-gray-400 hover:bg-gray-500 text-gray-800 font-bold rounded-md shadow-md"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            // Display mode for structure - visible to all
+                            <div className="grid grid-cols-1 gap-6">
+                                <div>
+                                    <h4 className="text-xl font-semibold text-red-700 mb-3">Fees (Money In)</h4>
+                                    <ul className="list-disc list-inside space-y-1 text-gray-700">
+                                        {debitStructureData.map((item, index) => (
+                                            <li key={index}>
+                                                <strong>{item.name}:</strong> {item.amount}{item.description && ` - ${item.description}`}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                                <div>
+                                    <h4 className="text-xl font-semibold text-green-700 mb-3">Payouts (Money Out)</h4>
+                                    <ul className="list-disc list-inside space-y-1 text-gray-700">
+                                        {creditStructureData.map((item, index) => (
+                                            <li key={index}>
+                                                <strong>{item.name}:</strong> {item.amount}{item.description && ` - ${item.description}`}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            </div>
+                        )}
+                    </section>
                 </>
             )}
 
-            {/* Confirmation Modal for Single Delete */}
+            {/* Single Delete Confirmation Modal */}
             {showConfirmDelete && (
                 <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50">
                     <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full text-center">
@@ -1786,7 +1690,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 </div>
             )}
 
-            {/* Confirmation Modal for Bulk Delete */}
+            {/* Bulk Delete Confirmation Modal */}
             {showConfirmBulkDelete && (
                 <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50">
                     <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full text-center">
