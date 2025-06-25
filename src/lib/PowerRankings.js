@@ -235,7 +235,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                             <thead className="bg-blue-100">
                                 <tr>
                                     <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Rank</th>
-                                    <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Movement</th>
+                                    <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-center">Change</th> {/* Changed Movement to Change and added text-center */}
                                     <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th> {/* This will now include avatar */}
                                     <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">DPR</th>
                                     <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record (W-L)</th>
@@ -254,7 +254,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                                     return (
                                         <tr key={row.team} className={rowIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                                             <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{row.rank}</td>
-                                            <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{renderMovement(row.movement)}</td>
+                                            <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200 text-center">{renderMovement(row.movement)}</td> {/* Added text-center */}
                                             <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
                                                 <div className="flex items-center space-x-2">
                                                     {/* The img tag will now always have a src due to getSleeperAvatarUrl's fallback */}
