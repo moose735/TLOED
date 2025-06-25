@@ -35,7 +35,15 @@ const formatLuckRating = (value) =>
 const formatDPR = (value) =>
   typeof value === 'number' ? value.toFixed(3) : 'N/A';
 
-const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => {
+// New function to format currency
+const formatCurrency = (value) => {
+    if (typeof value === 'number') {
+        return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+    }
+    return 'N/A';
+};
+
+const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName, financialData }) => {
   const [teamOverallStats, setTeamOverallStats] = useState(null);
   const [teamSeasonHistory, setTeamSeasonHistory] = useState([]);
   const [loadingStats, setLoadingStats] = useState(true);
@@ -53,7 +61,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
     const overallStats = { totalWins: 0, totalLosses: 0, totalTies: 0, totalPointsFor: 0, totalGamesPlayed: 0, overallTopScoreWeeksCount: 0, playoffAppearancesCount: 0, avgDPR: 0, totalDPRSum: 0, seasonsWithDPRData: 0, totalLuckRating: 0, totalChampionships: 0, totalRunnerUps: 0, totalThirdPlaces: 0, totalPointsChampionships: 0, totalPointsRunnerUps: 0, totalThirdPlacePoints: 0, winRank: 'N/A', winPercentageRank: 'N/A', pointsForRank: 'N/A', topScoreWeeksRank: 'N/A', playoffRank: 'N/A', championshipRank: 'N/A', luckRank: 'N/A' };
 
     const seasonalData = {};
-    const participatedSeasons = new Set(); // Changed from completedSeasons to be more accurate
+    const participatedSeasons = new Set();
     historicalMatchups.forEach(match => {
       const year = parseInt(match.year);
       const displayTeam1 = getMappedTeamName(String(match.team1 || '').trim());
@@ -65,7 +73,6 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
     });
 
     const latestSeason = participatedSeasons.size > 0 ? Math.max(...participatedSeasons) : null;
-    // For award counting, only consider seasons that are NOT the latest (current) one
     const seasonsForAwardCounting = new Set([...participatedSeasons].filter(year => year !== latestSeason));
 
     historicalMatchups.forEach(match => {
@@ -79,7 +86,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
       if (!displayTeam1 || !displayTeam2 || isNaN(year) || isNaN(week) || isNaN(team1Score) || isNaN(team2Score) || (displayTeam1 !== teamName && displayTeam2 !== teamName)) return;
 
       if (!seasonalData[year]) seasonalData[year] = {};
-      if (!seasonalData[year][teamName]) seasonalData[year][teamName] = { wins: 0, losses: 0, ties: 0, pointsFor: 0, pointsAgainst: 0, luckRating: 0, adjustedDPR: 0, allPlayWinPercentage: 0, gamesPlayed: 0, weeklyScores: [] };
+      if (!seasonalData[year][teamName]) seasonalData[year][teamName] = { wins: 0, losses: 0, ties: 0, pointsFor: 0, pointsAgainst: 0, luckRating: 0, adjustedDPR: 0, allPlayWinPercentage: 0, gamesPlayed: 0, weeklyScores: [], netBalance: 'N/A' }; // Added netBalance
 
       const teamIsTeam1 = displayTeam1 === teamName;
       const currentTeamScore = teamIsTeam1 ? team1Score : team2Score;
@@ -107,6 +114,20 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
       seasonalData[year][teamName].pointsAgainst += opponentScore;
     });
 
+    // Merge financial data
+    if (financialData && Array.isArray(financialData)) {
+        financialData.forEach(financialEntry => {
+            const year = parseInt(financialEntry.year);
+            const team = getMappedTeamName(String(financialEntry.teamName || '').trim());
+            const netBalance = parseFloat(financialEntry.netBalance);
+
+            if (!isNaN(year) && team === teamName && !isNaN(netBalance) && seasonalData[year] && seasonalData[year][teamName]) {
+                seasonalData[year][teamName].netBalance = netBalance;
+            }
+        });
+    }
+
+
     const { seasonalMetrics } = calculateAllLeagueMetrics(historicalMatchups, getMappedTeamName);
 
     const compiledSeasonHistory = [];
@@ -117,16 +138,14 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
       if (!team) return;
       let stats = { wins: 0, losses: 0, ties: 0, pointsFor: 0, totalGamesPlayed: 0, championships: 0, playoffAppearancesCount: 0, topScoreWeeksCount: 0, totalLuckRating: 0, avgDPR: 0, totalDPRSum: 0, seasonsWithDPRData: 0 };
 
-      // Aggregate stats for overall ranks (can include current season data)
       Object.keys(seasonalMetrics).forEach(year => {
         const m = seasonalMetrics[year]?.[team];
-        if (m && participatedSeasons.has(parseInt(year))) { // Use participatedSeasons here
+        if (m && participatedSeasons.has(parseInt(year))) {
           stats.wins += m.wins;
           stats.losses += m.losses;
           stats.ties += m.ties;
           stats.pointsFor += m.pointsFor;
           stats.totalGamesPlayed += m.totalGames;
-          // Awards are counted separately below, excluding the current season
           if (typeof m.topScoreWeeksCount === 'number') stats.topScoreWeeksCount += m.topScoreWeeksCount;
           if (typeof m.luckRating === 'number') stats.totalLuckRating += m.luckRating;
           if (m.adjustedDPR !== 0) {
@@ -150,10 +169,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
         totalGamesPlayed: teamStats.totalGamesPlayed,
         overallTopScoreWeeksCount: teamStats.topScoreWeeksCount,
         avgDPR: teamStats.avgDPR,
-        // Championships and playoff appearances for overall ranks are still calculated here
-        // as they are cumulative totals that include the current year's data for ranking purposes,
-        // but the *display of icons* will only count completed seasons.
-        playoffAppearancesCount: teamStats.playoffAppearancesCount, // This might include current season if m.isPlayoffTeam is true
+        playoffAppearancesCount: teamStats.playoffAppearancesCount,
         totalLuckRating: teamStats.totalLuckRating,
         winRank: calculateRank(teamStats.wins, Object.values(allTeamsAggregatedStats).map(t => t.wins)),
         winPercentageRank: calculateRank((teamStats.wins + 0.5 * teamStats.ties) / teamStats.totalGamesPlayed, Object.values(allTeamsAggregatedStats).map(t => (t.wins + 0.5 * t.ties) / t.totalGamesPlayed)),
@@ -164,11 +180,9 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
         luckRank: calculateRank(teamStats.totalLuckRating, Object.values(allTeamsAggregatedStats).map(t => t.totalLuckRating)),
       });
 
-      // Accumulate awards ONLY from completed seasons
       Object.keys(seasonalMetrics).forEach(yearStr => {
         const m = seasonalMetrics[yearStr]?.[teamName];
         const currentYear = parseInt(yearStr);
-        // Only count awards if the season is in seasonsForAwardCounting (i.e., not the latest season)
         if (m && seasonsForAwardCounting.has(currentYear)) {
           if (m.isChampion) overallStats.totalChampionships++;
           if (m.isRunnerUp) overallStats.totalRunnerUps++;
@@ -184,7 +198,6 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
       const year = parseInt(yearStr);
       const stats = seasonalData[year][teamName];
       const m = seasonalMetrics[year]?.[teamName];
-      // Only include season in history if team actually participated
       if (stats && m && participatedSeasons.has(year)) {
         const totalGames = stats.wins + stats.losses + stats.ties;
         const winPct = totalGames > 0 ? ((stats.wins + 0.5 * stats.ties) / totalGames) : 0;
@@ -192,9 +205,9 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
           year, team: teamName, wins: stats.wins, losses: stats.losses, ties: stats.ties,
           pointsFor: stats.pointsFor, pointsAgainst: stats.pointsAgainst, luckRating: m.luckRating,
           adjustedDPR: m.adjustedDPR, allPlayWinPercentage: m.allPlayWinPercentage, winPercentage: winPct,
-          // Display N/A for finish and points finish if it's the current/latest season
           finish: (year === latestSeason) ? 'N/A' : (m.rank ? `${m.rank}${getOrdinalSuffix(m.rank)}` : 'N/A'),
-          pointsFinish: (year === latestSeason) ? 'N/A' : (m.pointsRank ? `${m.pointsRank}${getOrdinalSuffix(m.pointsRank)}` : 'N/A')
+          pointsFinish: (year === latestSeason) ? 'N/A' : (m.pointsRank ? `${m.pointsRank}${getOrdinalSuffix(m.pointsRank)}` : 'N/A'),
+          netBalance: stats.netBalance // Added netBalance here
         });
       }
     });
@@ -202,7 +215,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
     setTeamOverallStats(overallStats);
     setTeamSeasonHistory(compiledSeasonHistory);
     setLoadingStats(false);
-  }, [teamName, historicalMatchups, getMappedTeamName]);
+  }, [teamName, historicalMatchups, getMappedTeamName, financialData]); // Added financialData to dependencies
 
   const sortedSeasonHistory = useMemo(() => {
     const sortable = [...teamSeasonHistory];
@@ -212,12 +225,12 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
         ? (a.wins + 0.5 * a.ties) / (a.wins + a.losses + a.ties)
         : sortBy === 'finish' || sortBy === 'pointsFinish'
         ? parseRank(a[sortBy])
-        : a[sortBy];
+        : sortBy === 'netBalance' && a[sortBy] === 'N/A' ? -Infinity : a[sortBy]; // Handle N/A for netBalance
       const valB = sortBy === 'record'
         ? (b.wins + 0.5 * b.ties) / (b.wins + b.losses + b.ties)
         : sortBy === 'finish' || sortBy === 'pointsFinish'
         ? parseRank(b[sortBy])
-        : b[sortBy];
+        : sortBy === 'netBalance' && b[sortBy] === 'N/A' ? -Infinity : b[sortBy]; // Handle N/A for netBalance
       return (valA < valB ? -1 : valA > valB ? 1 : 0) * (sortOrder === 'asc' ? 1 : -1);
     });
   }, [teamSeasonHistory, sortBy, sortOrder]);
@@ -346,6 +359,9 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
                   <th className="py-2 px-3 text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200 text-center cursor-pointer" onClick={() => handleSort('allPlayWinPercentage')}>
                     All-Play Win % {sortBy === 'allPlayWinPercentage' && (sortOrder === 'asc' ? '▲' : '▼')}
                   </th>
+                  <th className="py-2 px-3 text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 text-center cursor-pointer" onClick={() => handleSort('netBalance')}>
+                    Net Balance {sortBy === 'netBalance' && (sortOrder === 'asc' ? '▲' : '▼')}
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -360,6 +376,7 @@ const TeamDetailPage = ({ teamName, historicalMatchups, getMappedTeamName }) => 
                     <td className="py-2 px-3 text-sm text-gray-700 text-center">{season.pointsFinish}</td>
                     <td className="py-2 px-3 text-sm text-gray-700 text-center">{formatDPR(season.adjustedDPR)}</td>
                     <td className="py-2 px-3 text-sm text-gray-700 text-center">{formatPercentage(season.allPlayWinPercentage)}</td>
+                    <td className="py-2 px-3 text-sm text-gray-700 text-center">{formatCurrency(season.netBalance)}</td> {/* Display netBalance */}
                   </tr>
                 ))}
               </tbody>
