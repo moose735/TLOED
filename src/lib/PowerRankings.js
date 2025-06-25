@@ -202,7 +202,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
         };
 
         loadPowerRankingsAndSleeperData();
-    }, [historicalMatchups, getDisplayTeamName]); // Add sleeperUsersMap to dependencies if you want re-render on map change, though it's set once on load
+    }, [historicalMatchups, getDisplayTeamName]);
 
     const renderMovement = (movement) => {
         if (movement === 0) {
@@ -255,8 +255,16 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                                 {powerRankings.map((row, rowIndex) => {
                                     const sleeperUserId = teamNameToSleeperIdMap[row.team];
                                     const sleeperTeamData = sleeperUsersMap[sleeperUserId];
+                                    // Debugging logs - Check your browser console for these values!
+                                    console.log(`Processing team: ${row.team}`);
+                                    console.log(`  Mapped Sleeper User ID: ${sleeperUserId}`);
+                                    console.log(`  Sleeper Team Data (from map):`, sleeperTeamData);
+
                                     const displayTeamName = sleeperTeamData ? sleeperTeamData.teamName : row.team;
-                                    const avatarUrl = sleeperTeamData ? getSleeperAvatarUrl(sleeperTeamData.avatar) : '';
+                                    const avatarUrl = sleeperTeamData ? getSleeperAvatarUrl(sleeperTeamData.avatar) : getSleeperAvatarUrl(''); // Always get a URL, even if a placeholder
+                                    console.log(`  Display Team Name: ${displayTeamName}`);
+                                    console.log(`  Avatar URL: ${avatarUrl}`);
+
 
                                     return (
                                         <tr key={row.team} className={rowIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
@@ -264,9 +272,8 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                                             <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{renderMovement(row.movement)}</td>
                                             <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
                                                 <div className="flex items-center space-x-2">
-                                                    {avatarUrl && (
-                                                        <img src={avatarUrl} alt={`${displayTeamName}'s avatar`} className="w-8 h-8 rounded-full object-cover" />
-                                                    )}
+                                                    {/* The img tag will now always have a src due to getSleeperAvatarUrl's fallback */}
+                                                    <img src={avatarUrl} alt={`${displayTeamName}'s avatar`} className="w-8 h-8 rounded-full object-cover" />
                                                     <span>{displayTeamName}</span>
                                                 </div>
                                             </td>
