@@ -75,20 +75,20 @@ export async function fetchUsersData(leagueId) {
     const data = await response.json();
 
     const processedUsers = data.map(user => {
-      let avatarUrl = '';
-      // Prefer the full URL from metadata if available and looks like a URL
-      if (user.metadata && user.metadata.avatar && user.metadata.avatar.startsWith('http')) {
-        avatarUrl = user.metadata.avatar;
+      let finalAvatarUrl = '';
+      // Prefer the full URL from metadata if available and starts with 'http'
+      if (user.metadata && typeof user.metadata.avatar === 'string' && user.metadata.avatar.startsWith('http')) {
+        finalAvatarUrl = user.metadata.avatar;
       } else {
         // Fallback to constructing from the main avatar hash
-        avatarUrl = getSleeperAvatarUrl(user.avatar);
+        finalAvatarUrl = getSleeperAvatarUrl(user.avatar);
       }
 
       return {
         userId: user.user_id,
         displayName: user.display_name,
-        avatar: user.avatar, // Keep the hash in case it's needed elsewhere
-        fullAvatarUrl: avatarUrl, // New field for the full URL
+        // The 'avatar' field now directly stores the full URL or a placeholder
+        avatar: finalAvatarUrl,
         // 'team_name' is typically found in the user.metadata object for Sleeper
         teamName: user.metadata ? user.metadata.team_name : user.display_name, // Fallback to display_name if no team_name
       };
