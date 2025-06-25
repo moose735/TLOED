@@ -1,5 +1,17 @@
 // src/utils/sleeperApi.js
 
+// Easily configurable current league ID
+export const CURRENT_LEAGUE_ID = '1181984921049018368'; // This is the CURRENT league ID for the 2025 season
+
+/**
+ * Constructs the full URL for a Sleeper user avatar.
+ * @param {string} avatarHash The avatar hash from Sleeper user data.
+ * @returns {string} The full URL to the avatar image, or a placeholder if hash is missing.
+ */
+export const getSleeperAvatarUrl = (avatarHash) => {
+  return avatarHash ? `https://sleepercdn.com/avatars/thumb_${avatarHash}` : 'https://placehold.co/150x150/cccccc/000000?text=No+Avatar';
+};
+
 /**
  * Fetches league details from the Sleeper API for a given league ID.
  * @param {string} leagueId The ID of the Sleeper league.
@@ -21,25 +33,23 @@ export async function fetchLeagueDetails(leagueId) {
 }
 
 /**
- * Fetches league data for the current season and specified previous seasons.
- * It recursively fetches previous league details using previous_league_id.
+ * Fetches league data for the current season and all available previous seasons.
+ * It recursively fetches previous league details using previous_league_id until no more are found.
  *
  * @param {string} currentLeagueId The ID of the current season's league.
- * @param {number} numPreviousSeasons The number of previous seasons to fetch data for (e.g., 2 for 2024 and 2023).
  * @returns {Promise<Array<Object>>} A promise that resolves to an array of league data objects,
- * ordered from current season to oldest requested previous season.
+ * ordered from current season to the oldest available season.
  */
-export async function fetchLeagueData(currentLeagueId, numPreviousSeasons = 2) {
+export async function fetchLeagueData(currentLeagueId) {
   const leagueData = [];
   let currentId = currentLeagueId;
-  let seasonsFetched = 0;
 
-  while (currentId && seasonsFetched <= numPreviousSeasons) {
+  // Loop continues as long as there's a currentId to fetch
+  while (currentId) {
     const details = await fetchLeagueDetails(currentId);
     if (details) {
       leagueData.push(details);
-      currentId = details.previous_league_id;
-      seasonsFetched++;
+      currentId = details.previous_league_id; // Move to the previous league ID
     } else {
       // Stop if a league cannot be fetched (e.g., invalid ID, network error)
       break;
@@ -78,30 +88,3 @@ export async function fetchUsersData(leagueId) {
     return [];
   }
 }
-
-// Example usage (you would typically call these from a React component's useEffect or similar)
-/*
-(async () => {
-  const currentLeagueId = '1181984921049018368'; // 2025 season ID
-
-  console.log("Fetching league data for current and 2 previous seasons...");
-  const allLeagueData = await fetchLeagueData(currentLeagueId, 2);
-  allLeagueData.forEach(league => {
-    console.log(`League: ${league.name} (ID: ${league.league_id})`);
-    console.log(`  Status: ${league.status}`);
-    console.log(`  Season: ${league.season}`);
-    console.log(`  Previous League ID: ${league.previous_league_id}`);
-    console.log('---');
-  });
-
-  console.log(`Fetching users for current league ID: ${currentLeagueId}`);
-  const users = await fetchUsersData(currentLeagueId);
-  users.forEach(user => {
-    console.log(`User ID: ${user.userId}`);
-    console.log(`  Display Name: ${user.displayName}`);
-    console.log(`  Team Name: ${user.teamName}`);
-    console.log(`  Avatar URL: https://sleepercdn.com/avatars/thumb_${user.avatar}`);
-    console.log('---');
-  });
-})();
-*/
