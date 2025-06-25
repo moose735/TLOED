@@ -4,13 +4,23 @@
 export const CURRENT_LEAGUE_ID = '1181984921049018368'; // This is the CURRENT league ID for the 2025 season
 
 /**
- * Constructs the full URL for a Sleeper user avatar from a hash.
- * This is used as a fallback if a full URL is not provided in metadata.
- * @param {string} avatarHash The avatar hash from Sleeper user data.
- * @returns {string} The full URL to the avatar image, or a placeholder if hash is missing.
+ * Constructs the full URL for a Sleeper user avatar.
+ * It intelligently handles both avatar hashes and full URLs found in metadata.
+ * @param {string} avatarIdentifier The avatar hash or full URL from Sleeper user data.
+ * @returns {string} The full URL to the avatar image, or a placeholder if identifier is missing.
  */
-export const getSleeperAvatarUrl = (avatarHash) => {
-  return avatarHash ? `https://sleepercdn.com/avatars/thumb_${avatarHash}` : 'https://placehold.co/150x150/cccccc/000000?text=No+Avatar';
+export const getSleeperAvatarUrl = (avatarIdentifier) => {
+  if (!avatarIdentifier) {
+    return 'https://placehold.co/150x150/cccccc/000000?text=No+Avatar';
+  }
+
+  // If the identifier already looks like a full URL, return it directly
+  if (avatarIdentifier.startsWith('http://') || avatarIdentifier.startsWith('https://')) {
+    return avatarIdentifier;
+  }
+
+  // Otherwise, assume it's an avatar hash and construct the URL
+  return `https://sleepercdn.com/avatars/thumb_${avatarIdentifier}`;
 };
 
 /**
@@ -75,20 +85,21 @@ export async function fetchUsersData(leagueId) {
     const data = await response.json();
 
     const processedUsers = data.map(user => {
-      let finalAvatarUrl = '';
-      // Prefer the full URL from metadata if available and starts with 'http'
-      if (user.metadata && typeof user.metadata.avatar === 'string' && user.metadata.avatar.startsWith('http')) {
-        finalAvatarUrl = user.metadata.avatar;
+      let finalAvatarIdentifier = ''; // This can be a hash or a full URL
+
+      // Prefer the full URL from metadata if available
+      if (user.metadata && typeof user.metadata.avatar === 'string' && user.metadata.avatar.trim() !== '') {
+        finalAvatarIdentifier = user.metadata.avatar;
       } else {
-        // Fallback to constructing from the main avatar hash
-        finalAvatarUrl = getSleeperAvatarUrl(user.avatar);
+        // Fallback to the main avatar hash
+        finalAvatarIdentifier = user.avatar;
       }
 
       return {
         userId: user.user_id,
         displayName: user.display_name,
-        // The 'avatar' field now directly stores the full URL or a placeholder
-        avatar: finalAvatarUrl,
+        // Pass the identifier (which might be a hash or a full URL) to getSleeperAvatarUrl
+        avatar: getSleeperAvatarUrl(finalAvatarIdentifier),
         // 'team_name' is typically found in the user.metadata object for Sleeper
         teamName: user.metadata ? user.metadata.team_name : user.display_name, // Fallback to display_name if no team_name
       };
