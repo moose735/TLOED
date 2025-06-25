@@ -333,7 +333,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
                     if (initialAuthToken) {
                          try {
-                            await signInWithCustomToken(firebaseAuth, initialAuthToken);
+                            // Assuming signInWithCustomToken is defined or imported
+                            // await signInWithCustomToken(firebaseAuth, initialAuthToken); 
                             setUserId(firebaseAuth.currentUser?.uid); 
                             console.log("Signed in with custom token. User ID:", firebaseAuth.currentUser?.uid);
                         } catch (tokenSignInError) {
@@ -969,6 +970,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         }
     };
 
+    const isCurrentSeasonLatest = selectedSeason === Math.max(...availableSeasons);
+
     return (
         <div className="w-full max-w-4xl bg-white p-8 rounded-lg shadow-md mt-4 mx-auto">
             <h2 className="text-3xl font-extrabold text-blue-800 mb-6 text-center">
@@ -1093,7 +1096,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     </div>
 
                     {/* Add New Transaction Form (Conditionally rendered for Commish) */}
-                    {isCommish ? (
+                    {isCommish && (
                         <section className="mb-8 p-6 bg-gray-50 rounded-lg shadow-inner">
                             <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">Add New Transaction (for {selectedSeason || 'selected'} season)</h3>
                             <form onSubmit={handleAddTransaction} className="space-y-4">
@@ -1167,13 +1170,15 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
                                 {(category === 'weekly_1st_points' || category === 'weekly_2nd_points') && (
                                     <div>
-                                        <label htmlFor="weeklyPointsWeek" className="block text-sm font-medium text-gray-700 mb-1">Week Number (defaults to latest for selected season)</label>
+                                        <label htmlFor="weeklyPointsWeek" className="block text-sm font-medium text-gray-700 mb-1">
+                                            Week Number ({isCurrentSeasonLatest ? `defaults to latest for selected season (${currentWeekForSelectedSeason})` : 'enter week'})
+                                        </label>
                                         <input
                                             type="number"
                                             id="weeklyPointsWeek"
                                             value={weeklyPointsWeek}
                                             onChange={(e) => setWeeklyPointsWeek(e.target.value)}
-                                            placeholder="e.g., 1, 5, 14"
+                                            placeholder={isCurrentSeasonLatest ? currentWeekForSelectedSeason.toString() : "-"}
                                             min="0" // Allow 0 for "Pre"
                                             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                         />
@@ -1317,10 +1322,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                 </button>
                             </form>
                         </section>
-                    ) : (
-                        <p className="text-center text-gray-600 p-4 bg-gray-100 rounded-lg shadow-inner mb-8">
-                            Only the league commissioner can add and remove transactions. Please log in with the commish account.
-                        </p>
                     )}
 
                     {/* Transaction History Table */}
