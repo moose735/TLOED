@@ -14,7 +14,6 @@ import {
 
 const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [transactions, setTransactions] = useState([]);
-    const [allTransactions, setAllTransactions] = useState([]); // New state for all transactions
     const [amount, setAmount] = useState('');
     const [description, setDescription] = useState('');
     const [type, setType] = useState('debit'); // 'debit' or 'credit' - internal values
@@ -30,7 +29,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null); 
     const [db, setDb] = useState(null);
-    const [auth, setAuth] = useState(null);
+    const [auth, setAuth] = null;
     const [userId, setUserId] = useState(null);
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [uniqueTeams, setUniqueTeams] = useState([]);
@@ -420,7 +419,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         if (!db || !isAuthReady || selectedSeason === null) {
             console.log("Firestore not ready, Auth not ready, or selectedSeason not set. Skipping transaction fetch.");
             setTransactions([]); // Clear existing transactions
-            setAllTransactions([]); // Clear all transactions
             setTransactionPot(0); // Clear pot
             setLoading(false); // Stop loading
             setSelectedTransactionIds([]); // Clear selections
@@ -450,8 +448,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 ...doc.data()
             }));
             
-            setAllTransactions(fetchedTransactions); // Store all fetched transactions
-
             // Client-side filtering by selectedSeason for display
             const filteredBySeason = fetchedTransactions.filter(t => 
                 selectedSeason === 0 || t.season === selectedSeason
@@ -828,12 +824,12 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         setShowConfirmBulkDelete(false);
     };
 
-    // Calculate OVERALL totals for Fees and Payouts (for summary cards) using allTransactions
-    const overallDebits = allTransactions 
+    // Calculate OVERALL totals for Fees and Payouts (for summary cards) using *transactions for selected season*
+    const overallDebits = transactions 
         .filter(t => t.type === 'debit')
         .reduce((sum, t) => sum + (t.amount || 0), 0);
 
-    const overallCredits = allTransactions 
+    const overallCredits = transactions 
         .filter(t => t.type === 'credit')
         .reduce((sum, t) => sum + (t.amount || 0), 0);
 
