@@ -62,58 +62,42 @@ export const calculateFinancialDataForTeamDetailPage = (transactions, getMappedT
 };
 
 // New component for the Overall Financial History Tab
-const OverallFinancialHistoryTab = ({ allTransactions, getDisplayTeamName, availableSeasons }) => {
+const OverallFinancialHistoryTab = ({ allTransactions, getDisplayTeamName }) => {
     // Calculate overall team financials across all seasons
     const overallTeamFinancials = useMemo(() => {
         const teamStats = {};
-        const allSeasonsWithData = new Set(); // Track seasons that actually have data
 
         allTransactions.forEach(t => {
             const displayTeam = getDisplayTeamName(String(t.teamName || '').trim());
-            const year = t.season ? parseInt(t.season) : (t.date?.toDate ? new Date(t.date.toDate()).getFullYear() : 'Unknown Season');
             const amount = parseFloat(t.amount);
 
             if (!displayTeam || isNaN(amount)) return;
 
             // Aggregate by team across all seasons
             if (!teamStats[displayTeam]) {
-                teamStats[displayTeam] = { totalDebits: 0, totalCredits: 0, netBalance: 0, seasonalBreakdown: {} };
+                teamStats[displayTeam] = { name: displayTeam, totalDebits: 0, totalCredits: 0, netBalance: 0 };
             }
             if (t.type === 'debit') {
                 teamStats[displayTeam].totalDebits += amount;
             } else if (t.type === 'credit') {
                 teamStats[displayTeam].totalCredits += amount;
             }
-
-            // Aggregate by team and season for breakdown
-            if (!teamStats[displayTeam].seasonalBreakdown[year]) {
-                teamStats[displayTeam].seasonalBreakdown[year] = { debits: 0, credits: 0, net: 0 };
-            }
-            if (t.type === 'debit') {
-                teamStats[displayTeam].seasonalBreakdown[year].debits += amount;
-            } else if (t.type === 'credit') {
-                teamStats[displayTeam].seasonalBreakdown[year].credits += amount;
-            }
-            allSeasonsWithData.add(year);
         });
 
-        // Calculate net balance for overall and seasonal breakdown
+        // Calculate net balance for overall team stats
         Object.keys(teamStats).forEach(team => {
             teamStats[team].netBalance = teamStats[team].totalCredits - teamStats[team].totalDebits;
-            Object.keys(teamStats[team].seasonalBreakdown).forEach(year => {
-                const seasonData = teamStats[team].seasonalBreakdown[year];
-                seasonData.net = seasonData.credits - seasonData.debits;
-            });
         });
         
-        return { teams: Object.values(teamStats).sort((a,b) => getDisplayTeamName(a.name).localeCompare(getDisplayTeamName(b.name))), allSeasons: Array.from(allSeasonsWithData).sort((a,b) => a - b) };
+        // Sort by team name before returning for display
+        return Object.values(teamStats).sort((a, b) => a.name.localeCompare(b.name));
     }, [allTransactions, getDisplayTeamName]);
 
     return (
         <section className="bg-white p-6 rounded-lg shadow-md mt-8">
             <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">Overall Financial History by Team</h3>
             
-            {allTransactions.length === 0 ? (
+            {overallTeamFinancials.length === 0 ? (
                 <p className="text-center text-gray-600">No financial data available across all seasons.</p>
             ) : (
                 <div className="overflow-x-auto">
@@ -121,28 +105,15 @@ const OverallFinancialHistoryTab = ({ allTransactions, getDisplayTeamName, avail
                         <thead className="bg-blue-100">
                             <tr>
                                 <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team Name</th>
-                                {overallTeamFinancials.allSeasons.map(year => (
-                                    <th key={year} className="py-3 px-2 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">
-                                        {year} Net
-                                    </th>
-                                ))}
                                 <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Total Fees</th>
                                 <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Total Payouts</th>
                                 <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Overall Net Balance</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {Object.entries(overallTeamFinancials.teams).sort(([teamA], [teamB]) => teamA.localeCompare(teamB)).map(([_, data], index) => (
+                            {overallTeamFinancials.map((data, index) => (
                                 <tr key={data.name} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                    <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{getDisplayTeamName(data.name)}</td>
-                                    {overallTeamFinancials.allSeasons.map(year => {
-                                        const netForYear = data.seasonalBreakdown[year]?.net;
-                                        return (
-                                            <td key={`${data.name}-${year}-net`} className={`py-2 px-2 text-sm text-center border-b border-gray-200 ${netForYear >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                                                {netForYear !== undefined ? formatCurrency(netForYear) : '-'}
-                                            </td>
-                                        );
-                                    })}
+                                    <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{data.name}</td>
                                     <td className="py-2 px-4 text-sm text-right text-red-700 border-b border-gray-200">{formatCurrency(data.totalDebits)}</td>
                                     <td className="py-2 px-4 text-sm text-right text-green-700 border-b border-gray-200">{formatCurrency(data.totalCredits)}</td>
                                     <td className={`py-2 px-4 text-sm text-right font-bold border-b border-gray-200 ${data.netBalance >= 0 ? 'text-green-900' : 'text-red-900'}`}>
@@ -573,7 +544,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         });
 
         return () => unsubscribe();
-    }, [db, isAuthReady, selectedSeason, activeTab]); // Added activeTab to dependencies
+    }, [db, isAuthReady, selectedSeason, activeTab]);
 
 
     // Fetch ALL transactions (for overall history tab)
@@ -609,7 +580,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         });
 
         return () => unsubscribe();
-    }, [db, isAuthReady, activeTab]); // Added activeTab to dependencies
+    }, [db, isAuthReady, activeTab]);
 
     // Fetch and listen for updates to the Fee/Payout structure
     useEffect(() => {
@@ -1172,7 +1143,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             value={password}
                                             onChange={(e) => setPassword(e.target.value)}
                                             required
-                                            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 w-full max-w-xs"
+                                            className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 w-full max-w-xs"
                                         />
                                         <button
                                             type="submit"
@@ -1880,7 +1851,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                         <OverallFinancialHistoryTab 
                             allTransactions={allTransactions} 
                             getDisplayTeamName={getDisplayTeamName}
-                            availableSeasons={availableSeasons} // Pass available seasons for column generation
                         />
                     )}
                 </>
