@@ -4,7 +4,8 @@
 export const CURRENT_LEAGUE_ID = '1181984921049018368'; // This is the CURRENT league ID for the 2025 season
 
 /**
- * Constructs the full URL for a Sleeper user avatar.
+ * Constructs the full URL for a Sleeper user avatar from a hash.
+ * This is used as a fallback if a full URL is not provided in metadata.
  * @param {string} avatarHash The avatar hash from Sleeper user data.
  * @returns {string} The full URL to the avatar image, or a placeholder if hash is missing.
  */
@@ -73,14 +74,25 @@ export async function fetchUsersData(leagueId) {
     }
     const data = await response.json();
 
-    // Extracting specific fields as requested: team_name, display_name, avatar, user_id
-    const processedUsers = data.map(user => ({
-      userId: user.user_id,
-      displayName: user.display_name,
-      avatar: user.avatar,
-      // 'team_name' is typically found in the user.metadata object for Sleeper
-      teamName: user.metadata ? user.metadata.team_name : user.display_name, // Fallback to display_name if no team_name
-    }));
+    const processedUsers = data.map(user => {
+      let avatarUrl = '';
+      // Prefer the full URL from metadata if available and looks like a URL
+      if (user.metadata && user.metadata.avatar && user.metadata.avatar.startsWith('http')) {
+        avatarUrl = user.metadata.avatar;
+      } else {
+        // Fallback to constructing from the main avatar hash
+        avatarUrl = getSleeperAvatarUrl(user.avatar);
+      }
+
+      return {
+        userId: user.user_id,
+        displayName: user.display_name,
+        avatar: user.avatar, // Keep the hash in case it's needed elsewhere
+        fullAvatarUrl: avatarUrl, // New field for the full URL
+        // 'team_name' is typically found in the user.metadata object for Sleeper
+        teamName: user.metadata ? user.metadata.team_name : user.display_name, // Fallback to display_name if no team_name
+      };
+    });
 
     return processedUsers;
   } catch (error) {
