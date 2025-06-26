@@ -1,6 +1,7 @@
 // src/lib/LeagueRecords.js
 import React, { useState, useEffect } from 'react';
-import { calculateAllLeagueMetrics } from '../utils/calculations.js'; // Corrected import path
+// Corrected import path, assuming calculations.js is accessible two levels up from src/lib
+import { calculateAllLeagueMetrics } from '../../calculations.js'; 
 
 const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
   const [allTimeRecords, setAllTimeRecords] = useState({});
