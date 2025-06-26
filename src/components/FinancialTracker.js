@@ -606,6 +606,12 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         setLoadingStructure(true);
         const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
         // MODIFIED: Season-specific document path for structure
+        // This path will be `/artifacts/{appId}/public/data/league_structure/{selectedSeason}`
+        // You MUST update your Firestore Security Rules to match this pattern:
+        // match /artifacts/{appId}/public/data/league_structure/{seasonId} {
+        //   allow read: if true; // Public read access
+        //   allow write: if request.auth != null && request.auth.uid == "YOUR_COMMISH_UID_HERE"; // Only commish can write
+        // }
         const structureDocRef = doc(db, `/artifacts/${appId}/public/data/league_structure/${selectedSeason}`);
 
         const unsubscribe = onSnapshot(structureDocRef, (docSnap) => {
