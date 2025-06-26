@@ -1053,11 +1053,24 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         setLoadingStructure(true);
         try {
             const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
-            // MODIFIED: Save to season-specific document path
+
+            // Sanitize structure data before saving
+            const sanitizedDebitStructure = debitStructureData.map(item => ({
+                name: String(item.name || ''),
+                amount: String(item.amount || ''),
+                description: String(item.description || ''),
+            }));
+
+            const sanitizedCreditStructure = creditStructureData.map(item => ({
+                name: String(item.name || ''),
+                amount: String(item.amount || ''),
+                description: String(item.description || ''),
+            }));
+
             const structureDocRef = doc(db, `/artifacts/${appId}/public/data/league_structure/${selectedSeason}`);
             await setDoc(structureDocRef, {
-                fees: debitStructureData,
-                payouts: creditStructureData,
+                fees: sanitizedDebitStructure,
+                payouts: sanitizedCreditStructure,
                 lastUpdated: serverTimestamp()
             });
             setIsEditingStructure(false);
