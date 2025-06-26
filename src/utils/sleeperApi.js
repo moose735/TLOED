@@ -39,6 +39,18 @@ const rosterDataCache = new Map();
 // Structure: Map<leagueId, Map<week, transactionsArray>>
 const transactionDataCache = new Map();
 
+// Internal caches for draft data
+// Structure: Map<leagueId, Array<drafts>>
+const leagueDraftsCache = new Map();
+// Structure: Map<draftId, draftDetailsObject>
+const draftDetailsCache = new Map();
+// Structure: Map<draftId, Array<draftPicks>>
+const draftPicksCache = new Map();
+// Structure: Map<draftId, Array<tradedPicks>>
+const tradedPicksCache = new Map();
+// Master cache for all historical draft data
+let allDraftHistoryCache = null;
+
 // Constants for NFL player cache in localStorage
 const NFL_PLAYERS_CACHE_KEY = 'nflPlayersCache';
 const NFL_PLAYERS_CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
@@ -440,5 +452,185 @@ export async function fetchTransactionsForWeek(leagueId, week) {
     } catch (error) {
         console.error(`Failed to fetch transaction data for league ID ${leagueId}, Week ${week}:`, error);
         return [];
+    }
+}
+
+/**
+ * Fetches all drafts for a given league ID.
+ * Data is cached in memory for subsequent calls within the same session.
+ * @param {string} leagueId The ID of the Sleeper league.
+ * @returns {Promise<Array<Object>>} A promise that resolves to an array of draft objects, or an empty array if an error occurs.
+ */
+export async function fetchLeagueDrafts(leagueId) {
+    if (leagueDraftsCache.has(leagueId)) {
+        console.log(`Returning league drafts for ${leagueId} from cache.`);
+        return leagueDraftsCache.get(leagueId);
+    }
+
+    try {
+        console.log(`Fetching league drafts for ID: ${leagueId}...`);
+        const response = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/drafts`);
+        if (!response.ok) {
+            console.error(`Error fetching drafts for league ID ${leagueId}: ${response.statusText}`);
+            return [];
+        }
+        const data = await response.json();
+        leagueDraftsCache.set(leagueId, data);
+        console.log(`Successfully fetched league drafts for ID: ${leagueId}.`);
+        return data;
+    } catch (error) {
+        console.error(`Failed to fetch league drafts for ID ${leagueId}:`, error);
+        return [];
+    }
+}
+
+/**
+ * Fetches details for a specific draft ID.
+ * Data is cached in memory for subsequent calls within the same session.
+ * @param {string} draftId The ID of the draft.
+ * @returns {Promise<Object|null>} A promise that resolves to the draft details object, or null if an error occurs.
+ */
+export async function fetchDraftDetails(draftId) {
+    if (draftDetailsCache.has(draftId)) {
+        console.log(`Returning draft details for ${draftId} from cache.`);
+        return draftDetailsCache.get(draftId);
+    }
+
+    try {
+        console.log(`Fetching draft details for ID: ${draftId}...`);
+        const response = await fetch(`https://api.sleeper.app/v1/draft/${draftId}`);
+        if (!response.ok) {
+            console.error(`Error fetching draft details for ID ${draftId}: ${response.statusText}`);
+            return null;
+        }
+        const data = await response.json();
+        draftDetailsCache.set(draftId, data);
+        console.log(`Successfully fetched draft details for ID: ${draftId}.`);
+        return data;
+    } catch (error) {
+        console.error(`Failed to fetch draft details for ID ${draftId}:`, error);
+        return null;
+    }
+}
+
+/**
+ * Fetches all picks for a specific draft ID.
+ * Data is cached in memory for subsequent calls within the same session.
+ * @param {string} draftId The ID of the draft.
+ * @returns {Promise<Array<Object>>} A promise that resolves to an array of draft pick objects, or an empty array if an error occurs.
+ */
+export async function fetchDraftPicks(draftId) {
+    if (draftPicksCache.has(draftId)) {
+        console.log(`Returning draft picks for ${draftId} from cache.`);
+        return draftPicksCache.get(draftId);
+    }
+
+    try {
+        console.log(`Fetching draft picks for ID: ${draftId}...`);
+        const response = await fetch(`https://api.sleeper.app/v1/draft/${draftId}/picks`);
+        if (!response.ok) {
+            console.error(`Error fetching draft picks for ID ${draftId}: ${response.statusText}`);
+            return [];
+        }
+        const data = await response.json();
+        draftPicksCache.set(draftId, data);
+        console.log(`Successfully fetched draft picks for ID: ${draftId}.`);
+        return data;
+    } catch (error) {
+        console.error(`Failed to fetch draft picks for ID ${draftId}:`, error);
+        return [];
+    }
+}
+
+/**
+ * Fetches all traded picks for a specific draft ID.
+ * Data is cached in memory for subsequent calls within the same session.
+ * @param {string} draftId The ID of the draft.
+ * @returns {Promise<Array<Object>>} A promise that resolves to an array of traded pick objects, or an empty array if an error occurs.
+ */
+export async function fetchTradedPicks(draftId) {
+    if (tradedPicksCache.has(draftId)) {
+        console.log(`Returning traded picks for ${draftId} from cache.`);
+        return tradedPicksCache.get(draftId);
+    }
+
+    try {
+        console.log(`Fetching traded picks for ID: ${draftId}...`);
+        const response = await fetch(`https://api.sleeper.app/v1/draft/${draftId}/traded_picks`);
+        if (!response.ok) {
+            console.error(`Error fetching traded picks for ID ${draftId}: ${response.statusText}`);
+            return [];
+        }
+        const data = await response.json();
+        tradedPicksCache.set(draftId, data);
+        console.log(`Successfully fetched traded picks for ID: ${draftId}.`);
+        return data;
+    } catch (error) {
+        console.error(`Failed to fetch traded picks for ID ${draftId}:`, error);
+        return [];
+    }
+}
+
+/**
+ * Fetches all draft history (details, picks, traded picks) for all leagues.
+ * This is a comprehensive function that consolidates all draft-related data.
+ * Data is cached in memory for subsequent calls within the same session.
+ *
+ * @returns {Promise<Object>} A promise that resolves to an object containing all historical draft data,
+ * structured as { season: { draftId: { details, picks, tradedPicks } } }.
+ * Returns an empty object on error.
+ */
+export async function fetchAllDraftHistory() {
+    if (allDraftHistoryCache) {
+        console.log('Returning all draft history from cache.');
+        return allDraftHistoryCache;
+    }
+
+    console.log('Fetching all draft history for the first time... '); // Minor change for re-deploy
+    const allDraftHistory = {};
+
+    try {
+        const leagues = await fetchLeagueData(CURRENT_LEAGUE_ID);
+        if (!leagues || leagues.length === 0) {
+            console.warn('No league data found to fetch draft history.');
+            return {};
+        }
+
+        for (const league of leagues) {
+            const season = league.season;
+            allDraftHistory[season] = {}; // Initialize season object
+
+            const drafts = await fetchLeagueDrafts(league.league_id);
+            if (!drafts || drafts.length === 0) {
+                console.log(`No drafts found for league ${league.league_id} (${season}).`);
+                continue; // Skip to next league if no drafts
+            }
+
+            for (const draft of drafts) {
+                const draftId = draft.draft_id;
+                console.log(`Fetching data for draft ID: ${draftId} (Season: ${season})...`);
+
+                // Fetch details, picks, and traded picks concurrently for the current draft
+                const [details, picks, tradedPicks] = await Promise.all([
+                    fetchDraftDetails(draftId),
+                    fetchDraftPicks(draftId),
+                    fetchTradedPicks(draftId)
+                ]);
+
+                allDraftHistory[season][draftId] = {
+                    details: details,
+                    picks: picks,
+                    tradedPicks: tradedPicks
+                };
+            }
+        }
+
+        allDraftHistoryCache = allDraftHistory;
+        console.log('Successfully fetched and cached all draft history.');
+        return allDraftHistory;
+
+    } catch (error) {
+        console.error('Error fetching all draft history:', error);
+        return {};
     }
 }
