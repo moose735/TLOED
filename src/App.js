@@ -24,6 +24,7 @@ import { fetchLeagueDetails } from './utils/sleeperApi';
 // Define the available tabs and their categories for the dropdown
 const NAV_CATEGORIES = {
   HOME: { label: 'Dashboard', tab: 'dashboard' }, // Default home tab now points to Dashboard
+  POWER_RANKINGS: { label: 'Power Rankings', tab: 'powerRankings' }, // Re-added Power Rankings as a top-level nav item
   LEAGUE_DATA: {
     label: 'League Data',
     subTabs: [
@@ -44,7 +45,7 @@ const NAV_CATEGORIES = {
 // Flattened list of all possible tabs for conditional rendering
 const TABS = {
   DASHBOARD: 'dashboard', // <--- NEW TAB CONSTANT for the homepage
-  POWER_RANKINGS: 'powerRankings',
+  POWER_RANKINGS: 'powerRankings', // Constant is already here
   LEAGUE_HISTORY: 'leagueHistory', // Constant updated for LeagueHistory
   RECORD_BOOK: 'recordBook',
   HEAD_TO_HEAD: 'headToHead',
@@ -182,6 +183,14 @@ const App = () => {
             {NAV_CATEGORIES.HOME.label}
           </button>
 
+          {/* New: Power Rankings Button */}
+          <button
+            onClick={() => handleTabChange(TABS.POWER_RANKINGS)}
+            className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${activeTab === TABS.POWER_RANKINGS ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
+          >
+            {NAV_CATEGORIES.POWER_RANKINGS.label}
+          </button>
+
           {/* Dropdown for League Data */}
           <div className="relative group">
             <button className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none flex items-center transition-colors duration-200">
@@ -229,8 +238,7 @@ const App = () => {
           {/* NEW: Financials Link */}
           <button
             onClick={() => handleTabChange(TABS.FINANCIALS)}
-            // Re-copying this className to ensure no hidden characters and proper parsing
-            className={`block w-full text-left py-3 px-4 text-lg font-semibold rounded-md transition-colors duration-200 ${activeTab === TABS.FINANCIALS ? 'bg-blue-100 text-blue-700' : 'text-gray-800 hover:bg-gray-100'}`}
+            className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${activeTab === TABS.FINANCIALS ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
           >
             {NAV_CATEGORIES.FINANCIALS.label}
           </button>
@@ -272,6 +280,14 @@ const App = () => {
               className={`block w-full text-left py-3 px-4 text-lg font-semibold rounded-md transition-colors duration-200 ${activeTab === TABS.DASHBOARD ? 'bg-blue-100 text-blue-700' : 'text-gray-800 hover:bg-gray-100'}`}
             >
               {NAV_CATEGORIES.HOME.label}
+            </button>
+
+            {/* New: Power Rankings Button (Mobile) */}
+            <button
+              onClick={() => handleTabChange(TABS.POWER_RANKINGS)}
+              className={`block w-full text-left py-3 px-4 text-lg font-semibold rounded-md transition-colors duration-200 ${activeTab === TABS.POWER_RANKINGS ? 'bg-blue-100 text-blue-700' : 'text-gray-800 hover:bg-gray-100'}`}
+            >
+              {NAV_CATEGORIES.POWER_RANKINGS.label}
             </button>
 
             {/* Accordion for League Data */}
@@ -333,7 +349,6 @@ const App = () => {
             {/* Financials Link (Mobile) */}
             <button
               onClick={() => handleTabChange(TABS.FINANCIALS)}
-              // This is line 179 in App.js. Ensuring it's correct.
               className={`block w-full text-left py-3 px-4 text-lg font-semibold rounded-md transition-colors duration-200 ${activeTab === TABS.FINANCIALS ? 'bg-blue-100 text-blue-700' : 'text-gray-800 hover:bg-gray-100'}`}
             >
               {NAV_CATEGORIES.FINANCIALS.label}
