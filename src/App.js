@@ -176,7 +176,7 @@ const App = () => {
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center space-x-6">
           <button
-            onClick={() => handleTabChange(TABS.DASHBOARD)} {/* Link for Dashboard */}
+            onClick={() => handleTabChange(TABS.DASHBOARD)}
             className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${activeTab === TABS.DASHBOARD ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
           >
             {NAV_CATEGORIES.HOME.label}
@@ -267,7 +267,7 @@ const App = () => {
           {/* Mobile Navigation Links */}
           <nav className="flex flex-col space-y-4">
             <button
-              onClick={() => handleTabChange(TABS.DASHBOARD)} {/* Link for Dashboard */}
+              onClick={() => handleTabChange(TABS.DASHBOARD)}
               className={`block w-full text-left py-3 px-4 text-lg font-semibold rounded-md transition-colors duration-200 ${activeTab === TABS.DASHBOARD ? 'bg-blue-100 text-blue-700' : 'text-gray-800 hover:bg-gray-100'}`}
             >
               {NAV_CATEGORIES.HOME.label}
@@ -332,6 +332,7 @@ const App = () => {
             {/* Financials Link (Mobile) */}
             <button
               onClick={() => handleTabChange(TABS.FINANCIALS)}
+              // Rewriting this className to ensure no hidden characters and proper parsing
               className={`block w-full text-left py-3 px-4 text-lg font-semibold rounded-md transition-colors duration-200 ${activeTab === TABS.FINANCIALS ? 'bg-blue-100 text-blue-700' : 'text-gray-800 hover:bg-gray-100'}`}
             >
               {NAV_CATEGORIES.FINANCIALS.label}
