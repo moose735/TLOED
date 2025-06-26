@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   HISTORICAL_MATCHUPS_API_URL,
   GOOGLE_SHEET_POWER_RANKINGS_API_URL, // Still imported, but PowerRankings.js no longer uses it directly
+  CURRENT_LEAGUE_ID, // Import CURRENT_LEAGUE_ID
 } from './config'; // Corrected import path for config.js to be within src/
 
 // Import existing components from your provided App.js
@@ -13,11 +14,16 @@ import DPRAnalysis from './lib/DPRAnalysis';
 import LuckRatingAnalysis from './lib/LuckRatingAnalysis';
 import TeamDetailPage from './lib/TeamDetailPage';
 import Head2HeadGrid from './lib/Head2HeadGrid'; // Stays for its own tab
-import FinancialTracker from './components/FinancialTracker'; // <--- NEW IMPORT
+import FinancialTracker from './components/FinancialTracker';
+import Dashboard from './components/Dashboard'; // <--- NEW IMPORT for the homepage
+
+// Import Sleeper API functions to fetch league details for dynamic tab population
+import { fetchLeagueDetails } from './utils/sleeperApi';
+
 
 // Define the available tabs and their categories for the dropdown
 const NAV_CATEGORIES = {
-  HOME: { label: 'Power Rankings', tab: 'powerRankings' }, // Default home tab
+  HOME: { label: 'Dashboard', tab: 'dashboard' }, // Default home tab now points to Dashboard
   LEAGUE_DATA: {
     label: 'League Data',
     subTabs: [
@@ -32,11 +38,12 @@ const NAV_CATEGORIES = {
     label: 'Teams',
     subTabs: [], // This will be populated dynamically from historicalMatchups
   },
-  FINANCIALS: { label: 'Financials', tab: 'financials' }, // <--- NEW CATEGORY
+  FINANCIALS: { label: 'Financials', tab: 'financials' },
 };
 
 // Flattened list of all possible tabs for conditional rendering
 const TABS = {
+  DASHBOARD: 'dashboard', // <--- NEW TAB CONSTANT for the homepage
   POWER_RANKINGS: 'powerRankings',
   LEAGUE_HISTORY: 'leagueHistory', // Constant updated for LeagueHistory
   RECORD_BOOK: 'recordBook',
@@ -44,11 +51,11 @@ const TABS = {
   DPR_ANALYSIS: 'dprAnalysis',
   LUCK_RATING: 'luckRating',
   TEAM_DETAIL: 'teamDetail',
-  FINANCIALS: 'financials', // <--- NEW TAB CONSTANT
+  FINANCIALS: 'financials',
 };
 
 const App = () => {
-  const [activeTab, setActiveTab] = useState(TABS.POWER_RANKINGS);
+  const [activeTab, setActiveTab] = useState(TABS.DASHBOARD); // Set Dashboard as default
   const [historicalMatchups, setHistoricalMatchups] = useState([]);
   const [historicalChampions, setHistoricalChampions] = useState([]); // State for champions
   const [loadingHistoricalData, setLoadingHistoricalData] = useState(true);
@@ -78,17 +85,20 @@ const App = () => {
       setLoadingHistoricalData(true);
       setHistoricalDataError(null); // Clear previous errors
 
-      // Fetch Historical Matchups
+      // Fetch Historical Matchups (still using Google Sheet for this specific data for now)
       let fetchedMatchupData = [];
       try {
         if (HISTORICAL_MATCHUPS_API_URL === 'YOUR_GOOGLE_SHEET_HISTORICAL_MATCHUPS_API_URL') {
-          throw new Error("HISTORICAL_MATCHUPS_API_URL not configured in config.js. Please update it.");
+          // Instead of throwing an error for config, try to use Sleeper API for historical data
+          // if the Google Sheet URL is not configured.
+          // For now, retaining the error as per existing structure, but could be enhanced.
+          throw new Error("HISTORICAL_MATCHUPS_API_URL not configured in config.js. Please update it or note that historical data won't load.");
         }
         const response = await fetch(HISTORICAL_MATCHUPS_API_URL, { mode: 'cors' });
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status} - Could not load historical matchup data.`);
         }
-        
+
         const textResponse = await response.text(); // Get raw text to inspect
         try {
           const parsedData = JSON.parse(textResponse);
@@ -120,7 +130,7 @@ const App = () => {
         } else {
           console.warn("fetchedMatchupData is not an array after processing, cannot populate team list.");
         }
-        
+
         const uniqueTeams = Array.from(uniqueTeamsSet).sort();
 
         NAV_CATEGORIES.TEAMS.subTabs = uniqueTeams.map(team => ({
@@ -166,8 +176,8 @@ const App = () => {
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center space-x-6">
           <button
-            onClick={() => handleTabChange(TABS.POWER_RANKINGS)}
-            className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${activeTab === TABS.POWER_RANKINGS ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
+            onClick={() => handleTabChange(TABS.DASHBOARD)} {/* Link for Dashboard */}
+            className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${activeTab === TABS.DASHBOARD ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
           >
             {NAV_CATEGORIES.HOME.label}
           </button>
@@ -216,7 +226,7 @@ const App = () => {
             </div>
           )}
 
-          {/* NEW: Financials Link */}
+          {/* Financials Link */}
           <button
             onClick={() => handleTabChange(TABS.FINANCIALS)}
             className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${activeTab === TABS.FINANCIALS ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
@@ -257,8 +267,8 @@ const App = () => {
           {/* Mobile Navigation Links */}
           <nav className="flex flex-col space-y-4">
             <button
-              onClick={() => handleTabChange(TABS.POWER_RANKINGS)}
-              className={`block w-full text-left py-3 px-4 text-lg font-semibold rounded-md transition-colors duration-200 ${activeTab === TABS.POWER_RANKINGS ? 'bg-blue-100 text-blue-700' : 'text-gray-800 hover:bg-gray-100'}`}
+              onClick={() => handleTabChange(TABS.DASHBOARD)} {/* Link for Dashboard */}
+              className={`block w-full text-left py-3 px-4 text-lg font-semibold rounded-md transition-colors duration-200 ${activeTab === TABS.DASHBOARD ? 'bg-blue-100 text-blue-700' : 'text-gray-800 hover:bg-gray-100'}`}
             >
               {NAV_CATEGORIES.HOME.label}
             </button>
@@ -319,7 +329,7 @@ const App = () => {
               </div>
             )}
 
-            {/* NEW: Financials Link (Mobile) */}
+            {/* Financials Link (Mobile) */}
             <button
               onClick={() => handleTabChange(TABS.FINANCIALS)}
               className={`block w-full text-left py-3 px-4 text-lg font-semibold rounded-md transition-colors duration-200 ${activeTab === TABS.FINANCIALS ? 'bg-blue-100 text-blue-700' : 'text-gray-800 hover:bg-gray-100'}`}
@@ -351,6 +361,11 @@ const App = () => {
           </p>
         ) : (
           <div className="w-full"> {/* Ensure content area takes full width */}
+            {activeTab === TABS.DASHBOARD && ( // Render Dashboard for the new homepage
+              <Dashboard
+                getDisplayTeamName={getMappedTeamName}
+              />
+            )}
             {activeTab === TABS.POWER_RANKINGS && (
               <PowerRankings
                 historicalMatchups={historicalMatchups}
