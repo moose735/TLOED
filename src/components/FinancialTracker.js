@@ -619,25 +619,19 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 setCreditStructureData(defaultCreditStructure);
             }
             setLoadingStructure(false);
+            // Clear any previous error related to structure loading if successful
+            setError(null);
         }, (firestoreError) => {
-            // Only set the error state if it's a critical issue for the current user's role
-            // For non-commish users, a "permission denied" on structure fetch might be expected
-            // if rules are very strict, but they can still see defaults.
-            if (!isCommish && (firestoreError.code === 'permission-denied' || firestoreError.message.includes('permissions'))) {
-                console.warn(`Non-commish user attempted to load season ${selectedSeason} structure and received permission error: ${firestoreError.message}. Displaying default structure.`);
-                // Do NOT set the general error state for the UI, as defaults are displayed.
-                // This suppresses the visible error message for non-commish permission errors on structure load.
-            } else {
-                setError(`Failed to load league structure for season ${selectedSeason}: ${firestoreError.message}`);
-            }
+            // Log the error to the console for debugging
+            console.warn(`Failed to load league structure for season ${selectedSeason}: ${firestoreError.message}. Displaying default structure.`);
+            // Do NOT set the general error state for the UI to prevent it from displaying.
             setLoadingStructure(false);
             setDebitStructureData(defaultDebitStructure);
             setCreditStructureData(defaultCreditStructure);
         });
 
         return () => unsubscribe();
-    }, [db, isAuthReady, selectedSeason, defaultDebitStructure, defaultCreditStructure, isCommish]); // Added isCommish to dependencies
-
+    }, [db, isAuthReady, selectedSeason, defaultDebitStructure, defaultCreditStructure]); // Removed isCommish from dependencies as the error is now always suppressed from UI
 
     const handleAddTransaction = async (e) => {
         e.preventDefault();
