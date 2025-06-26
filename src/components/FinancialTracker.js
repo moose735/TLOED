@@ -1289,7 +1289,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                             {/* Add New Transaction Form (Conditionally rendered for Commish) */}
                             {isCommish ? (
                                 <section className="mb-8 p-6 bg-gray-50 rounded-lg shadow-inner">
-                                    <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">Add New Transaction (for {selectedSeason || 'selected'} season)</h3>
+                                    <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">Add New Transaction ({selectedSeason || 'selected'})</h3>
                                     <form onSubmit={handleAddTransaction} className="space-y-4">
                                         <div className="flex flex-col md:flex-row gap-4">
                                             <div className="flex-1">
@@ -1314,8 +1314,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                     onChange={(e) => setType(e.target.value)}
                                                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                                 >
-                                                    <option value="debit">Fee (Money In)</option>
-                                                    <option value="credit">Payout (Money Out)</option>
+                                                    <option value="debit">Fee</option>
+                                                    <option value="credit">Payout</option>
                                                 </select>
                                             </div>
                                         </div>
@@ -1769,7 +1769,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
                             {/* Fee and Payout Structure Section */}
                             <section className="mt-8 p-6 bg-gray-50 rounded-lg shadow-inner">
-                                <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">League Fee & Payout Structure (for {selectedSeason || 'selected'} season)</h3>
+                                <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">League Fee & Payout Structure ({selectedSeason || 'selected'})</h3>
                                 {isCommish && !isEditingStructure && (
                                     <div className="text-center mb-4">
                                         <button
@@ -1786,7 +1786,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                 ) : isEditingStructure ? (
                                     <div className="space-y-6">
                                         <div>
-                                            <h4 className="text-xl font-semibold text-red-700 mb-3">Fees (Money In)</h4>
+                                            <h4 className="text-xl font-semibold text-red-700 mb-3">Fees</h4>
                                             {debitStructureData.map((item, index) => (
                                                 <div key={index} className="flex flex-col md:flex-row gap-2 mb-2 items-center">
                                                     <input
@@ -1829,7 +1829,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                         </div>
 
                                         <div>
-                                            <h4 className="text-xl font-semibold text-green-700 mb-3">Payouts (Money Out)</h4>
+                                            <h4 className="text-xl font-semibold text-green-700 mb-3">Payouts</h4>
                                             {creditStructureData.map((item, index) => (
                                                 <div key={index} className="flex flex-col md:flex-row gap-2 mb-2 items-center">
                                                     <input
@@ -1890,7 +1890,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                 ) : (
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div>
-                                            <h4 className="text-xl font-semibold text-red-700 mb-3">Fees (Money In)</h4>
+                                            <h4 className="text-xl font-semibold text-red-700 mb-3">Fees</h4>
                                             <ul className="list-disc list-inside space-y-1 text-gray-700">
                                                 {debitStructureData.map((item, index) => (
                                                     <li key={index}>
@@ -1900,7 +1900,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             </ul>
                                         </div>
                                         <div>
-                                            <h4 className="text-xl font-semibold text-green-700 mb-3">Payouts (Money Out)</h4>
+                                            <h4 className="text-xl font-semibold text-green-700 mb-3">Payouts</h4>
                                             <ul className="list-disc list-inside space-y-1 text-gray-700">
                                                 {creditStructureData.map((item, index) => (
                                                     <li key={index}>
