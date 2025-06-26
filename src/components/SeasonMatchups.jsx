@@ -13,10 +13,10 @@ const SeasonMatchups = ({ season, leagueId, matchups, users, rosters, getDisplay
   const getRosterById = useCallback((rosterId) => {
     if (typeof rosterId === 'number' && rosterId > 0) {
       const foundRoster = rosters.find(r => r.roster_id === rosterId);
-      // console.log(`  getRosterById(${rosterId}): Found ${foundRoster ? 'roster' : 'nothing'}`); // Detailed debug log - uncomment if needed
+      console.log(`  getRosterById(${rosterId}): Found ${foundRoster ? 'roster' : 'nothing'}`); // Detailed debug log - UNCOMMENTED
       return foundRoster;
     }
-    // console.log(`  getRosterById(${rosterId}): Invalid rosterId type or value.`); // Detailed debug log - uncomment if needed
+    console.log(`  getRosterById(${rosterId}): Invalid rosterId type or value.`); // Detailed debug log - UNCOMMENTED
     return null;
   }, [rosters]); // Dependency on 'rosters' prop
 
@@ -25,7 +25,7 @@ const SeasonMatchups = ({ season, leagueId, matchups, users, rosters, getDisplay
       let display = 'TBD';
       let avatar = 'https://placehold.co/50x50/cccccc/000000?text=TBD';
 
-      // console.log("  getParticipantInfo called with:", participantIdOrObject); // Detailed debug log - uncomment if needed
+      console.log("  getParticipantInfo called with:", participantIdOrObject); // Detailed debug log - UNCOMMENTED
 
       if (typeof participantIdOrObject === 'object' && participantIdOrObject !== null) {
           const type = participantIdOrObject.w ? 'Winner' : 'Loser';
@@ -37,7 +37,7 @@ const SeasonMatchups = ({ season, leagueId, matchups, users, rosters, getDisplay
             const rosterObj = getRosterById(numericRosterId);
             if (rosterObj) {
                 const user = users[rosterObj.owner_id];
-                // console.log(`    Resolved roster ${numericRosterId}, owner_id: ${rosterObj.owner_id}, found user: ${!!user}`); // Detailed debug log - uncomment if needed
+                console.log(`    Resolved roster ${numericRosterId}, owner_id: ${rosterObj.owner_id}, found user: ${!!user}, user data:`, user); // Detailed debug log - UNCOMMENTED
                 if (user) {
                     display = getDisplayTeamName(user.teamName || user.displayName);
                     avatar = getSleeperAvatarUrl(user.avatar);
@@ -49,7 +49,7 @@ const SeasonMatchups = ({ season, leagueId, matchups, users, rosters, getDisplay
             }
           }
       }
-      // console.log(`  getParticipantInfo returning: Display: ${display}, Avatar: ${avatar}`); // Detailed debug log - uncomment if needed
+      console.log(`  getParticipantInfo returning: Display: ${display}, Avatar: ${avatar}`); // Detailed debug log - UNCOMMENTED
       return { display, avatar };
   }, [getRosterById, users, getDisplayTeamName]);
 
