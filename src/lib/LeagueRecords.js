@@ -414,7 +414,8 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
   // Helper function to render a single record entry
   const renderSingleRecordEntry = (record, label, key, formatter = (value) => value) => {
     const isExpanded = expandedRows[key];
-    const hasMultipleEntries = record && record.entries && record.entries.length > 1;
+    // Check if there are more than 1 entry OR if there are entries beyond the first one when showing top 5
+    const hasMoreThanOneEntryForDisplay = record && record.entries && record.entries.length > 1;
 
     // Default display for N/A or no valid data
     if (!record || record.entries.length === 0 || record.value === null || record.value === -Infinity) {
@@ -438,14 +439,14 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         <td className="py-2 px-3 text-sm text-gray-700">
           <div className="flex items-center justify-between">
             <span>{topEntryTeams}</span>
-            {hasMultipleEntries && (
+            {hasMoreThanOneEntryForDisplay && (
               <button
                 onClick={() => toggleExpand(key)}
-                className="ml-2 p-1 rounded-full hover:bg-gray-200 transition-colors"
+                className="ml-2 p-1 border border-gray-300 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors shadow-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500" // Added more prominent styles
                 title={isExpanded ? "Collapse" : "Expand to view top 5"}
               >
                 <svg
-                  className={`w-4 h-4 transform transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                  className={`w-4 h-4 text-gray-600 transform transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -456,8 +457,8 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
               </button>
             )}
           </div>
-          {isExpanded && hasMultipleEntries && (
-            <div className="mt-1 ml-4 text-xs"> {/* Indent additional entries */}
+          {isExpanded && hasMoreThanOneEntryForDisplay && (
+            <div className="mt-1 ml-4 text-xs space-y-0.5"> {/* Indent additional entries and add minor spacing */}
               {record.entries.slice(1, 5).map((entry, idx) => ( // Show next 4 entries (up to top 5 total)
                 <div key={idx}>{entry.team}</div>
               ))}
