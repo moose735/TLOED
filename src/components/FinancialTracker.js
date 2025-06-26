@@ -1057,15 +1057,21 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             // Sanitize structure data before saving
             const sanitizedDebitStructure = debitStructureData.map(item => ({
                 name: String(item.name || ''),
-                amount: String(item.amount || ''),
+                // Convert amount to a number, or null if empty/invalid
+                amount: (item.amount === '' || item.amount === null || isNaN(parseFloat(item.amount))) ? null : String(item.amount),
                 description: String(item.description || ''),
             }));
 
             const sanitizedCreditStructure = creditStructureData.map(item => ({
                 name: String(item.name || ''),
-                amount: String(item.amount || ''),
+                // Convert amount to a number, or null if empty/invalid
+                amount: (item.amount === '' || item.amount === null || isNaN(parseFloat(item.amount))) ? null : String(item.amount),
                 description: String(item.description || ''),
             }));
+
+            console.log("Saving debit structure:", sanitizedDebitStructure);
+            console.log("Saving credit structure:", sanitizedCreditStructure);
+
 
             const structureDocRef = doc(db, `/artifacts/${appId}/public/data/league_structure/${selectedSeason}`);
             await setDoc(structureDocRef, {
