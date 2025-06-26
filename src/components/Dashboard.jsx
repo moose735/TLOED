@@ -7,6 +7,7 @@ import {
   fetchRostersWithDetails,
   fetchNFLPlayers,
   fetchTransactionsForWeek,
+  fetchLeagueDrafts, // NEW: Import to get draft data
   getSleeperPlayerHeadshotUrl,
 } from '../utils/sleeperApi';
 
@@ -18,6 +19,8 @@ const Dashboard = ({ getDisplayTeamName }) => {
   const [rosters, setRosters] = useState([]);
   const [nflPlayers, setNflPlayers] = useState({});
   const [transactions, setTransactions] = useState([]);
+  const [draftStartTime, setDraftStartTime] = useState(null); // NEW: State for draft start timestamp
+  const [timeRemaining, setTimeRemaining] = useState(null); // NEW: State for countdown display
 
   useEffect(() => {
     const loadDashboardData = async () => {
@@ -31,14 +34,15 @@ const Dashboard = ({ getDisplayTeamName }) => {
         }
         setLeagueInfo(leagueDetails);
 
-        const currentWeek = leagueDetails.settings?.week; // Get current week from league settings
+        const currentWeek = leagueDetails.settings?.week;
         const season = leagueDetails.season;
 
-        // 2. Fetch Users, Rosters, NFL Players, and Transactions concurrently
-        const [fetchedUsers, fetchedRosters, fetchedNflPlayers, fetchedTransactions] = await Promise.all([
+        // 2. Fetch Users, Rosters, NFL Players, and League Drafts concurrently
+        const [fetchedUsers, fetchedRosters, fetchedNflPlayers, fetchedLeagueDrafts, fetchedTransactions] = await Promise.all([
           fetchUsersData(CURRENT_LEAGUE_ID),
-          fetchRostersWithDetails(CURRENT_LEAGUE_ID), // This already includes owner details
+          fetchRostersWithDetails(CURRENT_LEAGUE_ID),
           fetchNFLPlayers(),
+          fetchLeagueDrafts(CURRENT_LEAGUE_ID), // Fetch drafts for the current league
           currentWeek ? fetchTransactionsForWeek(CURRENT_LEAGUE_ID, currentWeek) : Promise.resolve([]),
         ]);
 
@@ -46,6 +50,18 @@ const Dashboard = ({ getDisplayTeamName }) => {
         setRosters(fetchedRosters);
         setNflPlayers(fetchedNflPlayers);
         setTransactions(fetchedTransactions);
+
+        // NEW: Check for pre-draft status and set draft start time
+        if (fetchedLeagueDrafts && fetchedLeagueDrafts.length > 0) {
+          // Find the main regular season draft (assuming the first one or most recent for the season)
+          const currentSeasonDraft = fetchedLeagueDrafts.find(d => d.season === season && d.season_type === 'regular');
+
+          if (currentSeasonDraft && currentSeasonDraft.status === 'pre_draft' && currentSeasonDraft.start_time) {
+            setDraftStartTime(currentSeasonDraft.start_time);
+          } else {
+            setDraftStartTime(null); // Clear if not pre-draft or no start time
+          }
+        }
 
       } catch (err) {
         console.error('Error loading dashboard data:', err);
@@ -57,6 +73,47 @@ const Dashboard = ({ getDisplayTeamName }) => {
 
     loadDashboardData();
   }, []); // Empty dependency array means this effect runs once on mount
+
+  // NEW: Effect for countdown timer
+  useEffect(() => {
+    let timerInterval;
+
+    if (draftStartTime) {
+      const calculateTimeRemaining = () => {
+        const now = new Date().getTime();
+        const distance = draftStartTime - now;
+
+        if (distance < 0) {
+          clearInterval(timerInterval);
+          setTimeRemaining('Draft has started!');
+          // Optionally, refetch league details to get updated status or hide countdown
+          // For now, just display the message.
+        } else {
+          const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+          const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+          const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+          const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+          setTimeRemaining(`${days}d ${hours}h ${minutes}m ${seconds}s`);
+        }
+      };
+
+      // Call immediately to set initial state
+      calculateTimeRemaining();
+
+      // Update every second
+      timerInterval = setInterval(calculateTimeRemaining, 1000);
+    } else {
+      setTimeRemaining(null); // Clear countdown if no draft start time
+    }
+
+    // Cleanup function: clear the interval when the component unmounts or draftStartTime changes
+    return () => {
+      if (timerInterval) {
+        clearInterval(timerInterval);
+      }
+    };
+  }, [draftStartTime]); // Re-run this effect if draftStartTime changes
 
   // Helper to get user display name from owner_id
   const getUserDisplayName = (userId) => {
@@ -111,11 +168,25 @@ const Dashboard = ({ getDisplayTeamName }) => {
         {leagueInfo?.name || 'Fantasy League'} Dashboard ({leagueInfo?.season || 'Current'} Season)
       </h2>
 
-      {leagueInfo?.settings?.week && (
+      {/* NEW: Conditional Draft Countdown */}
+      {draftStartTime && timeRemaining && (
+        <div className="text-center bg-blue-100 text-blue-800 p-3 rounded-md mb-8 shadow-sm">
+          <p className="text-xl font-semibold">
+            Draft Countdown: <span className="font-bold">{timeRemaining}</span>
+          </p>
+          <p className="text-sm text-blue-700 mt-1">
+            (Draft scheduled for {new Date(draftStartTime).toLocaleDateString()} at {new Date(draftStartTime).toLocaleTimeString()})
+          </p>
+        </div>
+      )}
+
+      {/* Existing Current Week display, now conditionally rendered with Draft Countdown */}
+      {!draftStartTime && leagueInfo?.settings?.week && (
         <p className="text-xl text-gray-700 text-center mb-8">
           Current Week: <span className="font-semibold">{leagueInfo.settings.week}</span>
         </p>
       )}
+
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
         {/* Current Standings Section */}
@@ -153,7 +224,7 @@ const Dashboard = ({ getDisplayTeamName }) => {
 
         {/* Recent Transactions Section */}
         <div className="bg-gray-50 p-6 rounded-lg shadow-inner">
-          <h3 className="text-2xl font-semibold text-blue-700 mb-4 border-b pb-2">Recent Transactions (Week {leagueInfo?.settings?.week || 'N/A'})</h3>
+          <h3 className="text-2xl font-semibold text-blue-700 mb-4 border-b pb-2">Recent Transactions ({leagueInfo?.settings?.week ? `Week ${leagueInfo.settings.week}` : 'N/A'})</h3>
           {transactions.length > 0 ? (
             <ul className="space-y-4">
               {transactions.slice(0, 5).map((transaction) => ( // Show up to 5 recent transactions
@@ -216,7 +287,12 @@ const Dashboard = ({ getDisplayTeamName }) => {
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-gray-500">No recent transactions for this week.</p>
+            <p className="text-sm text-gray-500">
+                {leagueInfo?.status === 'pre_draft'
+                    ? 'No transactions available before the draft begins.'
+                    : 'No recent transactions for this week.'
+                }
+            </p>
           )}
         </div>
       </div>
