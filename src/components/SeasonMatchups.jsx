@@ -1,169 +1,322 @@
-// src/components/SeasonMatchups.jsx
+// src/components/Seasons.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { getSleeperAvatarUrl } from '../utils/sleeperApi';
+import {
+  CURRENT_LEAGUE_ID,
+  fetchLeagueData,
+  fetchUsersData,
+  fetchRostersWithDetails,
+  fetchAllHistoricalMatchups, // This fetches Sleeper matchup data
+  fetchAllDraftHistory,
+  fetchNFLPlayers,
+  fetchTransactionsForWeek, // Need this to fetch transactions per week for a given season
+} from '../utils/sleeperApi';
 
-const SeasonMatchups = ({ season, leagueId, matchups, users, rosters, getDisplayTeamName }) => {
-  const [selectedWeek, setSelectedWeek] = useState('');
+// Import sub-components
+import SeasonOverview from './SeasonOverview';
+import SeasonMatchups from './SeasonMatchups';
+import SeasonDraft from './SeasonDraft';
+import SeasonTransactions from './SeasonTransactions';
 
-  // Helper to get roster by ID (necessary for t1/t2 which are roster_ids)
-  // Memoized to prevent unnecessary re-creations
-  const getRosterById = useCallback((rosterId) => {
-    // Ensure rosterId is a valid number and greater than 0 before attempting to find
-    if (typeof rosterId === 'number' && rosterId > 0) {
-      return rosters.find(r => r.roster_id === rosterId);
-    }
-    return null; // Return null if not a valid rosterId number
-  }, [rosters]); // Dependency on 'rosters' prop
+const SEASONS_SUB_TABS = {
+  OVERVIEW: 'overview',
+  MATCHUPS: 'matchups',
+  DRAFT: 'draft',
+  TRANSACTIONS: 'transactions',
+};
 
-  // Memoized helper to get participant info (display name and avatar)
-  // This function handles both direct roster IDs and playoff progression objects ({w: matchId}, {l: matchId})
-  const getParticipantInfo = useCallback((participantIdOrObject) => {
-      let display = 'TBD';
-      let avatar = 'https://placehold.co/50x50/cccccc/000000?text=TBD'; // Default TBD avatar
+const Seasons = ({ getDisplayTeamName }) => {
+  // State for available seasons (fetched initially)
+  const [availableSeasonsData, setAvailableSeasonsData] = useState([]); // Array of { season: 'YYYY', league_id: '...' }
 
-      // Check if the participant is a playoff progression object (e.g., {w: 1}, {l: 2})
-      if (typeof participantIdOrObject === 'object' && participantIdOrObject !== null) {
-          const type = participantIdOrObject.w ? 'Winner' : 'Loser';
-          const matchId = participantIdOrObject.w || participantIdOrObject.l;
-          display = `${type} of Match ${matchId}`;
-      }
-      // Check if the participant is a direct roster ID (number)
-      else if (typeof participantIdOrObject === 'number' && participantIdOrObject > 0) {
-          const rosterObj = getRosterById(participantIdOrObject);
-          if (rosterObj) {
-              const user = users[rosterObj.owner_id]; // 'users' is passed as a map/object with userId as keys
-              if (user) {
-                  display = getDisplayTeamName(user.teamName || user.displayName);
-                  avatar = getSleeperAvatarUrl(user.avatar);
-              } else {
-                  // Fallback if user data not found for the roster owner
-                  display = `Roster ${participantIdOrObject} (User not found)`;
-              }
-          } else {
-              // Fallback if roster object not found for the given ID
-              display = `Roster ${participantIdOrObject} (Roster not found)`;
-          }
-      }
-      // If none of the above, it remains 'TBD' with default avatar
+  // State for data of the CURRENTLY SELECTED season
+  const [currentSeasonDetails, setCurrentSeasonDetails] = useState(null); // Full league object for selected season
+  const [currentSeasonUsers, setCurrentSeasonUsers] = useState({}); // Map of userId to user details for selected league
+  const [currentSeasonRosters, setCurrentSeasonRosters] = useState([]); // Array of roster data for selected league
+  const [currentSeasonSleeperMatchups, setCurrentSeasonSleeperMatchups] = useState({}); // Object of week -> matchups for selected season
+  const [currentSeasonDraftHistory, setCurrentSeasonDraftHistory] = useState({}); // Object of draftId -> {details, picks, tradedPicks} for selected season
+  const [currentSeasonNflPlayers, setCurrentSeasonNflPlayers] = useState({}); // Map of playerId to player details (global, but fetched once)
+  const [currentSeasonTransactions, setCurrentSeasonTransactions] = useState({}); // Object of week -> transactions for selected league
 
-      return { display, avatar };
-  }, [getRosterById, users, getDisplayTeamName]); // Dependencies for useCallback
+  const [selectedSeason, setSelectedSeason] = useState(null); // The season string currently being viewed
+  const [activeSubTab, setActiveSubTab] = useState(SEASONS_SUB_TABS.OVERVIEW);
+
+  const [loadingInitial, setLoadingInitial] = useState(true); // Loading state for initial season list
+  const [loadingSeasonData, setLoadingSeasonData] = useState(false); // Loading state for specific season's data
+  const [error, setError] = useState(null);
 
 
-  // Update selectedWeek when the season or matchups data changes
+  // Memoized helper to get a user's display name from their ID, considering users for the *current* season
+  const getUserDisplayName = useCallback((userId) => {
+    const user = currentSeasonUsers[userId];
+    return user ? getDisplayTeamName(user.teamName || user.displayName) : 'Unknown User';
+  }, [currentSeasonUsers, getDisplayTeamName]);
+
+  // Memoized helper to get a player's name from their ID (NFL players are fetched once globally)
+  const getPlayerName = useCallback((playerId) => {
+    const player = currentSeasonNflPlayers[playerId];
+    return player ? `${player.first_name || ''} ${player.last_name || ''}`.trim() : `Unknown Player (${playerId})`;
+  }, [currentSeasonNflPlayers]);
+
+
+  // Effect 1: Fetch initial list of available seasons, excluding the current season
   useEffect(() => {
-    if (Object.keys(matchups).length > 0) {
-      // Set initial selected week to the latest week available in the matchups data
-      const latestWeek = Math.max(...Object.keys(matchups).map(Number));
-      setSelectedWeek(String(latestWeek));
-    } else {
-      setSelectedWeek('');
-    }
-  }, [season, matchups]); // Re-run when season or matchups data changes
+    const loadAvailableSeasons = async () => {
+      setLoadingInitial(true);
+      setError(null);
+      try {
+        const leagues = await fetchLeagueData(CURRENT_LEAGUE_ID);
+        // Find the current league's season
+        const currentLeague = leagues.find(l => l.league_id === CURRENT_LEAGUE_ID);
+        const currentSeason = currentLeague ? currentLeague.season : null;
 
-  // Display message if no matchup data is available for the season
-  if (!season || !leagueId || Object.keys(matchups).length === 0) {
+        // Filter out the current season and map to simpler objects
+        const historicalLeagues = leagues
+          .filter(l => l.season !== currentSeason) // Exclude the current season
+          .map(l => ({ season: l.season, league_id: l.league_id, settings: l.settings }));
+
+        setAvailableSeasonsData(historicalLeagues.sort((a, b) => b.season - a.season)); // Sort descending
+
+        // Do NOT set initial selected season if the current season is excluded
+        // The dropdown will default to "Select a Season"
+      } catch (err) {
+        console.error('Error loading available seasons:', err);
+        setError(`Failed to load available seasons: ${err.message}.`);
+      } finally {
+        setLoadingInitial(false);
+      }
+    };
+
+    loadAvailableSeasons();
+  }, []); // Runs only once on mount to get the list of all historical leagues
+
+  // Effect 2: Fetch detailed data when a season is selected
+  useEffect(() => {
+    const loadSelectedSeasonData = async () => {
+      if (!selectedSeason) {
+        console.log("No season selected, clearing current season data."); // NEW LOG
+        // Clear previous season's data if no season is selected
+        setCurrentSeasonDetails(null);
+        setCurrentSeasonUsers({});
+        setCurrentSeasonRosters([]);
+        setCurrentSeasonSleeperMatchups({});
+        setCurrentSeasonDraftHistory({});
+        setCurrentSeasonTransactions({});
+        return;
+      }
+
+      setLoadingSeasonData(true);
+      setError(null);
+      console.log(`Attempting to load data for selected season: ${selectedSeason}`); // NEW LOG
+
+      // Find the leagueId for the selected season
+      const leagueForSelectedSeason = availableSeasonsData.find(l => l.season === selectedSeason);
+      if (!leagueForSelectedSeason) {
+        console.error(`League details not found for season ${selectedSeason} in availableSeasonsData.`); // NEW LOG
+        setError(`League details not found for season ${selectedSeason}.`);
+        setLoadingSeasonData(false);
+        return;
+      }
+      const selectedLeagueId = leagueForSelectedSeason.league_id;
+      setCurrentSeasonDetails(leagueForSelectedSeason); // Set the full league object
+      console.log(`Selected league ID for ${selectedSeason}: ${selectedLeagueId}`); // NEW LOG
+
+      try {
+        // Fetch users, rosters, NFL players (once), and specific season data
+        const [
+          fetchedUsersArray, // This is an array of user objects for the SELECTED league
+          fetchedRosters, // Rosters for the SELECTED league
+          allSleeperMatchups, // This is the *global* cache for all historical matchups
+          fetchedAllDraftHistory, // Still global, but will filter by selected season later
+          fetchedNFLPlayers, // Global, cached via in-memory cache
+        ] = await Promise.all([
+          fetchUsersData(selectedLeagueId),
+          fetchRostersWithDetails(selectedLeagueId),
+          fetchAllHistoricalMatchups(), // This fetches all, filter by season for specific display
+          fetchAllDraftHistory(), // This fetches all, filter by season for specific display
+          fetchNFLPlayers(), // Fetch global NFL players (cached)
+        ]);
+
+        // Convert fetchedUsersArray to a map for easier lookup in sub-components
+        const usersMap = fetchedUsersArray.reduce((acc, user) => {
+          acc[user.userId] = user;
+          return acc;
+        }, {});
+        setCurrentSeasonUsers(usersMap);
+        setCurrentSeasonRosters(fetchedRosters);
+        
+        // Extract only the matchups for the selected season from the global cache
+        const matchupsForSelectedSeason = allSleeperMatchups[selectedSeason] || {};
+        setCurrentSeasonSleeperMatchups(matchupsForSelectedSeason); 
+        console.log(`Matchups for ${selectedSeason} being set to state:`, matchupsForSelectedSeason); // NEW LOG: Check content here
+
+        setCurrentSeasonDraftHistory(fetchedAllDraftHistory[selectedSeason] || {}); // Filter by selected season
+        setCurrentSeasonNflPlayers(fetchedNFLPlayers); // Set global NFL players
+
+        // Fetch transactions for all weeks of the selected season
+        const transactionsForSelectedSeason = {};
+        // Use leagueForSelectedSeason.settings?.playoff_start_week to determine relevant weeks
+        let maxWeek = leagueForSelectedSeason.settings?.playoff_start_week ? leagueForSelectedSeason.settings.playoff_start_week + 3 : 18; // Max 3 playoff weeks after start
+        maxWeek = Math.min(maxWeek, 18); // Cap at 18 just in case
+
+        for (let week = 1; week <= maxWeek; week++) {
+            const transactions = await fetchTransactionsForWeek(selectedLeagueId, week);
+            if (transactions && transactions.length > 0) {
+                transactionsForSelectedSeason[week] = transactions;
+            } else if (week === 1 && (!transactions || transactions.length === 0)) { // If week 1 has no transactions, and none were fetched, break early
+                console.log(`No transactions found for league ${selectedLeagueId}, Week 1. Stopping transaction fetches for this season.`); // NEW LOG
+                break;
+            }
+        }
+        setCurrentSeasonTransactions(transactionsForSelectedSeason);
+        console.log(`Transactions for ${selectedSeason} being set to state:`, transactionsForSelectedSeason); // NEW LOG
+
+      } catch (err) {
+        console.error(`Error loading data for season ${selectedSeason}:`, err);
+        setError(`Failed to load data for ${selectedSeason}: ${err.message}.`);
+        // Clear data on error for the current season
+        setCurrentSeasonDetails(null);
+        setCurrentSeasonUsers({});
+        setCurrentSeasonRosters([]);
+        setCurrentSeasonSleeperMatchups({});
+        setCurrentSeasonDraftHistory({});
+        setCurrentSeasonTransactions({});
+      } finally {
+        setLoadingSeasonData(false);
+      }
+    };
+
+    loadSelectedSeasonData();
+  }, [selectedSeason, availableSeasonsData]); // Re-run when selectedSeason changes or initial season list loads
+
+
+  if (loadingInitial) {
     return (
-      <div className="text-center p-4 text-gray-600">
-        No matchup data available for {season}.
+      <div className="flex flex-col items-center justify-center min-h-[400px] text-blue-600">
+        <svg className="animate-spin h-10 w-10 text-blue-500 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <p className="text-lg font-medium">Loading available seasons...</p>
       </div>
     );
   }
 
-  // Sort available weeks numerically for the dropdown
-  const availableWeeks = Object.keys(matchups).sort((a, b) => Number(a) - Number(b));
-  // Get matchups for the currently selected week
-  const currentWeekMatchups = selectedWeek ? matchups[selectedWeek] : [];
+  if (error) {
+    return (
+      <div className="text-center text-red-600 text-lg p-4">
+        <p>Error: {error}</p>
+        <p>Could not load season history. Please check your network connection and API configurations.</p>
+      </div>
+    );
+  }
+
+  // Derived state for the dropdown options
+  const seasonOptions = availableSeasonsData.map(league => league.season);
+
 
   return (
-    <div className="p-4">
-      <h3 className="text-2xl font-semibold text-blue-700 mb-4 border-b pb-2">
-        {season} Season Matchups
-      </h3>
+    <div className="container mx-auto p-4 md:p-6 bg-white shadow-lg rounded-lg">
+      <h2 className="text-3xl font-bold text-gray-800 mb-6 text-center">
+        Season History
+      </h2>
 
-      {/* Week Selection Dropdown */}
-      <div className="mb-6 flex flex-col md:flex-row items-center justify-start space-y-4 md:space-y-0 md:space-x-4">
-        <label htmlFor="week-select" className="font-semibold text-gray-700">Select Week:</label>
+      {/* Season Selection Dropdown */}
+      <div className="mb-6 flex flex-col md:flex-row items-center justify-center space-y-4 md:space-y-0 md:space-x-4">
+        <label htmlFor="season-select" className="font-semibold text-gray-700">Select Season:</label>
         <select
-          id="week-select"
+          id="season-select"
           className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-          value={selectedWeek}
-          onChange={(e) => setSelectedWeek(e.target.value)}
+          value={selectedSeason || ''}
+          onChange={(e) => {
+            setSelectedSeason(e.target.value);
+            setActiveSubTab(SEASONS_SUB_TABS.OVERVIEW); // Reset to overview when season changes
+          }}
         >
-          {/* Display a default option if no weeks are available */}
-          {availableWeeks.length === 0 && <option value="">No Weeks Available</option>}
-          {availableWeeks.map(week => (
-            <option key={week} value={week}>
-              Week {week}
+          {/* Add a default "Select a Season" option if no season is initially selected */}
+          {!selectedSeason && <option value="">Select a Season</option>}
+          {seasonOptions.map(season => (
+            <option key={season} value={season}>
+              {season}
             </option>
           ))}
         </select>
       </div>
 
-      {selectedWeek && currentWeekMatchups.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {currentWeekMatchups.map((matchup) => {
-            // Get info for Team 1 and Team 2 using the helper function
-            const team1Info = getParticipantInfo(matchup.t1);
-            const team2Info = getParticipantInfo(matchup.t2);
+      {selectedSeason && (
+        loadingSeasonData ? (
+          <div className="flex flex-col items-center justify-center min-h-[300px] text-blue-600">
+            <svg className="animate-spin h-10 w-10 text-blue-500 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p className="text-lg font-medium">Loading data for {selectedSeason} season...</p>
+          </div>
+        ) : (
+          <>
+            <div className="flex justify-center border-b border-gray-200 mb-6">
+              {Object.values(SEASONS_SUB_TABS).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveSubTab(tab)}
+                  className={`py-2 px-4 text-lg font-medium transition-colors duration-200 ${
+                    activeSubTab === tab
+                      ? 'border-b-2 border-blue-600 text-blue-600'
+                      : 'text-gray-700 hover:text-blue-500 hover:border-blue-300'
+                  }`}
+                >
+                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                </button>
+              ))}
+            </div>
 
-            // Determine winning team info
-            let winningTeamDisplay = 'TBD';
-            let winningTeamAvatar = 'https://placehold.co/50x50/cccccc/000000?text=TBD';
-
-            // If a winner (w) is present in the matchup data, resolve their info
-            if (matchup.w) {
-                const winnerRoster = getRosterById(matchup.w);
-                if (winnerRoster) {
-                    const winnerUser = users[winnerRoster.owner_id];
-                    if (winnerUser) {
-                        winningTeamDisplay = getDisplayTeamName(winnerUser.teamName || winnerUser.displayName);
-                        winningTeamAvatar = getSleeperAvatarUrl(winnerUser.avatar);
-                    }
-                }
-            }
-
-            return (
-              <div key={matchup.m} className="bg-white p-4 rounded-lg shadow-md border border-gray-200">
-                {/* Display Match Round, defaulting to 'N/A' if not available */}
-                <p className="text-md font-semibold text-gray-800 mb-2">Match {matchup.m} (Round {matchup.r || 'N/A'})</p>
-                <div className="flex items-center justify-between py-2 border-b border-gray-100">
-                  {/* Display Team 1 Info */}
-                  <div className="flex items-center space-x-2">
-                    <img src={team1Info.avatar} alt={team1Info.display} className="w-8 h-8 rounded-full" onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/50x50/cccccc/000000?text=TBD'; }} />
-                    <span className="font-medium text-gray-700">{team1Info.display}</span>
-                  </div>
-                  {/* VS Separator */}
-                  <span className="font-bold text-lg text-gray-800">VS</span>
-                  {/* Display Team 2 Info */}
-                  <div className="flex items-center space-x-2">
-                    <img src={team2Info.avatar} alt={team2Info.display} className="w-8 h-8 rounded-full" onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/50x50/cccccc/000000?text=TBD'; }} />
-                    <span className="font-medium text-gray-700">{team2Info.display}</span>
-                  </div>
-                </div>
-                <div className="mt-3 text-center text-sm">
-                  {/* Conditionally display winner or "Match not yet played" */}
-                  {matchup.w || matchup.l ? (
-                    <p className="text-green-700 font-bold flex items-center justify-center">
-                      Winner:
-                      <img src={winningTeamAvatar} alt={winningTeamDisplay} className="w-6 h-6 rounded-full ml-2 mr-1" onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/50x50/cccccc/000000?text=TBD'; }} />
-                      {winningTeamDisplay}
-                    </p>
-                  ) : (
-                    <p className="text-gray-500 italic">Match not yet played.</p>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <p className="text-center p-4 text-gray-500">
-          Select a week to view matchups, or no matchups available for Week {selectedWeek} in {season}.
-        </p>
+            <div className="tab-content">
+              {activeSubTab === SEASONS_SUB_TABS.OVERVIEW && (
+                <SeasonOverview
+                  season={selectedSeason}
+                  leagueDetails={currentSeasonDetails}
+                  rosters={currentSeasonRosters}
+                  users={currentSeasonUsers}
+                  getDisplayTeamName={getDisplayTeamName}
+                />
+              )}
+              {activeSubTab === SEASONS_SUB_TABS.MATCHUPS && (
+                <SeasonMatchups
+                  season={selectedSeason}
+                  leagueId={currentSeasonDetails?.league_id}
+                  matchups={currentSeasonSleeperMatchups}
+                  users={currentSeasonUsers}
+                  rosters={currentSeasonRosters}
+                  getDisplayTeamName={getDisplayTeamName}
+                />
+              )}
+              {activeSubTab === SEASONS_SUB_TABS.DRAFT && (
+                <SeasonDraft
+                  season={selectedSeason}
+                  leagueId={currentSeasonDetails?.league_id}
+                  draftHistory={currentSeasonDraftHistory}
+                  nflPlayers={currentSeasonNflPlayers}
+                  users={currentSeasonUsers}
+                  rosters={currentSeasonRosters}
+                  getDisplayTeamName={getDisplayTeamName}
+                />
+              )}
+              {activeSubTab === SEASONS_SUB_TABS.TRANSACTIONS && (
+                <SeasonTransactions
+                  season={selectedSeason}
+                  leagueId={currentSeasonDetails?.league_id}
+                  transactionsByWeek={currentSeasonTransactions}
+                  nflPlayers={currentSeasonNflPlayers}
+                  users={currentSeasonUsers}
+                  rosters={currentSeasonRosters}
+                  getDisplayTeamName={getDisplayTeamName}
+                />
+              )}
+            </div>
+          </>
+        )
       )}
     </div>
   );
 };
 
-export default SeasonMatchups;
+export default Seasons;
