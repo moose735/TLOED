@@ -620,14 +620,23 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             }
             setLoadingStructure(false);
         }, (firestoreError) => {
-            setError(`Failed to load league structure for season ${selectedSeason}: ${firestoreError.message}`);
+            // Only set the error state if it's a critical issue for the current user's role
+            // For non-commish users, a "permission denied" on structure fetch might be expected
+            // if rules are very strict, but they can still see defaults.
+            if (!isCommish && (firestoreError.code === 'permission-denied' || firestoreError.message.includes('permissions'))) {
+                console.warn(`Non-commish user attempted to load season ${selectedSeason} structure and received permission error: ${firestoreError.message}. Displaying default structure.`);
+                // Do NOT set the general error state for the UI, as defaults are displayed.
+                // This suppresses the visible error message for non-commish permission errors on structure load.
+            } else {
+                setError(`Failed to load league structure for season ${selectedSeason}: ${firestoreError.message}`);
+            }
             setLoadingStructure(false);
             setDebitStructureData(defaultDebitStructure);
             setCreditStructureData(defaultCreditStructure);
         });
 
         return () => unsubscribe();
-    }, [db, isAuthReady, selectedSeason, defaultDebitStructure, defaultCreditStructure]); // Added selectedSeason dependency
+    }, [db, isAuthReady, selectedSeason, defaultDebitStructure, defaultCreditStructure, isCommish]); // Added isCommish to dependencies
 
 
     const handleAddTransaction = async (e) => {
