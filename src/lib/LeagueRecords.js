@@ -1,11 +1,11 @@
 // src/lib/LeagueRecords.js
 import React, { useState, useEffect } from 'react';
-// Corrected import path, assuming calculations.js is accessible two levels up from src/lib
-import { calculateAllLeagueMetrics } from '../../calculations.js'; 
+import { calculateAllLeagueMetrics } from '../utils/calculations'; // Import the new utility
 
 const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
   const [allTimeRecords, setAllTimeRecords] = useState({});
-  const [expandedRows, setExpandedRows] = useState({}); // State to manage expanded rows
+  // New state to manage expanded records
+  const [expandedRecords, setExpandedRecords] = useState({});
 
   useEffect(() => {
     console.log("LeagueRecords: useEffect triggered.");
@@ -49,7 +49,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         teamStats.totalGames += seasonData.totalGames;
         teamStats.totalPointsFor += seasonData.pointsFor;
         teamStats.totalPointsAgainst += seasonData.pointsAgainst;
-        
+
         // Collect seasonal all-play percentages for later averaging
         if (typeof seasonData.allPlayWinPercentage === 'number' && !isNaN(seasonData.allPlayWinPercentage)) {
             teamStats.allPlayWinPercentages.push(seasonData.allPlayWinPercentage);
@@ -186,17 +186,19 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         value: sortedCareerDPR[0].dpr,
         entries: sortedCareerDPR.filter(d => d.dpr === sortedCareerDPR[0].dpr).map(d => ({ team: d.team }))
       };
+      // For lowest DPR, we need to sort ascending and potentially get more entries if there are ties
+      const sortedCareerDPRAsc = [...calculatedCareerDPRs].sort((a, b) => a.dpr - b.dpr);
       newCalculatedRecords.lowestDPR = {
-        value: sortedCareerDPR[sortedCareerDPR.length - 1].dpr,
-        entries: sortedCareerDPR.filter(d => d.dpr === sortedCareerDPR[sortedCareerDPR.length - 1].dpr).map(d => ({ team: d.team }))
+        value: sortedCareerDPRAsc[0].dpr, // Smallest DPR
+        entries: sortedCareerDPRAsc.filter(d => d.dpr === sortedCareerDPRAsc[0].dpr).map(d => ({ team: d.team }))
       };
     }
 
     // Variables to find the max/min across all teams, initialized to safe defaults
     let maxWins = { value: -Infinity, entries: [] };
     let maxLosses = { value: -Infinity, entries: [] };
-    let bestWinPct = { value: -Infinity, entries: [] }; // This one will be populated from careerDPRData
-    let bestAllPlayWinPct = { value: -Infinity, entries: [] }; // This one will be populated from aggregatedCareerStats
+    let bestWinPct = { value: -Infinity, entries: [] };
+    let bestAllPlayWinPct = { value: -Infinity, entries: [] };
     let maxWeeklyHighScores = { value: -Infinity, entries: [] };
     let maxWeeklyTop2Scores = { value: -Infinity, entries: [] };
     let maxWinningSeasons = { value: -Infinity, entries: [] };
@@ -208,149 +210,155 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     let maxTotalPoints = { value: -Infinity, entries: [] };
     let maxPointsAgainst = { value: -Infinity, entries: [] };
 
-    // Iterate over calculatedCareerDPRs for Best Win %
-    if (Array.isArray(calculatedCareerDPRs)) {
-      calculatedCareerDPRs.forEach(teamData => {
-        const team = teamData.team;
-        const careerWinPct = teamData.winPercentage; // Directly use the calculated career win percentage
 
-        // Best Win Percentage
-        if (typeof careerWinPct === 'number' && !isNaN(careerWinPct)) {
-            if (careerWinPct > bestWinPct.value) {
-                bestWinPct = { value: careerWinPct, entries: [{ team: team }] };
-            } else if (careerWinPct === bestWinPct.value) {
-                bestWinPct.entries.push({ team: team });
-            }
+    // Iterate over calculatedCareerDPRs for Best Win %
+    // Sort and collect all entries for bestWinPct
+    if (Array.isArray(calculatedCareerDPRs)) {
+        const sortedByWinPct = [...calculatedCareerDPRs].sort((a, b) => b.winPercentage - a.winPercentage);
+        if (sortedByWinPct.length > 0) {
+            bestWinPct = {
+                value: sortedByWinPct[0].winPercentage,
+                entries: sortedByWinPct
+                    .filter(d => d.winPercentage === sortedByWinPct[0].winPercentage)
+                    .map(d => ({ team: d.team }))
+            };
         }
-      });
     }
+
 
     // Now, iterate over aggregatedCareerStats for the remaining count-based records
     // and for Best All-Play Win Percentage
     if (typeof aggregatedCareerStats === 'object' && aggregatedCareerStats !== null) {
+      // Create temporary arrays to sort and find top N for each category
+      const tempMostWins = [];
+      const tempMostLosses = [];
+      const tempBestAllPlayWinPct = [];
+      const tempMostWeeklyHighScores = [];
+      const tempMostWeeklyTop2Scores = [];
+      const tempMostWinningSeasons = [];
+      const tempMostLosingSeasons = [];
+      const tempMostBlowoutWins = [];
+      const tempMostBlowoutLosses = [];
+      const tempMostSlimWins = [];
+      const tempMostSlimLosses = [];
+      const tempMostTotalPoints = [];
+      const tempMostPointsAgainst = [];
+
+
       Object.keys(aggregatedCareerStats).forEach(team => {
         const stats = aggregatedCareerStats[team];
 
-        // Best All-Play Win Percentage (Calculated from aggregated seasonal all-play percentages)
+        // Best All-Play Win Percentage
         if (stats && stats.allPlayWinPercentages.length > 0) {
             const currentCareerAllPlayWinPct = stats.allPlayWinPercentages.reduce((sum, pct) => sum + pct, 0) / stats.allPlayWinPercentages.length;
             if (typeof currentCareerAllPlayWinPct === 'number' && !isNaN(currentCareerAllPlayWinPct)) {
-                if (currentCareerAllPlayWinPct > bestAllPlayWinPct.value) {
-                    bestAllPlayWinPct = { value: currentCareerAllPlayWinPct, entries: [{ team: team }] };
-                } else if (currentCareerAllPlayWinPct === bestAllPlayWinPct.value) {
-                    bestAllPlayWinPct.entries.push({ team: team });
-                }
+                tempBestAllPlayWinPct.push({ team: team, value: currentCareerAllPlayWinPct });
             }
         }
 
         // Most Wins
-        if (stats.totalWins > maxWins.value) {
-          maxWins = { value: stats.totalWins, entries: [{ team: team }] };
-        } else if (stats.totalWins === maxWins.value) {
-          maxWins.entries.push({ team: team });
-        }
+        tempMostWins.push({ team: team, value: stats.totalWins });
 
         // Most Losses
-        if (stats.totalLosses > maxLosses.value) {
-          maxLosses = { value: stats.totalLosses, entries: [{ team: team }] };
-        } else if (stats.totalLosses === maxLosses.value) {
-          maxLosses.entries.push({ team: team });
-        }
+        tempMostLosses.push({ team: team, value: stats.totalLosses });
 
         // Most Weekly High Scores
-        if (stats.weeklyHighScores > maxWeeklyHighScores.value) {
-            maxWeeklyHighScores = { value: stats.weeklyHighScores, entries: [{ team: team }] };
-        } else if (stats.weeklyHighScores === maxWeeklyHighScores.value) {
-            maxWeeklyHighScores.entries.push({ team: team });
-        }
+        tempMostWeeklyHighScores.push({ team: team, value: stats.weeklyHighScores });
 
         // Most Weekly Top 2 Scores
-        if (stats.weeklyTop2Scores > maxWeeklyTop2Scores.value) {
-            maxWeeklyTop2Scores = { value: stats.weeklyTop2Scores, entries: [{ team: team }] };
-        } else if (stats.weeklyTop2Scores === maxWeeklyTop2Scores.value) {
-            maxWeeklyTop2Scores.entries.push({ team: team });
-        }
+        tempMostWeeklyTop2Scores.push({ team: team, value: stats.weeklyTop2Scores });
 
         // Most Winning Seasons
-        if (stats.winningSeasons > maxWinningSeasons.value) {
-          maxWinningSeasons = { value: stats.winningSeasons, entries: [{ team: team }] };
-        } else if (stats.winningSeasons === maxWinningSeasons.value) {
-          maxWinningSeasons.entries.push({ team: team });
-        }
+        tempMostWinningSeasons.push({ team: team, value: stats.winningSeasons });
 
         // Most Losing Seasons
-        if (stats.losingSeasons > maxLosingSeasons.value) {
-          maxLosingSeasons = { value: stats.losingSeasons, entries: [{ team: team }] };
-        } else if (stats.losingSeasons === maxLosingSeasons.value) {
-          maxLosingSeasons.entries.push({ team: team });
-        }
+        tempMostLosingSeasons.push({ team: team, value: stats.losingSeasons });
 
         // Most Blowout Wins
-        if (stats.blowoutWins > maxBlowoutWins.value) {
-          maxBlowoutWins = { value: stats.blowoutWins, entries: [{ team: team }] };
-        } else if (stats.blowoutWins === maxBlowoutWins.value) {
-          maxBlowoutWins.entries.push({ team: team });
-        }
+        tempMostBlowoutWins.push({ team: team, value: stats.blowoutWins });
 
         // Most Blowout Losses
-        if (stats.blowoutLosses > maxBlowoutLosses.value) {
-          maxBlowoutLosses = { value: stats.blowoutLosses, entries: [{ team: team }] };
-        } else if (stats.blowoutLosses === maxBlowoutLosses.value) {
-          maxBlowoutLosses.entries.push({ team: team });
-        }
+        tempMostBlowoutLosses.push({ team: team, value: stats.blowoutLosses });
 
         // Most Slim Wins
-        if (stats.slimWins > maxSlimWins.value) {
-          maxSlimWins = { value: stats.slimWins, entries: [{ team: team }] };
-        } else if (stats.slimWins === maxSlimWins.value) {
-          maxSlimWins.entries.push({ team: team });
-        }
+        tempMostSlimWins.push({ team: team, value: stats.slimWins });
 
         // Most Slim Losses
-        if (stats.slimLosses > maxSlimLosses.value) {
-          maxSlimLosses = { value: stats.slimLosses, entries: [{ team: team }] };
-        } else if (stats.slimLosses === maxSlimLosses.value) {
-          maxSlimLosses.entries.push({ team: team });
-        }
+        tempMostSlimLosses.push({ team: team, value: stats.slimLosses });
 
         // Most Total Points For
-        if (stats.totalPointsFor > maxTotalPoints.value) {
-          maxTotalPoints = { value: stats.totalPointsFor, entries: [{ team: team }] };
-        } else if (stats.totalPointsFor === maxTotalPoints.value) {
-          maxTotalPoints.entries.push({ team: team });
-        }
+        tempMostTotalPoints.push({ team: team, value: stats.totalPointsFor });
 
         // Most Points Against
-        if (stats.totalPointsAgainst > maxPointsAgainst.value) {
-          maxPointsAgainst = { value: stats.totalPointsAgainst, entries: [{ team: team }] };
-        } else if (stats.totalPointsAgainst === maxPointsAgainst.value) {
-          maxPointsAgainst.entries.push({ team: team });
-        }
+        tempMostPointsAgainst.push({ team: team, value: stats.totalPointsAgainst });
       });
+
+
+      // Helper to process a temporary array into the record format (top 1 + potentially other top entries)
+      const processRecord = (tempArray, isAscending = false) => {
+          if (tempArray.length === 0) return { value: null, entries: [] };
+
+          // Sort based on value (descending for max, ascending for min)
+          tempArray.sort((a, b) => isAscending ? a.value - b.value : b.value - a.value);
+
+          const topValue = tempArray[0].value;
+          const topEntries = tempArray.filter(item => item.value === topValue).map(item => ({ team: item.team }));
+
+          // For the dropdown, collect up to the next 5 unique values or teams
+          const allRankedEntries = [];
+          let currentRankValue = null;
+          let rankCounter = 0;
+
+          for (const item of tempArray) {
+              if (item.value !== currentRankValue) {
+                  rankCounter++;
+                  currentRankValue = item.value;
+              }
+              if (rankCounter <= 6) { // Top 1 + next 5 ranks
+                  allRankedEntries.push({ team: item.team, value: item.value });
+              } else {
+                  break;
+              }
+          }
+
+          return { value: topValue, entries: topEntries, allRankedEntries: allRankedEntries };
+      };
+
+
+      // Assign processed records
+      newCalculatedRecords.mostWins = processRecord(tempMostWins);
+      newCalculatedRecords.mostLosses = processRecord(tempMostLosses);
+      newCalculatedRecords.bestAllPlayWinPct = processRecord(tempBestAllPlayWinPct);
+      newCalculatedRecords.mostWeeklyHighScores = processRecord(tempMostWeeklyHighScores);
+      newCalculatedRecords.mostWeeklyTop2Scores = processRecord(tempMostWeeklyTop2Scores);
+      newCalculatedRecords.mostWinningSeasons = processRecord(tempMostWinningSeasons);
+      newCalculatedRecords.mostLosingSeasons = processRecord(tempMostLosingSeasons);
+      newCalculatedRecords.mostBlowoutWins = processRecord(tempMostBlowoutWins);
+      newCalculatedRecords.mostBlowoutLosses = processRecord(tempMostBlowoutLosses);
+      newCalculatedRecords.mostSlimWins = processRecord(tempMostSlimWins);
+      newCalculatedRecords.mostSlimLosses = processRecord(tempMostSlimLosses);
+      newCalculatedRecords.mostTotalPoints = processRecord(tempMostTotalPoints);
+      newCalculatedRecords.mostPointsAgainst = processRecord(tempMostPointsAgainst);
+
+      // Re-process DPR and Best Win % to include allRankedEntries for dropdown
+      if (sortedCareerDPR.length > 0) {
+        newCalculatedRecords.highestDPR = processRecord(sortedCareerDPR.map(d => ({ team: d.team, value: d.dpr })));
+        newCalculatedRecords.lowestDPR = processRecord(sortedCareerDPRAsc.map(d => ({ team: d.team, value: d.dpr })), true); // Use ascending sort
+      }
+
+      if (bestWinPct.entries.length > 0) {
+          newCalculatedRecords.bestWinPct = processRecord(sortedByWinPct.map(d => ({ team: d.team, value: d.winPercentage })));
+      }
+
     }
     console.log("LeagueRecords: Record candidates before final assignment (bestWinPct, bestAllPlayWinPct):", { bestWinPct, bestAllPlayWinPct });
 
 
     // Now, assign the calculated values to newCalculatedRecords
     // Only assign if a valid record was found (i.e., not -Infinity or empty entries for numerical records)
-    if (maxWins.entries.length > 0) newCalculatedRecords.mostWins = maxWins;
-    if (maxLosses.entries.length > 0) newCalculatedRecords.mostLosses = maxLosses;
-
-    // These were initialized to -Infinity, so if they are still -Infinity, it means no valid data was found
-    if (bestWinPct.value !== -Infinity) newCalculatedRecords.bestWinPct = bestWinPct;
-    if (bestAllPlayWinPct.value !== -Infinity) newCalculatedRecords.bestAllPlayWinPct = bestAllPlayWinPct;
-
-    if (maxWeeklyHighScores.entries.length > 0) newCalculatedRecords.mostWeeklyHighScores = maxWeeklyHighScores;
-    if (maxWeeklyTop2Scores.entries.length > 0) newCalculatedRecords.mostWeeklyTop2Scores = maxWeeklyTop2Scores;
-    if (maxWinningSeasons.entries.length > 0) newCalculatedRecords.mostWinningSeasons = maxWinningSeasons;
-    if (maxLosingSeasons.entries.length > 0) newCalculatedRecords.mostLosingSeasons = maxLosingSeasons;
-    if (maxBlowoutWins.entries.length > 0) newCalculatedRecords.mostBlowoutWins = maxBlowoutWins;
-    if (maxBlowoutLosses.entries.length > 0) newCalculatedRecords.mostBlowoutLosses = maxBlowoutLosses;
-    if (maxSlimWins.entries.length > 0) newCalculatedRecords.mostSlimWins = maxSlimWins;
-    if (maxSlimLosses.entries.length > 0) newCalculatedRecords.mostSlimLosses = maxSlimLosses;
-
-    if (maxTotalPoints.value !== -Infinity) newCalculatedRecords.mostTotalPoints = maxTotalPoints;
-    if (maxPointsAgainst.value !== -Infinity) newCalculatedRecords.mostPointsAgainst = maxPointsAgainst;
+    // The processRecord helper already handles the initial population, so these assignments are more for
+    // ensuring the structure for records that might not have been processed if their tempArray was empty.
+    // However, given the structure, they should be correctly initialized by processRecord now.
 
     console.log("LeagueRecords: Final newCalculatedRecords before setting state:", newCalculatedRecords);
     setAllTimeRecords(newCalculatedRecords);
@@ -362,7 +370,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
 
   // Formats as ".xxx" (removes leading zero if present)
   const formatWinPct = (pct) => {
-    console.log("formatWinPct called with value:", pct, "type:", typeof pct);
+    // console.log("formatWinPct called with value:", pct, "type:", typeof pct);
     if (typeof pct === 'number' && !isNaN(pct) && pct !== -Infinity) {
       let formatted = pct.toFixed(3);
       if (formatted.startsWith('0.')) {
@@ -370,14 +378,14 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       } else if (formatted.startsWith('-0.')) {
         formatted = `-${formatted.substring(2)}`; // Handle negative " -0.XXX" -> "-.XXX"
       }
-      return `${formatted}%`;
+      return `${formatted}`; // Removed '%' here, will add in render if needed
     }
     return 'N/A';
   };
 
   // Formats as ".xxx%" (removes leading zero if present)
   const formatAllPlayWinPct = (pct) => {
-    console.log("formatAllPlayWinPct called with value:", pct, "type:", typeof pct);
+    // console.log("formatAllPlayWinPct called with value:", pct, "type:", typeof pct);
     if (typeof pct === 'number' && !isNaN(pct) && pct !== -Infinity) {
       let formatted = pct.toFixed(3);
       if (formatted.startsWith('0.')) {
@@ -385,14 +393,14 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       } else if (formatted.startsWith('-0.')) {
         formatted = `-${formatted.substring(2)}`; // Handle negative
       }
-      return `${formatted}%`; // Appended '%'
+      return `${formatted}`; // Removed '%' here, will add in render if needed
     }
     return 'N/A';
   };
 
   // Modified to format with commas and two decimal places using Intl.NumberFormat
   const formatPoints = (points) => {
-    console.log("formatPoints called with value:", points, "type:", typeof points);
+    // console.log("formatPoints called with value:", points, "type:", typeof points);
     if (typeof points === 'number' && !isNaN(points) && points !== -Infinity) {
         return new Intl.NumberFormat(undefined, {
             minimumFractionDigits: 2,
@@ -403,23 +411,19 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     return 'N/A';
   };
 
-  // Toggle expand/collapse for a given record key
-  const toggleExpand = (key) => {
-    setExpandedRows(prev => ({
+  // Toggle function for dropdowns
+  const toggleExpanded = (recordKey) => {
+    setExpandedRecords(prev => ({
       ...prev,
-      [key]: !prev[key]
+      [recordKey]: !prev[recordKey]
     }));
   };
 
-  // Helper function to render a single record entry
-  const renderSingleRecordEntry = (record, label, key, formatter = (value) => value) => {
-    const isExpanded = expandedRows[key];
-    // Check if there are more than 1 entry OR if there are entries beyond the first one when showing top 5
-    const hasMoreThanOneEntryForDisplay = record && record.entries && record.entries.length > 1;
-
-    // Default display for N/A or no valid data
+  // Helper function to render a single record entry, now with dropdown logic
+  const renderSingleRecordEntry = (record, label, formatter = (value) => value, isPercentage = false) => {
+    // Check if record is valid and has meaningful data
     if (!record || record.entries.length === 0 || record.value === null || record.value === -Infinity) {
-      console.log(`renderSingleRecordEntry: Displaying N/A for "${label}". Record state:`, record);
+      // console.log(`renderSingleRecordEntry: Displaying N/A for "${label}". Record state:`, record);
       return (
         <>
           <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{label}</td>
@@ -428,54 +432,55 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       );
     }
 
-    // Always display the #1 value and its team(s)
-    const topEntryValue = formatter(record.value);
-    const topEntryTeams = record.entries[0].team;
+    const isExpanded = expandedRecords[record.key];
+    const topEntries = record.entries; // These are already the top ones based on value
+    const otherRankedEntries = (record.allRankedEntries || [])
+                                .filter(item => !topEntries.some(top => top.team === item.team && item.value === record.value)); // Filter out the top entries
 
     return (
       <>
         <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{label}</td>
-        <td className="py-2 px-3 text-sm text-gray-800 text-right">{topEntryValue}</td>
+        <td className="py-2 px-3 text-sm text-gray-800 text-right">
+          {formatter(record.value)}{isPercentage ? '%' : ''}
+        </td>
         <td className="py-2 px-3 text-sm text-gray-700">
-          <div className="flex items-center justify-between">
-            <span>{topEntryTeams}</span>
-            {hasMoreThanOneEntryForDisplay && (
+          {topEntries.map((entry, idx) => (
+            <span key={`${record.key}-top-${idx}`} className="block">{entry.team}</span>
+          ))}
+
+          {otherRankedEntries.length > 0 && (
+            <>
               <button
-                onClick={() => toggleExpand(key)}
-                className="ml-2 p-1 border border-gray-300 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors shadow-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500" // Added more prominent styles
-                title={isExpanded ? "Collapse" : "Expand to view top 5"}
+                onClick={() => toggleExpanded(record.key)}
+                className="text-blue-500 hover:text-blue-700 text-xs mt-1 focus:outline-none"
               >
-                <svg
-                  className={`w-4 h-4 text-gray-600 transform transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
-                </svg>
+                {isExpanded ? 'Show Less ▲' : 'Show More ▼'}
               </button>
-            )}
-          </div>
-          {isExpanded && hasMoreThanOneEntryForDisplay && (
-            <div className="mt-1 ml-4 text-xs space-y-0.5"> {/* Indent additional entries and add minor spacing */}
-              {record.entries.slice(1, 5).map((entry, idx) => ( // Show next 4 entries (up to top 5 total)
-                <div key={idx}>{entry.team}</div>
-              ))}
-            </div>
+              {isExpanded && (
+                <div className="mt-2">
+                  {otherRankedEntries.slice(0, 5).map((entry, idx) => ( // Show next 5 for simplicity
+                    <div key={`${record.key}-other-${idx}`} className="flex justify-between items-center text-xs text-gray-600">
+                      <span>{entry.team}</span>
+                      <span className="font-medium">{formatter(entry.value)}{isPercentage ? '%' : ''}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </td>
       </>
     );
   };
 
+
   const recordDefinitions = [
     { key: 'highestDPR', label: 'Highest DPR', formatter: formatDPR },
     { key: 'lowestDPR', label: 'Lowest DPR', formatter: formatDPR },
     { key: 'mostWins', label: 'Most Wins' },
     { key: 'mostLosses', label: 'Most Losses' },
-    { key: 'bestWinPct', label: 'Best Win %', formatter: formatWinPct },
-    { key: 'bestAllPlayWinPct', label: 'Best All-Play Win %', formatter: formatAllPlayWinPct },
+    { key: 'bestWinPct', label: 'Best Win %', formatter: formatWinPct, isPercentage: true },
+    { key: 'bestAllPlayWinPct', label: 'Best All-Play Win %', formatter: formatAllPlayWinPct, isPercentage: true },
     { key: 'mostWeeklyHighScores', label: 'Most Weekly High Scores' },
     { key: 'mostWeeklyTop2Scores', label: 'Most Weekly Top 2 Scores' },
     { key: 'mostWinningSeasons', label: 'Most Winning Seasons' },
@@ -509,9 +514,15 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
             <tbody>
               {recordDefinitions.map((recordDef, index) => {
                 const recordData = allTimeRecords[recordDef.key];
+                // Pass recordKey to renderSingleRecordEntry so toggleExpanded can use it
                 return (
                   <tr key={recordDef.key} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                    {renderSingleRecordEntry(recordData, recordDef.label, recordDef.key, recordDef.formatter)}
+                    {renderSingleRecordEntry(
+                      { ...recordData, key: recordDef.key }, // Pass the key here
+                      recordDef.label,
+                      recordDef.formatter,
+                      recordDef.isPercentage // Pass the new prop
+                    )}
                   </tr>
                 );
               })}
