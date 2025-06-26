@@ -49,7 +49,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         teamStats.totalGames += seasonData.totalGames;
         teamStats.totalPointsFor += seasonData.pointsFor;
         teamStats.totalPointsAgainst += seasonData.pointsAgainst;
-
+        
         // Collect seasonal all-play percentages for later averaging
         if (typeof seasonData.allPlayWinPercentage === 'number' && !isNaN(seasonData.allPlayWinPercentage)) {
             teamStats.allPlayWinPercentages.push(seasonData.allPlayWinPercentage);
@@ -193,14 +193,12 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         // For the dropdown, collect up to the next 5 unique values or teams
         const allRankedEntries = [];
         let currentRankValue = null;
-        let rankCounter = 0;
         let uniqueRanksAdded = 0; // Track unique ranks
 
         for (const item of tempArray) {
             if (item.value !== currentRankValue) {
-                rankCounter++;
-                currentRankValue = item.value;
                 uniqueRanksAdded++;
+                currentRankValue = item.value;
             }
             if (uniqueRanksAdded <= 6) { // Top 1 + next 5 unique ranks
                 allRankedEntries.push({ team: item.team, value: item.value });
@@ -252,7 +250,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       const tempMostLosingSeasons = [];
       const tempMostBlowoutWins = [];
       const tempMostBlowoutLosses = [];
-      const tempMostSlimWins = [];
+      const tempMostSlimWins = []; // Corrected variable name
       const tempMostSlimLosses = [];
       const tempMostTotalPoints = [];
       const tempMostPointsAgainst = [];
@@ -294,7 +292,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         tempMostBlowoutLosses.push({ team: team, value: stats.blowoutLosses });
 
         // Most Slim Wins
-        tempSlimWins.push({ team: team, value: stats.slimWins });
+        tempMostSlimWins.push({ team: team, value: stats.slimWins }); // Corrected push to tempMostSlimWins
 
         // Most Slim Losses
         tempMostSlimLosses.push({ team: team, value: stats.slimLosses });
@@ -347,7 +345,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       } else if (formatted.startsWith('-0.')) {
         formatted = `-${formatted.substring(2)}`; // Handle negative " -0.XXX" -> "-.XXX"
       }
-      return `${formatted}`; // Removed '%' here, will add in render if needed
+      return `${formatted}%`;
     }
     return 'N/A';
   };
@@ -362,7 +360,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       } else if (formatted.startsWith('-0.')) {
         formatted = `-${formatted.substring(2)}`; // Handle negative
       }
-      return `${formatted}`; // Removed '%' here, will add in render if needed
+      return `${formatted}%`; // Appended '%'
     }
     return 'N/A';
   };
@@ -403,21 +401,21 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
 
     const isExpanded = expandedRecords[record.key];
     const topEntries = record.entries; // These are already the top ones based on value
-    const otherRankedEntries = (record.allRankedEntries || [])
-                                .filter(item => !topEntries.some(top => top.team === item.team && item.value === record.value)); // Filter out the top entries
+    // allRankedEntries now contains all entries sorted, including the top ones.
 
     return (
       <>
         <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{label}</td>
         <td className="py-2 px-3 text-sm text-gray-800 text-right">
-          {formatter(record.value)}{isPercentage ? '%' : ''}
+          {formatter(record.value)}{isPercentage ? '' : ''}
         </td>
         <td className="py-2 px-3 text-sm text-gray-700">
           {topEntries.map((entry, idx) => (
             <span key={`${record.key}-top-${idx}`} className="block">{entry.team}</span>
           ))}
 
-          {otherRankedEntries.length > 0 && (
+          {/* Only show "Show More" if there are more entries beyond the immediately displayed top ones */}
+          {record.allRankedEntries && record.allRankedEntries.length > topEntries.length && (
             <>
               <button
                 onClick={() => toggleExpanded(record.key)}
@@ -427,42 +425,33 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
               </button>
               {isExpanded && (
                 <div className="mt-2">
-                  {/* Iterate over allRankedEntries and skip entries whose value matches the top record's value
-                      and are also present in topEntries. This ensures we show distinct "next" entries.
-                      Limit to showing 5 additional unique ranks, even if a rank has multiple teams. */}
                   {(() => {
-                    const displayed = new Set(topEntries.map(e => e.team)); // Track teams already displayed in top section
-                    let uniqueRanksDisplayed = 1; // Count the initial top rank
-                    const teamsToShowInDropdown = [];
+                    const dropdownEntries = [];
+                    let lastValue = record.value;
+                    let uniqueRanksCount = 0;
 
+                    // Iterate through all ranked entries to find the next 5 unique ranks/values
                     for (const entry of record.allRankedEntries) {
-                        if (uniqueRanksDisplayed > 6) break; // Stop after displaying top 1 + next 5 unique ranks
-
-                        // If the entry is part of the top entries, or if the team is already displayed as a top entry, skip it for the dropdown
-                        if (entry.value === record.value && topEntries.some(t => t.team === entry.team)) {
+                        // Skip if it's one of the top entries that are already shown
+                        if (topEntries.some(top => top.team === entry.team && top.value === entry.value)) {
                             continue;
                         }
 
-                        // Check if this value/rank has already been added to the dropdown set
-                        const isValueAlreadyAdded = teamsToShowInDropdown.some(item => item.value === entry.value);
-
-                        if (!isValueAlreadyAdded) {
-                            uniqueRanksDisplayed++; // Increment unique rank count
+                        // If it's a new unique value/rank
+                        if (entry.value !== lastValue) {
+                            uniqueRanksCount++;
+                            if (uniqueRanksCount > 5) { // We want top 1 + next 5 unique ranks
+                                break;
+                            }
+                            lastValue = entry.value;
                         }
-
-                        if (!displayed.has(entry.team)) { // Only add if team not already shown in the top part
-                            teamsToShowInDropdown.push(entry);
-                            displayed.add(entry.team);
-                        }
+                        dropdownEntries.push(entry);
                     }
 
-                    // Sort the dropdown entries again to ensure consistent order, then slice to next 5
-                    teamsToShowInDropdown.sort((a, b) => isPercentage ? b.value - a.value : b.value - a.value); // Re-sort for descending order in dropdown for better readability
-
-                    return teamsToShowInDropdown.slice(0,5).map((entry, idx) => (
-                        <div key={`${record.key}-other-${entry.team}-${idx}`} className="flex justify-between items-center text-xs text-gray-600">
+                    return dropdownEntries.map((entry, idx) => (
+                        <div key={`${record.key}-dropdown-${idx}`} className="flex justify-between items-center text-xs text-gray-600">
                           <span>{entry.team}</span>
-                          <span className="font-medium">{formatter(entry.value)}{isPercentage ? '%' : ''}</span>
+                          <span className="font-medium">{formatter(entry.value)}{isPercentage ? '' : ''}</span>
                         </div>
                     ));
                   })()}
