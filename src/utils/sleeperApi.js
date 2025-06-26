@@ -208,22 +208,20 @@ async function fetchMatchupsForLeague(leagueId, regularSeasonWeeks) {
 
     for (let week = 1; week <= regularSeasonWeeks; week++) {
         try {
-            // console.log(`Fetching matchups for league ID: ${leagueId}, Week: ${week}...`); // Commented out for less console noise during normal app use
             const response = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/matchups/${week}`);
 
             if (!response.ok) {
                 console.warn(`Warning: Could not fetch matchups for league ${leagueId}, Week ${week}: ${response.statusText}`);
-                continue;
+                continue; // Continue to next week even if fetch fails for current week
             }
 
             const data = await response.json();
             if (data && data.length > 0) {
                 leagueMatchups[week] = data;
             } else {
-                // If a week returns no data, it often means the regular season for that league/year has ended.
-                // We can break early as there's likely no more data for subsequent weeks.
-                console.log(`No matchups found for league ${leagueId}, Week ${week}. Stopping further week fetches for this league.`);
-                break;
+                // Modified: Do NOT break here. A week might genuinely have no matchups,
+                // but subsequent weeks might. Continue to the next week.
+                console.log(`No matchups found for league ${leagueId}, Week ${week}.`);
             }
         } catch (error) {
             console.error(`Failed to fetch matchups for league ${leagueId}, Week ${week}:`, error);
