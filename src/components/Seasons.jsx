@@ -11,7 +11,7 @@ import {
   fetchTransactionsForWeek, // Need this to fetch transactions per week for a given season
 } from '../utils/sleeperApi';
 
-// Import sub-components (will be created in subsequent steps)
+// Import sub-components
 import SeasonOverview from './SeasonOverview';
 import SeasonMatchups from './SeasonMatchups';
 import SeasonDraft from './SeasonDraft';
@@ -25,129 +25,162 @@ const SEASONS_SUB_TABS = {
 };
 
 const Seasons = ({ getDisplayTeamName }) => {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [allLeagueData, setAllLeagueData] = useState([]); // All historical league details
-  const [allUsers, setAllUsers] = useState({}); // Map of userId to user details across all leagues
-  const [allRosters, setAllRosters] = useState({}); // Map of leagueId -> roster data
-  const [allSleeperMatchups, setAllSleeperMatchups] = useState({}); // Map of season -> week -> matchups
-  const [allDraftHistory, setAllDraftHistory] = useState({}); // Map of season -> draftId -> {details, picks, tradedPicks}
-  const [allNflPlayers, setAllNflPlayers] = useState({}); // Map of playerId to player details
-  const [allTransactions, setAllTransactions] = useState({}); // Map of leagueId -> week -> transactions
+  // State for available seasons (fetched initially)
+  const [availableSeasonsData, setAvailableSeasonsData] = useState([]); // Array of { season: 'YYYY', league_id: '...' }
 
-  const [selectedSeason, setSelectedSeason] = useState(null); // The season currently being viewed
+  // State for data of the CURRENTLY SELECTED season
+  const [currentSeasonDetails, setCurrentSeasonDetails] = useState(null); // Full league object for selected season
+  const [currentSeasonUsers, setCurrentSeasonUsers] = useState({}); // Map of userId to user details for selected league
+  const [currentSeasonRosters, setCurrentSeasonRosters] = useState([]); // Array of roster data for selected league
+  const [currentSeasonSleeperMatchups, setCurrentSeasonSleeperMatchups] = useState({}); // Object of week -> matchups for selected season
+  const [currentSeasonDraftHistory, setCurrentSeasonDraftHistory] = useState({}); // Object of draftId -> {details, picks, tradedPicks} for selected season
+  const [currentSeasonNflPlayers, setCurrentSeasonNflPlayers] = useState({}); // Map of playerId to player details (global, but fetched once)
+  const [currentSeasonTransactions, setCurrentSeasonTransactions] = useState({}); // Object of week -> transactions for selected league
+
+  const [selectedSeason, setSelectedSeason] = useState(null); // The season string currently being viewed
   const [activeSubTab, setActiveSubTab] = useState(SEASONS_SUB_TABS.OVERVIEW);
 
-  // Memoized helper to get a user's display name from their ID, considering all users fetched
+  const [loadingInitial, setLoadingInitial] = useState(true); // Loading state for initial season list
+  const [loadingSeasonData, setLoadingSeasonData] = useState(false); // Loading state for specific season's data
+  const [error, setError] = useState(null);
+
+
+  // Memoized helper to get a user's display name from their ID, considering users for the *current* season
   const getUserDisplayName = useCallback((userId) => {
-    const user = allUsers[userId];
+    const user = currentSeasonUsers[userId];
     return user ? getDisplayTeamName(user.teamName || user.displayName) : 'Unknown User';
-  }, [allUsers, getDisplayTeamName]);
+  }, [currentSeasonUsers, getDisplayTeamName]);
 
-  // Memoized helper to get a player's name from their ID
+  // Memoized helper to get a player's name from their ID (NFL players are fetched once globally)
   const getPlayerName = useCallback((playerId) => {
-    const player = allNflPlayers[playerId];
+    const player = currentSeasonNflPlayers[playerId];
     return player ? `${player.first_name || ''} ${player.last_name || ''}`.trim() : `Unknown Player (${playerId})`;
-  }, [allNflPlayers]);
+  }, [currentSeasonNflPlayers]);
 
 
+  // Effect 1: Fetch initial list of available seasons
   useEffect(() => {
-    const loadAllHistoricalSleeperData = async () => {
-      setLoading(true);
+    const loadAvailableSeasons = async () => {
+      setLoadingInitial(true);
       setError(null);
       try {
-        // Fetch all foundational data concurrently
+        const leagues = await fetchLeagueData(CURRENT_LEAGUE_ID);
+        // Map to simpler objects containing only season and league_id
+        const simplifiedLeagues = leagues.map(l => ({ season: l.season, league_id: l.league_id, settings: l.settings }));
+        setAvailableSeasonsData(simplifiedLeagues.sort((a, b) => b.season - a.season)); // Sort descending
+
+        // Set initial selected season to the current league's season
+        if (simplifiedLeagues.length > 0) {
+          setSelectedSeason(simplifiedLeagues[0].season);
+        }
+      } catch (err) {
+        console.error('Error loading available seasons:', err);
+        setError(`Failed to load available seasons: ${err.message}.`);
+      } finally {
+        setLoadingInitial(false);
+      }
+    };
+
+    loadAvailableSeasons();
+  }, []); // Runs only once on mount to get the list of all historical leagues
+
+  // Effect 2: Fetch detailed data when a season is selected
+  useEffect(() => {
+    const loadSelectedSeasonData = async () => {
+      if (!selectedSeason) {
+        // Clear previous season's data if no season is selected
+        setCurrentSeasonDetails(null);
+        setCurrentSeasonUsers({});
+        setCurrentSeasonRosters([]);
+        setCurrentSeasonSleeperMatchups({});
+        setCurrentSeasonDraftHistory({});
+        setCurrentSeasonTransactions({});
+        return;
+      }
+
+      setLoadingSeasonData(true);
+      setError(null);
+
+      // Find the leagueId for the selected season
+      const leagueForSelectedSeason = availableSeasonsData.find(l => l.season === selectedSeason);
+      if (!leagueForSelectedSeason) {
+        setError(`League details not found for season ${selectedSeason}.`);
+        setLoadingSeasonData(false);
+        return;
+      }
+      const selectedLeagueId = leagueForSelectedSeason.league_id;
+      setCurrentSeasonDetails(leagueForSelectedSeason); // Set the full league object
+
+      try {
+        // Fetch users, rosters, NFL players (once), and specific season data
         const [
-          fetchedLeagueData,
-          fetchedUsersArray, // This is an array of user objects
-          fetchedAllRostersByLeague, // This returns {leagueId: [...rosters]}
-          fetchedAllSleeperMatchups,
-          fetchedAllDraftHistory,
-          fetchedNFLPlayers,
+          fetchedUsersArray, // This is an array of user objects for the SELECTED league
+          fetchedRosters, // Rosters for the SELECTED league
+          fetchedAllSleeperMatchups, // Still global, but will filter by selected season later
+          fetchedAllDraftHistory, // Still global, but will filter by selected season later
+          fetchedNFLPlayers, // Global, cached via localStorage
         ] = await Promise.all([
-          fetchLeagueData(CURRENT_LEAGUE_ID),
-          // Fetch users for the CURRENT_LEAGUE_ID, then for all previous leagues
-          (async () => {
-              const usersMap = new Map();
-              const leagues = await fetchLeagueData(CURRENT_LEAGUE_ID);
-              for (const league of leagues) {
-                  const users = await fetchUsersData(league.league_id);
-                  users.forEach(user => usersMap.set(user.userId, user));
-              }
-              return Array.from(usersMap.values()); // Convert back to array for consistent handling
-          })(),
-          // Fetch rosters for all historical leagues
-          (async () => {
-              const rostersMap = {};
-              const leagues = await fetchLeagueData(CURRENT_LEAGUE_ID);
-              for (const league of leagues) {
-                  const rosters = await fetchRostersWithDetails(league.league_id);
-                  rostersMap[league.league_id] = rosters;
-              }
-              return rostersMap;
-          })(),
-          fetchAllHistoricalMatchups(), // This already returns by season->week
-          fetchAllDraftHistory(), // This already returns by season->draftId->details/picks/tradedPicks
-          fetchNFLPlayers(),
+          fetchUsersData(selectedLeagueId),
+          fetchRostersWithDetails(selectedLeagueId),
+          fetchAllHistoricalMatchups(), // This fetches all, filter by season for specific display
+          fetchAllDraftHistory(), // This fetches all, filter by season for specific display
+          fetchNFLPlayers(), // Fetch global NFL players (cached)
         ]);
 
-        setAllLeagueData(fetchedLeagueData);
-
-        // Convert fetchedUsersArray to a map for easier lookup
+        // Convert fetchedUsersArray to a map for easier lookup in sub-components
         const usersMap = fetchedUsersArray.reduce((acc, user) => {
           acc[user.userId] = user;
           return acc;
         }, {});
-        setAllUsers(usersMap);
+        setCurrentSeasonUsers(usersMap);
+        setCurrentSeasonRosters(fetchedRosters);
+        setCurrentSeasonSleeperMatchups(fetchedAllSleeperMatchups[selectedSeason] || {}); // Filter by selected season
+        setCurrentSeasonDraftHistory(fetchedAllDraftHistory[selectedSeason] || {}); // Filter by selected season
+        setCurrentSeasonNflPlayers(fetchedNFLPlayers); // Set global NFL players
 
-        setAllRosters(fetchedAllRostersByLeague);
-        setAllSleeperMatchups(fetchedAllSleeperMatchups);
-        setAllDraftHistory(fetchedAllDraftHistory);
-        setAllNflPlayers(fetchedNFLPlayers);
+        // Fetch transactions for all weeks of the selected season
+        const transactionsForSelectedSeason = {};
+        // Use leagueForSelectedSeason.settings?.playoff_start_week to determine relevant weeks
+        let maxWeek = leagueForSelectedSeason.settings?.playoff_start_week ? leagueForSelectedSeason.settings.playoff_start_week + 3 : 18; // Max 3 playoff weeks after start
+        maxWeek = Math.min(maxWeek, 18); // Cap at 18 just in case
 
-        // Set initial selected season to the current league's season
-        if (fetchedLeagueData.length > 0) {
-          const currentSeason = fetchedLeagueData[0].season; // Assumes first in array is current
-          setSelectedSeason(currentSeason);
-        }
-
-        // Fetch transactions for all weeks of all seasons
-        const allTransactionsData = {};
-        for (const league of fetchedLeagueData) {
-            allTransactionsData[league.league_id] = {}; // Initialize for this league
-            // Assuming max 18 weeks (14 regular + 4 playoff potential) for a season
-            for (let week = 1; week <= 18; week++) { // Iterate up to 18 weeks as a safe upper bound
-                const transactionsForWeek = await fetchTransactionsForWeek(league.league_id, week);
-                if (transactionsForWeek && transactionsForWeek.length > 0) {
-                    allTransactionsData[league.league_id][week] = transactionsForWeek;
-                } else if (week === 1) {
-                    // If no transactions in week 1, likely no transactions for this league in the season
-                    // Break early to avoid unnecessary API calls for later weeks of this league
-                    break;
-                }
+        for (let week = 1; week <= maxWeek; week++) {
+            const transactions = await fetchTransactionsForWeek(selectedLeagueId, week);
+            if (transactions && transactions.length > 0) {
+                transactionsForSelectedSeason[week] = transactions;
+            } else if (week === 1) { // If week 1 has no transactions, likely no data for the season
+                break;
             }
         }
-        setAllTransactions(allTransactionsData);
+        setCurrentSeasonTransactions(transactionsForSelectedSeason);
 
       } catch (err) {
-        console.error('Error loading all historical Sleeper data:', err);
-        setError(`Failed to load historical data: ${err.message}. Please check API configurations.`);
+        console.error(`Error loading data for season ${selectedSeason}:`, err);
+        setError(`Failed to load data for ${selectedSeason}: ${err.message}.`);
+        // Clear data on error for the current season
+        setCurrentSeasonDetails(null);
+        setCurrentSeasonUsers({});
+        setCurrentSeasonRosters([]);
+        setCurrentSeasonSleeperMatchups({});
+        setCurrentSeasonDraftHistory({});
+        setCurrentSeasonTransactions({});
       } finally {
-        setLoading(false);
+        setLoadingSeasonData(false);
       }
     };
 
-    loadAllHistoricalSleeperData();
-  }, []); // Run once on component mount
+    loadSelectedSeasonData();
+  }, [selectedSeason, availableSeasonsData]); // Re-run when selectedSeason changes or initial season list loads
 
-  if (loading) {
+
+  if (loadingInitial) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] text-blue-600">
         <svg className="animate-spin h-10 w-10 text-blue-500 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
         </svg>
-        <p className="text-lg font-medium">Loading all season history data...</p>
+        <p className="text-lg font-medium">Loading available seasons...</p>
       </div>
     );
   }
@@ -161,14 +194,9 @@ const Seasons = ({ getDisplayTeamName }) => {
     );
   }
 
-  const availableSeasons = allLeagueData
-    .map(league => league.season)
-    .filter((value, index, self) => self.indexOf(value) === index) // Get unique seasons
-    .sort((a, b) => b - a); // Sort descending (most recent first)
+  // Derived state for the dropdown options
+  const seasonOptions = availableSeasonsData.map(league => league.season);
 
-  // Get the league details for the currently selected season
-  const currentSeasonLeague = allLeagueData.find(league => league.season === selectedSeason);
-  const currentSeasonLeagueId = currentSeasonLeague ? currentSeasonLeague.league_id : null;
 
   return (
     <div className="container mx-auto p-4 md:p-6 bg-white shadow-lg rounded-lg">
@@ -183,10 +211,13 @@ const Seasons = ({ getDisplayTeamName }) => {
           id="season-select"
           className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
           value={selectedSeason || ''}
-          onChange={(e) => setSelectedSeason(e.target.value)}
+          onChange={(e) => {
+            setSelectedSeason(e.target.value);
+            setActiveSubTab(SEASONS_SUB_TABS.OVERVIEW); // Reset to overview when season changes
+          }}
         >
           {!selectedSeason && <option value="">Select a Season</option>}
-          {availableSeasons.map(season => (
+          {seasonOptions.map(season => (
             <option key={season} value={season}>
               {season}
             </option>
@@ -195,67 +226,77 @@ const Seasons = ({ getDisplayTeamName }) => {
       </div>
 
       {selectedSeason && (
-        <>
-          <div className="flex justify-center border-b border-gray-200 mb-6">
-            {Object.values(SEASONS_SUB_TABS).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveSubTab(tab)}
-                className={`py-2 px-4 text-lg font-medium transition-colors duration-200 ${
-                  activeSubTab === tab
-                    ? 'border-b-2 border-blue-600 text-blue-600'
-                    : 'text-gray-700 hover:text-blue-500 hover:border-blue-300'
-                }`}
-              >
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
-              </button>
-            ))}
+        loadingSeasonData ? (
+          <div className="flex flex-col items-center justify-center min-h-[300px] text-blue-600">
+            <svg className="animate-spin h-10 w-10 text-blue-500 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p className="text-lg font-medium">Loading data for {selectedSeason} season...</p>
           </div>
+        ) : (
+          <>
+            <div className="flex justify-center border-b border-gray-200 mb-6">
+              {Object.values(SEASONS_SUB_TABS).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveSubTab(tab)}
+                  className={`py-2 px-4 text-lg font-medium transition-colors duration-200 ${
+                    activeSubTab === tab
+                      ? 'border-b-2 border-blue-600 text-blue-600'
+                      : 'text-gray-700 hover:text-blue-500 hover:border-blue-300'
+                  }`}
+                >
+                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                </button>
+              ))}
+            </div>
 
-          <div className="tab-content">
-            {activeSubTab === SEASONS_SUB_TABS.OVERVIEW && (
-              <SeasonOverview
-                season={selectedSeason}
-                leagueDetails={currentSeasonLeague}
-                rosters={allRosters[currentSeasonLeagueId] || []}
-                users={allUsers}
-                getDisplayTeamName={getDisplayTeamName}
-              />
-            )}
-            {activeSubTab === SEASONS_SUB_TABS.MATCHUPS && (
-              <SeasonMatchups
-                season={selectedSeason}
-                leagueId={currentSeasonLeagueId}
-                matchups={allSleeperMatchups[selectedSeason] || {}}
-                users={allUsers}
-                rosters={allRosters[currentSeasonLeagueId] || []}
-                getDisplayTeamName={getDisplayTeamName}
-              />
-            )}
-            {activeSubTab === SEASONS_SUB_TABS.DRAFT && (
-              <SeasonDraft
-                season={selectedSeason}
-                leagueId={currentSeasonLeagueId}
-                draftHistory={allDraftHistory[selectedSeason] || {}}
-                nflPlayers={allNflPlayers}
-                users={allUsers}
-                rosters={allRosters[currentSeasonLeagueId] || []}
-                getDisplayTeamName={getDisplayTeamName}
-              />
-            )}
-            {activeSubTab === SEASONS_SUB_TABS.TRANSACTIONS && (
-              <SeasonTransactions
-                season={selectedSeason}
-                leagueId={currentSeasonLeagueId}
-                transactionsByWeek={allTransactions[currentSeasonLeagueId] || {}}
-                nflPlayers={allNflPlayers}
-                users={allUsers}
-                rosters={allRosters[currentSeasonLeagueId] || []}
-                getDisplayTeamName={getDisplayTeamName}
-              />
-            )}
-          </div>
-        </>
+            <div className="tab-content">
+              {activeSubTab === SEASONS_SUB_TABS.OVERVIEW && (
+                <SeasonOverview
+                  season={selectedSeason}
+                  leagueDetails={currentSeasonDetails}
+                  rosters={currentSeasonRosters}
+                  users={currentSeasonUsers}
+                  getDisplayTeamName={getDisplayTeamName}
+                />
+              )}
+              {activeSubTab === SEASONS_SUB_TABS.MATCHUPS && (
+                <SeasonMatchups
+                  season={selectedSeason}
+                  leagueId={currentSeasonDetails?.league_id}
+                  matchups={currentSeasonSleeperMatchups}
+                  users={currentSeasonUsers}
+                  rosters={currentSeasonRosters}
+                  getDisplayTeamName={getDisplayTeamName}
+                />
+              )}
+              {activeSubTab === SEASONS_SUB_TABS.DRAFT && (
+                <SeasonDraft
+                  season={selectedSeason}
+                  leagueId={currentSeasonDetails?.league_id}
+                  draftHistory={currentSeasonDraftHistory}
+                  nflPlayers={currentSeasonNflPlayers}
+                  users={currentSeasonUsers}
+                  rosters={currentSeasonRosters}
+                  getDisplayTeamName={getDisplayTeamName}
+                />
+              )}
+              {activeSubTab === SEASONS_SUB_TABS.TRANSACTIONS && (
+                <SeasonTransactions
+                  season={selectedSeason}
+                  leagueId={currentSeasonDetails?.league_id}
+                  transactionsByWeek={currentSeasonTransactions}
+                  nflPlayers={currentSeasonNflPlayers}
+                  users={currentSeasonUsers}
+                  rosters={currentSeasonRosters}
+                  getDisplayTeamName={getDisplayTeamName}
+                />
+              )}
+            </div>
+          </>
+        )
       )}
     </div>
   );
