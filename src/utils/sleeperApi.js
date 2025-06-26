@@ -51,6 +51,11 @@ const tradedPicksCache = new Map();
 // Master cache for all historical draft data
 let allDraftHistoryCache = null;
 
+// Internal caches for playoff bracket data
+const winnersBracketCache = new Map(); // Structure: Map<leagueId, Array<matchup>>
+const losersBracketCache = new Map(); // Structure: Map<leagueId, Array<matchup>>
+
+
 // Constants for NFL player cache in localStorage
 const NFL_PLAYERS_CACHE_KEY = 'nflPlayersCache';
 const NFL_PLAYERS_CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
@@ -682,5 +687,63 @@ export async function fetchAllDraftHistory() {
     } catch (error) {
         console.error('Error fetching all draft history:', error);
         return {};
+    }
+}
+
+/**
+ * Fetches the winners bracket data for a given league ID.
+ * Data is cached in memory for subsequent calls within the same session.
+ * @param {string} leagueId The ID of the Sleeper league.
+ * @returns {Promise<Array<Object>>} A promise that resolves to an array of bracket matchup objects, or an empty array if an error occurs.
+ */
+export async function fetchWinnersBracket(leagueId) {
+    if (winnersBracketCache.has(leagueId)) {
+        console.log(`Returning winners bracket for league ${leagueId} from cache.`);
+        return winnersBracketCache.get(leagueId);
+    }
+
+    try {
+        console.log(`Fetching winners bracket for league ID: ${leagueId}...`);
+        const response = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/winners_bracket`);
+        if (!response.ok) {
+            console.error(`Error fetching winners bracket for league ID ${leagueId}: ${response.statusText}`);
+            return [];
+        }
+        const data = await response.json();
+        winnersBracketCache.set(leagueId, data);
+        console.log(`Successfully fetched winners bracket for league ID: ${leagueId}.`);
+        return data;
+    } catch (error) {
+        console.error(`Failed to fetch winners bracket for league ID ${leagueId}:`, error);
+        return [];
+    }
+}
+
+/**
+ * Fetches the losers bracket data for a given league ID.
+ * Data is cached in memory for subsequent calls within the same session.
+ * @param {string} leagueId The ID of the Sleeper league.
+ * @returns {Promise<Array<Object>>} A promise that resolves to an array of bracket matchup objects, or an empty array if an error occurs.
+ */
+export async function fetchLosersBracket(leagueId) {
+    if (losersBracketCache.has(leagueId)) {
+        console.log(`Returning losers bracket for league ${leagueId} from cache.`);
+        return losersBracketCache.get(leagueId);
+    }
+
+    try {
+        console.log(`Fetching losers bracket for league ID: ${leagueId}...`);
+        const response = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/losers_bracket`);
+        if (!response.ok) {
+            console.error(`Error fetching losers bracket for league ID ${leagueId}: ${response.statusText}`);
+            return [];
+        }
+        const data = await response.json();
+        losersBracketCache.set(leagueId, data);
+        console.log(`Successfully fetched losers bracket for league ID: ${leagueId}.`);
+        return data;
+    } catch (error) {
+        console.error(`Failed to fetch losers bracket for league ID ${leagueId}:`, error);
+        return [];
     }
 }
