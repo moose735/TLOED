@@ -7,7 +7,7 @@ import {
   fetchRostersWithDetails,
   fetchNFLPlayers,
   fetchTransactionsForWeek,
-  fetchLeagueDrafts, // NEW: Import to get draft data.
+  fetchLeagueDrafts, // NEW: Import to get draft data
   getSleeperPlayerHeadshotUrl,
 } from '../utils/sleeperApi';
 
@@ -40,7 +40,7 @@ const Dashboard = ({ getDisplayTeamName }) => {
         // 2. Fetch Users, Rosters, NFL Players, and League Drafts concurrently
         const [fetchedUsers, fetchedRosters, fetchedNflPlayers, fetchedLeagueDrafts, fetchedTransactions] = await Promise.all([
           fetchUsersData(CURRENT_LEAGUE_ID),
-          fetchRostersWithDetails(CURRENT_LEAGUE_ID),
+          fetchRostersWithDetails(CURRENT_LEAGUE_ID), // This already includes owner details
           fetchNFLPlayers(),
           fetchLeagueDrafts(CURRENT_LEAGUE_ID), // Fetch drafts for the current league
           currentWeek ? fetchTransactionsForWeek(CURRENT_LEAGUE_ID, currentWeek) : Promise.resolve([]),
@@ -175,7 +175,12 @@ const Dashboard = ({ getDisplayTeamName }) => {
             Draft Countdown: <span className="font-bold">{timeRemaining}</span>
           </p>
           <p className="text-sm text-blue-700 mt-1">
-            (Draft scheduled for {new Date(draftStartTime).toLocaleDateString()} at {new Date(draftStartTime).toLocaleTimeString()})
+            (Draft scheduled for{' '}
+            {new Date(draftStartTime).toLocaleDateString()}{' '}
+            at{' '}
+            {/* Format the time to exclude seconds */}
+            {new Date(draftStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            )
           </p>
         </div>
       )}
