@@ -55,6 +55,10 @@ let allDraftHistoryCache = null;
 const NFL_PLAYERS_CACHE_KEY = 'nflPlayersCache';
 const NFL_PLAYERS_CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
+// Constants for NFL state cache in localStorage
+const NFL_STATE_CACHE_KEY = 'nflStateCache';
+const NFL_STATE_CACHE_EXPIRY_MS = 1 * 60 * 60 * 1000; // 1 hour in milliseconds, can be adjusted
+
 /**
  * Constructs the full URL for a Sleeper user avatar.
  * It intelligently handles both avatar hashes and full URLs found in metadata.
@@ -233,7 +237,7 @@ export async function fetchAllHistoricalMatchups() {
         return historicalMatchupsCache;
     }
 
-    console.log('Fetching all historical matchup data for the first time...');
+    console.log('Fetching all historical matchup data for the first time... ');
     const allHistoricalMatchups = {};
 
     try {
@@ -327,6 +331,52 @@ export async function fetchNFLPlayers() {
         return {};
     }
 }
+
+/**
+ * Fetches NFL state data from the Sleeper API, using localStorage for caching.
+ * This data includes current week, season type, etc. Caches for 1 hour by default.
+ *
+ * @returns {Promise<Object>} A promise that resolves to an object containing NFL state data.
+ * Returns an empty object on error.
+ */
+export async function fetchNFLState() {
+    try {
+        const cachedDataString = localStorage.getItem(NFL_STATE_CACHE_KEY);
+        const now = Date.now();
+
+        if (cachedDataString) {
+            const cachedData = JSON.parse(cachedDataString);
+            if (cachedData.timestamp && (now - cachedData.timestamp < NFL_STATE_CACHE_EXPIRY_MS)) {
+                console.log('Returning NFL state from localStorage cache (still valid).');
+                return cachedData.state;
+            }
+        }
+
+        console.log('Fetching NFL state from Sleeper API (cache expired or not found)...');
+        const response = await fetch('https://api.sleeper.app/v1/state/nfl');
+
+        if (!response.ok) {
+            console.error(`Error fetching NFL state: ${response.statusText}`);
+            return {};
+        }
+
+        const state = await response.json();
+
+        localStorage.setItem(NFL_STATE_CACHE_KEY, JSON.stringify({
+            state,
+            timestamp: now
+        }));
+
+        console.log('Successfully fetched and cached NFL state in localStorage.');
+        return state;
+
+    } catch (error) {
+        console.error('Failed to fetch or cache NFL state:', error);
+        localStorage.removeItem(NFL_STATE_CACHE_KEY); // Clear potentially corrupted cache
+        return {};
+    }
+}
+
 
 /**
  * Fetches raw roster data for a given league ID from the Sleeper API.
@@ -586,7 +636,7 @@ export async function fetchAllDraftHistory() {
         return allDraftHistoryCache;
     }
 
-    console.log('Fetching all draft history for the first time... '); // Minor change for re-deploy
+    console.log('Fetching all draft history for the first time... ');
     const allDraftHistory = {};
 
     try {
