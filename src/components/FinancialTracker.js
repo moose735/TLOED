@@ -1061,19 +1061,28 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
 
             // Sanitize structure data before saving
-            const sanitizedDebitStructure = debitStructureData.map(item => ({
-                name: String(item.name || ''),
-                // Convert amount to a number, or null if empty/invalid
-                amount: (item.amount === '' || item.amount === null || isNaN(parseFloat(item.amount))) ? null : String(item.amount),
-                description: String(item.description || ''),
-            }));
+            const sanitizedDebitStructure = debitStructureData.map(item => {
+                // Remove non-numeric characters (except period) for validation
+                const cleanedValue = String(item.amount || '').replace(/[^0-9.]/g, '');
+                const parsedValue = parseFloat(cleanedValue);
 
-            const sanitizedCreditStructure = creditStructureData.map(item => ({
-                name: String(item.name || ''),
-                // Convert amount to a number, or null if empty/invalid
-                amount: (item.amount === '' || item.amount === null || isNaN(parseFloat(item.amount))) ? null : String(item.amount),
-                description: String(item.description || ''),
-            }));
+                return {
+                    name: String(item.name || ''),
+                    // Store the original amount string if it can be parsed as a number after cleaning, otherwise null
+                    amount: isNaN(parsedValue) ? null : String(item.amount || ''),
+                    description: String(item.description || ''),
+                };
+            });
+
+            const sanitizedCreditStructure = creditStructureData.map(item => {
+                const cleanedValue = String(item.amount || '').replace(/[^0-9.]/g, '');
+                const parsedValue = parseFloat(cleanedValue);
+                return {
+                    name: String(item.name || ''),
+                    amount: isNaN(parsedValue) ? null : String(item.amount || ''),
+                    description: String(item.description || ''),
+                };
+            });
 
             console.log("Saving debit structure:", sanitizedDebitStructure);
             console.log("Saving credit structure:", sanitizedCreditStructure);
