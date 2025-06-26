@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { initializeApp } from 'firebase/app';
-import { 
-    getAuth, 
-    onAuthStateChanged, 
-    signInWithEmailAndPassword, 
+import {
+    getAuth,
+    onAuthStateChanged,
+    signInWithEmailAndPassword,
     signOut,
-    signInAnonymously 
+    signInAnonymously
 } from 'firebase/auth';
-import { 
-    getFirestore, collection, addDoc, query, orderBy, onSnapshot, 
-    serverTimestamp, deleteDoc, doc, setDoc, getDoc, writeBatch 
+import {
+    getFirestore, collection, addDoc, query, orderBy, onSnapshot,
+    serverTimestamp, deleteDoc, doc, setDoc, getDoc, writeBatch
 } from 'firebase/firestore';
 
 // Helper function to format currency
@@ -99,7 +99,7 @@ const OverallFinancialHistoryTab = ({ allTransactions, getDisplayTeamName, uniqu
         Object.keys(teamStats).forEach(team => {
             teamStats[team].netBalance = teamStats[team].totalCredits - teamStats[team].totalDebits;
         });
-        
+
         // Sort by team name before returning for display
         return Object.values(teamStats).sort((a, b) => a.name.localeCompare(b.name));
     }, [allTransactions, getDisplayTeamName, uniqueTeamsForOverallHistory]);
@@ -107,7 +107,7 @@ const OverallFinancialHistoryTab = ({ allTransactions, getDisplayTeamName, uniqu
     return (
         <section className="bg-white p-6 rounded-lg shadow-md mt-8">
             <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">Overall Financial History by Team</h3>
-            
+
             {overallTeamFinancials.length === 0 ? (
                 <p className="text-center text-gray-600">No financial data available across all seasons.</p>
             ) : (
@@ -147,51 +147,51 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     const [amount, setAmount] = useState('');
     const [description, setDescription] = useState('');
-    const [type, setType] = useState('debit'); 
+    const [type, setType] = useState('debit');
     const [category, setCategory] = useState('entry_fee');
     const [weeklyPointsWeek, setWeeklyPointsWeek] = useState('');
     const [sidePotName, setSidePotName] = useState('');
 
-    const [teamName, setTeamName] = useState(''); 
-    const [tradeTeams, setTradeTeams] = useState(['', '']); 
-    const [waiverEntries, setWaiverEntries] = useState([{ team: '', numPickups: 1 }]); 
-    
-    const [tradeEntryMethod, setTradeEntryMethod] = useState('multi_team'); 
-    const [numTrades, setNumTrades] = useState(1); 
+    const [teamName, setTeamName] = useState('');
+    const [tradeTeams, setTradeTeams] = useState(['', '']);
+    const [waiverEntries, setWaiverEntries] = useState([{ team: '', numPickups: 1 }]);
+
+    const [tradeEntryMethod, setTradeEntryMethod] = useState('multi_team');
+    const [numTrades, setNumTrades] = useState(1);
 
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null); 
+    const [error, setError] = useState(null);
     const [db, setDb] = useState(null);
-    const [auth, setAuth] = useState(null); 
+    const [auth, setAuth] = useState(null);
     const [userId, setUserId] = useState(null);
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [uniqueTeams, setUniqueTeams] = useState([]); // Unique teams for selected season
-    const [weeklyHighScores, setWeeklyHighScores] = useState({}); 
-    const [currentWeekForSelectedSeason, setCurrentWeekForSelectedSeason] = useState(0); 
+    const [weeklyHighScores, setWeeklyHighScores] = useState({});
+    const [currentWeekForSelectedSeason, setCurrentWeekForSelectedSeason] = useState(0);
 
-    const [selectedSeason, setSelectedSeason] = useState(null); 
-    const [availableSeasons, setAvailableSeasons] = useState([]); 
-    const [activeTeamsCount, setActiveTeamsCount] = useState(0); 
-    
-    const [isTeamAutoPopulated, setIsTeamAutoPopulated] = useState(false); 
-    const [autoPopulateWarning, setAutoPopulateWarning] = useState(null); 
-    
+    const [selectedSeason, setSelectedSeason] = useState(null);
+    const [availableSeasons, setAvailableSeasons] = useState([]);
+    const [activeTeamsCount, setActiveTeamsCount] = useState(0);
+
+    const [isTeamAutoPopulated, setIsTeamAutoPopulated] = useState(false);
+    const [autoPopulateWarning, setAutoPopulateWarning] = useState(null);
+
     const [showConfirmDelete, setShowConfirmDelete] = useState(false);
-    const [transactionToDelete, setTransactionToDelete] = useState(null); 
+    const [transactionToDelete, setTransactionToDelete] = useState(null);
     const [selectedTransactionIds, setSelectedTransactionIds] = useState([]);
     const [showConfirmBulkDelete, setShowConfirmBulkDelete] = useState(false);
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loginError, setLoginError] = useState(null);
-    const [showCommishLogin, setShowCommishLogin] = useState(false); 
+    const [showCommishLogin, setShowCommishLogin] = useState(false);
 
-    const [filterTeam, setFilterTeam] = useState(''); 
+    const [filterTeam, setFilterTeam] = useState('');
 
-    const [debitStructureData, setDebitStructureData] = useState([]); 
-    const [creditStructureData, setCreditStructureData] = useState([]); 
+    const [debitStructureData, setDebitStructureData] = useState([]);
+    const [creditStructureData, setCreditStructureData] = useState([]);
     const [isEditingStructure, setIsEditingStructure] = useState(false);
-    const [loadingStructure, setLoadingStructure] = useState(true); 
+    const [loadingStructure, setLoadingStructure] = useState(true);
 
     const [transactionPot, setTransactionPot] = useState(0);
 
@@ -202,7 +202,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [activeTab, setActiveTab] = useState('transactions'); // 'transactions' or 'overall_history'
 
     const COMMISH_UID = process.env.REACT_APP_COMMISH_UID;
-    const isCommish = userId && COMMISH_UID && userId === COMMISH_UID; 
+    const isCommish = userId && COMMISH_UID && userId === COMMISH_UID;
 
     const getCategoriesForType = useCallback((currentType) => {
         if (currentType === 'debit') {
@@ -210,16 +210,16 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 { value: 'entry_fee', label: 'Entry Fee' },
                 { value: 'waiver_fa_fee', label: 'Waiver/FA Fee' },
                 { value: 'trade_fee', label: 'Trade Fee' },
-                { value: 'other_fee', label: 'Other' }, 
+                { value: 'other_fee', label: 'Other' },
             ];
         } else if (currentType === 'credit') {
             return [
-                { value: 'weekly_1st_points', label: 'Weekly 1st - Points' }, 
-                { value: 'weekly_2nd_points', label: 'Weekly 2nd - Points' }, 
-                { value: 'playoff_finish', label: 'Playoff Finish' }, 
-                { value: 'points_finish', label: 'Points Finish' }, 
+                { value: 'weekly_1st_points', label: 'Weekly 1st - Points' },
+                { value: 'weekly_2nd_points', label: 'Weekly 2nd - Points' },
+                { value: 'playoff_finish', label: 'Playoff Finish' },
+                { value: 'points_finish', label: 'Points Finish' },
                 { value: 'side_pot', label: 'Side Pot' },
-                { value: 'other_payout', label: 'Other' }, 
+                { value: 'other_payout', label: 'Other' },
             ];
         }
         return [];
@@ -257,19 +257,19 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         }
         if (!(type === 'debit' && category === 'trade_fee')) {
             setTradeTeams(['', '']);
-            setNumTrades(1); 
-            setTradeEntryMethod('multi_team'); 
+            setNumTrades(1);
+            setTradeEntryMethod('multi_team');
         }
         if (!(type === 'debit' && category === 'waiver_fa_fee')) {
             setWaiverEntries([{ team: '', numPickups: 1 }]);
         }
-    }, [type, category, getCategoriesForType]); 
+    }, [type, category, getCategoriesForType]);
 
 
     useEffect(() => {
         if (historicalMatchups && Array.isArray(historicalMatchups)) {
             const yearsSet = new Set();
-            let maxSeasonOverall = 0; 
+            let maxSeasonOverall = 0;
 
             historicalMatchups.forEach(match => {
                 if (match.year && typeof match.year === 'number') {
@@ -280,9 +280,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 }
             });
 
-            const sortedYears = Array.from(yearsSet).sort((a, b) => b - a); 
+            const sortedYears = Array.from(yearsSet).sort((a, b) => b - a);
             setAvailableSeasons(sortedYears);
-            
+
             if (maxSeasonOverall > 0 && selectedSeason === null) {
                 setSelectedSeason(maxSeasonOverall);
             }
@@ -354,27 +354,27 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
 
         const sortedTeams = Array.from(teamsSet).sort();
-        setUniqueTeams(['ALL_TEAMS_MULTIPLIER', ...sortedTeams]); 
-        setActiveTeamsCount(sortedTeams.length); 
+        setUniqueTeams(['ALL_TEAMS_MULTIPLIER', ...sortedTeams]);
+        setActiveTeamsCount(sortedTeams.length);
     }, [selectedSeason, historicalMatchups, getDisplayTeamName]);
 
 
     useEffect(() => {
-        setAutoPopulateWarning(null); 
-        setIsTeamAutoPopulated(false); 
+        setAutoPopulateWarning(null);
+        setIsTeamAutoPopulated(false);
 
         if (!(type === 'debit' && category === 'trade_fee')) {
             setTradeTeams(['', '']);
-            setNumTrades(1); 
-            setTradeEntryMethod('multi_team'); 
+            setNumTrades(1);
+            setTradeEntryMethod('multi_team');
         }
         if (!(type === 'debit' && category === 'waiver_fa_fee')) {
             setWaiverEntries([{ team: '', numPickups: 1 }]);
         }
 
-        if (type === 'credit' && 
+        if (type === 'credit' &&
             (category === 'weekly_1st_points' || category === 'weekly_2nd_points') &&
-            weeklyPointsWeek) 
+            weeklyPointsWeek)
         {
             const weekNum = parseInt(weeklyPointsWeek);
             const weekData = weeklyHighScores[weekNum];
@@ -395,7 +395,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 setAutoPopulateWarning(`No score data found for Week ${weeklyPointsWeek} in the selected season.`);
             }
         } else if (type === 'credit' && category === 'side_pot') {
-            setTeamName(''); 
+            setTeamName('');
             setDescription(`Payout: Side Pot`);
         } else {
             setTeamName('');
@@ -438,13 +438,14 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setDb(firestore);
             setAuth(firebaseAuth);
 
-            const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => { 
+            const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
                 if (user) {
                     setUserId(user.uid);
                 } else {
                     const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
                     if (initialAuthToken) {
                          try {
+                            // await signInWithCustomToken(firebaseAuth, initialAuthToken); // Changed to signInAnonymously
                             await signInAnonymously(firebaseAuth); // Fallback to anonymous
                             setUserId(firebaseAuth.currentUser?.uid);
                         } catch (tokenSignInError) {
@@ -466,7 +467,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                         }
                     }
                 }
-                setIsAuthReady(true); 
+                setIsAuthReady(true);
             });
 
             return () => unsubscribe();
@@ -479,7 +480,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     const handleLogin = async (e) => {
         e.preventDefault();
-        setLoginError(null); 
+        setLoginError(null);
         if (!auth) {
             setLoginError("Authentication service not initialized.");
             return;
@@ -489,8 +490,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             await signInWithEmailAndPassword(auth, email, password);
             setEmail('');
             setPassword('');
-            setError(null); 
-            setShowCommishLogin(false); 
+            setError(null);
+            setShowCommishLogin(false);
         } catch (error) {
             setLoginError(`Login failed: ${error.message}`);
         }
@@ -501,7 +502,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         try {
             await signOut(auth);
             setLoginError(null);
-            setError(null); 
+            setError(null);
         } catch (error) {
             setLoginError(`Logout failed: ${error.message}`);
         }
@@ -522,9 +523,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
         const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
         const transactionCollectionPath = `/artifacts/${appId}/public/data/financial_transactions`;
-        
+
         const q = query(
-            collection(db, transactionCollectionPath), 
+            collection(db, transactionCollectionPath),
             orderBy('date', 'desc')
         );
 
@@ -534,15 +535,15 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 id: doc.id,
                 ...doc.data()
             }));
-            
-            const filteredBySeason = fetchedTransactions.filter(t => 
+
+            const filteredBySeason = fetchedTransactions.filter(t =>
                 selectedSeason === 0 || t.season === selectedSeason
             );
             setTransactions(filteredBySeason);
 
             const currentSeasonTransactionPot = filteredBySeason
-                .filter(t => 
-                    (t.category === 'waiver_fa_fee' || t.category === 'trade_fee') 
+                .filter(t =>
+                    (t.category === 'waiver_fa_fee' || t.category === 'trade_fee')
                 )
                 .reduce((sum, t) => sum + (t.amount || 0), 0);
             setTransactionPot(currentSeasonTransactionPot);
@@ -571,9 +572,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
         const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
         const transactionCollectionPath = `/artifacts/${appId}/public/data/financial_transactions`;
-        
+
         const q = query(
-            collection(db, transactionCollectionPath), 
+            collection(db, transactionCollectionPath),
             orderBy('date', 'asc') // Order by date ascending for consistent yearly calculations
         );
 
@@ -593,9 +594,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         return () => unsubscribe();
     }, [db, isAuthReady, activeTab]);
 
-    // Fetch and listen for updates to the Fee/Payout structure
+    // Fetch and listen for updates to the Fee/Payout structure for the SELECTED season
     useEffect(() => {
-        if (!db || !isAuthReady) { 
+        if (!db || !isAuthReady || selectedSeason === null) {
             setLoadingStructure(false);
             setDebitStructureData(defaultDebitStructure);
             setCreditStructureData(defaultCreditStructure);
@@ -604,7 +605,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
         setLoadingStructure(true);
         const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
-        const structureDocRef = doc(db, `/artifacts/${appId}/public/data/league_structure/current_structure`);
+        // MODIFIED: Season-specific document path for structure
+        const structureDocRef = doc(db, `/artifacts/${appId}/public/data/league_structure/${selectedSeason}`);
 
         const unsubscribe = onSnapshot(structureDocRef, (docSnap) => {
             if (docSnap.exists()) {
@@ -612,26 +614,27 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 setDebitStructureData(data.fees || defaultDebitStructure);
                 setCreditStructureData(data.payouts || defaultCreditStructure);
             } else {
+                // If no specific structure for the season, load defaults
                 setDebitStructureData(defaultDebitStructure);
                 setCreditStructureData(defaultCreditStructure);
             }
             setLoadingStructure(false);
         }, (firestoreError) => {
-            setError(`Failed to load league structure: ${firestoreError.message}`);
+            setError(`Failed to load league structure for season ${selectedSeason}: ${firestoreError.message}`);
             setLoadingStructure(false);
             setDebitStructureData(defaultDebitStructure);
             setCreditStructureData(defaultCreditStructure);
         });
 
         return () => unsubscribe();
-    }, [db, isAuthReady, defaultDebitStructure, defaultCreditStructure]);
+    }, [db, isAuthReady, selectedSeason, defaultDebitStructure, defaultCreditStructure]); // Added selectedSeason dependency
 
 
     const handleAddTransaction = async (e) => {
         e.preventDefault();
 
-        setError(null); 
-        setAutoPopulateWarning(null); 
+        setError(null);
+        setAutoPopulateWarning(null);
 
         if (!db || !userId) {
             setError("Database not ready or user not authenticated. Cannot add transaction.");
@@ -645,11 +648,11 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setError("Please enter a valid positive amount.");
             return;
         }
-        if (!description.trim() && category !== 'waiver_fa_fee' && !(category === 'trade_fee' && tradeEntryMethod === 'single_team')) { 
+        if (!description.trim() && category !== 'waiver_fa_fee' && !(category === 'trade_fee' && tradeEntryMethod === 'single_team')) {
             setError("Description cannot be empty.");
             return;
         }
-        
+
         let transactionsToAdd = [];
         const transactionDate = serverTimestamp(); // Use a single timestamp for all related transactions
 
@@ -667,7 +670,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
                 for (const team of validTradeTeams) {
                     transactionsToAdd.push({
-                        amount: parseFloat(amount), 
+                        amount: parseFloat(amount),
                         description: description.trim(),
                         type: type, // 'debit'
                         teamName: team,
@@ -675,7 +678,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                         userId: userId,
                         category: category,
                         season: selectedSeason, // Use selectedSeason for new transactions
-                        weekNumber: currentWeekForSelectedSeason, 
+                        weekNumber: currentWeekForSelectedSeason,
                         teamsInvolvedCount: 1,
                     });
                 }
@@ -689,16 +692,16 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     return;
                 }
                 transactionsToAdd.push({
-                    amount: parseFloat(amount) * numTrades, 
+                    amount: parseFloat(amount) * numTrades,
                     description: `Trade Fee: ${teamName} - ${numTrades} trade(s)`,
-                    type: type, 
+                    type: type,
                     teamName: teamName,
                     date: transactionDate,
                     userId: userId,
                     category: category,
-                    season: selectedSeason, 
+                    season: selectedSeason,
                     weekNumber: currentWeekForSelectedSeason,
-                    numTrades: numTrades, 
+                    numTrades: numTrades,
                     teamsInvolvedCount: 1,
                 });
             }
@@ -707,7 +710,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 setError("Please add at least one valid waiver/FA entry with a team and positive number of pickups.");
                 return;
             }
-            const perPickupCost = parseFloat(amount); 
+            const perPickupCost = parseFloat(amount);
 
             for (const entry of waiverEntries) {
                 if (entry.team && entry.numPickups > 0) {
@@ -719,7 +722,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                         date: transactionDate,
                         userId: userId,
                         category: category,
-                        season: selectedSeason, 
+                        season: selectedSeason,
                         weekNumber: currentWeekForSelectedSeason,
                         numPickups: entry.numPickups,
                     });
@@ -731,14 +734,14 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             }
 
         } else {
-            if (!teamName.trim() && teamName !== 'ALL_TEAMS_MULTIPLIER') { 
+            if (!teamName.trim() && teamName !== 'ALL_TEAMS_MULTIPLIER') {
                 setError("Please select an Associated Team.");
                 return;
             }
 
             let finalAmount = parseFloat(amount);
-            let finalTeamName = teamName; 
-            let teamsInvolved = 1; 
+            let finalTeamName = teamName;
+            let teamsInvolved = 1;
 
             if (type === 'debit' && teamName === 'ALL_TEAMS_MULTIPLIER') {
                 if (activeTeamsCount === 0) {
@@ -746,8 +749,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     return;
                 }
                 finalAmount = finalAmount * activeTeamsCount;
-                finalTeamName = 'All Teams'; 
-                teamsInvolved = activeTeamsCount; 
+                finalTeamName = 'All Teams';
+                teamsInvolved = activeTeamsCount;
             } else if (type === 'credit' && teamName === 'ALL_TEAMS_MULTIPLIER') {
                 finalTeamName = 'All Teams';
             }
@@ -755,13 +758,13 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             transactionsToAdd.push({
                 amount: finalAmount,
                 description: description.trim(),
-                type: type, 
-                teamName: finalTeamName, 
+                type: type,
+                teamName: finalTeamName,
                 date: transactionDate,
                 userId: userId,
-                category: category, 
-                season: selectedSeason, 
-                weekNumber: currentWeekForSelectedSeason, 
+                category: category,
+                season: selectedSeason,
+                weekNumber: currentWeekForSelectedSeason,
                 teamsInvolvedCount: teamsInvolved,
             });
 
@@ -772,7 +775,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                         return;
                     }
                     const weekNum = parseInt(weeklyPointsWeek);
-                    transactionsToAdd[0].weekNumber = weekNum; 
+                    transactionsToAdd[0].weekNumber = weekNum;
 
                     const weekData = weeklyHighScores[weekNum];
                     if (weekData) {
@@ -784,11 +787,11 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                             transactionsToAdd[0].description = `Payout: Weekly 2nd Points - ${weekData.secondHighest.team} (${weekData.secondHighest.score} pts)`;
                         } else {
                             setError(`Could not find a winning team for ${category.replace(/_/g, ' ')} in Week ${weekNum} for the selected season. Transaction not added.`);
-                            return; 
+                            return;
                         }
                     } else {
                         setError(`No score data found for Week ${weekNum} in the selected season. Transaction not added.`);
-                        return; 
+                        return;
                     }
                 } else if (category === 'side_pot') {
                     if (!sidePotName.trim()) {
@@ -803,24 +806,24 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         try {
             const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
             const transactionCollectionRef = collection(db, `/artifacts/${appId}/public/data/financial_transactions`);
-            
+
             for (const transaction of transactionsToAdd) {
                 await addDoc(transactionCollectionRef, transaction);
             }
-            
+
             setAmount('');
             setDescription('');
-            setType('debit'); 
-            setCategory(getCategoriesForType('debit')[0].value); 
-            setTeamName(''); 
-            setTradeTeams(['', '']); 
-            setWaiverEntries([{ team: '', numPickups: 1 }]); 
-            setWeeklyPointsWeek(''); 
-            setSidePotName(''); 
-            setNumTrades(1); 
-            setTradeEntryMethod('multi_team'); 
-            setError(null); 
-            setAutoPopulateWarning(null); 
+            setType('debit');
+            setCategory(getCategoriesForType('debit')[0].value);
+            setTeamName('');
+            setTradeTeams(['', '']);
+            setWaiverEntries([{ team: '', numPickups: 1 }]);
+            setWeeklyPointsWeek('');
+            setSidePotName('');
+            setNumTrades(1);
+            setTradeEntryMethod('multi_team');
+            setError(null);
+            setAutoPopulateWarning(null);
         } catch (addError) {
             setError(`Failed to add transaction: ${addError.message}. Please try again.`);
         }
@@ -832,7 +835,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     };
 
     const executeDelete = async () => {
-        setShowConfirmDelete(false); 
+        setShowConfirmDelete(false);
         if (!transactionToDelete || !db || !userId) {
             setError("Cannot delete: Invalid transaction or not authenticated.");
             return;
@@ -847,8 +850,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             const transactionDocRef = doc(db, `/artifacts/${appId}/public/data/financial_transactions`, transactionToDelete.id);
             await deleteDoc(transactionDocRef);
             setError(null);
-            setTransactionToDelete(null); 
-            setSelectedTransactionIds([]); 
+            setTransactionToDelete(null);
+            setSelectedTransactionIds([]);
         } catch (deleteError) {
             setError(`Failed to delete transaction: ${deleteError.message}. Please check your permissions.`);
         }
@@ -870,7 +873,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const handleWaiverEntryChange = (index, field, value) => {
         const newWaiverEntries = [...waiverEntries];
         if (field === 'numPickups') {
-            newWaiverEntries[index][field] = parseInt(value) || 0; 
+            newWaiverEntries[index][field] = parseInt(value) || 0;
         } else {
             newWaiverEntries[index][field] = value;
         }
@@ -881,10 +884,11 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     const filteredTransactions = transactions.filter(t => {
         if (filterTeam === '') {
-            return true; 
+            return true;
         } else if (filterTeam === 'All Teams') {
             return t.teamName === 'All Teams';
         } else {
+            // Filter by specific team, also include 'All Teams' debits for individual team view
             return (t.teamName === filterTeam || (t.teamName === 'All Teams' && t.type === 'debit'));
         }
     });
@@ -927,14 +931,14 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         try {
             const batch = writeBatch(db);
             const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
-            
+
             selectedTransactionIds.forEach(id => {
                 const docRef = doc(db, `/artifacts/${appId}/public/data/financial_transactions`, id);
                 batch.delete(docRef);
             });
             await batch.commit();
             setError(null);
-            setSelectedTransactionIds([]); 
+            setSelectedTransactionIds([]);
         } catch (bulkDeleteError) {
             setError(`Failed to delete selected transactions: ${bulkDeleteError.message}.`);
         }
@@ -944,43 +948,43 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         setShowConfirmBulkDelete(false);
     };
 
-    const overallDebits = transactions 
+    const overallDebits = transactions
         .filter(t => t.type === 'debit')
         .reduce((sum, t) => sum + (t.amount || 0), 0);
 
-    const overallCredits = transactions 
+    const overallCredits = transactions
         .filter(t => t.type === 'credit')
         .reduce((sum, t) => sum + (t.amount || 0), 0);
 
-    const overallNetBalance = overallDebits - overallCredits; 
+    const overallNetBalance = overallDebits - overallCredits;
 
     // Calculate team summary data for the CURRENTLY SELECTED season
     const teamSummary = {};
     uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').forEach(team => {
         teamSummary[team] = {
-            totalDebits: 0, 
-            totalCredits: 0, 
-            netBalance: 0, 
-            totalDebitsLessEntryFee: 0, 
-            winningsExtraFees: 0, 
+            totalDebits: 0,
+            totalCredits: 0,
+            netBalance: 0,
+            totalDebitsLessEntryFee: 0,
+            winningsExtraFees: 0,
         };
     });
 
-    transactions.forEach(t => { 
+    transactions.forEach(t => {
         if (t.teamName === 'All Teams' && t.type === 'debit' && t.teamsInvolvedCount > 0) {
             const perTeamAmount = t.amount / t.teamsInvolvedCount;
             uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').forEach(team => {
-                if (teamSummary[team]) { 
+                if (teamSummary[team]) {
                     teamSummary[team].totalDebits += perTeamAmount;
-                    if (t.category !== 'entry_fee') { 
+                    if (t.category !== 'entry_fee') {
                         teamSummary[team].totalDebitsLessEntryFee += perTeamAmount;
                     }
                 }
             });
-        } else if (teamSummary[t.teamName]) { 
+        } else if (teamSummary[t.teamName]) {
             if (t.type === 'debit') {
                 teamSummary[t.teamName].totalDebits += (t.amount || 0);
-                if (t.category !== 'entry_fee') { 
+                if (t.category !== 'entry_fee') {
                     teamSummary[t.teamName].totalDebitsLessEntryFee += (t.amount || 0);
                 }
             } else if (t.type === 'credit') {
@@ -1039,23 +1043,24 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     };
 
     const handleSaveStructure = async () => {
-        if (!db || !isCommish) {
-            setError("Cannot save structure: Not authenticated as commish or database not ready.");
+        if (!db || !isCommish || selectedSeason === null) {
+            setError("Cannot save structure: Not authenticated as commish, database not ready, or no season selected.");
             return;
         }
         setLoadingStructure(true);
         try {
             const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
-            const structureDocRef = doc(db, `/artifacts/${appId}/public/data/league_structure/current_structure`);
+            // MODIFIED: Save to season-specific document path
+            const structureDocRef = doc(db, `/artifacts/${appId}/public/data/league_structure/${selectedSeason}`);
             await setDoc(structureDocRef, {
-                fees: debitStructureData, 
-                payouts: creditStructureData, 
+                fees: debitStructureData,
+                payouts: creditStructureData,
                 lastUpdated: serverTimestamp()
             });
             setIsEditingStructure(false);
             setError(null);
         } catch (saveError) {
-            setError(`Failed to save league structure: ${saveError.message}`);
+            setError(`Failed to save league structure for season ${selectedSeason}: ${saveError.message}`);
         } finally {
             setLoadingStructure(false);
         }
@@ -1063,7 +1068,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     const handleCancelEditStructure = () => {
         setIsEditingStructure(false);
-        setError(null); 
+        // On cancel, re-fetch the current season's structure to discard unsaved changes
+        // This will be handled by the useEffect for structure data based on selectedSeason
+        setError(null);
     };
 
     const indexOfLastTransaction = currentPage * transactionsPerPage;
@@ -1131,62 +1138,61 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                         You are logged in as the Commish.
                     </span>
                 )}
-                
-                {isAuthReady && ( 
+
+                {isAuthReady && !isCommish && ( // Only show login form if not already commish
                     <div className="mt-4">
-                        {isCommish ? ( 
+                        {!showCommishLogin ? (
                             <button
-                                onClick={handleLogout}
-                                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-bold rounded-md transition-colors"
+                                onClick={() => setShowCommishLogin(true)}
+                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-md transition-colors w-full max-w-xs"
                             >
-                                Logout (Commish)
+                                Commish Login
                             </button>
-                        ) : ( 
-                            <>
-                                {!showCommishLogin ? (
-                                    <button
-                                        onClick={() => setShowCommishLogin(true)}
-                                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-md transition-colors w-full max-w-xs"
-                                    >
-                                        Commish Login
-                                    </button>
-                                ) : (
-                                    <form onSubmit={handleLogin} className="flex flex-col items-center space-y-2">
-                                        <p className="text-gray-700 font-semibold mb-2">Enter Commish Credentials</p>
-                                        <input
-                                            type="email"
-                                            placeholder="Commish Email"
-                                            value={email}
-                                            onChange={(e) => setEmail(e.target.value)}
-                                            required
-                                            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 w-full max-w-xs"
-                                        />
-                                        <input
-                                            type="password"
-                                            placeholder="Password"
-                                            value={password}
-                                            onChange={(e) => setPassword(e.target.value)}
-                                            required
-                                            className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 w-full max-w-xs"
-                                        />
-                                        <button
-                                            type="submit"
-                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-md transition-colors w-full max-w-xs"
-                                        >
-                                            Login (Commish Only)
-                                        </button>
-                                        {loginError && <p className="text-red-500 text-sm mt-2">{loginError}</p>}
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowCommishLogin(false)}
-                                            className="text-gray-500 hover:text-gray-700 text-sm mt-2"
-                                        >
-                                            Hide Login
-                                        </button>
-                                    </form>
-                                )}
-                            </>
+                        ) : (
+                            <form onSubmit={handleLogin} className="flex flex-col items-center space-y-2">
+                                <p className="text-gray-700 font-semibold mb-2">Enter Commish Credentials</p>
+                                <input
+                                    type="email"
+                                    placeholder="Commish Email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    required
+                                    className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 w-full max-w-xs"
+                                />
+                                <input
+                                    type="password"
+                                    placeholder="Password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    required
+                                    className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 w-full max-w-xs"
+                                />
+                                <button
+                                    type="submit"
+                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-md transition-colors w-full max-w-xs"
+                                >
+                                    Login (Commish Only)
+                                </button>
+                                {loginError && <p className="text-red-500 text-sm mt-2">{loginError}</p>}
+                                <button
+                                    type="button"
+                                    onClick={() => setShowCommishLogin(false)}
+                                    className="text-gray-500 hover:text-gray-700 text-sm mt-2"
+                                >
+                                    Hide Login
+                                </button>
+                            </form>
                         )}
+                    </div>
+                )}
+                {isAuthReady && isCommish && ( // Show logout button only if commish is logged in
+                    <div className="mt-4">
+                        <button
+                            onClick={handleLogout}
+                            className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-bold rounded-md transition-colors"
+                        >
+                            Logout (Commish)
+                        </button>
                     </div>
                 )}
             </div>
@@ -1207,12 +1213,12 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                     <label htmlFor="seasonFilter" className="mr-2 font-semibold text-blue-700">View/Add Data For Season:</label>
                                     <select
                                         id="seasonFilter"
-                                        value={selectedSeason || ''} 
+                                        value={selectedSeason || ''}
                                         onChange={(e) => {
                                             const newSeason = parseInt(e.target.value);
                                             setSelectedSeason(isNaN(newSeason) ? null : newSeason);
-                                            setCurrentPage(1); 
-                                            setFilterTeam(''); 
+                                            setCurrentPage(1);
+                                            setFilterTeam('');
                                         }}
                                         className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                     >
@@ -1224,7 +1230,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                             )}
 
                             {/* Financial Summary */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8"> 
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                                 <div className="bg-red-50 p-4 rounded-lg shadow-sm text-center">
                                     <h3 className="text-lg font-semibold text-red-700">Total Fees</h3>
                                     <p className="text-2xl font-bold text-red-900">{formatCurrency(overallDebits)}</p>
@@ -1283,14 +1289,14 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                 value={category}
                                                 onChange={(e) => {
                                                     setCategory(e.target.value);
-                                                    setWeeklyPointsWeek(''); 
+                                                    setWeeklyPointsWeek('');
                                                     setSidePotName('');
-                                                    setTeamName(''); 
-                                                    setTradeTeams(['', '']); 
-                                                    setWaiverEntries([{ team: '', numPickups: 1 }]); 
-                                                    setDescription(''); 
-                                                    setNumTrades(1); 
-                                                    setTradeEntryMethod('multi_team'); 
+                                                    setTeamName('');
+                                                    setTradeTeams(['', '']);
+                                                    setWaiverEntries([{ team: '', numPickups: 1 }]);
+                                                    setDescription('');
+                                                    setNumTrades(1);
+                                                    setTradeEntryMethod('multi_team');
                                                 }}
                                                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                             >
@@ -1310,7 +1316,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                     placeholder="e.g., Annual League Entry, Weekly Winnings"
                                                     maxLength="100"
                                                     required
-                                                    readOnly={isTeamAutoPopulated} 
+                                                    readOnly={isTeamAutoPopulated}
                                                     className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none ${isTeamAutoPopulated ? 'bg-gray-200 cursor-not-allowed' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'} sm:text-sm`}
                                                 />
                                             </div>
@@ -1325,7 +1331,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                     value={weeklyPointsWeek}
                                                     onChange={(e) => setWeeklyPointsWeek(e.target.value)}
                                                     placeholder="e.g., 1, 5, 14"
-                                                    min="0" 
+                                                    min="0"
                                                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                                 />
                                             </div>
@@ -1345,7 +1351,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                 />
                                             </div>
                                         )}
-                                        
+
                                         {type === 'debit' && category === 'trade_fee' ? (
                                             <div className="space-y-4">
                                                 <label className="block text-sm font-medium text-gray-700">Trade Entry Method:</label>
@@ -1358,7 +1364,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                             checked={tradeEntryMethod === 'multi_team'}
                                                             onChange={() => {
                                                                 setTradeEntryMethod('multi_team');
-                                                                setTeamName(''); 
+                                                                setTeamName('');
                                                                 setNumTrades(1);
                                                             }}
                                                         />
@@ -1395,7 +1401,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                                         <option key={optionTeam} value={optionTeam}>{optionTeam}</option>
                                                                     ))}
                                                                 </select>
-                                                                {tradeTeams.length > 1 && ( 
+                                                                {tradeTeams.length > 1 && (
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => handleRemoveTradeTeam(index)}
@@ -1500,24 +1506,24 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                     onChange={(e) => {
                                                         setTeamName(e.target.value);
                                                         setIsTeamAutoPopulated(false);
-                                                        setAutoPopulateWarning(null); 
+                                                        setAutoPopulateWarning(null);
                                                     }}
-                                                    required 
-                                                    disabled={isTeamSelectionDisabled} 
+                                                    required
+                                                    disabled={isTeamSelectionDisabled}
                                                     className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none ${isTeamAutoPopulated ? 'bg-gray-200 cursor-not-allowed' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'} sm:text-sm`}
                                                 >
-                                                    <option value="">Select Team</option> 
-                                                    {type === 'debit' && ( 
+                                                    <option value="">Select Team</option>
+                                                    {type === 'debit' && (
                                                         <option value="ALL_TEAMS_MULTIPLIER">All Teams (Multiplied)</option>
                                                     )}
-                                                    {nonAllTeams.map(team => ( 
+                                                    {nonAllTeams.map(team => (
                                                         <option key={team} value={team}>{team}</option>
                                                     ))}
                                                 </select>
-                                                {autoPopulateWarning && ( 
+                                                {autoPopulateWarning && (
                                                     <p className="text-xs text-orange-600 mt-1">{autoPopulateWarning}</p>
                                                 )}
-                                                {isTeamAutoPopulated && teamName && ( 
+                                                {isTeamAutoPopulated && teamName && (
                                                     <p className="text-xs text-gray-500 mt-1">Automatically determined: {teamName}</p>
                                                 )}
                                             </div>
@@ -1532,9 +1538,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                     </form>
                                 </section>
                             ) : (
-                                <p className="text-center text-gray-600 p-4 bg-gray-100 rounded-lg shadow-inner mb-8">
-                                    Only the league commissioner can add and remove transactions. Please log in with the commish account.
-                                </p>
+                                // This entire block is removed, as requested by the user
+                                null
                             )}
 
                             {/* Transaction History Table */}
@@ -1548,7 +1553,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             value={filterTeam}
                                             onChange={(e) => {
                                                 setFilterTeam(e.target.value);
-                                                setCurrentPage(1); 
+                                                setCurrentPage(1);
                                             }}
                                             className="mt-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm w-full"
                                         >
@@ -1556,7 +1561,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             {uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').map(team => (
                                                 <option key={team} value={team}>{team}</option>
                                             ))}
-                                            <option value="All Teams">Transactions for 'All Teams'</option> 
+                                            <option value="All Teams">Transactions for 'All Teams'</option>
                                         </select>
                                     </div>
                                     {isCommish && selectedTransactionIds.length > 0 && (
@@ -1590,8 +1595,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                     <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
                                                     <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Amount</th>
                                                     <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Type</th>
-                                                    <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Category</th> 
-                                                    <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Week</th> 
+                                                    <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Category</th>
+                                                    <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Week</th>
                                                     {isCommish && <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Actions</th>}
                                                 </tr>
                                             </thead>
@@ -1637,11 +1642,11 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                             </td>
                                                             <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200 capitalize">
                                                                 {t.category ? t.category.replace(/_/g, ' ') : 'General'}
-                                                            </td> 
-                                                            <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
-                                                                {t.weekNumber === 0 ? 'Pre' : (t.weekNumber || '-')} 
                                                             </td>
-                                                            {isCommish && ( 
+                                                            <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
+                                                                {t.weekNumber === 0 ? 'Pre' : (t.weekNumber || '-')}
+                                                            </td>
+                                                            {isCommish && (
                                                                 <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
                                                                     <button
                                                                         onClick={() => confirmDelete(t)}
@@ -1724,10 +1729,10 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                     </div>
                                 </section>
                             )}
-                            
+
                             {/* Fee and Payout Structure Section */}
                             <section className="mt-8 p-6 bg-gray-50 rounded-lg shadow-inner">
-                                <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">League Fee & Payout Structure</h3>
+                                <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">League Fee & Payout Structure (for {selectedSeason || 'selected'} season)</h3>
                                 {isCommish && !isEditingStructure && (
                                     <div className="text-center mb-4">
                                         <button
@@ -1755,7 +1760,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                         className="flex-1 px-3 py-2 border rounded-md"
                                                     />
                                                     <input
-                                                        type="text" 
+                                                        type="text"
                                                         value={item.amount}
                                                         onChange={(e) => handleDebitStructureChange(index, 'amount', e.target.value)}
                                                         placeholder="Amount"
@@ -1763,6 +1768,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                     />
                                                     <input
                                                         type="text"
+                                                        value={item.description} // Ensured value is bound to state
                                                         onChange={(e) => handleDebitStructureChange(index, 'description', e.target.value)}
                                                         placeholder="Description (optional)"
                                                         className="flex-1 px-3 py-2 border rounded-md"
@@ -1797,7 +1803,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                         className="flex-1 px-3 py-2 border rounded-md"
                                                     />
                                                     <input
-                                                        type="text" 
+                                                        type="text"
                                                         value={item.amount}
                                                         onChange={(e) => handleCreditStructureChange(index, 'amount', e.target.value)}
                                                         placeholder="Amount (optional)"
@@ -1805,6 +1811,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                     />
                                                     <input
                                                         type="text"
+                                                        value={item.description} // Ensured value is bound to state
                                                         onChange={(e) => handleCreditStructureChange(index, 'description', e.target.value)}
                                                         placeholder="Description (optional)"
                                                         className="flex-1 px-3 py-2 border rounded-md"
@@ -1872,8 +1879,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     )}
 
                     {activeTab === 'overall_history' && (
-                        <OverallFinancialHistoryTab 
-                            allTransactions={allTransactions} 
+                        <OverallFinancialHistoryTab
+                            allTransactions={allTransactions}
                             getDisplayTeamName={getDisplayTeamName}
                             uniqueTeamsForOverallHistory={uniqueTeamsForOverallHistory} // Pass this prop
                         />
@@ -1890,14 +1897,14 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                         </p>
                         <div className="flex justify-center space-x-4">
                             <button
-                                type="button" 
+                                type="button"
                                 onClick={cancelDelete}
                                 className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-md transition-colors"
                             >
                                 Cancel
                             </button>
                             <button
-                                type="button" 
+                                type="button"
                                 onClick={executeDelete}
                                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors"
                             >
@@ -1917,14 +1924,14 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                         </p>
                         <div className="flex justify-center space-x-4">
                             <button
-                                type="button" 
+                                type="button"
                                 onClick={cancelBulkDelete}
                                 className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-md transition-colors"
                             >
                                 Cancel
                             </button>
                             <button
-                                type="button" 
+                                type="button"
                                 onClick={executeBulkDelete}
                                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors"
                             >
