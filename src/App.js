@@ -15,7 +15,8 @@ import LuckRatingAnalysis from './lib/LuckRatingAnalysis';
 import TeamDetailPage from './lib/TeamDetailPage';
 import Head2HeadGrid from './lib/Head2HeadGrid'; // Stays for its own tab
 import FinancialTracker from './components/FinancialTracker';
-import Dashboard from './components/Dashboard'; // <--- NEW IMPORT for the homepage
+import Dashboard from './components/Dashboard';
+import Seasons from './components/Seasons'; // <--- NEW IMPORT for the Seasons tab
 
 // Import Sleeper API functions to fetch league details for dynamic tab population
 import { fetchLeagueDetails } from './utils/sleeperApi';
@@ -35,6 +36,7 @@ const NAV_CATEGORIES = {
       { label: 'Luck Rating', tab: 'luckRating' },
     ]
   },
+  SEASONS: { label: 'Seasons', tab: 'seasons' }, // NEW: Seasons Tab
   TEAMS: { // New category for individual team pages
     label: 'Teams',
     subTabs: [], // This will be populated dynamically from historicalMatchups
@@ -53,6 +55,7 @@ const TABS = {
   LUCK_RATING: 'luckRating',
   TEAM_DETAIL: 'teamDetail',
   FINANCIALS: 'financials',
+  SEASONS: 'seasons', // NEW: Seasons Tab Constant
 };
 
 const App = () => {
@@ -212,6 +215,14 @@ const App = () => {
             </div>
           </div>
 
+          {/* NEW: Seasons Tab */}
+          <button
+            onClick={() => handleTabChange(TABS.SEASONS)}
+            className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${activeTab === TABS.SEASONS ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
+          >
+            {NAV_CATEGORIES.SEASONS.label}
+          </button>
+
           {/* Dropdown for Teams (dynamic) */}
           {NAV_CATEGORIES.TEAMS.subTabs.length > 0 && (
             <div className="relative group">
@@ -316,6 +327,14 @@ const App = () => {
                 </ul>
               )}
             </div>
+
+            {/* NEW: Seasons Tab (Mobile) */}
+            <button
+              onClick={() => handleTabChange(TABS.SEASONS)}
+              className={`block w-full text-left py-3 px-4 text-lg font-semibold rounded-md transition-colors duration-200 ${activeTab === TABS.SEASONS ? 'bg-blue-100 text-blue-700' : 'text-gray-800 hover:bg-gray-100'}`}
+            >
+              {NAV_CATEGORIES.SEASONS.label}
+            </button>
 
             {/* Accordion for Teams (dynamic) */}
             {NAV_CATEGORIES.TEAMS.subTabs.length > 0 && (
@@ -423,6 +442,13 @@ const App = () => {
                 getDisplayTeamName={getMappedTeamName}
               />
             )}
+
+           {/* NEW: Render Seasons component */}
+           {activeTab === TABS.SEASONS && (
+              <Seasons
+                getDisplayTeamName={getMappedTeamName}
+              />
+           )}
 
            {/* Render TeamDetailPage when selected */}
            {activeTab === TABS.TEAM_DETAIL && selectedTeam && (
