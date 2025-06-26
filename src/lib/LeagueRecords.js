@@ -179,52 +179,65 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     newCalculatedRecords.mostPointsAgainst = { value: -Infinity, entries: [] };
 
 
+    // Helper to process a temporary array into the record format (top 1 + potentially other top entries)
+    // This helper should be defined before its first use.
+    const processRecord = (tempArray, isAscending = false) => {
+        if (tempArray.length === 0) return { value: null, entries: [], allRankedEntries: [] };
+
+        // Sort based on value (descending for max, ascending for min)
+        tempArray.sort((a, b) => isAscending ? a.value - b.value : b.value - a.value);
+
+        const topValue = tempArray[0].value;
+        const topEntries = tempArray.filter(item => item.value === topValue).map(item => ({ team: item.team }));
+
+        // For the dropdown, collect up to the next 5 unique values or teams
+        const allRankedEntries = [];
+        let currentRankValue = null;
+        let rankCounter = 0;
+        let uniqueRanksAdded = 0; // Track unique ranks
+
+        for (const item of tempArray) {
+            if (item.value !== currentRankValue) {
+                rankCounter++;
+                currentRankValue = item.value;
+                uniqueRanksAdded++;
+            }
+            if (uniqueRanksAdded <= 6) { // Top 1 + next 5 unique ranks
+                allRankedEntries.push({ team: item.team, value: item.value });
+            } else {
+                break;
+            }
+        }
+
+        return { value: topValue, entries: topEntries, allRankedEntries: allRankedEntries };
+    };
+
     // Highest/Lowest Career DPR (Uses calculatedCareerDPRs directly)
-    const sortedCareerDPR = [...calculatedCareerDPRs].sort((a, b) => b.dpr - a.dpr);
-    if (sortedCareerDPR.length > 0) {
-      newCalculatedRecords.highestDPR = {
-        value: sortedCareerDPR[0].dpr,
-        entries: sortedCareerDPR.filter(d => d.dpr === sortedCareerDPR[0].dpr).map(d => ({ team: d.team }))
-      };
-      // For lowest DPR, we need to sort ascending and potentially get more entries if there are ties
-      const sortedCareerDPRAsc = [...calculatedCareerDPRs].sort((a, b) => a.dpr - b.dpr);
-      newCalculatedRecords.lowestDPR = {
-        value: sortedCareerDPRAsc[0].dpr, // Smallest DPR
-        entries: sortedCareerDPRAsc.filter(d => d.dpr === sortedCareerDPRAsc[0].dpr).map(d => ({ team: d.team }))
-      };
+    // We now use processRecord for these too for consistency and dropdown functionality
+    if (Array.isArray(calculatedCareerDPRs) && calculatedCareerDPRs.length > 0) {
+      newCalculatedRecords.highestDPR = processRecord(calculatedCareerDPRs.map(d => ({ team: d.team, value: d.dpr })));
+      newCalculatedRecords.lowestDPR = processRecord(calculatedCareerDPRs.map(d => ({ team: d.team, value: d.dpr })), true); // true for ascending sort
     }
 
     // Variables to find the max/min across all teams, initialized to safe defaults
-    let maxWins = { value: -Infinity, entries: [] };
-    let maxLosses = { value: -Infinity, entries: [] };
-    let bestWinPct = { value: -Infinity, entries: [] };
-    let bestAllPlayWinPct = { value: -Infinity, entries: [] };
-    let maxWeeklyHighScores = { value: -Infinity, entries: [] };
-    let maxWeeklyTop2Scores = { value: -Infinity, entries: [] };
-    let maxWinningSeasons = { value: -Infinity, entries: [] };
-    let maxLosingSeasons = { value: -Infinity, entries: [] };
-    let maxBlowoutWins = { value: -Infinity, entries: [] };
-    let maxBlowoutLosses = { value: -Infinity, entries: [] };
-    let maxSlimWins = { value: -Infinity, entries: [] };
-    let maxSlimLosses = { value: -Infinity, entries: [] };
-    let maxTotalPoints = { value: -Infinity, entries: [] };
-    let maxPointsAgainst = { value: -Infinity, entries: [] };
+    // These are now temporary arrays that will be passed to processRecord
+    const tempBestWinPct = [];
 
 
     // Iterate over calculatedCareerDPRs for Best Win %
-    // Sort and collect all entries for bestWinPct
     if (Array.isArray(calculatedCareerDPRs)) {
-        const sortedByWinPct = [...calculatedCareerDPRs].sort((a, b) => b.winPercentage - a.winPercentage);
-        if (sortedByWinPct.length > 0) {
-            bestWinPct = {
-                value: sortedByWinPct[0].winPercentage,
-                entries: sortedByWinPct
-                    .filter(d => d.winPercentage === sortedByWinPct[0].winPercentage)
-                    .map(d => ({ team: d.team }))
-            };
-        }
-    }
+      calculatedCareerDPRs.forEach(teamData => {
+        const team = teamData.team;
+        const careerWinPct = teamData.winPercentage; // Directly use the calculated career win percentage
 
+        // Best Win Percentage
+        if (typeof careerWinPct === 'number' && !isNaN(careerWinPct)) {
+            tempBestWinPct.push({ team: team, value: careerWinPct });
+        }
+      });
+      // Process Best Win Pct after populating tempBestWinPct
+      newCalculatedRecords.bestWinPct = processRecord(tempBestWinPct);
+    }
 
     // Now, iterate over aggregatedCareerStats for the remaining count-based records
     // and for Best All-Play Win Percentage
@@ -281,7 +294,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         tempMostBlowoutLosses.push({ team: team, value: stats.blowoutLosses });
 
         // Most Slim Wins
-        tempMostSlimWins.push({ team: team, value: stats.slimWins });
+        tempSlimWins.push({ team: team, value: stats.slimWins });
 
         // Most Slim Losses
         tempMostSlimLosses.push({ team: team, value: stats.slimLosses });
@@ -292,38 +305,6 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         // Most Points Against
         tempMostPointsAgainst.push({ team: team, value: stats.totalPointsAgainst });
       });
-
-
-      // Helper to process a temporary array into the record format (top 1 + potentially other top entries)
-      const processRecord = (tempArray, isAscending = false) => {
-          if (tempArray.length === 0) return { value: null, entries: [] };
-
-          // Sort based on value (descending for max, ascending for min)
-          tempArray.sort((a, b) => isAscending ? a.value - b.value : b.value - a.value);
-
-          const topValue = tempArray[0].value;
-          const topEntries = tempArray.filter(item => item.value === topValue).map(item => ({ team: item.team }));
-
-          // For the dropdown, collect up to the next 5 unique values or teams
-          const allRankedEntries = [];
-          let currentRankValue = null;
-          let rankCounter = 0;
-
-          for (const item of tempArray) {
-              if (item.value !== currentRankValue) {
-                  rankCounter++;
-                  currentRankValue = item.value;
-              }
-              if (rankCounter <= 6) { // Top 1 + next 5 ranks
-                  allRankedEntries.push({ team: item.team, value: item.value });
-              } else {
-                  break;
-              }
-          }
-
-          return { value: topValue, entries: topEntries, allRankedEntries: allRankedEntries };
-      };
-
 
       // Assign processed records
       newCalculatedRecords.mostWins = processRecord(tempMostWins);
@@ -339,26 +320,14 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
       newCalculatedRecords.mostSlimLosses = processRecord(tempMostSlimLosses);
       newCalculatedRecords.mostTotalPoints = processRecord(tempMostTotalPoints);
       newCalculatedRecords.mostPointsAgainst = processRecord(tempMostPointsAgainst);
-
-      // Re-process DPR and Best Win % to include allRankedEntries for dropdown
-      if (sortedCareerDPR.length > 0) {
-        newCalculatedRecords.highestDPR = processRecord(sortedCareerDPR.map(d => ({ team: d.team, value: d.dpr })));
-        newCalculatedRecords.lowestDPR = processRecord(sortedCareerDPRAsc.map(d => ({ team: d.team, value: d.dpr })), true); // Use ascending sort
-      }
-
-      if (bestWinPct.entries.length > 0) {
-          newCalculatedRecords.bestWinPct = processRecord(sortedByWinPct.map(d => ({ team: d.team, value: d.winPercentage })));
-      }
-
     }
-    console.log("LeagueRecords: Record candidates before final assignment (bestWinPct, bestAllPlayWinPct):", { bestWinPct, bestAllPlayWinPct });
+    console.log("LeagueRecords: Record candidates before final assignment (bestWinPct, bestAllPlayWinPct):", { bestWinPct: newCalculatedRecords.bestWinPct, bestAllPlayWinPct: newCalculatedRecords.bestAllPlayWinPct });
 
 
-    // Now, assign the calculated values to newCalculatedRecords
-    // Only assign if a valid record was found (i.e., not -Infinity or empty entries for numerical records)
-    // The processRecord helper already handles the initial population, so these assignments are more for
-    // ensuring the structure for records that might not have been processed if their tempArray was empty.
-    // However, given the structure, they should be correctly initialized by processRecord now.
+    // The assignments below are no longer strictly necessary if processRecord populates newCalculatedRecords directly,
+    // but keeping them for clarity in case newCalculatedRecords was initialized with null/empty values and processRecord
+    // might return the default if the input array is empty. However, processRecord itself returns the default.
+    // So, the final assignment logic can be simplified as it now directly populates newCalculatedRecords inside the loops.
 
     console.log("LeagueRecords: Final newCalculatedRecords before setting state:", newCalculatedRecords);
     setAllTimeRecords(newCalculatedRecords);
@@ -458,12 +427,45 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
               </button>
               {isExpanded && (
                 <div className="mt-2">
-                  {otherRankedEntries.slice(0, 5).map((entry, idx) => ( // Show next 5 for simplicity
-                    <div key={`${record.key}-other-${idx}`} className="flex justify-between items-center text-xs text-gray-600">
-                      <span>{entry.team}</span>
-                      <span className="font-medium">{formatter(entry.value)}{isPercentage ? '%' : ''}</span>
-                    </div>
-                  ))}
+                  {/* Iterate over allRankedEntries and skip entries whose value matches the top record's value
+                      and are also present in topEntries. This ensures we show distinct "next" entries.
+                      Limit to showing 5 additional unique ranks, even if a rank has multiple teams. */}
+                  {(() => {
+                    const displayed = new Set(topEntries.map(e => e.team)); // Track teams already displayed in top section
+                    let uniqueRanksDisplayed = 1; // Count the initial top rank
+                    const teamsToShowInDropdown = [];
+
+                    for (const entry of record.allRankedEntries) {
+                        if (uniqueRanksDisplayed > 6) break; // Stop after displaying top 1 + next 5 unique ranks
+
+                        // If the entry is part of the top entries, or if the team is already displayed as a top entry, skip it for the dropdown
+                        if (entry.value === record.value && topEntries.some(t => t.team === entry.team)) {
+                            continue;
+                        }
+
+                        // Check if this value/rank has already been added to the dropdown set
+                        const isValueAlreadyAdded = teamsToShowInDropdown.some(item => item.value === entry.value);
+
+                        if (!isValueAlreadyAdded) {
+                            uniqueRanksDisplayed++; // Increment unique rank count
+                        }
+
+                        if (!displayed.has(entry.team)) { // Only add if team not already shown in the top part
+                            teamsToShowInDropdown.push(entry);
+                            displayed.add(entry.team);
+                        }
+                    }
+
+                    // Sort the dropdown entries again to ensure consistent order, then slice to next 5
+                    teamsToShowInDropdown.sort((a, b) => isPercentage ? b.value - a.value : b.value - a.value); // Re-sort for descending order in dropdown for better readability
+
+                    return teamsToShowInDropdown.slice(0,5).map((entry, idx) => (
+                        <div key={`${record.key}-other-${entry.team}-${idx}`} className="flex justify-between items-center text-xs text-gray-600">
+                          <span>{entry.team}</span>
+                          <span className="font-medium">{formatter(entry.value)}{isPercentage ? '%' : ''}</span>
+                        </div>
+                    ));
+                  })()}
                 </div>
               )}
             </>
