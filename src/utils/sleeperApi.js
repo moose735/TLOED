@@ -29,9 +29,12 @@ export const RETIRED_MANAGERS = new Set([
   // For example: 'RetiredManagerName1', 'RetiredManagerName2'
 ]);
 
-// Internal cache for historical matchup data to avoid repeated API calls.
-// This cache will persist for the duration of the page session.
+// Internal cache for historical matchup data to avoid repeated API calls within the session.
 let historicalMatchupsCache = null;
+
+// Constants for NFL player cache in localStorage
+const NFL_PLAYERS_CACHE_KEY = 'nflPlayersCache';
+const NFL_PLAYERS_CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
 /**
  * Constructs the full URL for a Sleeper user avatar.
@@ -243,5 +246,53 @@ export async function fetchAllHistoricalMatchups() {
     } catch (error) {
         console.error('Error fetching all historical matchups:', error);
         return {}; // Return empty object on error
+    }
+}
+
+/**
+ * Fetches NFL player data from the Sleeper API, using localStorage for daily caching.
+ * This function will only hit the Sleeper API once every 24 hours.
+ *
+ * @returns {Promise<Object>} A promise that resolves to an object containing all NFL player data,
+ * keyed by player ID. Returns an empty object on error.
+ */
+export async function fetchNFLPlayers() {
+    try {
+        const cachedDataString = localStorage.getItem(NFL_PLAYERS_CACHE_KEY);
+        const now = Date.now();
+
+        if (cachedDataString) {
+            const cachedData = JSON.parse(cachedDataString);
+            // Check if the cached data exists and is still valid (less than 24 hours old)
+            if (cachedData.timestamp && (now - cachedData.timestamp < NFL_PLAYERS_CACHE_EXPIRY_MS)) {
+                console.log('Returning NFL players from localStorage cache (still valid).');
+                return cachedData.players;
+            }
+        }
+
+        console.log('Fetching NFL players from Sleeper API (cache expired or not found)...');
+        const response = await fetch('https://api.sleeper.app/v1/players/nfl');
+
+        if (!response.ok) {
+            console.error(`Error fetching NFL players: ${response.statusText}`);
+            return {};
+        }
+
+        const players = await response.json();
+
+        // Store the new players data and the current timestamp in localStorage
+        localStorage.setItem(NFL_PLAYERS_CACHE_KEY, JSON.stringify({
+            players,
+            timestamp: now
+        }));
+
+        console.log('Successfully fetched and cached NFL players in localStorage.');
+        return players;
+
+    } catch (error) {
+        console.error('Failed to fetch or cache NFL players:', error);
+        // Clear corrupted cache in case of parsing errors or other issues
+        localStorage.removeItem(NFL_PLAYERS_CACHE_KEY);
+        return {};
     }
 }
