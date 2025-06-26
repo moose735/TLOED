@@ -1,9 +1,10 @@
 // src/lib/LeagueRecords.js
 import React, { useState, useEffect } from 'react';
-import { calculateAllLeagueMetrics } from '../utils/calculations'; // Import the new utility
+import { calculateAllLeagueMetrics } from '../utils/calculations.js'; // Corrected import path
 
 const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
   const [allTimeRecords, setAllTimeRecords] = useState({});
+  const [expandedRows, setExpandedRows] = useState({}); // State to manage expanded rows
 
   useEffect(() => {
     console.log("LeagueRecords: useEffect triggered.");
@@ -401,10 +402,20 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
     return 'N/A';
   };
 
+  // Toggle expand/collapse for a given record key
+  const toggleExpand = (key) => {
+    setExpandedRows(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
 
   // Helper function to render a single record entry
-  const renderSingleRecordEntry = (record, label, formatter = (value) => value) => {
-    // Check if record is valid and has meaningful data
+  const renderSingleRecordEntry = (record, label, key, formatter = (value) => value) => {
+    const isExpanded = expandedRows[key];
+    const hasMultipleEntries = record && record.entries && record.entries.length > 1;
+
+    // Default display for N/A or no valid data
     if (!record || record.entries.length === 0 || record.value === null || record.value === -Infinity) {
       console.log(`renderSingleRecordEntry: Displaying N/A for "${label}". Record state:`, record);
       return (
@@ -414,15 +425,43 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         </>
       );
     }
+
+    // Always display the #1 value and its team(s)
+    const topEntryValue = formatter(record.value);
+    const topEntryTeams = record.entries[0].team;
+
     return (
       <>
         <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{label}</td>
-        {/* Added text-right for numerical values */}
-        <td className="py-2 px-3 text-sm text-gray-800 text-right">{formatter(record.value)}</td>
+        <td className="py-2 px-3 text-sm text-gray-800 text-right">{topEntryValue}</td>
         <td className="py-2 px-3 text-sm text-gray-700">
-          {record.entries.map((entry, idx) => (
-            <span key={idx} className="block">{entry.team}</span>
-          ))}
+          <div className="flex items-center justify-between">
+            <span>{topEntryTeams}</span>
+            {hasMultipleEntries && (
+              <button
+                onClick={() => toggleExpand(key)}
+                className="ml-2 p-1 rounded-full hover:bg-gray-200 transition-colors"
+                title={isExpanded ? "Collapse" : "Expand to view top 5"}
+              >
+                <svg
+                  className={`w-4 h-4 transform transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+              </button>
+            )}
+          </div>
+          {isExpanded && hasMultipleEntries && (
+            <div className="mt-1 ml-4 text-xs"> {/* Indent additional entries */}
+              {record.entries.slice(1, 5).map((entry, idx) => ( // Show next 4 entries (up to top 5 total)
+                <div key={idx}>{entry.team}</div>
+              ))}
+            </div>
+          )}
         </td>
       </>
     );
@@ -470,7 +509,7 @@ const LeagueRecords = ({ historicalMatchups, getDisplayTeamName }) => {
                 const recordData = allTimeRecords[recordDef.key];
                 return (
                   <tr key={recordDef.key} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                    {renderSingleRecordEntry(recordData, recordDef.label, recordDef.formatter)}
+                    {renderSingleRecordEntry(recordData, recordDef.label, recordDef.key, recordDef.formatter)}
                   </tr>
                 );
               })}
