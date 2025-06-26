@@ -55,14 +55,14 @@ let allDraftHistoryCache = null;
 const winnersBracketCache = new Map(); // Structure: Map<leagueId, Array<matchup>>
 const losersBracketCache = new Map(); // Structure: Map<leagueId, Array<matchup>>
 
+// NEW: In-memory cache for NFL players and NFL state
+const nflPlayersCache = new Map(); // Stores { players: {}, timestamp: Date.now() }
+const nflStateCache = new Map(); // Stores { state: {}, timestamp: Date.now() }
 
-// Constants for NFL player cache in localStorage
-const NFL_PLAYERS_CACHE_KEY = 'nflPlayersCache';
+// Constants for NFL player cache expiry (moved from localStorage to in-memory)
 const NFL_PLAYERS_CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+const NFL_STATE_CACHE_EXPIRY_MS = 1 * 60 * 60 * 1000; // 1 hour in milliseconds
 
-// Constants for NFL state cache in localStorage
-const NFL_STATE_CACHE_KEY = 'nflStateCache';
-const NFL_STATE_CACHE_EXPIRY_MS = 1 * 60 * 60 * 1000; // 1 hour in milliseconds, can be adjusted
 
 /**
  * Constructs the full URL for a Sleeper user avatar.
@@ -102,6 +102,12 @@ export const getSleeperPlayerHeadshotUrl = (playerId) => {
  * @returns {Promise<Object|null>} A promise that resolves to the league data, or null if an error occurs.
  */
 export async function fetchLeagueDetails(leagueId) {
+    // NEW: Add a robust check for valid leagueId before fetching
+    if (!leagueId || typeof leagueId !== 'string' || leagueId === '0') {
+        console.warn(`Attempted to fetch league details with an invalid league ID: ${leagueId}`);
+        return null; // Return null immediately for invalid IDs
+    }
+
   try {
     const response = await fetch(`https://api.sleeper.app/v1/league/${leagueId}`);
     if (!response.ok) {
@@ -128,14 +134,14 @@ export async function fetchLeagueData(currentLeagueId) {
   const leagueData = [];
   let currentId = currentLeagueId;
 
-  // Loop continues as long as there's a currentId to fetch
-  while (currentId) {
+  // Loop continues as long as there's a currentId to fetch and it's a valid string ID
+  while (currentId && typeof currentId === 'string' && currentId !== '0') {
     const details = await fetchLeagueDetails(currentId);
     if (details) {
       leagueData.push(details);
       currentId = details.previous_league_id; // Move to the previous league ID
     } else {
-      // Stop if a league cannot be fetched (e.g., invalid ID, network error)
+      // Stop if a league cannot be fetched (e.g., invalid ID, network error, or previous_league_id is null/invalid)
       break;
     }
   }
@@ -290,24 +296,20 @@ export async function fetchAllHistoricalMatchups() {
 }
 
 /**
- * Fetches NFL player data from the Sleeper API, using localStorage for daily caching.
- * This function will only hit the Sleeper API once every 24 hours.
+ * Fetches NFL player data from the Sleeper API, using in-memory caching.
+ * This function will only hit the Sleeper API once every 24 hours within the session.
  *
  * @returns {Promise<Object>} A promise that resolves to an object containing all NFL player data,
  * keyed by player ID. Returns an empty object on error.
  */
 export async function fetchNFLPlayers() {
     try {
-        const cachedDataString = localStorage.getItem(NFL_PLAYERS_CACHE_KEY);
+        const cachedData = nflPlayersCache.get('players');
         const now = Date.now();
 
-        if (cachedDataString) {
-            const cachedData = JSON.parse(cachedDataString);
-            // Check if the cached data exists and is still valid (less than 24 hours old)
-            if (cachedData.timestamp && (now - cachedData.timestamp < NFL_PLAYERS_CACHE_EXPIRY_MS)) {
-                console.log('Returning NFL players from localStorage cache (still valid).');
-                return cachedData.players;
-            }
+        if (cachedData && (now - cachedData.timestamp < NFL_PLAYERS_CACHE_EXPIRY_MS)) {
+            console.log('Returning NFL players from in-memory cache (still valid).');
+            return cachedData.players;
         }
 
         console.log('Fetching NFL players from Sleeper API (cache expired or not found)...');
@@ -320,25 +322,21 @@ export async function fetchNFLPlayers() {
 
         const players = await response.json();
 
-        // Store the new players data and the current timestamp in localStorage
-        localStorage.setItem(NFL_PLAYERS_CACHE_KEY, JSON.stringify({
-            players,
-            timestamp: now
-        }));
+        // Store the new players data and the current timestamp in in-memory cache
+        nflPlayersCache.set('players', { players, timestamp: now });
 
-        console.log('Successfully fetched and cached NFL players in localStorage.');
+        console.log('Successfully fetched and cached NFL players in memory.');
         return players;
 
     } catch (error) {
         console.error('Failed to fetch or cache NFL players:', error);
-        // Clear corrupted cache in case of parsing errors or other issues
-        localStorage.removeItem(NFL_PLAYERS_CACHE_KEY);
+        nflPlayersCache.delete('players'); // Clear potentially corrupted cache
         return {};
     }
 }
 
 /**
- * Fetches NFL state data from the Sleeper API, using localStorage for caching.
+ * Fetches NFL state data from the Sleeper API, using in-memory caching.
  * This data includes current week, season type, etc. Caches for 1 hour by default.
  *
  * @returns {Promise<Object>} A promise that resolves to an object containing NFL state data.
@@ -346,15 +344,12 @@ export async function fetchNFLPlayers() {
  */
 export async function fetchNFLState() {
     try {
-        const cachedDataString = localStorage.getItem(NFL_STATE_CACHE_KEY);
+        const cachedData = nflStateCache.get('state');
         const now = Date.now();
 
-        if (cachedDataString) {
-            const cachedData = JSON.parse(cachedDataString);
-            if (cachedData.timestamp && (now - cachedData.timestamp < NFL_STATE_CACHE_EXPIRY_MS)) {
-                console.log('Returning NFL state from localStorage cache (still valid).');
-                return cachedData.state;
-            }
+        if (cachedData && (now - cachedData.timestamp < NFL_STATE_CACHE_EXPIRY_MS)) {
+            console.log('Returning NFL state from in-memory cache (still valid).');
+            return cachedData.state;
         }
 
         console.log('Fetching NFL state from Sleeper API (cache expired or not found)...');
@@ -367,17 +362,14 @@ export async function fetchNFLState() {
 
         const state = await response.json();
 
-        localStorage.setItem(NFL_STATE_CACHE_KEY, JSON.stringify({
-            state,
-            timestamp: now
-        }));
+        nflStateCache.set('state', { state, timestamp: now });
 
-        console.log('Successfully fetched and cached NFL state in localStorage.');
+        console.log('Successfully fetched and cached NFL state in memory.');
         return state;
 
     } catch (error) {
         console.error('Failed to fetch or cache NFL state:', error);
-        localStorage.removeItem(NFL_STATE_CACHE_KEY); // Clear potentially corrupted cache
+        nflStateCache.delete('state'); // Clear potentially corrupted cache
         return {};
     }
 }
