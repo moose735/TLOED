@@ -58,21 +58,26 @@ const Seasons = ({ getDisplayTeamName }) => {
   }, [currentSeasonNflPlayers]);
 
 
-  // Effect 1: Fetch initial list of available seasons
+  // Effect 1: Fetch initial list of available seasons, excluding the current season
   useEffect(() => {
     const loadAvailableSeasons = async () => {
       setLoadingInitial(true);
       setError(null);
       try {
         const leagues = await fetchLeagueData(CURRENT_LEAGUE_ID);
-        // Map to simpler objects containing only season and league_id
-        const simplifiedLeagues = leagues.map(l => ({ season: l.season, league_id: l.league_id, settings: l.settings }));
-        setAvailableSeasonsData(simplifiedLeagues.sort((a, b) => b.season - a.season)); // Sort descending
+        // Find the current league's season
+        const currentLeague = leagues.find(l => l.league_id === CURRENT_LEAGUE_ID);
+        const currentSeason = currentLeague ? currentLeague.season : null;
 
-        // Set initial selected season to the current league's season
-        if (simplifiedLeagues.length > 0) {
-          setSelectedSeason(simplifiedLeagues[0].season);
-        }
+        // Filter out the current season and map to simpler objects
+        const historicalLeagues = leagues
+          .filter(l => l.season !== currentSeason) // Exclude the current season
+          .map(l => ({ season: l.season, league_id: l.league_id, settings: l.settings }));
+
+        setAvailableSeasonsData(historicalLeagues.sort((a, b) => b.season - a.season)); // Sort descending
+
+        // Do NOT set initial selected season if the current season is excluded
+        // The dropdown will default to "Select a Season"
       } catch (err) {
         console.error('Error loading available seasons:', err);
         setError(`Failed to load available seasons: ${err.message}.`);
@@ -216,6 +221,7 @@ const Seasons = ({ getDisplayTeamName }) => {
             setActiveSubTab(SEASONS_SUB_TABS.OVERVIEW); // Reset to overview when season changes
           }}
         >
+          {/* Add a default "Select a Season" option if no season is initially selected */}
           {!selectedSeason && <option value="">Select a Season</option>}
           {seasonOptions.map(season => (
             <option key={season} value={season}>
