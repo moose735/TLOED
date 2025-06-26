@@ -7,7 +7,7 @@ import {
   fetchRostersWithDetails,
   fetchNFLPlayers,
   fetchTransactionsForWeek,
-  fetchLeagueDrafts, // NEW: Import to get draft data
+  fetchLeagueDrafts, // NEW: Import to get draft data.
   getSleeperPlayerHeadshotUrl,
 } from '../utils/sleeperApi';
 
