@@ -206,6 +206,8 @@ export async function fetchUsersData(leagueId) {
 async function fetchMatchupsForLeague(leagueId, regularSeasonWeeks) {
     const leagueMatchups = {}; // Object to store matchups for the current league, keyed by week.
 
+    console.log(`Starting to fetch matchups for league ${leagueId} for up to ${regularSeasonWeeks} weeks.`); // NEW LOG
+
     for (let week = 1; week <= regularSeasonWeeks; week++) {
         try {
             const response = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/matchups/${week}`);
@@ -216,11 +218,10 @@ async function fetchMatchupsForLeague(leagueId, regularSeasonWeeks) {
             }
 
             const data = await response.json();
+            console.log(`League ${leagueId}, Week ${week}: Fetched ${data.length} matchups.`); // NEW LOG
             if (data && data.length > 0) {
                 leagueMatchups[week] = data;
             } else {
-                // Modified: Do NOT break here. A week might genuinely have no matchups,
-                // but subsequent weeks might. Continue to the next week.
                 console.log(`No matchups found for league ${leagueId}, Week ${week}.`);
             }
         } catch (error) {
@@ -228,6 +229,7 @@ async function fetchMatchupsForLeague(leagueId, regularSeasonWeeks) {
             // Continue to the next week even if a specific week's fetch fails.
         }
     }
+    console.log(`Finished fetching matchups for league ${leagueId}. Total weeks with data: ${Object.keys(leagueMatchups).length}`); // NEW LOG
     return leagueMatchups;
 }
 
@@ -274,10 +276,12 @@ export async function fetchAllHistoricalMatchups() {
             }
 
             const matchups = await fetchMatchupsForLeague(leagueId, regularSeasonWeeks);
+            console.log(`For season ${season} (${leagueId}), collected weeks: ${Object.keys(matchups).length}`); // NEW LOG
 
-            if (Object.keys(matchups).length > 0) {
-                allHistoricalMatchups[season] = matchups;
-            } else {
+            // Always add the season key, even if matchups is empty, so it's defined
+            allHistoricalMatchups[season] = matchups;
+
+            if (Object.keys(matchups).length === 0) {
                 console.warn(`No matchups collected for season ${season} (${leagueId}).`);
             }
         }
