@@ -91,25 +91,18 @@ const App = () => {
   const getDisplayTeamName = useCallback((identifier) => {
     if (typeof identifier !== 'string' || !identifier) return 'Unknown Team'; // Return placeholder if invalid
 
-    // Access the most current state of the maps directly
-    // This allows the useCallback to "see" the latest map values without re-creating
-    // unless its dependencies (the maps themselves) change.
+    // 1. Try to resolve if it's a roster_id
     if (rosterIdToDisplayNameMap.has(identifier)) {
         return rosterIdToDisplayNameMap.get(identifier);
     }
+    // 2. Try to resolve if it's a user_id
     if (userIdToDisplayNameMap.has(identifier)) {
         return userIdToDisplayNameMap.get(identifier);
     }
-    // This part of the mapping (internal team names) is often static or derived differently
-    if (TEAM_NAME_TO_SLEEPER_ID_MAP[identifier]) { // Use the hardcoded map for initial lookup
-        // We might need to refine this to use the `teamNameToDisplayMap` state
-        // if `TEAM_NAME_TO_SLEEPER_ID_MAP` values aren't the final display names.
-        // For now, let's assume TEAM_NAME_TO_SLEEPER_ID_MAP keys are 'internal' names
-        // and their values are sleeper IDs. The display name itself would come from roster/user data.
-        // Let's use the `teamNameToDisplayMap` state first for consistency.
-        if (teamNameToDisplayMap.has(identifier)) {
-            return teamNameToDisplayMap.get(identifier);
-        }
+    // 3. Try to resolve if it's an internal team name key (e.g., 'Ainsworth') mapped to a display name
+    // This assumes teamNameToDisplayMap holds your desired display names for internal keys.
+    if (teamNameToDisplayMap.has(identifier)) {
+        return teamNameToDisplayMap.get(identifier);
     }
 
     const trimmedIdentifier = identifier.trim();
@@ -135,7 +128,7 @@ const App = () => {
         }
 
         // --- Start: Dynamic Team Name Population for Navigation and ID Resolution ---
-        const tempTeamNameToDisplayMap = new Map(); // For internal names like 'Ainsworth' to display names
+        const tempTeamNameToDisplayMap = new Map(); // For internal names (from TEAM_NAME_TO_SLEEPER_ID_MAP keys) to display names
         const tempUserIdToDisplayNameMap = new Map(); // For user_id to display name
         const tempRosterIdToDisplayNameMap = new Map(); // For roster_id to display name
 
@@ -143,7 +136,6 @@ const App = () => {
         const leagueIds = [];
         const usersByLeague = {};
         const rostersByLeague = {};
-        // leagueDetailsMap is not strictly needed for rendering, removed for brevity
 
         console.log("Starting league details traversal from CURRENT_LEAGUE_ID:", CURRENT_LEAGUE_ID);
         while (currentLeagueId && currentLeagueId !== '0' && !leagueIds.includes(currentLeagueId)) {
@@ -169,20 +161,21 @@ const App = () => {
         console.log("All user data fetched:", allUsersResults);
         console.log("All roster data fetched:", allRostersResults);
 
-        // Process users and rosters to build maps
+        // Process users to build userIdToDisplayNameMap first
         allUsersResults.forEach((users, index) => {
             const leagueId = leagueIds[index];
             usersByLeague[leagueId] = users;
             if (users && users.length > 0) {
                 users.forEach(user => {
                     const displayName = user.teamName || user.displayName || user.metadata?.team_name || user.display_name || user.user_id;
-                    tempUserIdToDisplayNameMap.set(user.userId, displayName); // CORRECTED: user.userId instead of user.user_id
+                    tempUserIdToDisplayNameMap.set(user.userId, displayName); // Corrected: user.userId for the key
                 });
             } else {
                 console.warn(`No users found for league ID: ${leagueId}`);
             }
         });
 
+        // Now process rosters using the populated userIdToDisplayNameMap
         allRostersResults.forEach((rosters, index) => {
             const leagueId = leagueIds[index];
             rostersByLeague[leagueId] = rosters;
@@ -191,17 +184,8 @@ const App = () => {
                     const ownerDisplayName = tempUserIdToDisplayNameMap.get(roster.owner_id);
                     if (ownerDisplayName) {
                         tempRosterIdToDisplayNameMap.set(roster.roster_id, ownerDisplayName);
-                        // Also populate teamNameToDisplayMap for direct internal name lookups
-                        // This assumes TEAM_NAME_TO_SLEEPER_ID_MAP's keys are the 'internal' names
-                        // and their values are sleeper user IDs.
-                        // We iterate the hardcoded map to ensure all defined internal names get a display name.
-                        for (const internalTeamName in TEAM_NAME_TO_SLEEPER_ID_MAP) {
-                            if (TEAM_NAME_TO_SLEEPER_ID_MAP[internalTeamName] === roster.owner_id) {
-                                tempTeamNameToDisplayMap.set(internalTeamName, ownerDisplayName);
-                                break; // Found a match, move to next internal team name
-                            }
-                        }
                     } else {
+                        // Fallback for roster_id if owner_id doesn't resolve
                         tempRosterIdToDisplayNameMap.set(roster.roster_id, `Roster: ${roster.roster_id}`);
                         console.warn(`Could not find display name for roster ID ${roster.roster_id} (owner_id: ${roster.owner_id}). Using fallback.`);
                     }
@@ -210,6 +194,21 @@ const App = () => {
                 console.warn(`No rosters found for league ID: ${leagueId}`);
             }
         });
+
+        // Populate teamNameToDisplayMap using the STATIC TEAM_NAME_TO_SLEEPER_ID_MAP
+        // and the now populated tempUserIdToDisplayNameMap
+        for (const internalTeamName in TEAM_NAME_TO_SLEEPER_ID_MAP) {
+            const sleeperUserId = TEAM_NAME_TO_SLEEPER_ID_MAP[internalTeamName];
+            const displayName = tempUserIdToDisplayNameMap.get(sleeperUserId);
+            if (displayName) {
+                tempTeamNameToDisplayMap.set(internalTeamName, displayName);
+            } else {
+                // Fallback if the Sleeper User ID from your map couldn't be resolved to a display name
+                tempTeamNameToDisplayMap.set(internalTeamName, internalTeamName); // Use internal name as display name
+                console.warn(`Could not find display name for internal team '${internalTeamName}' (Sleeper ID: ${sleeperUserId}). Using internal name as fallback.`);
+            }
+        }
+
 
         // Set the state variables for the maps
         setTeamNameToDisplayMap(tempTeamNameToDisplayMap);
@@ -220,13 +219,13 @@ const App = () => {
         console.log("Final userIdToDisplayNameMap (user_id to display):", tempUserIdToDisplayNameMap);
         console.log("Final rosterIdToDisplayNameMap (roster_id to display):", tempRosterIdToDisplayNameMap);
 
-        // Dynamically populate TEAMS subTabs based on fetched data
-        // Use the display names from tempUserIdToDisplayNameMap as unique teams for navigation
-        const uniqueTeamsFromUsers = Array.from(tempUserIdToDisplayNameMap.values()).sort();
-        NAV_CATEGORIES.TEAMS.subTabs = uniqueTeamsFromUsers.map(teamName => ({
-          label: teamName,
+        // Dynamically populate TEAMS subTabs based on the final teamNameToDisplayMap keys
+        // This ensures the navigation reflects the names you intend, and are clickable.
+        const uniqueTeamsForNav = Array.from(tempTeamNameToDisplayMap.keys()).sort(); // Use keys from your internal map
+        NAV_CATEGORIES.TEAMS.subTabs = uniqueTeamsForNav.map(internalName => ({
+          label: tempTeamNameToDisplayMap.get(internalName), // Display name from the map
           tab: TABS.TEAM_DETAIL,
-          teamName: teamName, // The actual display name
+          teamName: internalName, // Pass the internal name to TeamDetailPage for consistency
         }));
 
       } catch (error) {
@@ -256,8 +255,8 @@ const App = () => {
         rosterIdToDisplayNameMap.size > 0 &&
         userIdToDisplayNameMap.size > 0) {
         console.log("Historical matchups and name maps are ready. Calculating all league metrics...");
-        // Ensure getDisplayTeamName has the most current state of the maps
-        const { careerDPRData } = calculateAllLeagueMetrics(historicalMatchups, getDisplayTeamName);
+        // Pass the maps directly to calculateAllLeagueMetrics
+        const { careerDPRData } = calculateAllLeagueMetrics(historicalMatchups, rosterIdToDisplayNameMap, userIdToDisplayNameMap);
         setAllCareerStats(careerDPRData);
         console.log("Calculated all career stats:", careerDPRData);
     } else {
@@ -268,7 +267,7 @@ const App = () => {
         });
         setAllCareerStats([]); // Clear stats if data is not ready
     }
-  }, [historicalMatchups, rosterIdToDisplayNameMap, userIdToDisplayNameMap, getDisplayTeamName]);
+  }, [historicalMatchups, rosterIdToDisplayNameMap, userIdToDisplayNameMap]); // getDisplayTeamName removed from dependencies as it's not directly used here to trigger this effect
 
 
   // Handle tab change, including setting selectedTeam for TEAM_DETAIL tab
@@ -522,7 +521,7 @@ const App = () => {
               <Head2HeadGrid
                 historicalMatchups={historicalMatchups}
                 getDisplayTeamName={getDisplayTeamName}
-                allLeagueStats={allCareerStats}
+                allLeagueStats={allCareerStats} {/* Pass career stats here */}
               />
             )}
             {activeTab === TABS.DPR_ANALYSIS && (
