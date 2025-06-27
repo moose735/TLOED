@@ -2,9 +2,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   // Removed HISTORICAL_MATCHUPS_API_URL and GOOGLE_SHEET_POWER_RANKINGS_API_URL as we'll use Sleeper API directly
-  // CURRENT_LEAGUE_ID is now imported from sleeperApi.js, so remove from here:
-  // CURRENT_LEAGUE_ID,
-} from './config'; // Corrected import path for config.js to be within src/
+  // CURRENT_LEAGUE_ID is now imported from sleeperApi.js, so it should not be imported from config.js at all.
+} from './config'; // No CURRENT_LEAGUE_ID here, as it's from sleeperApi.js
 
 // Import existing components from your provided App.js
 import PowerRankings from './lib/PowerRankings';
