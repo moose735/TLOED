@@ -39,6 +39,7 @@ const Head2HeadGrid = ({ historicalMatchups, getDisplayTeamName, allLeagueStats 
     // Data processing for head-to-head records
     useEffect(() => {
         if (!historicalMatchups || Object.keys(historicalMatchups).length === 0) {
+            console.log("[Head2HeadGrid] historicalMatchups is empty or null, setting headToHeadRecords to empty.");
             setHeadToHeadRecords({});
             return;
         }
@@ -62,6 +63,7 @@ const Head2HeadGrid = ({ historicalMatchups, getDisplayTeamName, allLeagueStats 
                 matchupsByPair.forEach(matchupPair => {
                     if (matchupPair.length !== 2) {
                         // Skip invalid pairs (e.g., bye weeks or incomplete data)
+                        console.warn(`[Head2HeadGrid] Skipping incomplete matchup pair in year ${year}, week ${week}, matchup_id ${matchupPair[0]?.matchup_id}. Expected 2 entries, got ${matchupPair.length}.`);
                         return;
                     }
 
@@ -73,8 +75,9 @@ const Head2HeadGrid = ({ historicalMatchups, getDisplayTeamName, allLeagueStats 
                     const team1Score = team1Entry.points;
                     const team2Score = team2Entry.points;
 
-                    if (!team1 || !team2 || isNaN(team1Score) || isNaN(team2Score) || team1 === team2) {
-                        // Skip invalid data or self-matches
+                    // MODIFIED: Explicitly skip if teams are unknown or invalid
+                    if (team1 === 'Unknown Team' || team2 === 'Unknown Team' || isNaN(team1Score) || isNaN(team2Score) || team1 === team2) {
+                        console.warn(`[Head2HeadGrid] Skipping matchup due to unknown team, invalid scores or self-match. Year: ${year}, Week: ${week}, Team1: '${team1}', Team2: '${team2}', Score1: ${team1Score}, Score2: ${team2Score}`);
                         return;
                     }
 
@@ -151,6 +154,8 @@ const Head2HeadGrid = ({ historicalMatchups, getDisplayTeamName, allLeagueStats 
             });
         });
         setHeadToHeadRecords(newHeadToHeadRecords);
+        console.log("[Head2HeadGrid] Processed Head-to-Head Records:", newHeadToHeadRecords);
+
     }, [historicalMatchups, getDisplayTeamName]);
 
     // Get a sorted list of all unique teams for the grid axes
@@ -262,7 +267,7 @@ const Head2HeadGrid = ({ historicalMatchups, getDisplayTeamName, allLeagueStats 
         const allTotalWins = allLeagueStats ? allLeagueStats.map(d => d.wins) : []; // Use 'wins' from careerDPRData
         const allWinPercentages = allLeagueStats ? allLeagueStats.map(d => d.winPercentage) : [];
         const allCareerDPRs = allLeagueStats ? allLeagueStats.map(d => d.dpr) : []; // Use 'dpr' from careerDPRData
-        const allTotalPointsScored = allLeagueStats ? allLeagueStats.map(d => d.pointsFor) : []; // Use 'pointsFor' from careerDPRData
+        const allTotalPointsScored = allLeagueStats ? allLeagueStats.map(d => d.pointsFor) : []; // Use 'pointsFor'
         // Assuming careerDPRData now has a 'careerHighScore' property from calculations.js
         const allCareerHighScores = allLeagueStats ? allLeagueStats.map(d => d.careerHighScore).filter(s => typeof s === 'number' && !isNaN(s)) : [];
 
