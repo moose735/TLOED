@@ -1,7 +1,10 @@
 // src/utils/sleeperApi.js
 
 // Easily configurable current league ID - imported from config.js
-export { CURRENT_LEAGUE_ID, NICKNAME_TO_SLEEPER_USER } from '../config';
+export { CURRENT_LEAGUE_ID, NICKNAME_TO_SLEEPER_USER as importedNicknameMap } from '../config';
+
+// Use a local constant, providing a default empty object if the importedNicknameMap is undefined for any reason
+const NICKNAME_TO_SLEEPER_USER_LOCAL = importedNicknameMap || {};
 
 // Centralized map linking your internal team names (e.g., last names) to Sleeper User IDs.
 // This is primarily for historical context or specific mapping needs.
@@ -247,8 +250,8 @@ export async function fetchAllHistoricalMatchups(startingLeagueId) {
 
         // Populate ownerToDisplayNameMap and rosterToOwnerMap for the current league
         users.forEach(user => {
-            // Prioritize custom nickname from NICKNAME_TO_SLEEPER_USER if available
-            const displayName = NICKNAME_TO_SLEEPER_USER[user.user_id] || (user.metadata && user.metadata.team_name) || user.display_name;
+            // Prioritize custom nickname from NICKNAME_TO_SLEEPER_USER_LOCAL if available
+            const displayName = NICKNAME_TO_SLEEPER_USER_LOCAL[user.user_id] || (user.metadata && user.metadata.team_name) || user.display_name;
             ownerToDisplayNameMap.set(user.user_id, displayName);
         });
 
