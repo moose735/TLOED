@@ -91,7 +91,7 @@ const App = () => {
    * @returns {string} The display name for the team.
    */
   const getDisplayTeamName = useCallback((identifier) => {
-    if (typeof identifier !== 'string' || !identifier) return '';
+    if (typeof identifier !== 'string' || !identifier) return 'Unknown Team'; // Return placeholder if identifier is invalid
 
     // 1. Try to resolve if it's a roster_id
     if (rosterIdToDisplayNameMap.has(identifier)) {
@@ -107,8 +107,9 @@ const App = () => {
         return teamNameToDisplayMap.get(identifier);
     }
 
-    // 4. Last resort: return the identifier itself if no mapping found
-    return identifier.trim();
+    // 4. Last resort: return the identifier itself if no mapping found, or 'Unknown Team' if it's just whitespace
+    const trimmedIdentifier = identifier.trim();
+    return trimmedIdentifier === '' ? 'Unknown Team' : trimmedIdentifier;
   }, [teamNameToDisplayMap, rosterIdToDisplayNameMap, userIdToDisplayNameMap]);
 
 
@@ -117,11 +118,18 @@ const App = () => {
     const fetchAndProcessHistoricalData = async () => {
       setLoadingHistoricalData(true);
       setHistoricalDataError(null);
+      console.log("Starting data fetch and processing...");
 
       try {
         // Use the fetchAllHistoricalMatchups from sleeperApi.js
+        console.log("Attempting to fetch all historical matchups...");
         const fetchedMatchupData = await fetchAllHistoricalMatchups();
         setHistoricalMatchups(fetchedMatchupData);
+        console.log("Fetched historical matchup data:", fetchedMatchupData);
+        if (Object.keys(fetchedMatchupData).length === 0) {
+            console.warn("No historical matchup data found. This might lead to empty content.");
+        }
+
 
         // --- Start: Dynamic Team Name Population for Navigation and ID Resolution ---
         const uniqueTeamsSet = new Set();
@@ -135,23 +143,30 @@ const App = () => {
         const rostersByLeague = {};
         const leagueDetailsMap = new Map(); // To store league details for quick lookup by ID
 
+        console.log("Starting league details traversal from CURRENT_LEAGUE_ID:", CURRENT_LEAGUE_ID);
         while (currentLeagueId && currentLeagueId !== '0' && !leagueIds.includes(currentLeagueId)) {
             leagueIds.push(currentLeagueId);
             const leagueDetail = await fetchLeagueDetails(currentLeagueId);
             if (leagueDetail) {
                 leagueDetailsMap.set(currentLeagueId, leagueDetail);
                 currentLeagueId = leagueDetail.previous_league_id;
+                console.log(`Fetched league ${leagueId}. Previous league ID: ${currentLeagueId}`);
             } else {
+                console.log(`No details found for league ID ${currentLeagueId} or end of chain.`);
                 currentLeagueId = null; // End of history or error
             }
         }
+        console.log("Identified historical league IDs:", leagueIds);
 
         // Fetch users and rosters for all identified league IDs in parallel
+        console.log("Fetching user data for all identified leagues...");
         const allUsersPromises = leagueIds.map(id => fetchUsersData(id));
         const allRostersPromises = leagueIds.map(id => fetchRostersWithDetails(id));
 
         const allUsersResults = await Promise.all(allUsersPromises);
         const allRostersResults = await Promise.all(allRostersPromises);
+        console.log("All user data fetched:", allUsersResults);
+        console.log("All roster data fetched:", allRostersResults);
 
         allUsersResults.forEach((users, index) => {
             const leagueId = leagueIds[index];
@@ -160,6 +175,7 @@ const App = () => {
                 users.forEach(user => {
                     const displayName = user.teamName || user.displayName || user.metadata?.team_name || user.display_name || user.user_id;
                     tempUserIdToDisplayNameMap.set(user.userId, displayName);
+                    // console.log(`Mapped User ID ${user.userId} to Display Name: ${displayName}`);
 
                     const mappedName = Object.keys(TEAM_NAME_TO_SLEEPER_ID_MAP).find(
                         key => TEAM_NAME_TO_SLEEPER_ID_MAP[key] === user.userId
@@ -168,12 +184,13 @@ const App = () => {
                         uniqueTeamsSet.add(mappedName); // Add internal name to unique set for navigation
                         tempTeamNameToDisplayMap.set(mappedName, displayName);
                     } else {
-                        // Fallback for unmapped teams, using display_name or user_id for navigation
                         const fallbackName = user.teamName || user.displayName || user.userId;
                         uniqueTeamsSet.add(fallbackName);
-                        tempTeamNameToDisplayMap.set(fallbackName, fallbackName); // Map it to itself if no specific internal key
+                        tempTeamNameToDisplayMap.set(fallbackName, fallbackName);
                     }
                 });
+            } else {
+                console.warn(`No users found for league ID: ${leagueId}`);
             }
         });
 
@@ -185,11 +202,14 @@ const App = () => {
                     const ownerDisplayName = tempUserIdToDisplayNameMap.get(roster.owner_id);
                     if (ownerDisplayName) {
                         tempRosterIdToDisplayNameMap.set(roster.roster_id, ownerDisplayName);
+                        // console.log(`Mapped Roster ID ${roster.roster_id} to Display Name: ${ownerDisplayName}`);
                     } else {
-                        // Fallback for roster_id if owner_id somehow didn't map
                         tempRosterIdToDisplayNameMap.set(roster.roster_id, `Roster: ${roster.roster_id}`);
+                        console.warn(`Could not find display name for roster ID ${roster.roster_id} (owner_id: ${roster.owner_id}). Using fallback.`);
                     }
                 });
+            } else {
+                console.warn(`No rosters found for league ID: ${leagueId}`);
             }
         });
 
@@ -212,9 +232,13 @@ const App = () => {
 
         // AFTER all maps are populated and stable, calculate league metrics
         if (Object.keys(fetchedMatchupData).length > 0) {
+            console.log("Calculating all league metrics...");
             const { careerDPRData } = calculateAllLeagueMetrics(fetchedMatchupData, getDisplayTeamName);
             setAllCareerStats(careerDPRData);
             console.log("Calculated all career stats:", careerDPRData);
+        } else {
+            console.warn("Skipping league metrics calculation as no matchup data was fetched.");
+            setAllCareerStats([]); // Ensure allCareerStats is an empty array if no data
         }
 
       } catch (error) {
@@ -222,6 +246,7 @@ const App = () => {
         setHistoricalDataError(`Failed to load league data: ${error.message}. Please check your internet connection, CURRENT_LEAGUE_ID, or the Sleeper API.`);
       } finally {
         setLoadingHistoricalData(false);
+        console.log("Finished data fetch and processing. Loading state set to false.");
       }
 
       // Always use mock data for historical champions as per request
