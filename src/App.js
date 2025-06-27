@@ -176,7 +176,7 @@ const App = () => {
             if (users && users.length > 0) {
                 users.forEach(user => {
                     const displayName = user.teamName || user.displayName || user.metadata?.team_name || user.display_name || user.user_id;
-                    tempUserIdToDisplayNameMap.set(user.user_id, displayName); // Use user.user_id as key
+                    tempUserIdToDisplayNameMap.set(user.userId, displayName); // CORRECTED: user.userId instead of user.user_id
                 });
             } else {
                 console.warn(`No users found for league ID: ${leagueId}`);
@@ -522,7 +522,7 @@ const App = () => {
               <Head2HeadGrid
                 historicalMatchups={historicalMatchups}
                 getDisplayTeamName={getDisplayTeamName}
-                allLeagueStats={allCareerStats} /* Pass career stats here */
+                allLeagueStats={allCareerStats}
               />
             )}
             {activeTab === TABS.DPR_ANALYSIS && (
