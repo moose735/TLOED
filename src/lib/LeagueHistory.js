@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { fetchUsersData, fetchRostersWithDetails, fetchLeagueDrafts, fetchDraftDetails, fetchDraftPicks, fetchTradedPicks, getSleeperAvatarUrl, CURRENT_LEAGUE_ID } from '../utils/sleeperApi'; // CURRENT_LEAGUE_ID now imported from sleeperApi.js
-import { TEAM_NAME_TO_SLEEPER_ID_MAP } from '../config'; // TEAM_NAME_TO_SLEEPER_ID_MAP remains from config
+import React, { useState, useEffect, useCallback } from 'react';
+import { fetchUsersData, fetchRostersWithDetails, fetchLeagueDrafts, fetchDraftDetails, fetchDraftPicks, fetchTradedPicks, getSleeperAvatarUrl, CURRENT_LEAGUE_ID, TEAM_NAME_TO_SLEEPER_ID_MAP } from '../utils/sleeperApi'; // CURRENT_LEAGUE_ID and TEAM_NAME_TO_SLEEPER_ID_MAP now imported from sleeperApi.js
 
 const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName }) => {
     const [allLeagueDetails, setAllLeagueDetails] = useState([]); // Stores { leagueId, season, name }
@@ -93,7 +92,7 @@ const LeagueHistory = ({ historicalMatchups, loading, error, getDisplayTeamName 
 
     const getTeamNameForRosterId = useCallback((season, rosterId) => {
         const rosters = allRostersBySeason[season];
-        if (rosters && rosters.has(roosterId)) {
+        if (rosters && rosters.has(rosterId)) {
             // Use the ownerTeamName property that was added by fetchRostersWithDetails
             return getDisplayTeamName(rosters.get(rosterId).ownerTeamName);
         }
