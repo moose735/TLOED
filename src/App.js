@@ -301,14 +301,14 @@ const App = () => {
               {openSubMenu === 'TEAMS' && (
                 <ul className="pl-6 mt-2 space-y-2 transition-all duration-300 ease-in-out origin-top">
                   {NAV_CATEGORIES.TEAMS.subTabs.map((subTab) => (
-                    <li key={subTab.label}>
-                      <button
-                        onClick={() => handleTabChange(subTab.tab, subTab.teamName)}
-                        className={`block w-full text-left py-2 px-3 rounded-md text-base transition-colors duration-200 ${selectedTeam === subTab.teamName && activeTab === TABS.TEAM_DETAIL ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
-                      >
-                        {subTab.label}
-                      </button>
-                    </li>
+                      <li key={subTab.label}>
+                        <button
+                          onClick={() => handleTabChange(subTab.tab, subTab.teamName)}
+                          className={`block w-full text-left py-2 px-3 rounded-md text-base transition-colors duration-200 ${selectedTeam === subTab.teamName && activeTab === TABS.TEAM_DETAIL ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
+                        >
+                          {subTab.label}
+                        </button>
+                      </li>
                   ))}
                 </ul>
               )}
@@ -486,7 +486,7 @@ const App = () => {
               <Head2HeadGrid
                 historicalMatchups={historicalMatchups}
                 getDisplayTeamName={getDisplayTeamName}
-                allLeagueStats={allCareerStats} {/* Pass career stats here */}
+                allLeagueStats={allCareerStats}
               />
             )}
             {activeTab === TABS.DPR_ANALYSIS && (
