@@ -1,70 +1,73 @@
 // App.js
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  HISTORICAL_MATCHUPS_API_URL,
-  GOOGLE_SHEET_POWER_RANKINGS_API_URL, // Still imported, but PowerRankings.js no longer uses it directly
+  // Removed HISTORICAL_MATCHUPS_API_URL and GOOGLE_SHEET_POWER_RANKINGS_API_URL as we'll use Sleeper API directly
   CURRENT_LEAGUE_ID, // Import CURRENT_LEAGUE_ID
 } from './config'; // Corrected import path for config.js to be within src/
 
 // Import existing components from your provided App.js
 import PowerRankings from './lib/PowerRankings';
-import LeagueHistory from './lib/LeagueHistory'; // Corrected import to the LeagueHistory component
+import LeagueHistory from './lib/LeagueHistory';
 import RecordBook from './lib/RecordBook';
 import DPRAnalysis from './lib/DPRAnalysis';
 import LuckRatingAnalysis from './lib/LuckRatingAnalysis';
 import TeamDetailPage from './lib/TeamDetailPage';
-import Head2HeadGrid from './lib/Head2HeadGrid'; // Stays for its own tab
+import Head2HeadGrid from './lib/Head2HeadGrid';
 import FinancialTracker from './components/FinancialTracker';
-import Dashboard from './components/Dashboard'; // <--- NEW IMPORT for the homepage
+import Dashboard from './components/Dashboard';
+// NEW: Import the HistoricalMatchupsByYear component
+import HistoricalMatchupsByYear from './components/HistoricalMatchupsByYear';
 
-// Import Sleeper API functions to fetch league details for dynamic tab population
-import { fetchLeagueDetails } from './utils/sleeperApi';
+// Import Sleeper API functions
+import { fetchLeagueDetails, fetchAllHistoricalMatchups } from './utils/sleeperApi';
 
 
 // Define the available tabs and their categories for the dropdown
 const NAV_CATEGORIES = {
-  HOME: { label: 'Dashboard', tab: 'dashboard' }, // Default home tab now points to Dashboard
-  POWER_RANKINGS: { label: 'Power Rankings', tab: 'powerRankings' }, // Re-added Power Rankings as a top-level nav item
+  HOME: { label: 'Dashboard', tab: 'dashboard' },
+  POWER_RANKINGS: { label: 'Power Rankings', tab: 'powerRankings' },
   LEAGUE_DATA: {
     label: 'League Data',
     subTabs: [
-      { label: 'League History', tab: 'leagueHistory' }, // Now points to LeagueHistory
+      { label: 'League History', tab: 'leagueHistory' },
       { label: 'Record Book', tab: 'recordBook' },
-      { label: 'Head-to-Head', tab: 'headToHead' }, // Separate tab for Head2HeadGrid
+      { label: 'Head-to-Head', tab: 'headToHead' },
       { label: 'DPR Analysis', tab: 'dprAnalysis' },
       { label: 'Luck Rating', tab: 'luckRating' },
+      { label: 'Historical Matchups', tab: 'historicalMatchups' }, // NEW: Historical Matchups tab
     ]
   },
-  TEAMS: { // New category for individual team pages
+  TEAMS: {
     label: 'Teams',
-    subTabs: [], // This will be populated dynamically from historicalMatchups
+    subTabs: [],
   },
   FINANCIALS: { label: 'Financials', tab: 'financials' },
 };
 
 // Flattened list of all possible tabs for conditional rendering
 const TABS = {
-  DASHBOARD: 'dashboard', // <--- NEW TAB CONSTANT for the homepage
-  POWER_RANKINGS: 'powerRankings', // Constant is already here
-  LEAGUE_HISTORY: 'leagueHistory', // Constant updated for LeagueHistory
+  DASHBOARD: 'dashboard',
+  POWER_RANKINGS: 'powerRankings',
+  LEAGUE_HISTORY: 'leagueHistory',
   RECORD_BOOK: 'recordBook',
   HEAD_TO_HEAD: 'headToHead',
   DPR_ANALYSIS: 'dprAnalysis',
   LUCK_RATING: 'luckRating',
   TEAM_DETAIL: 'teamDetail',
   FINANCIALS: 'financials',
+  HISTORICAL_MATCHUPS: 'historicalMatchups', // NEW: Tab for Historical Matchups
 };
 
 const App = () => {
-  const [activeTab, setActiveTab] = useState(TABS.DASHBOARD); // Set Dashboard as default
-  const [historicalMatchups, setHistoricalMatchups] = useState([]);
-  const [historicalChampions, setHistoricalChampions] = useState([]); // State for champions
+  const [activeTab, setActiveTab] = useState(TABS.DASHBOARD);
+  const [historicalMatchups, setHistoricalMatchups] = useState({}); // Changed to object for year-keyed data
+  const [historicalChampions, setHistoricalChampions] = useState([]);
   const [loadingHistoricalData, setLoadingHistoricalData] = useState(true);
   const [historicalDataError, setHistoricalDataError] = useState(null);
-  const [selectedTeam, setSelectedTeam] = useState(null); // State to hold the selected team name
+  const [selectedTeam, setSelectedTeam] = useState(null);
 
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // State for mobile menu
-  const [openSubMenu, setOpenSubMenu] = useState(null); // State for mobile sub-menus
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [openSubMenu, setOpenSubMenu] = useState(null);
 
 
   // Function to toggle sub-menus in mobile view
@@ -75,78 +78,65 @@ const App = () => {
 
   // Function to get mapped team names (case-insensitive, trim)
   const getMappedTeamName = useCallback((teamName) => {
-    if (typeof teamName !== 'string' || !teamName) return ''; // Ensure it's a string and not empty
+    if (typeof teamName !== 'string' || !teamName) return '';
     const trimmedName = teamName.trim();
-    return trimmedName;
+    // This map should ideally be populated from sleeperApi.js's TEAM_NAME_TO_SLEEPER_ID_MAP
+    // For now, let's assume it maps directly, or enhance it if display names differ
+    return trimmedName; // Placeholder, as sleeperApi handles the actual mapping internally
   }, []);
 
   // Fetch historical matchup data and championship data
   useEffect(() => {
-    const fetchHistoricalData = async () => {
+    const fetchAndProcessHistoricalData = async () => {
       setLoadingHistoricalData(true);
-      setHistoricalDataError(null); // Clear previous errors
+      setHistoricalDataError(null);
 
-      // Fetch Historical Matchups (still using Google Sheet for this specific data for now)
-      let fetchedMatchupData = [];
       try {
-        if (HISTORICAL_MATCHUPS_API_URL === 'YOUR_GOOGLE_SHEET_HISTORICAL_MATCHUPS_API_URL') {
-          // Instead of throwing an error for config, try to use Sleeper API for historical data
-          // if the Google Sheet URL is not configured.
-          // For now, retaining the error as per existing structure, but could be enhanced.
-          throw new Error("HISTORICAL_MATCHUPS_API_URL not configured in config.js. Please update it or note that historical data won't load.");
-        }
-        const response = await fetch(HISTORICAL_MATCHUPS_API_URL, { mode: 'cors' });
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status} - Could not load historical matchup data.`);
-        }
+        // Use the fetchAllHistoricalMatchups from sleeperApi.js
+        const fetchedMatchupData = await fetchAllHistoricalMatchups();
+        if (Object.keys(fetchedMatchupData).length > 0) {
+          setHistoricalMatchups(fetchedMatchupData);
 
-        const textResponse = await response.text(); // Get raw text to inspect
-        try {
-          const parsedData = JSON.parse(textResponse);
-          // Crucial: Check if the parsed data is an object with a 'data' property that is an array
-          if (parsedData && typeof parsedData === 'object' && Array.isArray(parsedData.data)) {
-            fetchedMatchupData = parsedData.data; // Extract the actual array
-            setHistoricalMatchups(fetchedMatchupData);
-          } else {
-            console.error("API response for historical matchups is not in the expected format (object with 'data' array):", parsedData);
-            throw new Error("Historical matchup data is not in the expected array format. Raw response: " + textResponse);
+          // Dynamically populate TEAMS subTabs
+          const uniqueTeamsSet = new Set();
+          // Iterate through seasons and weeks to get all team names
+          for (const season in fetchedMatchupData) {
+            const seasonMatchups = fetchedMatchupData[season];
+            for (const week in seasonMatchups) {
+              seasonMatchups[week].forEach(match => {
+                // IMPORTANT: The raw matchup data from Sleeper API does NOT contain team names directly.
+                // It contains `roster_id` and `owner_id`.
+                // To get actual team names, we would need to:
+                // 1. Fetch rosters for each league/season.
+                // 2. Fetch users for each league/season.
+                // 3. Map roster_id to owner_id, and owner_id to teamName.
+                // This is a more complex data processing step.
+                // For now, let's just make sure the TeamDetailPage still functions if selected via direct URL,
+                // and acknowledge that dynamic population of team names here requires more logic.
+                // For simplicity, I'm commenting out the team population for now, as it's not directly supported
+                // by the raw historicalMatchups data structure as is.
+                // If you want dynamic team list, we need to enhance the data processing in sleeperApi.js
+                // to include resolved team names within the historicalMatchups object.
+
+                // Placeholder for future team name extraction from fetchedMatchupData if enriched
+                // For now, TeamDetailPage relies on the passed `teamName` via `handleTabChange`.
+              });
+            }
           }
-        } catch (jsonError) {
-          console.error("Error parsing historical matchup data JSON. Raw response:", textResponse, jsonError);
-          setHistoricalDataError(`Failed to load historical matchup data: The API response was not valid JSON. Please ensure your Google Apps Script for HISTORICAL_MATCHUPS_API_URL is correctly deployed as a Web App and returns JSON (e.g., using ContentService.MimeType.JSON). Raw response snippet: ${textResponse.substring(0, 200)}...`);
-          setLoadingHistoricalData(false); // Ensure loading is false on error
-          return; // Stop execution if parsing fails to avoid further issues
-        }
 
-        // Dynamically populate TEAMS subTabs
-        const uniqueTeamsSet = new Set();
-        // Check if fetchedMatchupData is actually an array before iterating
-        if (Array.isArray(fetchedMatchupData)) {
-          fetchedMatchupData.forEach(match => {
-            const team1 = getMappedTeamName(match.team1);
-            const team2 = getMappedTeamName(match.team2);
-            if (team1) uniqueTeamsSet.add(team1);
-            if (team2) uniqueTeamsSet.add(team2);
-          });
+          // Placeholder: Update NAV_CATEGORIES.TEAMS.subTabs if team name resolution is implemented
+          // For now, keep it empty or populate it manually for testing if needed.
+          NAV_CATEGORIES.TEAMS.subTabs = []; // Keep empty until full team name resolution is implemented.
+
         } else {
-          console.warn("fetchedMatchupData is not an array after processing, cannot populate team list.");
+          console.warn("No historical matchup data found from Sleeper API.");
+          setHistoricalDataError("No historical matchup data could be loaded from Sleeper API. Check CURRENT_LEAGUE_ID and API connectivity.");
         }
-
-        const uniqueTeams = Array.from(uniqueTeamsSet).sort();
-
-        NAV_CATEGORIES.TEAMS.subTabs = uniqueTeams.map(team => ({
-          label: team,
-          tab: TABS.TEAM_DETAIL, // All team links go to the team detail tab
-          teamName: team,           // Pass the team name for rendering
-        }));
 
       } catch (error) {
-        console.error("Error fetching historical matchup data:", error);
-        setHistoricalDataError(`Failed to load historical data: ${error.message}. Please check your HISTORICAL_MATCHUPS_API_URL in config.js and ensure your Google Apps Script is deployed correctly as a Web App (Execute as: Me, Who has access: Anyone).`);
-        setLoadingHistoricalData(false); // Ensure loading is false on error
-        return; // Stop execution if fetching fails
+        console.error("Error fetching historical matchup data from Sleeper API:", error);
+        setHistoricalDataError(`Failed to load historical data: ${error.message}. Please check your internet connection or Sleeper API.`);
       } finally {
-        // Ensure loading is false after data fetch (even if it fails, to stop spinner)
         setLoadingHistoricalData(false);
       }
 
@@ -157,7 +147,7 @@ const App = () => {
       ]);
     };
 
-    fetchHistoricalData();
+    fetchAndProcessHistoricalData();
   }, [getMappedTeamName]);
 
   // Handle tab change, including setting selectedTeam for TEAM_DETAIL tab
@@ -183,7 +173,6 @@ const App = () => {
             {NAV_CATEGORIES.HOME.label}
           </button>
 
-          {/* New: Power Rankings Button */}
           <button
             onClick={() => handleTabChange(TABS.POWER_RANKINGS)}
             className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${activeTab === TABS.POWER_RANKINGS ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
@@ -224,7 +213,7 @@ const App = () => {
               <div className="absolute left-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 max-h-60 overflow-y-auto z-20">
                 {NAV_CATEGORIES.TEAMS.subTabs.map((item) => (
                   <button
-                    key={item.label} // Use label as key for team buttons
+                    key={item.label}
                     onClick={() => handleTabChange(item.tab, item.teamName)}
                     className={`block w-full text-left px-4 py-2 text-sm transition-colors duration-200 ${selectedTeam === item.teamName && activeTab === TABS.TEAM_DETAIL ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
                   >
@@ -235,7 +224,6 @@ const App = () => {
             </div>
           )}
 
-          {/* NEW: Financials Link */}
           <button
             onClick={() => handleTabChange(TABS.FINANCIALS)}
             className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${activeTab === TABS.FINANCIALS ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
@@ -282,7 +270,6 @@ const App = () => {
               {NAV_CATEGORIES.HOME.label}
             </button>
 
-            {/* New: Power Rankings Button (Mobile) */}
             <button
               onClick={() => handleTabChange(TABS.POWER_RANKINGS)}
               className={`block w-full text-left py-3 px-4 text-lg font-semibold rounded-md transition-colors duration-200 ${activeTab === TABS.POWER_RANKINGS ? 'bg-blue-100 text-blue-700' : 'text-gray-800 hover:bg-gray-100'}`}
@@ -358,7 +345,7 @@ const App = () => {
       )}
 
 
-      <main className="flex-grow w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8 mt-4"> {/* Adjusted for centering and max-width */}
+      <main className="flex-grow w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8 mt-4">
         {loadingHistoricalData ? (
           <div className="flex flex-col items-center justify-center min-h-[200px] text-blue-600">
             <svg className="animate-spin h-10 w-10 text-blue-500 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -372,13 +359,12 @@ const App = () => {
             {historicalDataError} <br />
             <br />
             **Please check the following:**<br />
-            1. **Google Apps Script URLs (`config.js`):** Ensure `HISTORICAL_MATCHUPS_API_URL` is correct and points to your deployed Google Apps Script Web App.
-            2. **Google Apps Script Deployment:** For your script, verify its deployment settings: "Execute as: Me" and "Who has access: Anyone".
-            3. **Vercel Deployment / Local Server:** Ensure your `index.js` file (and other JavaScript files) are being served with the correct MIME type (`application/javascript`). This usually requires proper build configuration (e.g., using a `build` script that generates optimized JavaScript bundles, which Vercel handles automatically for standard React projects). If developing locally, ensure your development server is configured correctly.
+            1. **Sleeper API:** Ensure your `CURRENT_LEAGUE_ID` in `config.js` is correct and you have an active internet connection.
+            2. **Data Structure:** Verify that the Sleeper API is returning data in the expected format for matchups.
           </p>
         ) : (
-          <div className="w-full"> {/* Ensure content area takes full width */}
-            {activeTab === TABS.DASHBOARD && ( // Render Dashboard for the new homepage
+          <div className="w-full">
+            {activeTab === TABS.DASHBOARD && (
               <Dashboard
                 getDisplayTeamName={getMappedTeamName}
               />
@@ -423,6 +409,13 @@ const App = () => {
                 getDisplayTeamName={getMappedTeamName}
               />
             )}
+            {/* NEW: Render HistoricalMatchupsByYear */}
+            {activeTab === TABS.HISTORICAL_MATCHUPS && (
+                <HistoricalMatchupsByYear
+                    historicalMatchups={historicalMatchups}
+                    getDisplayTeamName={getMappedTeamName}
+                />
+            )}
 
            {/* Render TeamDetailPage when selected */}
            {activeTab === TABS.TEAM_DETAIL && selectedTeam && (
@@ -432,23 +425,23 @@ const App = () => {
                getMappedTeamName={getMappedTeamName}
              />
            )}
-           {/* NEW: Render FinancialTracker */}
-{activeTab === TABS.FINANCIALS && (
-    <FinancialTracker
-        getDisplayTeamName={getMappedTeamName}
-        historicalMatchups={historicalMatchups} // <--- Ensure this prop is present and correctly linked
-    />
-)}
+           {/* Render FinancialTracker */}
+            {activeTab === TABS.FINANCIALS && (
+                <FinancialTracker
+                    getDisplayTeamName={getMappedTeamName}
+                    historicalMatchups={historicalMatchups}
+                />
+            )}
           </div>
         )}
       </main>
 
       <footer className="mt-8 text-center text-gray-600 text-sm pb-8 px-4">
-        <p>This site displays league data powered by Google Apps Script.</p>
+        <p>This site displays league data powered by Sleeper API.</p>
         <p className="mt-2">
-          For Apps Script deployment instructions, visit:{" "}
-          <a href="https://developers.google.com/apps-script/guides/web" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-            Google Apps Script Web Apps Guide
+          For Sleeper API documentation, visit:{" "}
+          <a href="https://docs.sleeper.app/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+            Sleeper API Docs
           </a>
         </p>
       </footer>
