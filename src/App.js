@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   // Removed HISTORICAL_MATCHUPS_API_URL and GOOGLE_SHEET_POWER_RANKINGS_API_URL as we'll use Sleeper API directly
-  CURRENT_LEAGUE_ID, // Import CURRENT_LEAGUE_ID
+  // CURRENT_LEAGUE_ID is now imported from sleeperApi.js, so remove from here:
+  // CURRENT_LEAGUE_ID,
 } from './config'; // Corrected import path for config.js to be within src/
 
 // Import existing components from your provided App.js
@@ -19,7 +20,8 @@ import Dashboard from './components/Dashboard';
 import HistoricalMatchupsByYear from './components/HistoricalMatchupsByYear';
 
 // Import Sleeper API functions to fetch league details for dynamic tab population
-import { fetchLeagueDetails, fetchAllHistoricalMatchups, TEAM_NAME_TO_SLEEPER_ID_MAP, fetchRostersWithDetails, fetchUsersData } from './utils/sleeperApi';
+// Ensure CURRENT_LEAGUE_ID is imported from here
+import { fetchLeagueDetails, fetchAllHistoricalMatchups, TEAM_NAME_TO_SLEEPER_ID_MAP, fetchRostersWithDetails, fetchUsersData, CURRENT_LEAGUE_ID } from './utils/sleeperApi';
 
 
 // Define the available tabs and their categories for the dropdown
