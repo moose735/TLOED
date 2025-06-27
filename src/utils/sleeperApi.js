@@ -1,12 +1,10 @@
 // src/utils/sleeperApi.js
 
-// Easily configurable current league ID - moved from config.js for direct access if needed, though App.js pulls it from config.
+// Easily configurable current league ID - imported from config.js
 export { CURRENT_LEAGUE_ID, NICKNAME_TO_SLEEPER_USER } from '../config';
 
 // Centralized map linking your internal team names (e.g., last names) to Sleeper User IDs.
-// This is used for functions that need to map display names back to Sleeper IDs,
-// or for initial population if you want a direct map.
-// For display, `NICKNAME_TO_SLEEPER_USER` in config.js is preferred.
+// This is primarily for historical context or specific mapping needs.
 export const TEAM_NAME_TO_SLEEPER_ID_MAP = {
     'Ainsworth': '783790952367169536',
     'Bjarnar': '783761299275382784',
@@ -23,15 +21,12 @@ export const TEAM_NAME_TO_SLEEPER_ID_MAP = {
 };
 
 // Managers who are no longer active in the league, for filtering or special handling
-export const RETIRED_MANAGERS = [
-    // Add retired manager Sleeper User IDs or display names if needed for specific logic
-    // 'RetiredManagerUserId1',
-];
+export const RETIRED_MANAGERS = []; // Populate with user_ids or team names as needed
 
 // Caching mechanisms for various API calls to reduce redundant fetches
 const leagueDetailsCache = new Map();
-const usersCache = new Map();
-const rostersCache = new Map();
+const usersCache = new Map(); // Cache for all users fetched per league
+const rostersCache = new Map(); // Cache for rosters fetched per league
 const nflPlayersCache = new Map();
 const transactionsCache = new Map();
 const winnersBracketCache = new Map();
@@ -41,30 +36,46 @@ const historicalMatchupsAggregatedCache = new Map(); // New: Cache for the entir
 
 /**
  * Helper to fetch JSON safely with caching.
+ * Adds more robust error logging and a simple retry mechanism.
  * @param {string} url The URL to fetch.
  * @param {Map} cacheMap The cache map to use.
  * @param {string} key The key for the cache.
+ * @param {number} retries Number of retries on failure.
+ * @param {number} delay Delay between retries in ms.
  * @returns {Promise<Object|Array|null>} The fetched data or null if an error occurs.
  */
-async function fetchJson(url, cacheMap, key) {
+async function fetchJson(url, cacheMap, key, retries = 3, delay = 500) {
     if (cacheMap.has(key)) {
         // console.log(`Returning data for ${key} from cache.`);
         return cacheMap.get(key);
     }
-    try {
-        // console.log(`Fetching data from: ${url}`);
-        const response = await fetch(url);
-        if (!response.ok) {
-            console.error(`Error fetching data from ${url}: ${response.status} ${response.statusText}`);
-            return null;
+
+    for (let i = 0; i < retries; i++) {
+        try {
+            // console.log(`Fetching data from: ${url} (Attempt ${i + 1}/${retries})`);
+            const response = await fetch(url);
+            if (!response.ok) {
+                // Log specific status codes
+                if (response.status === 404) {
+                    console.warn(`404 Not Found for ${url}. This might be expected for some endpoints (e.g., empty drafts).`);
+                    return null; // For 404, usually means no data, so return null without retrying
+                }
+                console.error(`Error fetching data from ${url}: ${response.status} ${response.statusText}. Retrying...`);
+                // For other non-OK responses, proceed to retry
+            } else {
+                const data = await response.json();
+                cacheMap.set(key, data);
+                return data;
+            }
+        } catch (error) {
+            console.error(`Failed to fetch data from ${url} (Attempt ${i + 1}/${retries}):`, error);
         }
-        const data = await response.json();
-        cacheMap.set(key, data);
-        return data;
-    } catch (error) {
-        console.error(`Failed to fetch data from ${url}:`, error);
-        return null;
+        if (i < retries - 1) {
+            await new Promise(res => setTimeout(res, delay * (i + 1))); // Exponential backoff
+        }
     }
+    console.error(`Failed to fetch data from ${url} after ${retries} attempts.`);
+    return null;
 }
 
 /**
@@ -77,31 +88,56 @@ export async function fetchLeagueDetails(leagueId) {
 }
 
 /**
- * Fetches user data for a given league ID.
+ * Fetches ALL user data for a given league ID.
+ * This directly uses the /users endpoint for efficiency.
  * @param {string} leagueId The ID of the Sleeper league.
  * @returns {Promise<Array<Object>>} A promise that resolves to an array of user objects, or an empty array if an error occurs.
  */
-export async function fetchUsersData(leagueId = CURRENT_LEAGUE_ID) {
-    // Note: Users are typically global or can be fetched per league.
-    // For historical purposes, fetching users linked to a league's rosters is more reliable.
-    // However, the Sleeper API /users endpoint needs user IDs directly,
-    // so we usually get user IDs from rosters first, or from league details if provided.
-    // If you need *all* users ever, it's more complex. For a specific league's users:
-    const rosters = await fetchRostersWithDetails(leagueId);
-    if (!rosters) return [];
-    const userIds = rosters.map(r => r.owner_id).filter(id => id);
-    const userPromises = userIds.map(id => fetchJson(`https://api.sleeper.app/v1/user/${id}`, usersCache, `user-${id}`));
-    const users = await Promise.all(userPromises);
-    return users.filter(user => user !== null);
+export async function fetchUsersData(leagueId) {
+    // Correctly fetch all users for a league, not individual users
+    const users = await fetchJson(`https://api.sleeper.app/v1/league/${leagueId}/users`, usersCache, `users-${leagueId}`);
+    return users || [];
 }
 
 /**
- * Fetches rosters data with owner_id (user_id) for a given league ID.
+ * Fetches raw rosters data for a given league ID.
  * @param {string} leagueId The ID of the Sleeper league.
- * @returns {Promise<Array<Object>>} A promise that resolves to an array of roster objects, or an empty array if an error occurs.
+ * @returns {Promise<Array<Object>>} A promise that resolves to an array of raw roster data objects, or an empty array if an error occurs.
+ */
+export async function fetchRosterData(leagueId) {
+    return fetchJson(`https://api.sleeper.app/v1/league/${leagueId}/rosters`, rostersCache, `rosters-${leagueId}`);
+}
+
+/**
+ * Fetches roster data for a given league ID and enriches it with user details.
+ * This is now more streamlined as fetchUsersData directly fetches all users.
+ * @param {string} leagueId The ID of the Sleeper league.
+ * @returns {Promise<Array<Object>>} A promise that resolves to an array of enriched roster data objects.
  */
 export async function fetchRostersWithDetails(leagueId) {
-    return fetchJson(`https://api.sleeper.app/v1/league/${leagueId}/rosters`, rostersCache, `rosters-${leagueId}`);
+    // Combine raw rosters with user data
+    const [rosters, users] = await Promise.all([
+        fetchRosterData(leagueId),
+        fetchUsersData(leagueId) // This is now efficient
+    ]);
+
+    if (!rosters || !users) {
+        console.warn(`Missing rosters or users data for league ${leagueId}. Cannot enrich rosters.`);
+        return [];
+    }
+
+    const userMap = new Map(users.map(user => [user.user_id, user]));
+
+    const enrichedRosters = rosters.map(roster => {
+        const owner = userMap.get(roster.owner_id);
+        return {
+            ...roster,
+            ownerDisplayName: owner ? owner.display_name : 'Unknown Owner',
+            ownerTeamName: (owner && owner.metadata && owner.metadata.team_name) ? owner.metadata.team_name : (owner ? owner.display_name : 'Unknown Team'),
+            ownerAvatar: owner ? getSleeperAvatarUrl(owner.avatar) : getSleeperAvatarUrl(null)
+        };
+    });
+    return enrichedRosters;
 }
 
 /**
@@ -128,7 +164,8 @@ export async function fetchTransactionsForWeek(leagueId, week) {
  * @returns {Promise<Array<Object>>} A promise that resolves to an array of draft objects.
  */
 export async function fetchLeagueDrafts(leagueId) {
-    return fetchJson(`https://api.sleeper.app/v1/league/${leagueId}/drafts`, new Map(), `drafts-${leagueId}`); // Don't cache drafts too aggressively as they change
+    // Drafts rarely change, can be cached longer. Using a dedicated map for this.
+    return fetchJson(`https://api.sleeper.app/v1/league/${leagueId}/drafts`, new Map(), `drafts-${leagueId}`);
 }
 
 /**
@@ -150,30 +187,39 @@ export async function fetchLosersBracket(leagueId) {
 }
 
 /**
- * Gets the Sleeper player headshot URL.
+ * Gets the Sleeper player headshot URL. Provides a placeholder if no player ID.
  * @param {string} playerId The ID of the player.
- * @returns {string} The URL to the player's headshot.
+ * @returns {string} The URL to the player's headshot or a placeholder.
  */
 export const getSleeperPlayerHeadshotUrl = (playerId) => {
-    return `https://sleepercdn.com/content/nfl/players/${playerId}.jpg`;
+    return playerId ? `https://sleepercdn.com/content/nfl/players/thumb/${playerId}.jpg` : 'https://placehold.co/150x150/cccccc/000000?text=No+Headshot';
 };
 
 /**
- * Gets the Sleeper avatar URL for a user.
+ * Gets the Sleeper avatar URL for a user. Provides a placeholder if no avatar ID.
  * @param {string} avatarId The avatar ID from user data.
- * @returns {string} The URL to the user's avatar.
+ * @returns {string} The URL to the user's avatar or a placeholder.
  */
 export const getSleeperAvatarUrl = (avatarId) => {
-    return avatarId ? `https://sleepercdn.com/avatars/thumbs/${avatarId}` : 'https://sleepercdn.com/images/v2/icons/comissioner.png'; // Default if no avatar
+    // Sleeper avatar IDs are typically hashes. If it's already a full URL, use it.
+    if (avatarId && (avatarId.startsWith('http://') || avatarId.startsWith('https://'))) {
+        return avatarId;
+    }
+    return avatarId ? `https://sleepercdn.com/avatars/thumbs/${avatarId}` : 'https://sleepercdn.com/images/v2/icons/comissioner.png'; // Default placeholder
 };
 
 /**
  * Fetches all historical matchups for a league, traversing through previous seasons.
- * This function will replace the Google Sheets API for historical matchups.
- * It returns raw matchup data with roster_ids, which App.js will then map to display names.
+ * This function returns processed matchup data, ready for consumption by components.
+ * It also returns a mapping of roster_id to owner_id and owner_id to display name for comprehensive mapping.
  *
  * @param {string} startingLeagueId The ID of the current (or starting) Sleeper league.
- * @returns {Promise<Array<Object>>} A promise that resolves to an array of all historical matchup objects.
+ * @returns {Promise<{
+ * matchups: Array<Object>,
+ * rosterToOwnerMap: Map<string, string>, // Maps roster_id to owner_id
+ * ownerToDisplayNameMap: Map<string, string> // Maps owner_id to display name
+ * }>} A promise that resolves to an object containing all historical matchup objects
+ * and the necessary mapping data.
  */
 export async function fetchAllHistoricalMatchups(startingLeagueId) {
     if (historicalMatchupsAggregatedCache.has(startingLeagueId)) {
@@ -182,22 +228,42 @@ export async function fetchAllHistoricalMatchups(startingLeagueId) {
     }
 
     let allMatchups = [];
+    let rosterToOwnerMap = new Map();
+    let ownerToDisplayNameMap = new Map();
     let currentLeagueId = startingLeagueId;
 
     while (currentLeagueId) {
         console.log(`Processing league ID: ${currentLeagueId}`);
-        const leagueDetails = await fetchLeagueDetails(currentLeagueId);
+        const [leagueDetails, users, rosters] = await Promise.all([
+            fetchLeagueDetails(currentLeagueId),
+            fetchUsersData(currentLeagueId),
+            fetchRosterData(currentLeagueId) // Fetch raw rosters here for mapping
+        ]);
+
         if (!leagueDetails) {
             console.error(`Failed to fetch details for league ID: ${currentLeagueId}. Stopping history traversal.`);
             break;
         }
 
+        // Populate ownerToDisplayNameMap and rosterToOwnerMap for the current league
+        users.forEach(user => {
+            // Prioritize custom nickname from NICKNAME_TO_SLEEPER_USER if available
+            const displayName = NICKNAME_TO_SLEEPER_USER[user.user_id] || (user.metadata && user.metadata.team_name) || user.display_name;
+            ownerToDisplayNameMap.set(user.user_id, displayName);
+        });
+
+        rosters.forEach(roster => {
+            if (roster.roster_id && roster.owner_id) {
+                rosterToOwnerMap.set(roster.roster_id.toString(), roster.owner_id);
+            }
+        });
+
         const season = leagueDetails.season;
         const regularSeasonWeeks = leagueDetails.settings?.playoff_week_start
             ? leagueDetails.settings.playoff_week_start - 1
-            : leagueDetails.settings?.last_idx; // Fallback
+            : leagueDetails.settings?.last_idx; // Fallback if playoff_week_start isn't set
 
-        console.log(`Fetching regular season matchups for ${season} (Weeks 1 to ${regularSeasonWeeks})`);
+        console.log(`Fetching regular season matchups for ${season} (Weeks 1 to ${regularSeasonWeeks || 'N/A'})`);
         for (let week = 1; week <= regularSeasonWeeks; week++) {
             const weekMatchups = await fetchJson(
                 `https://api.sleeper.app/v1/league/${currentLeagueId}/matchups/${week}`,
@@ -205,37 +271,61 @@ export async function fetchAllHistoricalMatchups(startingLeagueId) {
                 `${currentLeagueId}-matchups-${week}`
             );
 
-            if (weekMatchups) {
+            if (weekMatchups && weekMatchups.length > 0) {
+                // Group matchups by matchup_id to find pairs
+                const groupedByMatchupId = new Map();
                 weekMatchups.forEach(match => {
-                    // Each match has data for one team. We need to pair them up by matchup_id.
-                    // This is a common pattern for Sleeper matchup data.
-                    const existingMatchupIndex = allMatchups.findIndex(
-                        m => m.matchup_id === match.matchup_id && m.year === season && m.week === week && m.league_id === currentLeagueId && m.roster_id_1 && !m.roster_id_2
-                    );
+                    if (!groupedByMatchupId.has(match.matchup_id)) {
+                        groupedByMatchupId.set(match.matchup_id, []);
+                    }
+                    groupedByMatchupId.get(match.matchup_id).push(match);
+                });
 
-                    if (existingMatchupIndex !== -1) {
-                        // Found the other half of the matchup
-                        const existingMatch = allMatchups[existingMatchupIndex];
-                        existingMatch.roster_id_2 = match.roster_id;
-                        existingMatch.team2Score = match.points;
-                        // Assuming team1 and team2 were set correctly on the first half
-                    } else {
-                        // This is the first half of a matchup
+                groupedByMatchupId.forEach(matchGroup => {
+                    if (matchGroup.length === 2) { // Standard head-to-head matchup
+                        const team1Raw = matchGroup[0];
+                        const team2Raw = matchGroup[1]; // Assumes two entries per matchup_id
+
                         allMatchups.push({
                             year: parseInt(season),
                             week: week,
-                            league_id: currentLeagueId, // Store league_id to help with context
-                            roster_id_1: match.roster_id,
-                            team1Score: match.points,
-                            // team2 and team2Score will be filled by its counterpart
-                            matchup_id: match.matchup_id,
+                            league_id: currentLeagueId,
+                            roster_id_1: team1Raw.roster_id,
+                            team1Score: team1Raw.points,
+                            roster_id_2: team2Raw.roster_id,
+                            team2Score: team2Raw.points,
+                            matchup_id: team1Raw.matchup_id,
                             playoffs: false,
+                            regSeason: true, // Mark as regular season
                             finalSeedingGame: null,
-                            // You might want to include custom_points if used
-                            custom_points_1: match.custom_points,
+                            custom_points_1: team1Raw.custom_points || 0,
+                            custom_points_2: team2Raw.custom_points || 0,
                         });
+                    } else if (matchGroup.length === 1 && matchGroup[0].matchup_id === null) {
+                        // This might be a bye week or points-only week where matchup_id is null
+                        const teamRaw = matchGroup[0];
+                         allMatchups.push({
+                            year: parseInt(season),
+                            week: week,
+                            league_id: currentLeagueId,
+                            roster_id_1: teamRaw.roster_id,
+                            team1Score: teamRaw.points,
+                            roster_id_2: null, // No opponent
+                            team2Score: null,
+                            matchup_id: null,
+                            playoffs: false,
+                            regSeason: true,
+                            pointsOnlyBye: true, // Mark as points-only bye
+                            finalSeedingGame: null,
+                            custom_points_1: teamRaw.custom_points || 0,
+                            custom_points_2: null,
+                        });
+                    } else {
+                        console.warn(`Unusual matchup group size (${matchGroup.length}) for league ${currentLeagueId}, season ${season}, week ${week}, matchup_id ${matchGroup[0]?.matchup_id}.`);
                     }
                 });
+            } else {
+                // console.log(`No matchups found for league ${currentLeagueId}, season ${season}, week ${week}.`);
             }
         }
 
@@ -243,23 +333,15 @@ export async function fetchAllHistoricalMatchups(startingLeagueId) {
         const winnersBracket = await fetchWinnersBracket(currentLeagueId);
         const losersBracket = await fetchLosersBracket(currentLeagueId);
 
-        // Process playoff matchups. Bracket data is usually more consolidated.
-        // Winner and loser bracket games often have 'r' (roster ID), 'p' (opponent roster ID), 's' (score), 's_p' (opponent score), 'm' (matchup ID), 'w' (week played in)
         const processBracket = (bracket, isLosersBracket = false) => {
             if (!bracket) return;
             bracket.forEach(match => {
-                // Ensure valid data for bracket games
-                if (match.r && match.p && typeof match.s === 'number' && typeof match.s_p === 'number') {
-                     // Determine the playoff week. Sleeper bracket 'w' key typically indicates the week.
-                    const playoffWeek = match.w || match.l; // 'w' for winner bracket, 'l' for loser bracket
-                    if (playoffWeek === undefined || isNaN(playoffWeek)) {
-                         console.warn(`Skipping bracket game with undefined or invalid week for league ${currentLeagueId}, matchup ${match.m}`);
-                         return;
-                    }
-
+                if (match.r && match.p && typeof match.s === 'number' && typeof match.s_p === 'number' && match.m && match.w) {
+                    // Match.w in bracket data typically represents the playoff week number
+                    const playoffWeek = match.w;
                     allMatchups.push({
                         year: parseInt(season),
-                        week: playoffWeek, // Playoff week number
+                        week: playoffWeek,
                         league_id: currentLeagueId,
                         roster_id_1: match.r,
                         team1Score: match.s,
@@ -267,13 +349,12 @@ export async function fetchAllHistoricalMatchups(startingLeagueId) {
                         team2Score: match.s_p,
                         matchup_id: match.m, // Sleeper bracket matchup ID
                         playoffs: true,
-                        // Determine finalSeedingGame based on actual playoff structure (e.g., final round, 3rd place game etc.)
-                        // This might require more complex logic based on bracket structure and desired "place"
-                        // For simplicity, we can default it or derive it based on the matchup ID or round.
-                        // Example: 1st place is usually the final game of the winners bracket.
-                        // You'd need to map match.r and match.p to team names later in App.js
-                        finalSeedingGame: (winnersBracket && winnersBracket.length > 0 && match.m === winnersBracket[winnersBracket.length - 1]?.m && winnersBracket.length === 15) ? 1 : null, // Very basic check for championship
-                        isLosersBracket: isLosersBracket // Useful for specific styling/logic
+                        regSeason: false, // Not regular season
+                        // You'll need more logic here if 'finalSeedingGame' maps to specific bracket types
+                        // For example, if match.t === 1 in winners bracket it could be championship
+                        // This might also be determined by the bracket structure and max playoff week.
+                        finalSeedingGame: null, // Placeholder - needs more sophisticated logic if exact place is required
+                        isLosersBracket: isLosersBracket,
                     });
                 }
             });
@@ -285,12 +366,17 @@ export async function fetchAllHistoricalMatchups(startingLeagueId) {
         currentLeagueId = leagueDetails.previous_league_id; // Move to the previous season's league
     }
 
-    // Sort all matchups by year and then by week for chronological processing in calculations.
+    // Sort all matchups by year and then by week for chronological processing
     allMatchups.sort((a, b) => {
         if (a.year !== b.year) return a.year - b.year;
         return a.week - b.week;
     });
 
-    historicalMatchupsAggregatedCache.set(startingLeagueId, allMatchups);
-    return allMatchups;
+    const result = {
+        matchups: allMatchups,
+        rosterToOwnerMap: rosterToOwnerMap,
+        ownerToDisplayNameMap: ownerToDisplayNameMap
+    };
+    historicalMatchupsAggregatedCache.set(startingLeagueId, result);
+    return result;
 }
