@@ -1,325 +1,452 @@
-// PowerRankings.js
-import React, { useState, useEffect } from 'react';
-import { calculateAllLeagueMetrics } from '../utils/calculations';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { CURRENT_LEAGUE_ID, fetchUsersData, getSleeperAvatarUrl, TEAM_NAME_TO_SLEEPER_ID_MAP, RETIRED_MANAGERS } from '../utils/sleeperApi'; // Import Sleeper API functions and maps
+import React, { useState, useEffect, useCallback } from 'react';
+import { Line } from 'react-chartjs-2';
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
+import { fetchNFLPlayers, fetchNFLState, fetchRostersWithDetails, TEAM_NAME_TO_SLEEPER_ID_MAP, RETIRED_MANAGERS } from '../utils/sleeperApi';
 
-const formatDPR = (dpr) => {
-    if (typeof dpr !== 'number' || isNaN(dpr)) return 'N/A';
-    return dpr.toFixed(3);
-};
+// Register Chart.js components
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
-const renderRecordNoTies = (wins, losses) => {
-    return `${wins || 0}-${losses || 0}`;
-};
-
-const formatPoints = (points) => {
-    if (typeof points !== 'number' || isNaN(points)) return 'N/A';
-    return points.toFixed(2);
-};
-
-const formatLuckRating = (luck) => {
-    if (typeof luck !== 'number' || isNaN(luck)) return 'N/A';
-    return luck.toFixed(3);
-};
-
-const CHART_COLORS = [
-    '#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#00c49f', '#ff0000',
-    '#0088fe', '#bb3f85', '#7a421a', '#4a4a4a', '#a5d6a7', '#ef9a9a'
-];
-
-const CustomDPRRankTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-        const sortedPayload = [...payload].sort((a, b) => a.value - b.value);
-        return (
-            <div className="bg-white p-3 border border-gray-300 rounded-md shadow-lg text-sm">
-                <p className="font-bold text-gray-800 mb-2">Week: {label}</p>
-                {sortedPayload.map((entry, index) => (
-                    <p key={`item-${index}`} style={{ color: entry.color }}>
-                        {entry.name}: Rank {entry.value} ({entry.payload.dprValues[entry.name].toFixed(3)} DPR)
-                    </p>
-                ))}
-            </div>
-        );
+/**
+ * Utility function to calculate Power Rankings.
+ * This function is kept outside the component to avoid re-creation on every render.
+ *
+ * Power Ranking Calculation Logic:
+ * 1. Win/Loss Record (weighted): Standard win/loss.
+ * 2. Points For (weighted): Total points scored.
+ * 3. Head-to-Head Dominance (weighted): Record against other teams.
+ * 4. Roster Strength (weighted - mock for now): Placeholder for future actual roster strength.
+ *
+ * @param {Object} historicalMatchups Object keyed by season, then by week, containing matchup data.
+ * @param {string} currentSeason The current season being displayed/analyzed.
+ * @param {Object} allLeagueRosters Map of leagueId to array of roster objects (from fetchRostersWithDetails).
+ * @returns {Array<Object>} Sorted array of power ranking objects.
+ */
+const calculatePowerRankings = (historicalMatchups, currentSeason, allLeagueRosters) => {
+    if (!historicalMatchups || Object.keys(historicalMatchups).length === 0 || !currentSeason || !allLeagueRosters || !allLeagueRosters[currentSeason]) {
+        console.warn("Insufficient data for Power Ranking calculation.");
+        return [];
     }
-    return null;
+
+    const seasonMatchups = historicalMatchups[currentSeason];
+    const rosters = allLeagueRosters[currentSeason]; // Get rosters for the current season
+
+    if (!seasonMatchups || Object.keys(seasonMatchups).length === 0 || !rosters || rosters.length === 0) {
+        console.warn(`No matchup or roster data found for season ${currentSeason} for power ranking calculation.`);
+        return [];
+    }
+
+    const teamStats = new Map(); // Map to store stats: teamName -> { wins, losses, pointsFor, totalGames, headToHeadRecord }
+
+    // Initialize team stats from rosters
+    rosters.forEach(roster => {
+        // Ensure that only active managers (not retired) are included in current season power rankings
+        const teamNameFromRoster = roster.ownerTeamName;
+        // Check if this teamName is in the TEAM_NAME_TO_SLEEPER_ID_MAP and not in RETIRED_MANAGERS
+        const internalTeamName = Object.keys(TEAM_NAME_TO_SLEEPER_ID_MAP).find(key => TEAM_NAME_TO_SLEEPER_ID_MAP[key] === roster.owner_id);
+
+        if (internalTeamName && !RETIRED_MANAGERS.has(internalTeamName)) {
+             teamStats.set(roster.roster_id, {
+                teamName: teamNameFromRoster,
+                wins: 0,
+                losses: 0,
+                pointsFor: 0,
+                pointsAgainst: 0,
+                totalGames: 0,
+                headToHeadRecord: new Map(), // Map: opponentRosterId -> { wins, losses }
+                rosterId: roster.roster_id // Store roster_id for easier lookup
+            });
+        } else {
+            console.log(`Excluding retired or unmapped team from Power Rankings: ${roster.ownerTeamName} (Roster ID: ${roster.roster_id})`);
+        }
+    });
+
+
+    Object.values(seasonMatchups).forEach(weekMatchups => { // Iterate through each week's matchups
+        weekMatchups.forEach(match => {
+            const team1RosterId = match.roster_id;
+            const team1Points = match.points;
+
+            // Find the opponent in the same matchup_id
+            const opponent = weekMatchups.find(
+                (m) => m.matchup_id === match.matchup_id && m.roster_id !== team1RosterId
+            );
+
+            if (opponent) {
+                const team2RosterId = opponent.roster_id;
+                const team2Points = opponent.points;
+
+                const team1Stat = teamStats.get(team1RosterId);
+                const team2Stat = teamStats.get(team2RosterId);
+
+                if (team1Stat && team2Stat) { // Only process if both teams are in our active list
+                    team1Stat.totalGames++;
+                    team1Stat.pointsFor += team1Points;
+                    team1Stat.pointsAgainst += team2Points;
+
+                    team2Stat.totalGames++;
+                    team2Stat.pointsFor += team2Points;
+                    team2Stat.pointsAgainst += team1Points;
+
+                    // Update win/loss
+                    if (team1Points > team2Points) {
+                        team1Stat.wins++;
+                        team2Stat.losses++;
+                    } else if (team2Points > team1Points) {
+                        team2Stat.wins++;
+                        team1Stat.losses++;
+                    }
+                    // Ties are implicitly handled if no win/loss update occurs
+
+                    // Update head-to-head record
+                    if (!team1Stat.headToHeadRecord.has(team2RosterId)) {
+                        team1Stat.headToHeadRecord.set(team2RosterId, { wins: 0, losses: 0 });
+                    }
+                    if (!team2Stat.headToHeadRecord.has(team1RosterId)) {
+                        team2Stat.headToHeadRecord.set(team1RosterId, { wins: 0, losses: 0 });
+                    }
+
+                    const h2h1 = team1Stat.headToHeadRecord.get(team2RosterId);
+                    const h2h2 = team2Stat.headToHeadRecord.get(team1RosterId);
+
+                    if (team1Points > team2Points) {
+                        h2h1.wins++;
+                        h2h2.losses++;
+                    } else if (team2Points > team1Points) {
+                        h2h2.wins++;
+                        h2h1.losses++;
+                    }
+                }
+            }
+        });
+    });
+
+    const powerRankings = Array.from(teamStats.values()).map(stats => {
+        const winLossScore = (stats.wins / Math.max(1, stats.totalGames)) * 0.4; // 40% weight
+        const pointsForScore = (stats.pointsFor / Math.max(1, stats.totalGames)) * 0.3; // 30% weight (average points per game)
+        // Simple mock for roster strength, can be replaced with actual logic
+        const rosterStrengthScore = Math.random() * 0.3; // 30% weight, random for now
+
+        // Total power score
+        const totalScore = (winLossScore * 100) + (pointsForScore * 10) + (rosterStrengthScore * 10); // Adjust multipliers for scale
+
+        return {
+            teamName: stats.teamName,
+            wins: stats.wins,
+            losses: stats.losses,
+            pointsFor: stats.pointsFor,
+            totalScore: parseFloat(totalScore.toFixed(2)),
+        };
+    });
+
+    // Sort by totalScore in descending order
+    return powerRankings.sort((a, b) => b.totalScore - a.totalScore);
+};
+
+
+/**
+ * Calculates historical power rankings for charting over seasons.
+ * This will return an object where keys are seasons, and values are arrays of power rankings for that season.
+ *
+ * @param {Object} historicalMatchups Object keyed by season, then by week, containing matchup data.
+ * @param {Object} allLeagueRosters Map of leagueId to array of roster objects (from fetchRostersWithDetails).
+ * @returns {Object} Object keyed by season, containing arrays of power rankings for each season.
+ */
+const calculateHistoricalPowerRankings = (historicalMatchups, allLeagueRosters) => {
+    const historicalRankings = {};
+    if (!historicalMatchups || Object.keys(historicalMatchups).length === 0) {
+        return historicalRankings;
+    }
+
+    const sortedSeasons = Object.keys(historicalMatchups).sort((a, b) => parseInt(a) - parseInt(b));
+
+    sortedSeasons.forEach(season => {
+        if (allLeagueRosters[season]) { // Ensure rosters exist for this season
+            historicalRankings[season] = calculatePowerRankings(historicalMatchups, season, allLeagueRosters);
+        } else {
+            console.warn(`Skipping historical power rankings for season ${season}: No roster data available.`);
+        }
+    });
+
+    return historicalRankings;
 };
 
 const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
     const [powerRankings, setPowerRankings] = useState([]);
+    const [historicalChartData, setHistoricalChartData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [weeklyChartData, setWeeklyChartData] = useState([]);
-    const [chartTeams, setChartTeams] = useState([]);
-    const [maxTeamsInChart, setMaxTeamsInChart] = useState(1);
-    const [currentWeek, setCurrentWeek] = useState(0);
-    const [sleeperUsersMap, setSleeperUsersMap] = useState({}); // Stores Sleeper user data by userId
+    const [nflPlayers, setNflPlayers] = useState({});
+    const [nflState, setNflState] = useState({});
+    const [allLeagueRosters, setAllLeagueRosters] = useState({}); // Store all historical rosters
 
+    // Effect to fetch NFL data and all historical rosters
     useEffect(() => {
-        const loadPowerRankingsAndSleeperData = async () => {
-            if (!historicalMatchups || historicalMatchups.length === 0) {
-                setPowerRankings([]);
-                setWeeklyChartData([]);
-                setChartTeams([]);
-                setLoading(false);
-                setError("No historical matchup data available to calculate power rankings or chart data.");
-                setCurrentWeek(0);
-                return;
-            }
-
-            setLoading(true);
-            setError(null);
-
+        const loadAuxiliaryData = async () => {
             try {
-                // Fetch Sleeper user data
-                const users = await fetchUsersData(CURRENT_LEAGUE_ID);
-                const usersMap = {};
-                users.forEach(user => {
-                    usersMap[user.userId] = user;
+                setLoading(true);
+                setError(null);
+
+                // Fetch NFL Players and State
+                const [players, state] = await Promise.all([
+                    fetchNFLPlayers(),
+                    fetchNFLState()
+                ]);
+                setNflPlayers(players);
+                setNflState(state);
+
+                // Fetch all historical rosters for all leagues
+                const rostersByLeagueId = {};
+                const leagueIdsToFetch = new Set();
+
+                // Collect all unique league IDs present in historicalMatchups
+                Object.keys(historicalMatchups).forEach(season => {
+                    const seasonMatchups = historicalMatchups[season];
+                    // Pick the first week's matchup to get a leagueId (assuming constant leagueId per season)
+                    const firstWeek = Object.keys(seasonMatchups)[0];
+                    if (firstWeek && seasonMatchups[firstWeek] && seasonMatchups[firstWeek].length > 0) {
+                        const leagueId = seasonMatchups[firstWeek][0].league_id;
+                        if (leagueId) {
+                            leagueIdsToFetch.add(leagueId);
+                        }
+                    }
                 });
-                setSleeperUsersMap(usersMap);
 
-                const allYears = historicalMatchups
-                    .map(match => parseInt(match.year))
-                    .filter(year => !isNaN(year));
-                const newestYear = allYears.length > 0 ? Math.max(...allYears) : null;
+                const rosterPromises = Array.from(leagueIdsToFetch).map(id => fetchRostersWithDetails(id));
+                const fetchedRosters = await Promise.all(rosterPromises);
 
-                if (!newestYear) {
-                    setError("No valid years found in historical data to determine the season for power rankings.");
-                    setLoading(false);
-                    setCurrentWeek(0);
-                    return;
-                }
-
-                const newestYearMatchups = historicalMatchups.filter(match => parseInt(match.year) === newestYear);
-                const uniqueTeamsInNewestYear = Array.from(new Set(
-                    newestYearMatchups.flatMap(match => [getDisplayTeamName(match.team1), getDisplayTeamName(match.team2)])
-                )).filter(teamName => teamName && teamName.trim() !== '' && !RETIRED_MANAGERS.has(teamName)); // Filter out retired managers from current season
-
-                const maxWeek = newestYearMatchups.reduce((max, match) => Math.max(max, parseInt(match.week)), 0);
-                setCurrentWeek(maxWeek);
-
-                const weeklyDPRsChartData = [];
-                const weeklyCumulativeSeasonalMetrics = {};
-
-                for (let week = 1; week <= maxWeek; week++) {
-                    const matchupsUpToCurrentWeek = newestYearMatchups.filter(match => parseInt(match.week) <= week);
-
-                    const { seasonalMetrics: currentWeekSeasonalMetrics } = calculateAllLeagueMetrics(matchupsUpToCurrentWeek, getDisplayTeamName);
-
-                    weeklyCumulativeSeasonalMetrics[week] = currentWeekSeasonalMetrics[newestYear] || {};
-
-                    const weeklyEntry = { week: week, dprValues: {} };
-                    const teamsDPRsForThisWeek = [];
-
-                    uniqueTeamsInNewestYear.forEach(teamName => {
-                        const teamData = currentWeekSeasonalMetrics[newestYear] ? currentWeekSeasonalMetrics[newestYear][teamName] : null;
-                        if (teamData && teamData.adjustedDPR !== undefined && !isNaN(teamData.adjustedDPR)) {
-                            teamsDPRsForThisWeek.push({ team: teamName, dpr: teamData.adjustedDPR });
-                        } else {
-                            teamsDPRsForThisWeek.push({ team: teamName, dpr: 0 });
-                        }
-                    });
-
-                    const rankedTeamsForWeek = teamsDPRsForThisWeek.sort((a, b) => b.dpr - a.dpr);
-
-                    rankedTeamsForWeek.forEach((rankedTeam, index) => {
-                        if (rankedTeam.dpr > 0 || (weeklyCumulativeSeasonalMetrics[week][rankedTeam.team] && weeklyCumulativeSeasonalMetrics[week][rankedTeam.team].gamesPlayed > 0)) {
-                            weeklyEntry[rankedTeam.team] = index + 1;
-                        } else {
-                            weeklyEntry[rankedTeam.team] = undefined;
-                        }
-                        weeklyEntry.dprValues[rankedTeam.team] = rankedTeam.dpr;
-                    });
-
-                    weeklyDPRsChartData.push(weeklyEntry);
-                }
-
-                setWeeklyChartData(weeklyDPRsChartData);
-
-                const activeChartTeams = uniqueTeamsInNewestYear.filter(team =>
-                    weeklyDPRsChartData.some(weekData => weekData[team] !== undefined)
-                );
-                setChartTeams(activeChartTeams);
-                setMaxTeamsInChart(uniqueTeamsInNewestYear.length > 0 ? uniqueTeamsInNewestYear.length : 1);
-
-
-                const finalPowerRankingsForTable = uniqueTeamsInNewestYear
-                    .map(teamName => {
-                        const fullSeasonMetrics = weeklyCumulativeSeasonalMetrics[maxWeek] ? weeklyCumulativeSeasonalMetrics[maxWeek][teamName] : {};
-
-                        const currentRankInChart = weeklyDPRsChartData.length > 0
-                            ? (weeklyDPRsChartData[weeklyDPRsChartData.length - 1][teamName] || 0)
-                            : 0;
-
-                        let previousRankInChart = 0;
-                        if (weeklyDPRsChartData.length > 1) {
-                            for (let i = weeklyDPRsChartData.length - 2; i >= 0; i--) {
-                                if (weeklyDPRsChartData[i][teamName] !== undefined && weeklyDPRsChartData[i][teamName] !== null && weeklyDPRsChartData[i][teamName] !== 0) {
-                                    previousRankInChart = weeklyDPRsChartData[i][teamName];
-                                    break;
-                                }
-                            }
-                        }
-
-                        let movement = 0;
-                        if (currentRankInChart !== 0 && previousRankInChart !== 0) {
-                            movement = previousRankInChart - currentRankInChart;
-                        }
-
-                        return {
-                            team: teamName, // This is the historical display name (e.g., "Irwin")
-                            rank: currentRankInChart,
-                            movement: movement,
-                            dpr: fullSeasonMetrics.adjustedDPR || 0,
-                            wins: fullSeasonMetrics.wins || 0,
-                            losses: fullSeasonMetrics.losses || 0,
-                            ties: fullSeasonMetrics.ties || 0,
-                            pointsFor: fullSeasonMetrics.pointsFor || 0,
-                            pointsAgainst: fullSeasonMetrics.pointsAgainst || 0,
-                            luckRating: fullSeasonMetrics.luckRating || 0,
-                            year: newestYear,
-                        };
-                    })
-                    .filter(team => team.rank !== 0 && team.rank !== undefined)
-                    .sort((a, b) => a.rank - b.rank);
-
-                setPowerRankings(finalPowerRankingsForTable);
-                setLoading(false);
+                // Map fetched rosters by league ID
+                fetchedRosters.forEach(rostersArray => {
+                    if (rostersArray.length > 0) {
+                        rostersByLeagueId[rostersArray[0].league_id] = rostersArray; // Assuming league_id is consistent within the array
+                    }
+                });
+                setAllLeagueRosters(rostersByLeagueId);
 
             } catch (err) {
-                console.error("Error calculating power rankings or chart data:", err);
-                setError(`Failed to calculate power rankings or chart data: ${err.message}. Ensure historical data is complete and accurate.`);
+                console.error("Error loading auxiliary data (NFL players/state/rosters):", err);
+                setError(`Failed to load auxiliary data: ${err.message}`);
+            } finally {
                 setLoading(false);
             }
         };
 
-        loadPowerRankingsAndSleeperData();
-    }, [historicalMatchups, getDisplayTeamName]);
+        loadAuxiliaryData();
+    }, [historicalMatchups]); // Rerun if historicalMatchups changes
 
-    const renderMovement = (movement) => {
-        if (movement === 0) {
-            return <span className="text-gray-500">—</span>;
-        } else if (movement > 0) {
-            return (
-                <span className="text-green-600 flex items-center justify-start">
-                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg>
-                    {movement}
-                </span>
-            );
-        } else { // movement < 0
-            return (
-                <span className="text-red-600 flex items-center justify-start">
-                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
-                    {Math.abs(movement)}
-                </span>
-            );
+    // Effect to calculate power rankings and chart data once all necessary data is loaded
+    useEffect(() => {
+        if (!loading && !error && Object.keys(historicalMatchups).length > 0 && Object.keys(allLeagueRosters).length > 0) {
+            try {
+                // Determine the most recent season available in historical matchups
+                const seasons = Object.keys(historicalMatchups);
+                const mostRecentSeason = seasons.length > 0 ? Math.max(...seasons.map(Number)).toString() : null;
+
+                if (mostRecentSeason) {
+                    const currentSeasonRankings = calculatePowerRankings(historicalMatchups, mostRecentSeason, allLeagueRosters);
+                    setPowerRankings(currentSeasonRankings);
+                } else {
+                    setPowerRankings([]);
+                }
+
+                // Calculate historical rankings for the chart
+                const hRankings = calculateHistoricalPowerRankings(historicalMatchups, allLeagueRosters);
+                console.log("Calculated Historical Rankings:", hRankings); // Debugging
+
+                // Prepare data for the chart
+                const chartLabels = Object.keys(hRankings).sort((a, b) => parseInt(a) - parseInt(b)); // Seasons as labels
+                const datasets = {}; // Map: teamName -> array of scores per season
+
+                // Initialize datasets for all teams that appear in any season
+                chartLabels.forEach(season => {
+                    if (hRankings[season]) {
+                        hRankings[season].forEach(ranking => {
+                            if (!datasets[ranking.teamName]) {
+                                datasets[ranking.teamName] = new Array(chartLabels.length).fill(null); // Fill with null initially
+                            }
+                        });
+                    }
+                });
+
+                // Populate datasets with scores
+                chartLabels.forEach((season, seasonIndex) => {
+                    if (hRankings[season]) {
+                        hRankings[season].forEach(ranking => {
+                            if (datasets[ranking.teamName]) {
+                                datasets[ranking.teamName][seasonIndex] = ranking.totalScore;
+                            }
+                        });
+                    }
+                });
+
+                const chartDatasets = Object.keys(datasets).map(teamName => ({
+                    label: getDisplayTeamName(teamName),
+                    data: datasets[teamName],
+                    borderColor: `hsl(${Math.random() * 360}, 70%, 50%)`, // Random color for each team
+                    tension: 0.1,
+                    fill: false,
+                }));
+
+                setHistoricalChartData({
+                    labels: chartLabels,
+                    datasets: chartDatasets,
+                });
+
+            } catch (err) {
+                console.error("Error calculating power rankings or chart data:", err);
+                setError(`Failed to calculate power rankings: ${err.message}`);
+            }
         }
+    }, [historicalMatchups, allLeagueRosters, loading, error, getDisplayTeamName]);
+
+
+    const chartOptions = {
+        responsive: true,
+        maintainAspectRatio: false, // Allows chart to take available height
+        plugins: {
+            legend: {
+                position: 'top',
+                labels: {
+                    font: {
+                        size: 14,
+                        family: 'Inter, sans-serif',
+                    },
+                    color: '#333',
+                },
+            },
+            title: {
+                display: true,
+                text: 'Historical Power Ranking Trends',
+                font: {
+                    size: 18,
+                    family: 'Inter, sans-serif',
+                    weight: 'bold',
+                },
+                color: '#333',
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        let label = context.dataset.label || '';
+                        if (label) {
+                            label += ': ';
+                        }
+                        if (context.parsed.y !== null) {
+                            label += context.parsed.y.toFixed(2);
+                        }
+                        return label;
+                    }
+                }
+            }
+        },
+        scales: {
+            x: {
+                title: {
+                    display: true,
+                    text: 'Season',
+                    font: {
+                        size: 16,
+                        family: 'Inter, sans-serif',
+                    },
+                    color: '#555',
+                },
+                grid: {
+                    display: false,
+                },
+            },
+            y: {
+                title: {
+                    display: true,
+                    text: 'Power Ranking Score',
+                    font: {
+                        size: 16,
+                        family: 'Inter, sans-serif',
+                    },
+                    color: '#555',
+                },
+                beginAtZero: false,
+                grid: {
+                    color: 'rgba(0, 0, 0, 0.05)',
+                },
+            },
+        },
     };
 
+    if (loading) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[300px] text-blue-600">
+                <svg className="animate-spin h-12 w-12 text-blue-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p className="text-xl font-medium">Loading power rankings and historical data...</p>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="text-center text-red-600 p-6 bg-red-50 rounded-lg shadow-md">
+                <p className="text-lg font-semibold mb-2">Error Loading Data</p>
+                <p className="text-md">{error}</p>
+                <p className="text-sm mt-3">Please ensure your Sleeper API calls are configured correctly and you have an active internet connection.</p>
+            </div>
+        );
+    }
+
+    // Determine the most recent season available for display in the table
+    const seasons = Object.keys(historicalMatchups);
+    const mostRecentSeason = seasons.length > 0 ? Math.max(...seasons.map(Number)).toString() : null;
+    const rankingsForDisplay = mostRecentSeason ? powerRankings : [];
+
+
     return (
-        <div className="w-full max-w-4xl bg-white p-8 rounded-lg shadow-md mt-4">
-            <h2 className="text-2xl font-bold text-blue-700 mb-4 text-center">
-                {powerRankings.length > 0
-                    ? `Power Rankings (DPR) - ${powerRankings[0].year} Season (Week ${currentWeek})`
-                    : 'Current Power Rankings'}
-            </h2>
-            {loading ? (
-                <p className="text-center text-gray-600">Calculating power rankings...</p>
-            ) : error ? (
-                <p className="text-center text-red-500 font-semibold">{error}</p>
-            ) : powerRankings.length > 0 ? (
-                <>
-                    <div className="overflow-x-auto mb-8">
-                        <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
-                            <thead className="bg-blue-100">
+        <div className="p-4 sm:p-6 lg:p-8 bg-white rounded-lg shadow-xl max-w-full mx-auto">
+            <h2 className="text-3xl font-bold text-gray-800 mb-6 text-center">Power Rankings</h2>
+
+            {mostRecentSeason && (
+                <div className="mb-8">
+                    <h3 className="text-2xl font-semibold text-blue-700 mb-4 text-center">Current Season ({mostRecentSeason}) Rankings</h3>
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full bg-white rounded-lg shadow-md overflow-hidden">
+                            <thead className="bg-blue-600 text-white">
                                 <tr>
-                                    <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Rank</th>
-                                    <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-center">Change</th> {/* Changed Movement to Change and added text-center */}
-                                    <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th> {/* This will now include avatar */}
-                                    <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">DPR</th>
-                                    <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record (W-L)</th>
-                                    <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Points For</th>
-                                    <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Points Against</th>
-                                    <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Luck Score</th>
+                                    <th className="py-3 px-4 text-left text-sm font-semibold">Rank</th>
+                                    <th className="py-3 px-4 text-left text-sm font-semibold">Team Name</th>
+                                    <th className="py-3 px-4 text-left text-sm font-semibold">Record (W-L)</th>
+                                    <th className="py-3 px-4 text-left text-sm font-semibold">Points For</th>
+                                    <th className="py-3 px-4 text-left text-sm font-semibold">Power Score</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                {powerRankings.map((row, rowIndex) => {
-                                    const sleeperUserId = TEAM_NAME_TO_SLEEPER_ID_MAP[row.team];
-                                    const sleeperTeamData = sleeperUsersMap[sleeperUserId];
-                                    const displayTeamName = sleeperTeamData ? sleeperTeamData.teamName : row.team;
-                                    const avatarUrl = sleeperTeamData ? sleeperTeamData.avatar : getSleeperAvatarUrl(''); // Use sleeperTeamData.avatar directly
-
-                                    return (
-                                        <tr key={row.team} className={rowIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                            <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{row.rank}</td>
-                                            <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200 text-center">{renderMovement(row.movement)}</td> {/* Added text-center */}
-                                            <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
-                                                <div className="flex items-center space-x-2">
-                                                    {/* The img tag will now always have a src due to getSleeperAvatarUrl's fallback */}
-                                                    <img src={avatarUrl} alt={`${displayTeamName}'s avatar`} className="w-8 h-8 rounded-full object-cover" />
-                                                    <span>{displayTeamName}</span>
-                                                </div>
-                                            </td>
-                                            <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{formatDPR(row.dpr)}</td>
-                                            <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{renderRecordNoTies(row.wins, row.losses)}</td>
-                                            <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{formatPoints(row.pointsFor)}</td>
-                                            <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{formatPoints(row.pointsAgainst)}</td>
-                                            <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{formatLuckRating(row.luckRating)}</td>
-                                        </tr>
-                                    );
-                                })}
+                            <tbody className="divide-y divide-gray-200">
+                                {rankingsForDisplay.map((team, index) => (
+                                    <tr key={team.teamName} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                                        <td className="py-3 px-4 text-sm text-gray-700">{index + 1}</td>
+                                        <td className="py-3 px-4 text-sm text-gray-700 font-medium">{getDisplayTeamName(team.teamName)}</td>
+                                        <td className="py-3 px-4 text-sm text-gray-700">{team.wins}-{team.losses}</td>
+                                        <td className="py-3 px-4 text-sm text-gray-700">{team.pointsFor.toFixed(2)}</td>
+                                        <td className="py-3 px-4 text-sm text-gray-700 font-semibold">{team.totalScore}</td>
+                                    </tr>
+                                ))}
                             </tbody>
                         </table>
                     </div>
-
-                    {weeklyChartData.length > 0 && (
-                        <section className="mt-8">
-                            <h3 className="text-xl font-bold text-blue-700 mb-4 text-center">
-                                DPR Rank by Week - {powerRankings[0].year} Season
-                            </h3>
-                            <ResponsiveContainer width="100%" height={400}>
-                                <LineChart
-                                    data={weeklyChartData}
-                                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                                >
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-                                    <XAxis dataKey="week" label={{ value: "Week", position: "insideBottom", offset: 0 }} />
-                                    <YAxis
-                                        label={{ value: "Rank", angle: -90, position: "insideLeft" }}
-                                        domain={[1, maxTeamsInChart]}
-                                        ticks={Array.from({ length: maxTeamsInChart }, (_, i) => i + 1)}
-                                        allowDecimals={false}
-                                        reversed={true}
-                                        interval={0}
-                                    />
-                                    <Tooltip content={<CustomDPRRankTooltip />} />
-                                    <Legend />
-                                    {chartTeams.map((team, index) => (
-                                        <Line
-                                            key={team}
-                                            type="monotone"
-                                            dataKey={team}
-                                            stroke={CHART_COLORS[index % CHART_COLORS.length]}
-                                            activeDot={{ r: 8 }}
-                                            strokeWidth={2}
-                                        />
-                                    ))}
-                                </LineChart>
-                            </ResponsiveContainer>
-                            <p className="mt-4 text-sm text-gray-500 text-center">
-                                This graph shows each team's rank based on their Dominance Power Ranking (DPR), calculated cumulatively based on all games played up to each specific week of the newest season. Rank 1 indicates the highest DPR.
-                            </p>
-                        </section>
-                    )}
-                </>
-            ) : (
-                <p className="text-center text-gray-600">No power rankings data found for the current season.</p>
+                </div>
             )}
-            <p className="mt-4 text-sm text-gray-500 text-center">
-                Power Rankings are calculated based on DPR (Dominance Power Ranking) for the newest season available.
-            </p>
+
+            <div className="mt-10">
+                <h3 className="text-2xl font-semibold text-blue-700 mb-4 text-center">Historical Power Ranking Trends</h3>
+                <div className="relative h-96 w-full">
+                    {historicalChartData && historicalChartData.labels.length > 0 && historicalChartData.datasets.length > 0 ? (
+                        <Line data={historicalChartData} options={chartOptions} />
+                    ) : (
+                        <p className="text-center text-gray-600 py-10">No sufficient historical data to display chart.</p>
+                    )}
+                </div>
+            </div>
+
+            <div className="mt-8 p-4 bg-yellow-50 border border-yellow-200 rounded-md text-sm text-yellow-800">
+                <p><strong>Note on Power Ranking Calculation:</strong> This is a simplified power ranking system. It currently uses a weighted average of Win/Loss Record (40%), Points For (30%), and a mock Roster Strength (30%). The Roster Strength component is a placeholder and currently uses a random score. For a more robust ranking, you would integrate actual roster data and player valuations.</p>
+            </div>
         </div>
     );
 };
