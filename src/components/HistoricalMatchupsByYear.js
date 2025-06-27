@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchUsersData, fetchRostersWithDetails } from '../utils/sleeperApi';
-import { CURRENT_LEAGUE_ID } from '../config';
+import { fetchUsersData, fetchRostersWithDetails, CURRENT_LEAGUE_ID } from '../utils/sleeperApi'; // Corrected import for CURRENT_LEAGUE_ID
 
 /**
  * HistoricalMatchupsByYear component displays all historical matchups grouped by year and week.
@@ -26,6 +25,8 @@ const HistoricalMatchupsByYear = ({ historicalMatchups, getDisplayTeamName }) =>
 
             try {
                 // Fetch league details to get previous league IDs
+                // Using a direct fetch for league details here to traverse history.
+                // Note: fetchLeagueData from sleeperApi could also be used if it provides the league object.
                 const leagueDetails = await fetch(`https://api.sleeper.app/v1/league/${CURRENT_LEAGUE_ID}`);
                 if (!leagueDetails.ok) {
                     throw new Error(`Failed to fetch current league details: ${leagueDetails.statusText}`);
@@ -54,6 +55,7 @@ const HistoricalMatchupsByYear = ({ historicalMatchups, getDisplayTeamName }) =>
                         rosters.forEach(roster => {
                             const user = users.find(u => u.userId === roster.owner_id);
                             if (user) {
+                                // Prefer teamName from metadata, fallback to display_name
                                 teamNameMap.set(roster.roster_id, user.teamName || user.displayName);
                             }
                         });
