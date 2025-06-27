@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Line } from 'react-chartjs-2';
-import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js'; // Ensure chart.js is imported
 import { fetchNFLPlayers, fetchNFLState, fetchRostersWithDetails, TEAM_NAME_TO_SLEEPER_ID_MAP, RETIRED_MANAGERS } from '../utils/sleeperApi';
 
 // Register Chart.js components
@@ -321,7 +321,7 @@ const PowerRankings = ({ historicalMatchups, getDisplayTeamName }) => {
                     family: 'Inter, sans-serif',
                     weight: 'bold',
                 },
-                color: '#333',
+                    color: '#333',
             },
             tooltip: {
                 callbacks: {
