@@ -150,7 +150,8 @@ const App = () => {
             if (leagueDetail) {
                 leagueDetailsMap.set(currentLeagueId, leagueDetail);
                 currentLeagueId = leagueDetail.previous_league_id;
-                console.log(`Fetched league ${leagueId}. Previous league ID: ${currentLeagueId}`);
+                // Corrected console.log: use currentLeagueId directly
+                console.log(`Fetched league ${leagueDetail.league_id}. Previous league ID: ${currentLeagueId}`);
             } else {
                 console.log(`No details found for league ID ${currentLeagueId} or end of chain.`);
                 currentLeagueId = null; // End of history or error
