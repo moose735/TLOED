@@ -15,8 +15,8 @@ const Dashboard = ({ getDisplayTeamName }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [leagueInfo, setLeagueInfo] = useState(null);
-  const [users, setUsers] = useState([]); // Raw user objects from Sleeper
-  const [rosters, setRosters] = useState([]); // Raw roster objects from Sleeper
+  const [users, setUsers] = useState([]);
+  const [rosters, setRosters] = useState([]);
   const [nflPlayers, setNflPlayers] = useState({});
   const [transactions, setTransactions] = useState([]);
   const [draftStartTime, setDraftStartTime] = useState(null); // NEW: State for draft start timestamp
@@ -40,7 +40,7 @@ const Dashboard = ({ getDisplayTeamName }) => {
         // 2. Fetch Users, Rosters, NFL Players, and League Drafts concurrently
         const [fetchedUsers, fetchedRosters, fetchedNflPlayers, fetchedLeagueDrafts, fetchedTransactions] = await Promise.all([
           fetchUsersData(CURRENT_LEAGUE_ID),
-          fetchRostersWithDetails(CURRENT_LEAGUE_ID), // This fetches rosters enriched with owner info
+          fetchRostersWithDetails(CURRENT_LEAGUE_ID), // This already includes owner details
           fetchNFLPlayers(),
           fetchLeagueDrafts(CURRENT_LEAGUE_ID), // Fetch drafts for the current league
           currentWeek ? fetchTransactionsForWeek(CURRENT_LEAGUE_ID, currentWeek) : Promise.resolve([]),
@@ -115,13 +115,10 @@ const Dashboard = ({ getDisplayTeamName }) => {
     };
   }, [draftStartTime]); // Re-run this effect if draftStartTime changes
 
-  // Helper to get user display name from a user_id or owner_id.
-  // It uses the getDisplayTeamName prop from App.js for consistent mapping.
+  // Helper to get user display name from owner_id
   const getUserDisplayName = (userId) => {
-      // Find the user object in the `users` state based on `user_id` (Sleeper API property)
-      const user = users.find(u => u.user_id === userId);
-      // Pass the found user's display_name or team_name (or user_id if not found) to the central getDisplayTeamName from App.js
-      return user ? getDisplayTeamName(user.user_id) : 'Unknown User';
+    const user = users.find(u => u.userId === userId);
+    return user ? getDisplayTeamName(user.teamName || user.displayName) : 'Unknown User';
   };
 
   // Helper to get player name from player_id using NFL players data
@@ -213,8 +210,7 @@ const Dashboard = ({ getDisplayTeamName }) => {
               {sortedRosters.length > 0 ? sortedRosters.map((roster, index) => (
                 <tr key={roster.roster_id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                   <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">{index + 1}</td>
-                  {/* Pass roster.owner_id to getDisplayTeamName for consistent mapping */}
-                  <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-700">{getDisplayTeamName(roster.owner_id)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-700">{getDisplayTeamName(roster.ownerTeamName)}</td>
                   <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-700">
                     {roster.settings?.wins || 0}-{roster.settings?.losses || 0}
                   </td>
@@ -257,8 +253,7 @@ const Dashboard = ({ getDisplayTeamName }) => {
                                     className="w-6 h-6 rounded-full mr-1"
                                     onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/150x150/cccccc/000000?text=No+Headshot'; }}
                                 />
-                                {/* Use getDisplayTeamName on the roster's owner_id */}
-                                {getPlayerName(playerId)} ({getUserDisplayName(rosters.find(r => r.roster_id === rosterId)?.owner_id)})
+                                {getPlayerName(playerId)} ({getUserDisplayName(users.find(u => u.roster_id === rosterId)?.userId)})
                             </div>
                         ))}
                     </div>
@@ -269,16 +264,15 @@ const Dashboard = ({ getDisplayTeamName }) => {
                         <span className="mr-2">&#x2716;</span> {/* X mark */}
                         <span className="font-semibold">Dropped:</span>
                         {Object.entries(transaction.drops).map(([playerId, rosterId]) => (
-                               <div key={playerId} className="ml-2 flex items-center">
-                                    <img
-                                        src={getSleeperPlayerHeadshotUrl(playerId)}
-                                        alt={getPlayerName(playerId)}
-                                        className="w-6 h-6 rounded-full mr-1"
-                                        onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/150x150/cccccc/000000?text=No+Headshot'; }}
-                                    />
-                                    {/* Use getDisplayTeamName on the roster's owner_id */}
-                                    {getPlayerName(playerId)} ({getUserDisplayName(rosters.find(r => r.roster_id === rosterId)?.owner_id)})
-                                </div>
+                             <div key={playerId} className="ml-2 flex items-center">
+                                <img
+                                    src={getSleeperPlayerHeadshotUrl(playerId)}
+                                    alt={getPlayerName(playerId)}
+                                    className="w-6 h-6 rounded-full mr-1"
+                                    onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/150x150/cccccc/000000?text=No+Headshot'; }}
+                                />
+                                {getPlayerName(playerId)} ({getUserDisplayName(users.find(u => u.roster_id === rosterId)?.userId)})
+                            </div>
                         ))}
                     </div>
                   )}
