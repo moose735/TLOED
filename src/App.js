@@ -19,7 +19,7 @@ import Dashboard from './components/Dashboard';
 import HistoricalMatchupsByYear from './components/HistoricalMatchupsByYear';
 
 // Import Sleeper API functions to fetch league details for dynamic tab population
-// Ensure CURRENT_LEAGUE_ID is imported from here
+// Ensure CURRENT_LEAGUE_ID and TEAM_NAME_TO_SLEEPER_ID_MAP are imported from here
 import { fetchLeagueDetails, fetchAllHistoricalMatchups, TEAM_NAME_TO_SLEEPER_ID_MAP, fetchRostersWithDetails, fetchUsersData, CURRENT_LEAGUE_ID } from './utils/sleeperApi';
 
 
