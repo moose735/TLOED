@@ -521,7 +521,7 @@ const App = () => {
               <Head2HeadGrid
                 historicalMatchups={historicalMatchups}
                 getDisplayTeamName={getDisplayTeamName}
-                allLeagueStats={allCareerStats} {/* Pass career stats here */}
+                allLeagueStats={allCareerStats}
               />
             )}
             {activeTab === TABS.DPR_ANALYSIS && (
