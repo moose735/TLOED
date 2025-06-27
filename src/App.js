@@ -289,23 +289,29 @@ const App = () => {
           {/* Dropdown for Teams (dynamic) */}
           {NAV_CATEGORIES.TEAMS.subTabs.length > 0 && (
             <div className="relative group">
-              <button className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none flex items-center transition-colors duration-200">
+              <button
+                className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none flex items-center transition-colors duration-200"
+                onClick={() => toggleSubMenu('TEAMS')}
+              >
                 {NAV_CATEGORIES.TEAMS.label}
-                <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <svg className={`w-5 h-5 transition-transform duration-200 ${openSubMenu === 'TEAMS' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
                 </svg>
               </button>
-              <div className="absolute left-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 max-h-60 overflow-y-auto z-20">
-                {NAV_CATEGORIES.TEAMS.subTabs.map((item) => (
-                  <button
-                    key={item.label}
-                    onClick={() => handleTabChange(item.tab, item.teamName)}
-                    className={`block w-full text-left px-4 py-2 text-sm transition-colors duration-200 ${selectedTeam === item.teamName && activeTab === TABS.TEAM_DETAIL ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
+              {openSubMenu === 'TEAMS' && (
+                <ul className="pl-6 mt-2 space-y-2 transition-all duration-300 ease-in-out origin-top">
+                  {NAV_CATEGORIES.TEAMS.subTabs.map((subTab) => (
+                    <li key={subTab.label}>
+                      <button
+                        onClick={() => handleTabChange(subTab.tab, subTab.teamName)}
+                        className={`block w-full text-left py-2 px-3 rounded-md text-base transition-colors duration-200 ${selectedTeam === subTab.teamName && activeTab === TABS.TEAM_DETAIL ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
+                      >
+                        {subTab.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
 
