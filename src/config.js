@@ -1,15 +1,29 @@
-// config.js
+// src/config.js
 
-// Removed Google Apps Script URLs as data is now fetched directly from Sleeper API.
-// export const GOOGLE_SHEET_POWER_RANKINGS_API_URL = 'https://script.google.com/macros/s/AKfycbxU2TLDiOxoym2VETq3qrfwUCjE9O0c_gbwHhfAgnrk2faxcBt30EW0jJIq6WXwtYhPdw/exec';
-// export const HISTORICAL_MATCHUPS_API_URL = 'https://script.google.com/macros/s/AKfycbxpo21zzZgNamYShESfqe-SX09miJz2LK7SpdlYrtHXQplneB3bF2xu2byy0HhjM8e-/exec';
+// Easily configurable current league ID.
+// IMPORTANT: Update this to your league's current ID.
+export const CURRENT_LEAGUE_ID = '1181984921049018368';
 
-// Custom team name mappings (Optional: for use if you want to map names from historical matchups to custom display names)
-// Example: { "TeamA_from_Google_Sheet": "My Awesome Team", "TeamB_from_Google_Sheet": "Gridiron Heroes" }
-// App.js will currently use names directly from HISTORICAL_MATCHUPS_API_URL for dropdown and display.
-// You can integrate this mapping into getMappedTeamName if you need to apply custom names later.
+// Custom team name mappings (Optional: for use if you want to map specific Sleeper User IDs
+// to custom display names for aesthetic purposes beyond the Sleeper display name).
+// This map allows you to override or define preferred display names for user_ids.
+// Example: { "SleeperUserID1": "My Awesome Team", "SleeperUserID2": "Gridiron Heroes" }
+// This will be used in App.js's getMappedTeamName to prioritize custom names.
 export const NICKNAME_TO_SLEEPER_USER = {
-  // Add your custom mappings here, e.g.:
-  // "LastnameA": "Team Rocket",
-  // "LastnameB": "The Mavericks",
+  // Add your custom mappings here. The key should be the Sleeper User ID,
+  // and the value should be the custom display name.
+  '783790952367169536': 'Ainsworth',
+  '783761299275382784': 'Bjarnar',
+  '783789717920534528': 'Blumbergs',
+  '783789669597999104': 'Boilard',
+  '783767734491127808': 'Dembski',
+  '467074573125283840': 'Irwin',
+  '783778036578418688': 'Meer',
+  '783763304463147008': 'Neufeglise',
+  '783758716272009216': 'O\'Donoghue',
+  '783760455581896704': 'Reis',
+  '783760119859560448': 'Reynolds',
+  '783760799793188864': 'Rogers',
 };
+
+// You can add other global configuration variables here if needed.
