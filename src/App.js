@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  CURRENT_LEAGUE_ID,
-} from './config';
+import { CURRENT_LEAGUE_ID } from './config'; // Fixed import
 import { fetchAllHistoricalMatchups, fetchWinnersBracket, TEAM_NAME_TO_SLEEPER_ID_MAP, getTeamNameFromSleeperId, inferMatchupMetadata } from './utils/sleeperApi';
 import PowerRankings from './lib/PowerRankings';
 import LeagueHistory from './lib/LeagueHistory';
