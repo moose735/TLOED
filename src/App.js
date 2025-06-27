@@ -1,8 +1,9 @@
 // App.js
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  // No CURRENT_LEAGUE_ID here, as it's from sleeperApi.js
-} from './config';
+  // Removed HISTORICAL_MATCHUPS_API_URL and GOOGLE_SHEET_POWER_RANKINGS_API_URL as we'll use Sleeper API directly
+  CURRENT_LEAGUE_ID, // Import CURRENT_LEAGUE_ID
+} from './config'; // Corrected import path for config.js to be within src/
 
 // Import existing components from your provided App.js
 import PowerRankings from './lib/PowerRankings';
@@ -17,11 +18,8 @@ import Dashboard from './components/Dashboard';
 // NEW: Import the HistoricalMatchupsByYear component
 import HistoricalMatchupsByYear from './components/HistoricalMatchupsByYear';
 
-// Import Sleeper API functions to fetch league details for dynamic tab population
-// Ensure CURRENT_LEAGUE_ID and TEAM_NAME_TO_SLEEPER_ID_MAP are imported from here
-import { fetchLeagueDetails, fetchAllHistoricalMatchups, TEAM_NAME_TO_SLEEPER_ID_MAP, fetchRostersWithDetails, fetchUsersData, CURRENT_LEAGUE_ID } from './utils/sleeperApi';
-// Import calculations to get career stats
-import { calculateAllLeagueMetrics } from './utils/calculations';
+// Import Sleeper API functions
+import { fetchLeagueDetails, fetchAllHistoricalMatchups } from './utils/sleeperApi';
 
 
 // Define the available tabs and their categories for the dropdown
@@ -67,11 +65,6 @@ const App = () => {
   const [loadingHistoricalData, setLoadingHistoricalData] = useState(true);
   const [historicalDataError, setHistoricalDataError] = useState(null);
   const [selectedTeam, setSelectedTeam] = useState(null);
-  const [teamNameToDisplayMap, setTeamNameToDisplayMap] = useState(new Map()); // Maps internal names (Ainsworth) to display names
-  // New state for mapping Sleeper IDs to display names
-  const [rosterIdToDisplayNameMap, setRosterIdToDisplayNameMap] = useState(new Map());
-  const [userIdToDisplayNameMap, setUserIdToDisplayNameMap] = useState(new Map());
-  const [allCareerStats, setAllCareerStats] = useState([]); // Stores careerDPRData for use in other components
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [openSubMenu, setOpenSubMenu] = useState(null);
@@ -82,158 +75,69 @@ const App = () => {
     setOpenSubMenu(openSubMenu === menuName ? null : menuName);
   };
 
-  /**
-   * Universal function to get the display name for a team given various identifiers.
-   * This function now directly uses the current state of the maps, ensuring it's always up-to-date.
-   * @param {string} identifier - Can be a Sleeper roster_id, a Sleeper user_id, or an internal team name key (e.g., 'Ainsworth').
-   * @returns {string} The display name for the team.
-   */
-  const getDisplayTeamName = useCallback((identifier) => {
-    if (typeof identifier !== 'string' || !identifier) return 'Unknown Team'; // Return placeholder if invalid
 
-    // 1. Try to resolve if it's a roster_id
-    if (rosterIdToDisplayNameMap.has(identifier)) {
-        return rosterIdToDisplayNameMap.get(identifier);
-    }
-    // 2. Try to resolve if it's a user_id
-    if (userIdToDisplayNameMap.has(identifier)) {
-        return userIdToDisplayNameMap.get(identifier);
-    }
-    // 3. Try to resolve if it's an internal team name key (e.g., 'Ainsworth') mapped to a display name
-    // This assumes teamNameToDisplayMap holds your desired display names for internal keys.
-    if (teamNameToDisplayMap.has(identifier)) {
-        return teamNameToDisplayMap.get(identifier);
-    }
+  // Function to get mapped team names (case-insensitive, trim)
+  const getMappedTeamName = useCallback((teamName) => {
+    if (typeof teamName !== 'string' || !teamName) return '';
+    const trimmedName = teamName.trim();
+    // This map should ideally be populated from sleeperApi.js's TEAM_NAME_TO_SLEEPER_ID_MAP
+    // For now, let's assume it maps directly, or enhance it if display names differ
+    return trimmedName; // Placeholder, as sleeperApi handles the actual mapping internally
+  }, []);
 
-    const trimmedIdentifier = identifier.trim();
-    return trimmedIdentifier === '' ? 'Unknown Team' : trimmedIdentifier;
-  }, [teamNameToDisplayMap, rosterIdToDisplayNameMap, userIdToDisplayNameMap]); // Dependencies for useCallback
-
-
-  // Effect 1: Fetch historical matchup data and populate all team name maps
+  // Fetch historical matchup data and championship data
   useEffect(() => {
-    const fetchAndProcessInitialData = async () => {
+    const fetchAndProcessHistoricalData = async () => {
       setLoadingHistoricalData(true);
       setHistoricalDataError(null);
-      console.log("Starting initial data fetch and processing (historical matchups, users, rosters)...");
 
       try {
-        // Fetch historical matchup data
-        console.log("Attempting to fetch all historical matchups...");
+        // Use the fetchAllHistoricalMatchups from sleeperApi.js
         const fetchedMatchupData = await fetchAllHistoricalMatchups();
-        setHistoricalMatchups(fetchedMatchupData);
-        console.log("Fetched historical matchup data:", fetchedMatchupData);
-        if (Object.keys(fetchedMatchupData).length === 0) {
-            console.warn("No historical matchup data found. This might lead to empty content.");
+        if (Object.keys(fetchedMatchupData).length > 0) {
+          setHistoricalMatchups(fetchedMatchupData);
+
+          // Dynamically populate TEAMS subTabs
+          const uniqueTeamsSet = new Set();
+          // Iterate through seasons and weeks to get all team names
+          for (const season in fetchedMatchupData) {
+            const seasonMatchups = fetchedMatchupData[season];
+            for (const week in seasonMatchups) {
+              seasonMatchups[week].forEach(match => {
+                // IMPORTANT: The raw matchup data from Sleeper API does NOT contain team names directly.
+                // It contains `roster_id` and `owner_id`.
+                // To get actual team names, we would need to:
+                // 1. Fetch rosters for each league/season.
+                // 2. Fetch users for each league/season.
+                // 3. Map roster_id to owner_id, and owner_id to teamName.
+                // This is a more complex data processing step.
+                // For now, let's just make sure the TeamDetailPage still functions if selected via direct URL,
+                // and acknowledge that dynamic population of team names here requires more logic.
+                // For simplicity, I'm commenting out the team population for now, as it's not directly supported
+                // by the raw historicalMatchups data structure as is.
+                // If you want dynamic team list, we need to enhance the data processing in sleeperApi.js
+                // to include resolved team names within the historicalMatchups object.
+
+                // Placeholder for future team name extraction from fetchedMatchupData if enriched
+                // For now, TeamDetailPage relies on the passed `teamName` via `handleTabChange`.
+              });
+            }
+          }
+
+          // Placeholder: Update NAV_CATEGORIES.TEAMS.subTabs if team name resolution is implemented
+          // For now, keep it empty or populate it manually for testing if needed.
+          NAV_CATEGORIES.TEAMS.subTabs = []; // Keep empty until full team name resolution is implemented.
+
+        } else {
+          console.warn("No historical matchup data found from Sleeper API.");
+          setHistoricalDataError("No historical matchup data could be loaded from Sleeper API. Check CURRENT_LEAGUE_ID and API connectivity.");
         }
-
-        // --- Start: Dynamic Team Name Population for Navigation and ID Resolution ---
-        const tempTeamNameToDisplayMap = new Map(); // For internal names (from TEAM_NAME_TO_SLEEPER_ID_MAP keys) to display names
-        const tempUserIdToDisplayNameMap = new Map(); // For user_id to display name
-        const tempRosterIdToDisplayNameMap = new Map(); // For roster_id to display name
-
-        let currentLeagueId = CURRENT_LEAGUE_ID;
-        const leagueIds = [];
-        const usersByLeague = {};
-        const rostersByLeague = {};
-
-        console.log("Starting league details traversal from CURRENT_LEAGUE_ID:", CURRENT_LEAGUE_ID);
-        while (currentLeagueId && currentLeagueId !== '0' && !leagueIds.includes(currentLeagueId)) {
-            leagueIds.push(currentLeagueId);
-            const leagueDetail = await fetchLeagueDetails(currentLeagueId);
-            if (leagueDetail) {
-                currentLeagueId = leagueDetail.previous_league_id;
-                console.log(`Fetched league ${leagueDetail.league_id}. Previous league ID: ${currentLeagueId}`);
-            } else {
-                console.log(`No details found for league ID ${currentLeagueId} or end of chain.`);
-                currentLeagueId = null; // End of history or error
-            }
-        }
-        console.log("Identified historical league IDs:", leagueIds);
-
-        // Fetch users and rosters for all identified league IDs in parallel
-        console.log("Fetching user data for all identified leagues...");
-        const allUsersPromises = leagueIds.map(id => fetchUsersData(id));
-        const allRostersPromises = leagueIds.map(id => fetchRostersWithDetails(id));
-
-        const allUsersResults = await Promise.all(allUsersPromises);
-        const allRostersResults = await Promise.all(allRostersPromises);
-        console.log("All user data fetched:", allUsersResults);
-        console.log("All roster data fetched:", allRostersResults);
-
-        // Process users to build userIdToDisplayNameMap first
-        allUsersResults.forEach((users, index) => {
-            const leagueId = leagueIds[index];
-            usersByLeague[leagueId] = users;
-            if (users && users.length > 0) {
-                users.forEach(user => {
-                    const displayName = user.teamName || user.displayName || user.metadata?.team_name || user.display_name || user.user_id;
-                    tempUserIdToDisplayNameMap.set(user.userId, displayName); // Corrected: user.userId for the key
-                });
-            } else {
-                console.warn(`No users found for league ID: ${leagueId}`);
-            }
-        });
-
-        // Now process rosters using the populated userIdToDisplayNameMap
-        allRostersResults.forEach((rosters, index) => {
-            const leagueId = leagueIds[index];
-            rostersByLeague[leagueId] = rosters;
-            if (rosters && rosters.length > 0) {
-                rosters.forEach(roster => {
-                    const ownerDisplayName = tempUserIdToDisplayNameMap.get(roster.owner_id);
-                    if (ownerDisplayName) {
-                        tempRosterIdToDisplayNameMap.set(roster.roster_id, ownerDisplayName);
-                    } else {
-                        // Fallback for roster_id if owner_id doesn't resolve
-                        tempRosterIdToDisplayNameMap.set(roster.roster_id, `Roster: ${roster.roster_id}`);
-                        console.warn(`Could not find display name for roster ID ${roster.roster_id} (owner_id: ${roster.owner_id}). Using fallback.`);
-                    }
-                });
-            } else {
-                console.warn(`No rosters found for league ID: ${leagueId}`);
-            }
-        });
-
-        // Populate teamNameToDisplayMap using the STATIC TEAM_NAME_TO_SLEEPER_ID_MAP
-        // and the now populated tempUserIdToDisplayNameMap
-        for (const internalTeamName in TEAM_NAME_TO_SLEEPER_ID_MAP) {
-            const sleeperUserId = TEAM_NAME_TO_SLEEPER_ID_MAP[internalTeamName];
-            const displayName = tempUserIdToDisplayNameMap.get(sleeperUserId);
-            if (displayName) {
-                tempTeamNameToDisplayMap.set(internalTeamName, displayName);
-            } else {
-                // Fallback if the Sleeper User ID from your map couldn't be resolved to a display name
-                tempTeamNameToDisplayMap.set(internalTeamName, internalTeamName); // Use internal name as display name
-                console.warn(`Could not find display name for internal team '${internalTeamName}' (Sleeper ID: ${sleeperUserId}). Using internal name as fallback.`);
-            }
-        }
-
-
-        // Set the state variables for the maps
-        setTeamNameToDisplayMap(tempTeamNameToDisplayMap);
-        setUserIdToDisplayNameMap(tempUserIdToDisplayNameMap);
-        setRosterIdToDisplayNameMap(tempRosterIdToDisplayNameMap);
-
-        console.log("Final teamNameToDisplayMap (internal to display):", tempTeamNameToDisplayMap);
-        console.log("Final userIdToDisplayNameMap (user_id to display):", tempUserIdToDisplayNameMap);
-        console.log("Final rosterIdToDisplayNameMap (roster_id to display):", tempRosterIdToDisplayNameMap);
-
-        // Dynamically populate TEAMS subTabs based on the final teamNameToDisplayMap keys
-        // This ensures the navigation reflects the names you intend, and are clickable.
-        const uniqueTeamsForNav = Array.from(tempTeamNameToDisplayMap.keys()).sort(); // Use keys from your internal map
-        NAV_CATEGORIES.TEAMS.subTabs = uniqueTeamsForNav.map(internalName => ({
-          label: tempTeamNameToDisplayMap.get(internalName), // Display name from the map
-          tab: TABS.TEAM_DETAIL,
-          teamName: internalName, // Pass the internal name to TeamDetailPage for consistency
-        }));
 
       } catch (error) {
-        console.error("Error fetching historical matchup data or league details from Sleeper API:", error);
-        setHistoricalDataError(`Failed to load league data: ${error.message}. Please check your internet connection, CURRENT_LEAGUE_ID, or the Sleeper API.`);
+        console.error("Error fetching historical matchup data from Sleeper API:", error);
+        setHistoricalDataError(`Failed to load historical data: ${error.message}. Please check your internet connection or Sleeper API.`);
       } finally {
         setLoadingHistoricalData(false);
-        console.log("Finished initial data fetch and processing. Loading state set to false.");
       }
 
       // Always use mock data for historical champions as per request
@@ -243,32 +147,8 @@ const App = () => {
       ]);
     };
 
-    fetchAndProcessInitialData();
-  }, []); // Run only once on component mount
-
-  // Effect 2: Calculate league metrics once historical data and all maps are ready
-  // This useEffect will run when historicalMatchups, or any of the display maps change
-  useEffect(() => {
-    // Check if historicalMatchups has data and if all three maps are populated
-    // (rosterIdToDisplayNameMap and userIdToDisplayNameMap are critical for getDisplayTeamName to work)
-    if (Object.keys(historicalMatchups).length > 0 &&
-        rosterIdToDisplayNameMap.size > 0 &&
-        userIdToDisplayNameMap.size > 0) {
-        console.log("Historical matchups and name maps are ready. Calculating all league metrics...");
-        // Pass the maps directly to calculateAllLeagueMetrics
-        const { careerDPRData } = calculateAllLeagueMetrics(historicalMatchups, rosterIdToDisplayNameMap, userIdToDisplayNameMap);
-        setAllCareerStats(careerDPRData);
-        console.log("Calculated all career stats:", careerDPRData);
-    } else {
-        console.log("Waiting for historical matchups or name maps to be ready before calculating metrics. Current states:", {
-            historicalMatchupsSize: Object.keys(historicalMatchups).length,
-            rosterIdToDisplayNameMapSize: rosterIdToDisplayNameMap.size,
-            userIdToDisplayNameMapSize: userIdToDisplayNameMap.size
-        });
-        setAllCareerStats([]); // Clear stats if data is not ready
-    }
-  }, [historicalMatchups, rosterIdToDisplayNameMap, userIdToDisplayNameMap]); // getDisplayTeamName removed from dependencies as it's not directly used here to trigger this effect
-
+    fetchAndProcessHistoricalData();
+  }, [getMappedTeamName]);
 
   // Handle tab change, including setting selectedTeam for TEAM_DETAIL tab
   const handleTabChange = (tab, teamName = null) => {
@@ -324,29 +204,23 @@ const App = () => {
           {/* Dropdown for Teams (dynamic) */}
           {NAV_CATEGORIES.TEAMS.subTabs.length > 0 && (
             <div className="relative group">
-              <button
-                className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none flex items-center transition-colors duration-200"
-                onClick={() => toggleSubMenu('TEAMS')}
-              >
+              <button className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none flex items-center transition-colors duration-200">
                 {NAV_CATEGORIES.TEAMS.label}
-                <svg className={`w-5 h-5 transition-transform duration-200 ${openSubMenu === 'TEAMS' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
                 </svg>
               </button>
-              {openSubMenu === 'TEAMS' && (
-                <ul className="pl-6 mt-2 space-y-2 transition-all duration-300 ease-in-out origin-top">
-                  {NAV_CATEGORIES.TEAMS.subTabs.map((subTab) => (
-                      <li key={subTab.label}>
-                        <button
-                          onClick={() => handleTabChange(subTab.tab, subTab.teamName)}
-                          className={`block w-full text-left py-2 px-3 rounded-md text-base transition-colors duration-200 ${selectedTeam === subTab.teamName && activeTab === TABS.TEAM_DETAIL ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
-                        >
-                          {subTab.label}
-                        </button>
-                      </li>
-                  ))}
-                </ul>
-              )}
+              <div className="absolute left-0 mt-2 w-48 bg-white border border-gray-200 rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 max-h-60 overflow-y-auto z-20">
+                {NAV_CATEGORIES.TEAMS.subTabs.map((item) => (
+                  <button
+                    key={item.label}
+                    onClick={() => handleTabChange(item.tab, item.teamName)}
+                    className={`block w-full text-left px-4 py-2 text-sm transition-colors duration-200 ${selectedTeam === item.teamName && activeTab === TABS.TEAM_DETAIL ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -492,13 +366,13 @@ const App = () => {
           <div className="w-full">
             {activeTab === TABS.DASHBOARD && (
               <Dashboard
-                getDisplayTeamName={getDisplayTeamName}
+                getDisplayTeamName={getMappedTeamName}
               />
             )}
             {activeTab === TABS.POWER_RANKINGS && (
               <PowerRankings
                 historicalMatchups={historicalMatchups}
-                getDisplayTeamName={getDisplayTeamName}
+                getDisplayTeamName={getMappedTeamName}
               />
             )}
             {activeTab === TABS.LEAGUE_HISTORY && (
@@ -506,7 +380,7 @@ const App = () => {
                 historicalMatchups={historicalMatchups}
                 loading={loadingHistoricalData}
                 error={historicalDataError}
-                getDisplayTeamName={getDisplayTeamName}
+                getDisplayTeamName={getMappedTeamName}
               />
             )}
             {activeTab === TABS.RECORD_BOOK && (
@@ -514,33 +388,32 @@ const App = () => {
                 historicalMatchups={historicalMatchups}
                 loading={loadingHistoricalData}
                 error={historicalDataError}
-                getDisplayTeamName={getDisplayTeamName}
+                getDisplayTeamName={getMappedTeamName}
               />
             )}
             {activeTab === TABS.HEAD_TO_HEAD && (
               <Head2HeadGrid
                 historicalMatchups={historicalMatchups}
-                getDisplayTeamName={getDisplayTeamName}
-                allLeagueStats={allCareerStats}
+                getDisplayTeamName={getMappedTeamName}
               />
             )}
             {activeTab === TABS.DPR_ANALYSIS && (
               <DPRAnalysis
                 historicalMatchups={historicalMatchups}
-                getDisplayTeamName={getDisplayTeamName}
+                getDisplayTeamName={getMappedTeamName}
               />
             )}
             {activeTab === TABS.LUCK_RATING && (
               <LuckRatingAnalysis
                 historicalMatchups={historicalMatchups}
-                getDisplayTeamName={getDisplayTeamName}
+                getDisplayTeamName={getMappedTeamName}
               />
             )}
             {/* NEW: Render HistoricalMatchupsByYear */}
             {activeTab === TABS.HISTORICAL_MATCHUPS && (
                 <HistoricalMatchupsByYear
                     historicalMatchups={historicalMatchups}
-                    getDisplayTeamName={getDisplayTeamName}
+                    getDisplayTeamName={getMappedTeamName}
                 />
             )}
 
@@ -549,13 +422,13 @@ const App = () => {
              <TeamDetailPage
                teamName={selectedTeam}
                historicalMatchups={historicalMatchups}
-               getMappedTeamName={getDisplayTeamName}
+               getMappedTeamName={getMappedTeamName}
              />
            )}
            {/* Render FinancialTracker */}
             {activeTab === TABS.FINANCIALS && (
                 <FinancialTracker
-                    getDisplayTeamName={getDisplayTeamName}
+                    getDisplayTeamName={getMappedTeamName}
                     historicalMatchups={historicalMatchups}
                 />
             )}
