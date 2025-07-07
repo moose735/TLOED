@@ -1,14 +1,14 @@
 // src/components/MatchupHistory.js
 import React, { useState, useEffect } from 'react';
-import { fetchUsersData, fetchRosterData } from '../utils/sleeperApi';
+// Import fetchRostersWithDetails instead of fetchUsersData and fetchRosterData
+import { fetchRostersWithDetails } from '../utils/sleeperApi';
 import { CURRENT_LEAGUE_ID } from '../config';
 
 const MatchupHistory = ({ sleeperHistoricalMatchups, loading, error }) => {
-  // State to store users and rosters as maps for quick lookup
-  const [usersMap, setUsersMap] = useState({});
-  const [rostersMap, setRostersMap] = useState({});
+  // We no longer need separate usersMap and rostersMap states this way
+  // We'll store the enriched rosters directly
+  const [enrichedRosters, setEnrichedRosters] = useState({});
 
-  // State for loading and error handling specific to league data
   const [loadingLeagueData, setLoadingLeagueData] = useState(true);
   const [leagueDataError, setLeagueDataError] = useState(null);
 
@@ -17,7 +17,6 @@ const MatchupHistory = ({ sleeperHistoricalMatchups, loading, error }) => {
       setLoadingLeagueData(true);
       setLeagueDataError(null);
       try {
-        // Debug: Log the CURRENT_LEAGUE_ID being used
         console.log("DEBUG: Current League ID being used:", CURRENT_LEAGUE_ID);
 
         if (!CURRENT_LEAGUE_ID || CURRENT_LEAGUE_ID === 'YOUR_SLEEPER_LEAGUE_ID' || CURRENT_LEAGUE_ID.includes('YOUR_')) {
@@ -26,97 +25,67 @@ const MatchupHistory = ({ sleeperHistoricalMatchups, loading, error }) => {
           throw new Error(errorMessage);
         }
 
-        // Fetch users and raw rosters
-        const fetchedUsersArray = await fetchUsersData(CURRENT_LEAGUE_ID);
-        const fetchedRostersArray = await fetchRosterData(CURRENT_LEAGUE_ID);
+        // Fetch enriched rosters directly
+        const fetchedEnrichedRostersArray = await fetchRostersWithDetails(CURRENT_LEAGUE_ID);
 
-        // Debug: Log the raw arrays received from the API
-        console.log("DEBUG: Fetched Users Array (raw from API):", fetchedUsersArray);
-        console.log("DEBUG: Fetched Rosters Array (raw from API):", fetchedRostersArray);
+        // Debug: Log the raw array received from the API
+        console.log("DEBUG: Fetched Enriched Rosters Array (raw from API):", fetchedEnrichedRostersArray);
 
-        // Convert user array to a map for easy lookup by user_id
-        const usersById = fetchedUsersArray.reduce((acc, user) => {
-          // Debug: Check each user object's user_id
-          if (!user.user_id) {
-              console.warn("DEBUG: User object missing user_id:", user);
-          }
-          acc[user.user_id] = user;
-          return acc;
-        }, {});
-
-        // Convert roster array to a map for easy lookup by roster_id
-        const rostersById = fetchedRostersArray.reduce((acc, roster) => {
-          // Debug: Check each roster object's roster_id
+        // Convert enriched roster array to a map for easy lookup by roster_id
+        // These enriched rosters should already contain ownerDisplayName and ownerTeamName
+        const enrichedRostersById = fetchedEnrichedRostersArray.reduce((acc, roster) => {
           if (!roster.roster_id) {
-              console.warn("DEBUG: Roster object missing roster_id:", roster);
+              console.warn("DEBUG: Enriched Roster object missing roster_id:", roster);
           }
           acc[roster.roster_id] = roster;
           return acc;
         }, {});
 
-        // Debug: Log the created maps
-        console.log("DEBUG: Users Map (usersById):", usersById);
-        console.log("DEBUG: Rosters Map (rostersById):", rostersById);
+        // Debug: Log the created map
+        console.log("DEBUG: Enriched Rosters Map (enrichedRostersById):", enrichedRostersById);
 
-        // Update state based on fetched data
-        if (Object.keys(usersById).length > 0) { // Check if the map is populated
-          setUsersMap(usersById);
+        // Update state
+        if (Object.keys(enrichedRostersById).length > 0) {
+          setEnrichedRosters(enrichedRostersById);
         } else {
-          const errorMessage = "Failed to load user data from Sleeper API or no users found for this league.";
-          setLeagueDataError(errorMessage);
-          console.warn("DEBUG:", errorMessage, "League ID:", CURRENT_LEAGUE_ID);
-        }
-        if (Object.keys(rostersById).length > 0) { // Check if the map is populated
-          setRostersMap(rostersById);
-        } else {
-          const errorMessage = (leagueDataError ? leagueDataError + " And failed to load roster data." : "Failed to load roster data from Sleeper API or no rosters found for this league.");
+          const errorMessage = "Failed to load enriched roster data from Sleeper API or no rosters found for this league.";
           setLeagueDataError(errorMessage);
           console.warn("DEBUG:", errorMessage, "League ID:", CURRENT_LEAGUE_ID);
         }
 
       } catch (err) {
-        console.error("DEBUG: Global Error fetching league user/roster data for MatchupHistory:", err);
+        console.error("DEBUG: Global Error fetching league roster data for MatchupHistory:", err);
         setLeagueDataError(`Failed to load league data: ${err.message}. Please check CURRENT_LEAGUE_ID.`);
       } finally {
         setLoadingLeagueData(false);
       }
     };
     loadLeagueData();
-  }, [CURRENT_LEAGUE_ID]); // Added CURRENT_LEAGUE_ID to dependencies just in case it changes, though usually it's static
+  }, [CURRENT_LEAGUE_ID]);
 
   // Helper function to get team display name
   const getTeamDisplayName = (rosterId) => {
     // Debug: Log the rosterId being processed
     console.log(`DEBUG: getTeamDisplayName called for rosterId: ${rosterId}`);
 
-    const roster = rostersMap[rosterId]; // Look up roster from the map
-    console.log("DEBUG: Found roster object:", roster);
+    // Look up the enriched roster directly
+    const roster = enrichedRosters[rosterId];
+    console.log("DEBUG: Found enriched roster object:", roster);
 
-    if (roster && roster.owner_id) { // Ensure roster and its owner_id exist
-      // Debug: Log the owner_id from the roster
-      console.log("DEBUG: Roster owner_id:", roster.owner_id);
+    if (roster) {
+      // These properties should be directly available on the enriched roster object
+      const teamName = roster.ownerTeamName;    // Property added by fetchRostersWithDetails
+      const displayName = roster.ownerDisplayName; // Property added by fetchRostersWithDetails
 
-      const user = usersMap[roster.owner_id]; // Look up user using owner_id from the users map
-      console.log("DEBUG: Found user object for owner_id:", user);
+      // Debug: Log the teamName and displayName found
+      console.log("DEBUG: Enriched Roster ownerTeamName:", teamName);
+      console.log("DEBUG: Enriched Roster ownerDisplayName:", displayName);
 
-      if (user) {
-        // Sleeper user objects typically have `metadata.team_name` for custom team names
-        // and `display_name` for their username.
-        const teamName = user.metadata?.team_name;
-        const displayName = user.display_name;
-
-        // Debug: Log the teamName and displayName found
-        console.log("DEBUG: User metadata.team_name:", teamName);
-        console.log("DEBUG: User display_name:", displayName);
-
-        return teamName || displayName; // Prefer custom team name, fall back to username
-      } else {
-        console.warn(`DEBUG: No user found in usersMap for owner_id: ${roster.owner_id} associated with rosterId: ${rosterId}`);
-      }
+      return teamName || displayName || `Roster ${rosterId}`; // Fallback
     } else {
-      console.warn(`DEBUG: Roster object or owner_id missing for rosterId: ${rosterId}`, { roster });
+      console.warn(`DEBUG: No enriched roster found for rosterId: ${rosterId}`);
     }
-    return `Roster ${rosterId}`; // Fallback if user data is incomplete or missing
+    return `Roster ${rosterId}`; // Fallback if no enriched roster is found
   };
 
   // Render logic based on loading and error states
