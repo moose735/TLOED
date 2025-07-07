@@ -1,48 +1,41 @@
 // App.js
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  // Removed: HISTORICAL_MATCHUPS_API_URL,
-  GOOGLE_SHEET_POWER_RANKINGS_API_URL,
-  CURRENT_LEAGUE_ID,
-  LEAGUE_START_YEAR, // NEW: Import LEAGUE_START_YEAR
-} from './config';
+  HISTORICAL_MATCHUPS_API_URL,
+  GOOGLE_SHEET_POWER_RANKINGS_API_URL, // Still imported, but PowerRankings.js no longer uses it directly
+  // CURRENT_LEAGUE_ID, // REMOVED: Import CURRENT_LEAGUE_ID from here as it's defined in sleeperApi.js
+} from './config'; // Corrected import path for config.js to be within src/
 
-// Import existing components
+// Import existing components from your provided App.js
 import PowerRankings from './lib/PowerRankings';
-import LeagueHistory from './lib/LeagueHistory';
+import LeagueHistory from './lib/LeagueHistory'; // Corrected import to the LeagueHistory component
 import RecordBook from './lib/RecordBook';
 import DPRAnalysis from './lib/DPRAnalysis';
 import LuckRatingAnalysis from './lib/LuckRatingAnalysis';
 import TeamDetailPage from './lib/TeamDetailPage';
-import Head2HeadGrid from './lib/Head2HeadGrid';
+import Head2HeadGrid from './lib/Head2HeadGrid'; // Stays for its own tab
 import FinancialTracker from './components/FinancialTracker';
-import Dashboard from './components/Dashboard';
+import Dashboard from './components/Dashboard'; // <--- NEW IMPORT for the homepage
 
-// Import Sleeper API functions to fetch league details and historical matchups
-import {
-  fetchLeagueDetails,
-  fetchUsersData,
-  fetchHistoricalMatchups, // NEW: Import the new historical matchups function
-  TEAM_NAME_TO_SLEEPER_ID_MAP, // NEW: Import the map for display names
-  RETIRED_MANAGERS, // NEW: Import retired managers
-} from './utils/sleeperApi';
+// Import Sleeper API functions to fetch league details for dynamic tab population
+import { fetchLeagueDetails, CURRENT_LEAGUE_ID } from './utils/sleeperApi'; // ADDED: Import CURRENT_LEAGUE_ID from sleeperApi.js
+
 
 // Define the available tabs and their categories for the dropdown
 const NAV_CATEGORIES = {
-  HOME: { label: 'Dashboard', tab: 'dashboard' },
-  POWER_RANKINGS: { label: 'Power Rankings', tab: 'powerRankings' },
+  HOME: { label: 'Dashboard', tab: 'dashboard' }, // Default home tab now points to Dashboard
+  POWER_RANKINGS: { label: 'Power Rankings', tab: 'powerRankings' }, // Re-added Power Rankings as a top-level nav item
   LEAGUE_DATA: {
     label: 'League Data',
     subTabs: [
-      { label: 'League History', tab: 'leagueHistory' },
+      { label: 'League History', tab: 'leagueHistory' }, // Corrected label
       { label: 'Record Book', tab: 'recordBook' },
-      { label: 'DPR Analysis', tab: 'dprAnalysis' },
-      { label: 'Luck Rating Analysis', tab: 'luckRating' },
-      { label: 'Matchup History', tab: 'matchupHistory' },
-      { label: 'Financial Tracker', tab: 'financials' },
+      { label: 'DPR Analysis', tab: 'dprAnalysis' }, // Added DPR Analysis
+      { label: 'Luck Rating', tab: 'luckRating' }, // Added Luck Rating
+      { label: 'Head-to-Head Grid', tab: 'head2HeadGrid' }, // Added Head to Head Grid
+      { label: 'Financials', tab: 'financials' }, // Added Financials
     ],
   },
-  TEAM_STATS: { label: 'Team Stats', tab: 'teamDetail' }, // This tab is special, activated by team selection
 };
 
 const TABS = {
@@ -52,204 +45,126 @@ const TABS = {
   RECORD_BOOK: 'recordBook',
   DPR_ANALYSIS: 'dprAnalysis',
   LUCK_RATING: 'luckRating',
-  MATCHUP_HISTORY: 'matchupHistory',
-  FINANCIALS: 'financials',
-  TEAM_DETAIL: 'teamDetail',
+  TEAM_DETAIL: 'teamDetail', // For navigating to a specific team's detail page
+  HEAD_TO_HEAD_GRID: 'head2HeadGrid', // Tab for the Head2HeadGrid component
+  FINANCIALS: 'financials', // Tab for FinancialTracker
 };
 
 const App = () => {
   const [activeTab, setActiveTab] = useState(TABS.DASHBOARD);
+  const [selectedTeam, setSelectedTeam] = useState(null); // State to hold the selected team for TeamDetailPage
+  const [historicalMatchups, setHistoricalMatchups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [historicalMatchups, setHistoricalMatchups] = useState([]);
-  const [allTeamNames, setAllTeamNames] = useState([]); // List of unique team names for dropdown
-  const [selectedTeam, setSelectedTeam] = useState(null); // State for selected team in dropdown
-  const [sleeperUsers, setSleeperUsers] = useState([]); // Store Sleeper users for display name mapping
-
-  // Function to get display team name based on Sleeper users and custom map
-  const getMappedTeamName = useCallback((userIdOrDisplayName) => {
-    // If it's directly a display name from Sleeper, return it
-    const foundUser = sleeperUsers.find(user => user.display_name === userIdOrDisplayName || user.user_id === userIdOrDisplayName);
-    if (foundUser) {
-        // Check if there's a custom mapping for this user ID
-        const customName = Object.keys(TEAM_NAME_TO_SLEEPER_ID_MAP).find(key => TEAM_NAME_TO_SLEEPER_ID_MAP[key] === foundUser.user_id);
-        if (customName) {
-            return customName;
-        }
-        // Check for retired managers map
-        if (RETIRED_MANAGERS[foundUser.user_id]) {
-            return RETIRED_MANAGERS[foundUser.user_id];
-        }
-        // Prioritize metadata.team_name if available
-        if (foundUser.metadata && foundUser.metadata.team_name) {
-            return foundUser.metadata.team_name;
-        }
-        // Fallback to display_name
-        return foundUser.display_name || foundUser.first_name || `User ${foundUser.user_id}`;
-    }
-
-    // Fallback if userIdOrDisplayName isn't a direct user ID or display name from current users
-    // This handles cases where `userIdOrDisplayName` might be a pre-mapped string or from old data.
-    // In a pure Sleeper API setup, this branch should ideally not be hit frequently for team names.
-    // If it's a direct match in the custom map (e.g., 'Ainsworth'), return it.
-    const customMappedId = TEAM_NAME_TO_SLEEPER_ID_MAP[userIdOrDisplayName];
-    if (customMappedId) {
-        return userIdOrDisplayName; // Return the key as it's the desired display name
-    }
-    // Check if the input is a retired manager's ID
-    if (RETIRED_MANAGERS[userIdOrDisplayName]) {
-        return RETIRED_MANAGERS[userIdOrDisplayName];
-    }
-
-    // Default to the input if no mapping found (e.g., if it's already the correct display name)
-    return userIdOrDisplayName;
-}, [sleeperUsers]); // Depend on sleeperUsers so it updates if user data changes
+  const [leagueName, setLeagueName] = useState('Fantasy League'); // Default league name
 
 
-  // Effect to load historical matchups and set team names for dropdown
+  // Function to determine the display name for a team
+  const getMappedTeamName = useCallback((teamIdOrName) => {
+    // This function can be enhanced to map team IDs from Sleeper to custom names
+    // if you have a separate mapping in config.js or another utility.
+    // For now, it simply returns the name as is or uses the sleeper_id to team name map.
+
+    // If you're passing a team ID that needs to be mapped to a display name:
+    // Example: if (TEAM_ID_TO_DISPLAY_NAME_MAP[teamIdOrName]) {
+    //   return TEAM_ID_TO_DISPLAY_NAME_MAP[teamIdOrName];
+    // }
+
+    // Use the TEAM_NAME_TO_SLEEPER_ID_MAP to reverse lookup display names if necessary
+    // or just return the provided teamIdOrName if it's already a display name.
+    return teamIdOrName;
+  }, []); // No dependencies for now, but add if external mappings are used.
+
+
   useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      setError(null);
+    const fetchHistoricalData = async () => {
       try {
-        console.log("App.js: Fetching historical matchups from Sleeper API...");
-        const matchups = await fetchHistoricalMatchups(CURRENT_LEAGUE_ID);
-        setHistoricalMatchups(matchups);
-        console.log("App.js: Fetched historical matchups:", matchups);
+        setLoading(true);
+        // Fetch league details to get the league name dynamically
+        const leagueDetails = await fetchLeagueDetails(CURRENT_LEAGUE_ID);
+        if (leagueDetails && leagueDetails.name) {
+          setLeagueName(leagueDetails.name);
+        }
 
-        // Fetch current users for team name display in dropdown and team detail page
-        const users = await fetchUsersData(CURRENT_LEAGUE_ID);
-        setSleeperUsers(users);
-
-        // Extract unique team names for the dropdown from the fetched matchups
-        const uniqueTeamNames = new Set();
-        matchups.forEach(match => {
-            const team1Display = getMappedTeamName(match.team1UserId); // Use userId directly for mapping
-            const team2Display = getMappedTeamName(match.team2UserId); // Use userId directly for mapping
-            if (team1Display) uniqueTeamNames.add(team1Display);
-            if (team2Display) uniqueTeamNames.add(team2Display);
-        });
-
-        // Add display names of current users to the set to ensure all active teams are present
-        users.forEach(user => {
-            const display = getMappedTeamName(user.user_id); // Pass user ID to getMappedTeamName
-            if (display) uniqueTeamNames.add(display);
-        });
-
-        // Sort team names alphabetically
-        const sortedTeamNames = Array.from(uniqueTeamNames).sort();
-        setAllTeamNames(sortedTeamNames);
-
-      } catch (err) {
-        console.error("Error loading data in App.js:", err);
-        setError("Failed to load historical data.");
+        const response = await fetch(HISTORICAL_MATCHUPS_API_URL);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        console.log("Fetched historical data:", data); // Log the fetched data
+        setHistoricalMatchups(data);
+      } catch (e) {
+        console.error("Error fetching historical matchups:", e);
+        setError(e.message);
       } finally {
         setLoading(false);
       }
     };
 
-    loadData();
-  }, [getMappedTeamName]); // getMappedTeamName is a dependency because it's used inside loadData
+    fetchHistoricalData();
+  }, []);
 
-  const handleTeamSelect = (e) => {
-    setSelectedTeam(e.target.value);
-    setActiveTab(TABS.TEAM_DETAIL); // Switch to Team Detail tab when a team is selected
+  const handleSelectTeam = useCallback((teamName) => {
+    setSelectedTeam(teamName);
+    setActiveTab(TABS.TEAM_DETAIL);
+  }, []);
+
+  // Helper to render navigation items
+  const renderNavItem = (category) => {
+    if (category.subTabs) {
+      return (
+        <div key={category.label} className="relative group">
+          <button className="text-white hover:text-blue-200 px-3 py-2 rounded-md text-sm font-medium">
+            {category.label}
+          </button>
+          <div className="absolute left-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10 hidden group-hover:block">
+            {category.subTabs.map(subTab => (
+              <a
+                key={subTab.tab}
+                href="#"
+                onClick={(e) => { e.preventDefault(); setActiveTab(subTab.tab); setSelectedTeam(null); }}
+                className={`block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 ${activeTab === subTab.tab ? 'bg-gray-100 font-semibold' : ''}`}
+              >
+                {subTab.label}
+              </a>
+            ))}
+          </div>
+        </div>
+      );
+    } else {
+      return (
+        <a
+          key={category.tab}
+          href="#"
+          onClick={(e) => { e.preventDefault(); setActiveTab(category.tab); setSelectedTeam(null); }}
+          className={`text-white px-3 py-2 rounded-md text-sm font-medium ${activeTab === category.tab ? 'bg-blue-700' : 'hover:bg-blue-700'}`}
+        >
+          {category.label}
+        </a>
+      );
+    }
   };
-
-  const handleNavClick = (tab) => {
-    setActiveTab(tab);
-    setSelectedTeam(null); // Clear selected team when navigating away from Team Detail
-  };
-
-  const currentYear = new Date().getFullYear(); // Dynamic current year
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col items-center p-4">
-      <header className="w-full max-w-6xl bg-blue-700 text-white p-6 rounded-lg shadow-md mb-8 flex flex-col md:flex-row justify-between items-center">
-        <h1 className="text-4xl font-extrabold text-center mb-4 md:mb-0">
-          Fantasy Football League History
-        </h1>
-        <div className="flex flex-col md:flex-row items-center space-y-2 md:space-y-0 md:space-x-4">
-          {/* Dropdown for Team Selection */}
-          {activeTab !== TABS.TEAM_DETAIL && ( // Only show dropdown if not already on Team Detail page
-            <div className="relative inline-block text-left w-full md:w-auto">
-              <select
-                onChange={handleTeamSelect}
-                value={selectedTeam || ''} // Control the select element
-                className="block appearance-none w-full bg-white border border-gray-300 text-gray-800 py-2 px-4 pr-8 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-              >
-                <option value="">-- View Team History --</option>
-                {allTeamNames.map((teamName) => (
-                  <option key={teamName} value={teamName}>
-                    {teamName}
-                  </option>
-                ))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 6.757 7.586 5.343 9z"/></svg>
-              </div>
-            </div>
-          )}
-
-          {/* Navigation Tabs (simplified from original for demonstration) */}
-          <nav className="flex flex-wrap justify-center md:justify-end gap-2 md:gap-4 mt-4 md:mt-0">
-            {Object.entries(NAV_CATEGORIES).map(([key, category]) => {
-              if (category.subTabs) {
-                // Render dropdown for categories with sub-tabs
-                return (
-                  <div key={key} className="relative group">
-                    <button
-                      className={`px-4 py-2 rounded-md font-semibold text-white transition-colors duration-200
-                        ${Object.values(category.subTabs).some(sub => sub.tab === activeTab) ? 'bg-blue-800' : 'hover:bg-blue-600'}`}
-                    >
-                      {category.label}
-                    </button>
-                    <div className="absolute left-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10 hidden group-hover:block">
-                      <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
-                        {category.subTabs.map(subTab => (
-                          <a
-                            key={subTab.tab}
-                            href="#"
-                            onClick={() => handleNavClick(subTab.tab)}
-                            className={`${activeTab === subTab.tab ? 'bg-gray-100 text-blue-700' : 'text-gray-700'}
-                              block px-4 py-2 text-sm hover:bg-gray-100 hover:text-blue-700`}
-                            role="menuitem"
-                          >
-                            {subTab.label}
-                          </a>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                );
-              } else if (key === 'TEAM_STATS') {
-                // Team Stats tab is handled by team selection dropdown, don't render explicitly here
-                return null;
-              } else {
-                // Render single button for direct tabs
-                return (
-                  <button
-                    key={key}
-                    onClick={() => handleNavClick(category.tab)}
-                    className={`px-4 py-2 rounded-md font-semibold transition-colors duration-200
-                      ${activeTab === category.tab ? 'bg-blue-800' : 'hover:bg-blue-600'}`}
-                  >
-                    {category.label}
-                  </button>
-                );
-              }
-            })}
+    <div className="min-h-screen bg-gray-100">
+      <header className="bg-blue-600 text-white shadow-md p-4">
+        <div className="container mx-auto flex flex-col sm:flex-row justify-between items-center">
+          <h1 className="text-3xl font-bold mb-2 sm:mb-0">
+            {leagueName} Dashboard
+          </h1>
+          <nav className="flex space-x-4">
+            {Object.values(NAV_CATEGORIES).map(renderNavItem)}
           </nav>
         </div>
       </header>
 
-      <main className="w-full max-w-6xl bg-white p-8 rounded-lg shadow-md">
+      <main className="container mx-auto p-4">
         {loading ? (
-          <p className="text-center text-xl text-blue-700">Loading historical data from Sleeper API, please wait...</p>
+          <div className="text-center text-gray-600 text-lg mt-8">Loading historical data...</div>
         ) : error ? (
-          <p className="text-center text-xl text-red-600">Error: {error}</p>
+          <div className="text-center text-red-600 text-lg mt-8">Error: {error}</div>
         ) : (
-          <div>
+          <div className="bg-white p-6 rounded-lg shadow-md">
             {activeTab === TABS.DASHBOARD && (
               <Dashboard
                 getDisplayTeamName={getMappedTeamName}
@@ -259,7 +174,6 @@ const App = () => {
               <PowerRankings
                 historicalMatchups={historicalMatchups}
                 getDisplayTeamName={getMappedTeamName}
-                currentYear={currentYear}
               />
             )}
             {activeTab === TABS.LEAGUE_HISTORY && (
@@ -280,8 +194,8 @@ const App = () => {
                 getDisplayTeamName={getMappedTeamName}
               />
             )}
-            {activeTab === TABS.MATCHUP_HISTORY && (
-              <MatchupHistory
+            {activeTab === TABS.HEAD_TO_HEAD_GRID && (
+              <Head2HeadGrid
                 historicalMatchups={historicalMatchups}
                 getDisplayTeamName={getMappedTeamName}
               />
@@ -302,22 +216,22 @@ const App = () => {
              />
            )}
            {/* NEW: Render FinancialTracker */}
-            {activeTab === TABS.FINANCIALS && (
-                <FinancialTracker
-                    getDisplayTeamName={getMappedTeamName}
-                    historicalMatchups={historicalMatchups}
-                />
-            )}
+{activeTab === TABS.FINANCIALS && (
+    <FinancialTracker
+        getDisplayTeamName={getMappedTeamName}
+        historicalMatchups={historicalMatchups} // <--- Ensure this prop is present and correctly linked
+    />
+)}
           </div>
         )}
       </main>
 
       <footer className="mt-8 text-center text-gray-600 text-sm pb-8 px-4">
-        <p>This site displays league data powered by Sleeper API.</p>
+        <p>This site displays league data powered by Google Apps Script.</p>
         <p className="mt-2">
-          For Sleeper API documentation, visit:{" "}
-          <a href="https://docs.sleeper.app/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-            Sleeper API Docs
+          For Apps Script deployment instructions, visit:{" "}
+          <a href="https://developers.google.com/apps-script/guides/web" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+            Google Apps Script Web Apps Guide
           </a>
         </p>
       </footer>
