@@ -1,13 +1,14 @@
 // src/components/MatchupHistory.js
 import React, { useState, useEffect } from 'react';
-// Correct: Importing fetchRosterData (singular)
 import { fetchUsersData, fetchRosterData } from '../utils/sleeperApi';
 import { CURRENT_LEAGUE_ID } from '../config';
 
 const MatchupHistory = ({ sleeperHistoricalMatchups, loading, error }) => {
-  // Initialize as empty objects for map-like access
+  // State to store users and rosters as maps for quick lookup
   const [usersMap, setUsersMap] = useState({});
   const [rostersMap, setRostersMap] = useState({});
+
+  // State for loading and error handling specific to league data
   const [loadingLeagueData, setLoadingLeagueData] = useState(true);
   const [leagueDataError, setLeagueDataError] = useState(null);
 
@@ -16,62 +17,109 @@ const MatchupHistory = ({ sleeperHistoricalMatchups, loading, error }) => {
       setLoadingLeagueData(true);
       setLeagueDataError(null);
       try {
-        if (!CURRENT_LEAGUE_ID || CURRENT_LEAGUE_ID === 'YOUR_SLEEPER_LEAGUE_ID') {
-          throw new Error("CURRENT_LEAGUE_ID not configured in config.js. Cannot fetch league data.");
+        // Debug: Log the CURRENT_LEAGUE_ID being used
+        console.log("DEBUG: Current League ID being used:", CURRENT_LEAGUE_ID);
+
+        if (!CURRENT_LEAGUE_ID || CURRENT_LEAGUE_ID === 'YOUR_SLEEPER_LEAGUE_ID' || CURRENT_LEAGUE_ID.includes('YOUR_')) {
+          const errorMessage = "CURRENT_LEAGUE_ID not properly configured in config.js. Cannot fetch league data.";
+          console.error("DEBUG:", errorMessage);
+          throw new Error(errorMessage);
         }
 
+        // Fetch users and raw rosters
         const fetchedUsersArray = await fetchUsersData(CURRENT_LEAGUE_ID);
-        // Corrected: Calling fetchRosterData (singular)
         const fetchedRostersArray = await fetchRosterData(CURRENT_LEAGUE_ID);
 
-        // Convert arrays to maps for easier lookup by ID
+        // Debug: Log the raw arrays received from the API
+        console.log("DEBUG: Fetched Users Array (raw from API):", fetchedUsersArray);
+        console.log("DEBUG: Fetched Rosters Array (raw from API):", fetchedRostersArray);
+
+        // Convert user array to a map for easy lookup by user_id
         const usersById = fetchedUsersArray.reduce((acc, user) => {
+          // Debug: Check each user object's user_id
+          if (!user.user_id) {
+              console.warn("DEBUG: User object missing user_id:", user);
+          }
           acc[user.user_id] = user;
           return acc;
         }, {});
 
+        // Convert roster array to a map for easy lookup by roster_id
         const rostersById = fetchedRostersArray.reduce((acc, roster) => {
+          // Debug: Check each roster object's roster_id
+          if (!roster.roster_id) {
+              console.warn("DEBUG: Roster object missing roster_id:", roster);
+          }
           acc[roster.roster_id] = roster;
           return acc;
         }, {});
 
+        // Debug: Log the created maps
+        console.log("DEBUG: Users Map (usersById):", usersById);
+        console.log("DEBUG: Rosters Map (rostersById):", rostersById);
 
-        if (fetchedUsersArray && fetchedUsersArray.length > 0) {
+        // Update state based on fetched data
+        if (Object.keys(usersById).length > 0) { // Check if the map is populated
           setUsersMap(usersById);
         } else {
-          setLeagueDataError("Failed to load user data from Sleeper API.");
+          const errorMessage = "Failed to load user data from Sleeper API or no users found for this league.";
+          setLeagueDataError(errorMessage);
+          console.warn("DEBUG:", errorMessage, "League ID:", CURRENT_LEAGUE_ID);
         }
-        if (fetchedRostersArray && fetchedRostersArray.length > 0) {
+        if (Object.keys(rostersById).length > 0) { // Check if the map is populated
           setRostersMap(rostersById);
         } else {
-          setLeagueDataError(prev => prev ? prev + " And failed to load roster data." : "Failed to load roster data from Sleeper API.");
+          const errorMessage = (leagueDataError ? leagueDataError + " And failed to load roster data." : "Failed to load roster data from Sleeper API or no rosters found for this league.");
+          setLeagueDataError(errorMessage);
+          console.warn("DEBUG:", errorMessage, "League ID:", CURRENT_LEAGUE_ID);
         }
 
       } catch (err) {
-        console.error("Error fetching league user/roster data for MatchupHistory:", err);
+        console.error("DEBUG: Global Error fetching league user/roster data for MatchupHistory:", err);
         setLeagueDataError(`Failed to load league data: ${err.message}. Please check CURRENT_LEAGUE_ID.`);
       } finally {
         setLoadingLeagueData(false);
       }
     };
     loadLeagueData();
-  }, []); // Run once on component mount
+  }, [CURRENT_LEAGUE_ID]); // Added CURRENT_LEAGUE_ID to dependencies just in case it changes, though usually it's static
 
   // Helper function to get team display name
   const getTeamDisplayName = (rosterId) => {
-    // Now using the map directly
-    const roster = rostersMap[rosterId];
-    if (roster && roster.owner_id) { // Sleeper uses owner_id, not ownerId for raw rosters
-      const user = usersMap[roster.owner_id];
+    // Debug: Log the rosterId being processed
+    console.log(`DEBUG: getTeamDisplayName called for rosterId: ${rosterId}`);
+
+    const roster = rostersMap[rosterId]; // Look up roster from the map
+    console.log("DEBUG: Found roster object:", roster);
+
+    if (roster && roster.owner_id) { // Ensure roster and its owner_id exist
+      // Debug: Log the owner_id from the roster
+      console.log("DEBUG: Roster owner_id:", roster.owner_id);
+
+      const user = usersMap[roster.owner_id]; // Look up user using owner_id from the users map
+      console.log("DEBUG: Found user object for owner_id:", user);
+
       if (user) {
-        // Sleeper user metadata might have `team_name` or fall back to `display_name`
-        return user.metadata?.team_name || user.display_name;
+        // Sleeper user objects typically have `metadata.team_name` for custom team names
+        // and `display_name` for their username.
+        const teamName = user.metadata?.team_name;
+        const displayName = user.display_name;
+
+        // Debug: Log the teamName and displayName found
+        console.log("DEBUG: User metadata.team_name:", teamName);
+        console.log("DEBUG: User display_name:", displayName);
+
+        return teamName || displayName; // Prefer custom team name, fall back to username
+      } else {
+        console.warn(`DEBUG: No user found in usersMap for owner_id: ${roster.owner_id} associated with rosterId: ${rosterId}`);
       }
+    } else {
+      console.warn(`DEBUG: Roster object or owner_id missing for rosterId: ${rosterId}`, { roster });
     }
-    return `Roster ${rosterId}`; // Fallback if no user or owner found
+    return `Roster ${rosterId}`; // Fallback if user data is incomplete or missing
   };
 
-
+  // Render logic based on loading and error states
   if (loading || loadingLeagueData) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[200px] text-blue-600">
@@ -138,7 +186,7 @@ const MatchupHistory = ({ sleeperHistoricalMatchups, loading, error }) => {
                             {matchupPair.map(teamData => (
                               <div key={teamData.roster_id} className="flex justify-between text-sm text-gray-700">
                                 <span className="font-medium">
-                                  {getTeamDisplayName(teamData.roster_id)} {/* <--- Call getTeamDisplayName */}
+                                  {getTeamDisplayName(teamData.roster_id)}
                                 </span>
                                 <span className="font-bold text-blue-600">{teamData.points ? teamData.points.toFixed(2) : 'N/A'}</span>
                               </div>
