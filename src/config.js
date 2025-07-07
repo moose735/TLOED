@@ -25,9 +25,9 @@ export const TEAM_NAME_TO_SLEEPER_ID_MAP = {
   'Tomczak': '787044291066380288',
 };
 
-export const RETIRED_MANAGERS = [
+export const RETIRED_MANAGERS = new Set ([
   // ... other retired manager IDs
-];
+]);
 // Custom team name mappings (Optional: for use if you want to map names from historical matchups to custom display names)
 // Example: { "TeamA_from_Google_Sheet": "My Awesome Team", "TeamB_from_Google_Sheet": "Gridiron Heroes" }
 // App.js will currently use names directly from HISTORICAL_MATCHUPS_API_URL for dropdown and display.
