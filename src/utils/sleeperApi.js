@@ -1,8 +1,5 @@
 // src/utils/sleeperApi.js
 
-// Easily configurable current league ID
-export const CURRENT_LEAGUE_ID = '1181984921049018368'; // This is the CURRENT league ID for the 2025 season
-
 // Centralized map linking your internal team names (e.g., last names) to Sleeper User IDs.
 // YOU MUST POPULATE THIS MAP WITH ALL YOUR TEAM NAMES AND THEIR CORRESPONDING SLEEPER USER IDs.
 export const TEAM_NAME_TO_SLEEPER_ID_MAP = {
