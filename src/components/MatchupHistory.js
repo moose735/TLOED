@@ -1,67 +1,78 @@
 // src/components/MatchupHistory.js
 import React, { useState, useEffect } from 'react';
-import { fetchUsersData } from '../utils/sleeperApi'; // Import fetchUsersData
-import { CURRENT_LEAGUE_ID, TEAM_NAME_TO_SLEEPER_ID_MAP } from '../utils/sleeperApi'; // Import for mapping
+import { fetchUsersData, fetchRostersData } from '../utils/sleeperApi';
+import { CURRENT_LEAGUE_ID } from '../config'; // Import CURRENT_LEAGUE_ID
 
 const MatchupHistory = ({ sleeperHistoricalMatchups, loading, error }) => {
   const [users, setUsers] = useState({});
-  const [loadingUsers, setLoadingUsers] = useState(true);
-  const [usersError, setUsersError] = useState(null);
-
-  // Function to get a team's display name from its roster_id or user_id
-  const getTeamDisplayName = (rosterId, userId, usersMap) => {
-    if (usersMap[userId] && usersMap[userId].teamName) {
-      return usersMap[userId].teamName;
-    }
-    // Fallback if teamName is not in metadata or if user not found via userId
-    // Try to find by reverse lookup from TEAM_NAME_TO_SLEEPER_ID_MAP
-    for (const teamName in TEAM_NAME_TO_SLEEPER_ID_MAP) {
-      if (TEAM_NAME_TO_SLEEPER_ID_MAP[teamName] === userId) {
-        return teamName;
-      }
-    }
-    return `Roster ${rosterId}`; // Fallback if no specific display name found
-  };
+  const [rosters, setRosters] = useState({});
+  const [loadingLeagueData, setLoadingLeagueData] = useState(true);
+  const [leagueDataError, setLeagueDataError] = useState(null);
 
   useEffect(() => {
-    const loadUsers = async () => {
-      setLoadingUsers(true);
-      setUsersError(null);
+    const loadLeagueData = async () => {
+      setLoadingLeagueData(true);
+      setLeagueDataError(null);
       try {
-        const leagueUsers = await fetchUsersData(CURRENT_LEAGUE_ID);
-        const usersMap = {};
-        leagueUsers.forEach(user => {
-          usersMap[user.userId] = user;
-        });
-        setUsers(usersMap);
+        if (!CURRENT_LEAGUE_ID || CURRENT_LEAGUE_ID === 'YOUR_SLEEPER_LEAGUE_ID') {
+          throw new Error("CURRENT_LEAGUE_ID not configured in config.js. Cannot fetch league data.");
+        }
+
+        const fetchedUsers = await fetchUsersData(CURRENT_LEAGUE_ID);
+        const fetchedRosters = await fetchRostersData(CURRENT_LEAGUE_ID);
+
+        if (fetchedUsers) {
+          setUsers(fetchedUsers);
+        } else {
+          setLeagueDataError("Failed to load user data from Sleeper API.");
+        }
+        if (fetchedRosters) {
+          setRosters(fetchedRosters);
+        } else {
+          setLeagueDataError(prev => prev ? prev + " And failed to load roster data." : "Failed to load roster data from Sleeper API.");
+        }
+
       } catch (err) {
-        console.error("Error fetching users for MatchupHistory:", err);
-        setUsersError("Failed to load user data for display.");
+        console.error("Error fetching league user/roster data for MatchupHistory:", err);
+        setLeagueDataError(`Failed to load league data: ${err.message}. Please check CURRENT_LEAGUE_ID.`);
       } finally {
-        setLoadingUsers(false);
+        setLoadingLeagueData(false);
       }
     };
-    loadUsers();
-  }, []);
+    loadLeagueData();
+  }, []); // Run once on component mount
 
-  if (loading || loadingUsers) {
+  // Helper function to get team display name
+  const getTeamDisplayName = (rosterId) => {
+    const roster = rosters[rosterId];
+    if (roster && roster.ownerId) {
+      const user = users[roster.ownerId];
+      if (user) {
+        return user.teamName || user.username; // Prefer teamName from metadata, fallback to username
+      }
+    }
+    return `Roster ${rosterId}`; // Fallback if no user or owner found
+  };
+
+
+  if (loading || loadingLeagueData) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[200px] text-blue-600">
         <svg className="animate-spin h-10 w-10 text-blue-500 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
         </svg>
-        <p className="text-lg font-medium">Loading matchup history from Sleeper...</p>
+        <p className="text-lg font-medium">Loading matchup history and league data...</p>
       </div>
     );
   }
 
-  if (error || usersError) {
+  if (error || leagueDataError) {
     return (
       <div className="text-center text-red-600 p-4 bg-red-100 border border-red-400 rounded-md">
         <p className="font-semibold text-lg">Error loading Matchup History:</p>
-        <p>{error || usersError}</p>
-        <p className="mt-2">Please ensure the Sleeper API is accessible and `CURRENT_LEAGUE_ID` in `sleeperApi.js` is correct.</p>
+        <p>{error || leagueDataError}</p>
+        <p className="mt-2">Please ensure `CURRENT_LEAGUE_ID` in `config.js` is correct and Sleeper API is accessible.</p>
       </div>
     );
   }
@@ -110,7 +121,7 @@ const MatchupHistory = ({ sleeperHistoricalMatchups, loading, error }) => {
                             {matchupPair.map(teamData => (
                               <div key={teamData.roster_id} className="flex justify-between text-sm text-gray-700">
                                 <span className="font-medium">
-                                  {getTeamDisplayName(teamData.roster_id, teamData.owner_id, users)}
+                                  {getTeamDisplayName(teamData.roster_id)} {/* <--- Call getTeamDisplayName */}
                                 </span>
                                 <span className="font-bold text-blue-600">{teamData.points ? teamData.points.toFixed(2) : 'N/A'}</span>
                               </div>
