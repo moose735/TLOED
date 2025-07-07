@@ -1,15 +1,15 @@
 // src/components/Dashboard.jsx
 import React, { useState, useEffect } from 'react';
-import {
-  CURRENT_LEAGUE_ID,
+import { CURRENT_LEAGUE_ID } from '../config'; // Only CURRENT_LEAGUE_ID comes from config
+import { // All these functions come from sleeperApi
   fetchLeagueDetails,
   fetchUsersData,
   fetchRostersWithDetails,
   fetchNFLPlayers,
   fetchTransactionsForWeek,
-  fetchLeagueDrafts, // NEW: Import to get draft data
+  fetchLeagueDrafts,
   getSleeperPlayerHeadshotUrl,
-} from '../config';
+} from '../utils/sleeperApi';
 
 const Dashboard = ({ getDisplayTeamName }) => {
   const [loading, setLoading] = useState(true);
