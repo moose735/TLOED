@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { calculateAllLeagueMetrics } from '../utils/calculations';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { CURRENT_LEAGUE_ID, fetchUsersData, getSleeperAvatarUrl, TEAM_NAME_TO_SLEEPER_ID_MAP, RETIRED_MANAGERS } from '../config';
+import { CURRENT_LEAGUE_ID, TEAM_NAME_TO_SLEEPER_ID_MAP, RETIRED_MANAGERS } from '../config'; // Only config-specific values here
+import { fetchUsersData, getSleeperAvatarUrl } from '../utils/sleeperApi'; // Sleeper API functions here
 
 const formatDPR = (dpr) => (typeof dpr === 'number' && !isNaN(dpr) ? dpr.toFixed(3) : 'N/A');
 const renderRecordNoTies = (wins, losses) => `${wins || 0}-${losses || 0}`;
