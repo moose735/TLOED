@@ -9,7 +9,7 @@ import {
   fetchTransactionsForWeek,
   fetchLeagueDrafts, // NEW: Import to get draft data
   getSleeperPlayerHeadshotUrl,
-} from '../utils/sleeperApi';
+} from '../config';
 
 const Dashboard = ({ getDisplayTeamName }) => {
   const [loading, setLoading] = useState(true);
