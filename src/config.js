@@ -9,6 +9,22 @@ export const HISTORICAL_MATCHUPS_API_URL = 'https://script.google.com/macros/s/A
 
 export const CURRENT_LEAGUE_ID = '1181984921049018368';
 
+export const TEAM_NAME_TO_SLEEPER_ID_MAP = {
+  'Ainsworth': '783790952367169536',
+  'Bjarnar': '783761299275382784',
+  'Blumbergs': '783789717920534528',
+  'Boilard': '783789669597999104',
+  'Dembski': '783767734491127808',
+  'Irwin': '467074573125283840',
+  'Meer': '783778036578418688',
+  'Neufeglise': '783763304463147008',
+  'O\'Donoghue': '783758716272009216',
+  'ODonoghue': '783758716272009216', // Added alias for "ODonoghue"
+  'Randall': '783754997035876352',
+  'Schmitt': '783761892693905408',
+  'Tomczak': '787044291066380288',
+};
+
 export const RETIRED_MANAGERS = [
   // ... other retired manager IDs
 ];
