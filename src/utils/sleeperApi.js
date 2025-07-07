@@ -80,14 +80,14 @@ export const getSleeperPlayerHeadshotUrl = (playerId) => {
  * @returns {Promise<Object|null>} A promise that resolves to the league data, or null if an error occurs.
  */
 export async function fetchLeagueDetails(leagueId) {
-    // NEW: Add a robust check for valid leagueId before fetching
+    // Add a robust check for valid leagueId before fetching
     if (!leagueId || typeof leagueId !== 'string' || leagueId === '0') {
         console.warn(`Attempted to fetch league details with an invalid league ID: ${leagueId}`);
         return null; // Return null immediately for invalid IDs
     }
 
   try {
-    const response = await fetch(`${BASE_URL}/league/${leagueId}`); // Use BASE_URL
+    const response = await fetch(`${BASE_URL}/league/${leagueId}`);
     if (!response.ok) {
       console.error(`Error fetching league details for ID ${leagueId}: ${response.statusText}`);
       return null;
@@ -134,7 +134,7 @@ export async function fetchLeagueData(currentLeagueId) {
  */
 export async function fetchUsersData(leagueId) {
   try {
-    const response = await fetch(`${BASE_URL}/league/${leagueId}/users`); // Use BASE_URL
+    const response = await fetch(`${BASE_URL}/league/${leagueId}/users`);
     if (!response.ok) {
       console.error(`Error fetching user details for league ID ${leagueId}: ${response.statusText}`);
       return [];
@@ -184,11 +184,9 @@ export async function fetchUsersData(leagueId) {
 async function fetchMatchupsForLeague(leagueId, regularSeasonWeeks) {
     const leagueMatchups = {}; // Object to store matchups for the current league, keyed by week.
 
-    console.log(`Starting to fetch matchups for league ${leagueId} for up to ${regularSeasonWeeks} weeks.`); // NEW LOG
-
     for (let week = 1; week <= regularSeasonWeeks; week++) {
         try {
-            const response = await fetch(`${BASE_URL}/league/${leagueId}/matchups/${week}`); // Use BASE_URL
+            const response = await fetch(`${BASE_URL}/league/${leagueId}/matchups/${week}`);
 
             if (!response.ok) {
                 console.warn(`Warning: Could not fetch matchups for league ${leagueId}, Week ${week}: ${response.statusText}`);
@@ -196,18 +194,17 @@ async function fetchMatchupsForLeague(leagueId, regularSeasonWeeks) {
             }
 
             const data = await response.json();
-            console.log(`League ${leagueId}, Week ${week}: Fetched ${data.length} matchups.`); // NEW LOG
             if (data && data.length > 0) {
                 leagueMatchups[week] = data;
             } else {
-                console.log(`No matchups found for league ${leagueId}, Week ${week}.`);
+                // If no data for a week, it might mean the season ended or this week doesn't exist.
+                // We don't need a console.log for this common occurrence.
             }
         } catch (error) {
             console.error(`Failed to fetch matchups for league ${leagueId}, Week ${week}:`, error);
             // Continue to the next week even if a specific week's fetch fails.
         }
     }
-    console.log(`Finished fetching matchups for league ${leagueId}. Total weeks with data: ${Object.keys(leagueMatchups).length}`); // NEW LOG
     return leagueMatchups;
 }
 
@@ -216,7 +213,7 @@ async function fetchMatchupsForLeague(leagueId, regularSeasonWeeks) {
  * Data is fetched once and then cached in memory for subsequent calls within the same session.
  *
  * @returns {Promise<Object>} A promise that resolves to an object containing all historical matchups,
- * structured as { "season_year": { "week_number": [matchup_data], ... }, ... }.
+ * structured as { "season_year": { id: "league_id_for_that_season", "weeks": { "week_number": [matchup_data], ... } }, ... }.
  * Returns the cached data if already fetched.
  */
 export async function fetchAllHistoricalMatchups() {
@@ -226,7 +223,7 @@ export async function fetchAllHistoricalMatchups() {
         return historicalMatchupsCache;
     }
 
-    console.log('Fetching all historical matchup data for the first time... ');
+    console.log('Fetching all historical matchup data for the first time...');
     const allHistoricalMatchups = {};
 
     try {
@@ -242,22 +239,24 @@ export async function fetchAllHistoricalMatchups() {
             const season = league.season;
 
             // Determine the number of regular season weeks for the current league.
-            // Sleeper API typically provides `settings.playoff_start_week`.
-            // The regular season ends the week before playoffs start.
             let regularSeasonWeeks = 14; // Default based on common fantasy league lengths.
 
             if (league.settings && typeof league.settings.playoff_start_week === 'number' && league.settings.playoff_start_week > 1) {
                 regularSeasonWeeks = league.settings.playoff_start_week - 1;
-                console.log(`For season ${season} (${leagueId}), fetching ${regularSeasonWeeks} regular season weeks.`);
             } else {
-                console.log(`No valid 'playoff_start_week' found for league ${season} (${leagueId}). Defaulting to fetching ${regularSeasonWeeks} regular season weeks.`);
+                // If playoff_start_week is not available or invalid, use default and log a warning.
+                // This warning can be removed if a default is expected behavior.
+                // console.warn(`No valid 'playoff_start_week' found for league ${season} (${leagueId}). Defaulting to fetching ${regularSeasonWeeks} regular season weeks.`);
             }
 
             const matchups = await fetchMatchupsForLeague(leagueId, regularSeasonWeeks);
-            console.log(`For season ${season} (${leagueId}), collected weeks: ${Object.keys(matchups).length}`); // NEW LOG
 
-            // Always add the season key, even if matchups is empty, so it's defined
-            allHistoricalMatchups[season] = matchups;
+            // IMPORTANT CHANGE HERE: Include the leagueId for the specific season.
+            // The MatchupHistory component needs this 'id' to fetch rosters for that season.
+            allHistoricalMatchups[season] = {
+                id: leagueId, // This is the crucial addition!
+                weeks: matchups
+            };
 
             if (Object.keys(matchups).length === 0) {
                 console.warn(`No matchups collected for season ${season} (${leagueId}).`);
@@ -293,7 +292,7 @@ export async function fetchNFLPlayers() {
         }
 
         console.log('Fetching NFL players from Sleeper API (cache expired or not found)...');
-        const response = await fetch(`${BASE_URL}/players/nfl`); // Use BASE_URL
+        const response = await fetch(`${BASE_URL}/players/nfl`);
 
         if (!response.ok) {
             console.error(`Error fetching NFL players: ${response.statusText}`);
@@ -333,7 +332,7 @@ export async function fetchNFLState() {
         }
 
         console.log('Fetching NFL state from Sleeper API (cache expired or not found)...');
-        const response = await fetch(`${BASE_URL}/state/nfl`); // Use BASE_URL
+        const response = await fetch(`${BASE_URL}/state/nfl`);
 
         if (!response.ok) {
             console.error(`Error fetching NFL state: ${response.statusText}`);
@@ -363,7 +362,7 @@ export async function fetchNFLState() {
 export async function fetchRosterData(leagueId) {
     try {
         console.log(`Fetching raw roster data for league ID: ${leagueId}...`);
-        const response = await fetch(`${BASE_URL}/league/${leagueId}/rosters`); // Use BASE_URL
+        const response = await fetch(`${BASE_URL}/league/${leagueId}/rosters`);
 
         if (!response.ok) {
             console.error(`Error fetching raw roster data for league ID ${leagueId}: ${response.statusText}`);
@@ -463,7 +462,7 @@ export async function fetchTransactionsForWeek(leagueId, week) {
 
     try {
         console.log(`Fetching transaction data for league ID: ${leagueId}, Week: ${week}...`);
-        const response = await fetch(`${BASE_URL}/league/${leagueId}/transactions/${week}`); // Use BASE_URL
+        const response = await fetch(`${BASE_URL}/league/${leagueId}/transactions/${week}`);
 
         if (!response.ok) {
             console.error(`Error fetching transaction data for league ${leagueId}, Week ${week}: ${response.statusText}`);
@@ -496,7 +495,7 @@ export async function fetchLeagueDrafts(leagueId) {
 
     try {
         console.log(`Fetching league drafts for ID: ${leagueId}...`);
-        const response = await fetch(`${BASE_URL}/league/${leagueId}/drafts`); // Use BASE_URL
+        const response = await fetch(`${BASE_URL}/league/${leagueId}/drafts`);
         if (!response.ok) {
             console.error(`Error fetching drafts for league ID ${leagueId}: ${response.statusText}`);
             return [];
@@ -525,7 +524,7 @@ export async function fetchDraftDetails(draftId) {
 
     try {
         console.log(`Fetching draft details for ID: ${draftId}...`);
-        const response = await fetch(`${BASE_URL}/draft/${draftId}`); // Use BASE_URL
+        const response = await fetch(`${BASE_URL}/draft/${draftId}`);
         if (!response.ok) {
             console.error(`Error fetching draft details for ID ${draftId}: ${response.statusText}`);
             return null;
@@ -554,7 +553,7 @@ export async function fetchDraftPicks(draftId) {
 
     try {
         console.log(`Fetching draft picks for ID: ${draftId}...`);
-        const response = await fetch(`${BASE_URL}/draft/${draftId}/picks`); // Use BASE_URL
+        const response = await fetch(`${BASE_URL}/draft/${draftId}/picks`);
         if (!response.ok) {
             console.error(`Error fetching draft picks for ID ${draftId}: ${response.statusText}`);
             return [];
@@ -583,7 +582,7 @@ export async function fetchTradedPicks(draftId) {
 
     try {
         console.log(`Fetching traded picks for ID: ${draftId}...`);
-        const response = await fetch(`${BASE_URL}/draft/${draftId}/traded_picks`); // Use BASE_URL
+        const response = await fetch(`${BASE_URL}/draft/${draftId}/traded_picks`);
         if (!response.ok) {
             console.error(`Error fetching traded picks for ID ${draftId}: ${response.statusText}`);
             return [];
@@ -617,7 +616,7 @@ export async function fetchAllDraftHistory() {
     const allDraftHistory = {};
 
     try {
-        const leagues = await fetchLeagueData(CURRENT_LEAGUE_ID); // CURRENT_LEAGUE_ID is now imported
+        const leagues = await fetchLeagueData(CURRENT_LEAGUE_ID);
         if (!leagues || leagues.length === 0) {
             console.warn('No league data found to fetch draft history. Check CURRENT_LEAGUE_ID in config.js.');
             return {};
@@ -676,7 +675,7 @@ export async function fetchWinnersBracket(leagueId) {
 
     try {
         console.log(`Fetching winners bracket for league ID: ${leagueId}...`);
-        const response = await fetch(`${BASE_URL}/league/${leagueId}/winners_bracket`); // Use BASE_URL
+        const response = await fetch(`${BASE_URL}/league/${leagueId}/winners_bracket`);
         if (!response.ok) {
             console.error(`Error fetching winners bracket for league ID ${leagueId}: ${response.statusText}`);
             return [];
@@ -705,7 +704,7 @@ export async function fetchLosersBracket(leagueId) {
 
     try {
         console.log(`Fetching losers bracket for league ID: ${leagueId}...`);
-        const response = await fetch(`${BASE_URL}/league/${leagueId}/losers_bracket`); // Use BASE_URL
+        const response = await fetch(`${BASE_URL}/league/${leagueId}/losers_bracket`);
         if (!response.ok) {
             console.error(`Error fetching losers bracket for league ID ${leagueId}: ${response.statusText}`);
             return [];
