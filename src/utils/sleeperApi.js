@@ -1,30 +1,11 @@
 // src/utils/sleeperApi.js
 
-// Centralized map linking your internal team names (e.g., last names) to Sleeper User IDs.
-// YOU MUST POPULATE THIS MAP WITH ALL YOUR TEAM NAMES AND THEIR CORRESPONDING SLEEPER USER IDs.
-export const TEAM_NAME_TO_SLEEPER_ID_MAP = {
-  'Ainsworth': '783790952367169536',
-  'Bjarnar': '783761299275382784',
-  'Blumbergs': '783789717920534528',
-  'Boilard': '783789669597999104',
-  'Dembski': '783767734491127808',
-  'Irwin': '467074573125283840',
-  'Meer': '783778036578418688',
-  'Neufeglise': '783763304463147008',
-  'O\'Donoghue': '783758716272009216', // Fixed syntax: ensure commas between entries.
-  'ODonoghue': '783758716272009216', // Added alias for "ODonoghue"
-  'Randall': '783754997035876352',
-  'Schmitt': '783761892693905408',
-  'Tomczak': '787044291066380288',
-};
+// Import CURRENT_LEAGUE_ID from your config file.
+// Ensure that 'config.js' is in the parent directory of 'utils', or adjust the path accordingly.
+import { CURRENT_LEAGUE_ID } from '../config';
 
-// Set of internal team names for managers who are retired.
-// Teams listed here will generally be excluded from current season calculations
-// like Power Rankings, but their historical data will still be processed.
-export const RETIRED_MANAGERS = new Set([
-  // Add internal team names of retired managers here:
-  // For example: 'RetiredManagerName1', 'RetiredManager2'
-]);
+// Define the base URL for the Sleeper API.
+const BASE_URL = 'https://api.sleeper.app/v1';
 
 // Internal cache for historical matchup data to avoid repeated API calls within the session.
 let historicalMatchupsCache = null;
@@ -68,17 +49,17 @@ const NFL_STATE_CACHE_EXPIRY_MS = 1 * 60 * 60 * 1000; // 1 hour in milliseconds
  * @returns {string} The full URL to the avatar image, or a placeholder if identifier is missing.
  */
 export const getSleeperAvatarUrl = (avatarIdentifier) => {
-  if (!avatarIdentifier) {
-    return 'https://placehold.co/150x150/cccccc/000000?text=No+Avatar';
-  }
+  if (!avatarIdentifier) {
+    return 'https://placehold.co/150x150/cccccc/000000?text=No+Avatar';
+  }
 
-  // If the identifier already looks like a full URL, return it directly
-  if (avatarIdentifier.startsWith('http://') || avatarIdentifier.startsWith('https://')) {
-    return avatarIdentifier;
-  }
+  // If the identifier already looks like a full URL, return it directly
+  if (avatarIdentifier.startsWith('http://') || avatarIdentifier.startsWith('https://')) {
+    return avatarIdentifier;
+  }
 
-  // Otherwise, assume it's an avatar hash and construct the URL
-  return `https://sleepercdn.com/avatars/thumb_${avatarIdentifier}`;
+  // Otherwise, assume it's an avatar hash and construct the URL
+  return `https://sleepercdn.com/avatars/thumb_${avatarIdentifier}`;
 };
 
 /**
@@ -105,18 +86,18 @@ export async function fetchLeagueDetails(leagueId) {
         return null; // Return null immediately for invalid IDs
     }
 
-  try {
-    const response = await fetch(`https://api.sleeper.app/v1/league/${leagueId}`);
-    if (!response.ok) {
-      console.error(`Error fetching league details for ID ${leagueId}: ${response.statusText}`);
-      return null;
-    }
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error(`Failed to fetch league details for ID ${leagueId}:`, error);
-    return null;
-  }
+  try {
+    const response = await fetch(`${BASE_URL}/league/${leagueId}`); // Use BASE_URL
+    if (!response.ok) {
+      console.error(`Error fetching league details for ID ${leagueId}: ${response.statusText}`);
+      return null;
+    }
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error(`Failed to fetch league details for ID ${leagueId}:`, error);
+    return null;
+  }
 }
 
 /**
@@ -128,22 +109,22 @@ export async function fetchLeagueDetails(leagueId) {
  * ordered from current season to the oldest available season.
  */
 export async function fetchLeagueData(currentLeagueId) {
-  const leagueData = [];
-  let currentId = currentLeagueId;
+  const leagueData = [];
+  let currentId = currentLeagueId;
 
-  // Loop continues as long as there's a currentId to fetch and it's a valid string ID
-  while (currentId && typeof currentId === 'string' && currentId !== '0') {
-    const details = await fetchLeagueDetails(currentId);
-    if (details) {
-      leagueData.push(details);
-      currentId = details.previous_league_id; // Move to the previous league ID
-    } else {
-      // Stop if a league cannot be fetched (e.g., invalid ID, network error, or previous_league_id is null/invalid)
-      break;
-    }
-  }
+  // Loop continues as long as there's a currentId to fetch and it's a valid string ID
+  while (currentId && typeof currentId === 'string' && currentId !== '0') {
+    const details = await fetchLeagueDetails(currentId);
+    if (details) {
+      leagueData.push(details);
+      currentId = details.previous_league_id; // Move to the previous league ID
+    } else {
+      // Stop if a league cannot be fetched (e.g., invalid ID, network error, or previous_league_id is null/invalid)
+      break;
+    }
+  }
 
-  return leagueData;
+  return leagueData;
 }
 
 /**
@@ -152,40 +133,40 @@ export async function fetchLeagueData(currentLeagueId) {
  * @returns {Promise<Array<Object>>} A promise that resolves to an array of user data objects, or an empty array if an error occurs.
  */
 export async function fetchUsersData(leagueId) {
-  try {
-    const response = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/users`);
-    if (!response.ok) {
-      console.error(`Error fetching user details for league ID ${leagueId}: ${response.statusText}`);
-      return [];
-    }
-    const data = await response.json();
+  try {
+    const response = await fetch(`${BASE_URL}/league/${leagueId}/users`); // Use BASE_URL
+    if (!response.ok) {
+      console.error(`Error fetching user details for league ID ${leagueId}: ${response.statusText}`);
+      return [];
+    }
+    const data = await response.json();
 
-    const processedUsers = data.map(user => {
-      let finalAvatarIdentifier = ''; // This can be a hash or a full URL
+    const processedUsers = data.map(user => {
+      let finalAvatarIdentifier = ''; // This can be a hash or a full URL
 
-      // Prefer the full URL from metadata if available
-      if (user.metadata && typeof user.metadata.avatar === 'string' && user.metadata.avatar.trim() !== '') {
-        finalAvatarIdentifier = user.metadata.avatar;
-      } else {
-        // Fallback to the main avatar hash
-        finalAvatarIdentifier = user.avatar;
-      }
+      // Prefer the full URL from metadata if available
+      if (user.metadata && typeof user.metadata.avatar === 'string' && user.metadata.avatar.trim() !== '') {
+        finalAvatarIdentifier = user.metadata.avatar;
+      } else {
+        // Fallback to the main avatar hash
+        finalAvatarIdentifier = user.avatar;
+      }
 
-      return {
-        userId: user.user_id,
-        displayName: user.display_name,
-        // Pass the identifier (which might be a hash or a full URL) to getSleeperAvatarUrl
-        avatar: getSleeperAvatarUrl(finalAvatarIdentifier),
-        // 'team_name' is typically found in the user.metadata object for Sleeper
-        teamName: user.metadata ? user.metadata.team_name : user.display_name, // Fallback to display_name if no team_name
-      };
-    });
+      return {
+        userId: user.user_id,
+        displayName: user.display_name,
+        // Pass the identifier (which might be a hash or a full URL) to getSleeperAvatarUrl
+        avatar: getSleeperAvatarUrl(finalAvatarIdentifier),
+        // 'team_name' is typically found in the user.metadata object for Sleeper
+        teamName: user.metadata ? user.metadata.team_name : user.display_name, // Fallback to display_name if no team_name
+      };
+    });
 
-    return processedUsers;
-  } catch (error) {
-    console.error(`Failed to fetch user details for league ID ${leagueId}:`, error);
-    return [];
-  }
+    return processedUsers;
+  } catch (error) {
+    console.error(`Failed to fetch user details for league ID ${leagueId}:`, error);
+    return [];
+  }
 }
 
 
@@ -207,7 +188,7 @@ async function fetchMatchupsForLeague(leagueId, regularSeasonWeeks) {
 
     for (let week = 1; week <= regularSeasonWeeks; week++) {
         try {
-            const response = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/matchups/${week}`);
+            const response = await fetch(`${BASE_URL}/league/${leagueId}/matchups/${week}`); // Use BASE_URL
 
             if (!response.ok) {
                 console.warn(`Warning: Could not fetch matchups for league ${leagueId}, Week ${week}: ${response.statusText}`);
@@ -249,10 +230,10 @@ export async function fetchAllHistoricalMatchups() {
     const allHistoricalMatchups = {};
 
     try {
-        const leagues = await fetchLeagueData(CURRENT_LEAGUE_ID);
+        const leagues = await fetchLeagueData(CURRENT_LEAGUE_ID); // CURRENT_LEAGUE_ID is now imported
 
         if (!leagues || leagues.length === 0) {
-            console.error('No league data found for historical matchup fetching. Check CURRENT_LEAGUE_ID.');
+            console.error('No league data found for historical matchup fetching. Check CURRENT_LEAGUE_ID in config.js.');
             return {};
         }
 
@@ -269,7 +250,7 @@ export async function fetchAllHistoricalMatchups() {
                 regularSeasonWeeks = league.settings.playoff_start_week - 1;
                 console.log(`For season ${season} (${leagueId}), fetching ${regularSeasonWeeks} regular season weeks.`);
             } else {
-                 console.log(`No valid 'playoff_start_week' found for league ${season} (${leagueId}). Defaulting to fetching ${regularSeasonWeeks} regular season weeks.`);
+                console.log(`No valid 'playoff_start_week' found for league ${season} (${leagueId}). Defaulting to fetching ${regularSeasonWeeks} regular season weeks.`);
             }
 
             const matchups = await fetchMatchupsForLeague(leagueId, regularSeasonWeeks);
@@ -312,7 +293,7 @@ export async function fetchNFLPlayers() {
         }
 
         console.log('Fetching NFL players from Sleeper API (cache expired or not found)...');
-        const response = await fetch('https://api.sleeper.app/v1/players/nfl');
+        const response = await fetch(`${BASE_URL}/players/nfl`); // Use BASE_URL
 
         if (!response.ok) {
             console.error(`Error fetching NFL players: ${response.statusText}`);
@@ -352,7 +333,7 @@ export async function fetchNFLState() {
         }
 
         console.log('Fetching NFL state from Sleeper API (cache expired or not found)...');
-        const response = await fetch('https://api.sleeper.app/v1/state/nfl');
+        const response = await fetch(`${BASE_URL}/state/nfl`); // Use BASE_URL
 
         if (!response.ok) {
             console.error(`Error fetching NFL state: ${response.statusText}`);
@@ -382,7 +363,7 @@ export async function fetchNFLState() {
 export async function fetchRosterData(leagueId) {
     try {
         console.log(`Fetching raw roster data for league ID: ${leagueId}...`);
-        const response = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/rosters`);
+        const response = await fetch(`${BASE_URL}/league/${leagueId}/rosters`); // Use BASE_URL
 
         if (!response.ok) {
             console.error(`Error fetching raw roster data for league ID ${leagueId}: ${response.statusText}`);
@@ -482,7 +463,7 @@ export async function fetchTransactionsForWeek(leagueId, week) {
 
     try {
         console.log(`Fetching transaction data for league ID: ${leagueId}, Week: ${week}...`);
-        const response = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/transactions/${week}`);
+        const response = await fetch(`${BASE_URL}/league/${leagueId}/transactions/${week}`); // Use BASE_URL
 
         if (!response.ok) {
             console.error(`Error fetching transaction data for league ${leagueId}, Week ${week}: ${response.statusText}`);
@@ -515,7 +496,7 @@ export async function fetchLeagueDrafts(leagueId) {
 
     try {
         console.log(`Fetching league drafts for ID: ${leagueId}...`);
-        const response = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/drafts`);
+        const response = await fetch(`${BASE_URL}/league/${leagueId}/drafts`); // Use BASE_URL
         if (!response.ok) {
             console.error(`Error fetching drafts for league ID ${leagueId}: ${response.statusText}`);
             return [];
@@ -544,7 +525,7 @@ export async function fetchDraftDetails(draftId) {
 
     try {
         console.log(`Fetching draft details for ID: ${draftId}...`);
-        const response = await fetch(`https://api.sleeper.app/v1/draft/${draftId}`);
+        const response = await fetch(`${BASE_URL}/draft/${draftId}`); // Use BASE_URL
         if (!response.ok) {
             console.error(`Error fetching draft details for ID ${draftId}: ${response.statusText}`);
             return null;
@@ -573,7 +554,7 @@ export async function fetchDraftPicks(draftId) {
 
     try {
         console.log(`Fetching draft picks for ID: ${draftId}...`);
-        const response = await fetch(`https://api.sleeper.app/v1/draft/${draftId}/picks`);
+        const response = await fetch(`${BASE_URL}/draft/${draftId}/picks`); // Use BASE_URL
         if (!response.ok) {
             console.error(`Error fetching draft picks for ID ${draftId}: ${response.statusText}`);
             return [];
@@ -602,7 +583,7 @@ export async function fetchTradedPicks(draftId) {
 
     try {
         console.log(`Fetching traded picks for ID: ${draftId}...`);
-        const response = await fetch(`https://api.sleeper.app/v1/draft/${draftId}/traded_picks`);
+        const response = await fetch(`${BASE_URL}/draft/${draftId}/traded_picks`); // Use BASE_URL
         if (!response.ok) {
             console.error(`Error fetching traded picks for ID ${draftId}: ${response.statusText}`);
             return [];
@@ -636,9 +617,9 @@ export async function fetchAllDraftHistory() {
     const allDraftHistory = {};
 
     try {
-        const leagues = await fetchLeagueData(CURRENT_LEAGUE_ID);
+        const leagues = await fetchLeagueData(CURRENT_LEAGUE_ID); // CURRENT_LEAGUE_ID is now imported
         if (!leagues || leagues.length === 0) {
-            console.warn('No league data found to fetch draft history.');
+            console.warn('No league data found to fetch draft history. Check CURRENT_LEAGUE_ID in config.js.');
             return {};
         }
 
@@ -695,7 +676,7 @@ export async function fetchWinnersBracket(leagueId) {
 
     try {
         console.log(`Fetching winners bracket for league ID: ${leagueId}...`);
-        const response = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/winners_bracket`);
+        const response = await fetch(`${BASE_URL}/league/${leagueId}/winners_bracket`); // Use BASE_URL
         if (!response.ok) {
             console.error(`Error fetching winners bracket for league ID ${leagueId}: ${response.statusText}`);
             return [];
@@ -724,7 +705,7 @@ export async function fetchLosersBracket(leagueId) {
 
     try {
         console.log(`Fetching losers bracket for league ID: ${leagueId}...`);
-        const response = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/losers_bracket`);
+        const response = await fetch(`${BASE_URL}/league/${leagueId}/losers_bracket`); // Use BASE_URL
         if (!response.ok) {
             console.error(`Error fetching losers bracket for league ID ${leagueId}: ${response.statusText}`);
             return [];
