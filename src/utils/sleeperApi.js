@@ -6,683 +6,529 @@ export const CURRENT_LEAGUE_ID = '1181984921049018368'; // This is the CURRENT l
 // Centralized map linking your internal team names (e.g., last names) to Sleeper User IDs.
 // YOU MUST POPULATE THIS MAP WITH ALL YOUR TEAM NAMES AND THEIR CORRESPONDING SLEEPER USER IDs.
 export const TEAM_NAME_TO_SLEEPER_ID_MAP = {
-  'Ainsworth': '783790952367169536',
-  'Bjarnar': '783761299275382784',
-  'Blumbergs': '783789717920534528',
-  'Boilard': '783789669597999104',
-  'Dembski': '783767734491127808',
-  'Irwin': '467074573125283840',
-  'Meer': '783778036578418688',
-  'Neufeglise': '783763304463147008',
-  'O\'Donoghue': '783758716272009216', // Fixed syntax: ensure commas between entries.
-  'ODonoghue': '783758716272009216', // Added alias for "ODonoghue"
-  'Randall': '783754997035876352',
-  'Schmitt': '783761892693905408',
-  'Tomczak': '787044291066380288',
+  // Example: 'Ainsworth': '783790952367169536',
+  // Make sure this map is complete for all your historical team owners
+  'Ainsworth': '783790952367169536',
+  'Bjarnar': '783761299275382784',
+  'Blumbergs': '783789717920534528',
+  'Boilard': '783789669597999104',
+  'Dembski': '783767734491127808',
+  'Irwin': '467074573125283840',
+  'Meer': '783778036578418688',
+  'Neufeglise': '783763304463147008',
+  'O\'Donoghue': '783758716272009216',
+  'ODonoghue': '783758716272009216', // Added alias for "ODonoghue"
+  'Randall': '783754997035876352',
+  'Schmitt': '783761892693905408',
+  'Tomczak': '787044291066380288'
 };
 
-// Set of internal team names for managers who are retired.
-// Teams listed here will generally be excluded from current season calculations
-// like Power Rankings, but their historical data will still be processed.
-export const RETIRED_MANAGERS = new Set([
-  // Add internal team names of retired managers here:
-  // For example: 'RetiredManagerName1', 'RetiredManager2'
-]);
 
-// Internal cache for historical matchup data to avoid repeated API calls within the session.
-let historicalMatchupsCache = null;
+// If you have managers who have left the league but you want to reference them, add them here.
+// Key should be the Sleeper User ID. Value is their display name.
+export const RETIRED_MANAGERS = {
+  // '783790952367169536': 'Retired Manager Name',
+};
 
-// Internal cache for roster data (per league ID) to avoid repeated API calls within the session.
-const rosterDataCache = new Map();
+const SLEEPER_API_BASE_URL = 'https://api.sleeper.app/v1';
 
-// Internal cache for transaction data (per league ID and week)
-// Structure: Map<leagueId, Map<week, transactionsArray>>
-const transactionDataCache = new Map();
+// Caches for API data
+const leagueDetailsCache = new Map();
+const usersCache = new Map();
+const rostersCache = new Map();
+const matchupsCache = new Map();
+const playersCache = new Map();
+const transactionsCache = new Map();
+const draftsCache = new Map();
+const winnersBracketCache = new Map();
+const losersBracketCache = new Map();
+const leagueHistoryCache = new Map(); // New cache for league history
 
-// Internal caches for draft data
-// Structure: Map<leagueId, Array<drafts>>
-const leagueDraftsCache = new Map();
-// Structure: Map<draftId, draftDetailsObject>
-const draftDetailsCache = new Map();
-// Structure: Map<draftId, Array<draftPicks>>
-const draftPicksCache = new Map();
-// Structure: Map<draftId, Array<tradedPicks>>
-const tradedPicksCache = new Map();
-// Master cache for all historical draft data
-let allDraftHistoryCache = null;
+const CACHE_EXPIRATION_MS = 5 * 60 * 1000; // 5 minutes
 
-// Internal caches for playoff bracket data
-const winnersBracketCache = new Map(); // Structure: Map<leagueId, Array<matchup>>
-const losersBracketCache = new Map(); // Structure: Map<leagueId, Array<matchup>>
+// Helper to check and clear cache
+const getCachedData = (cache, key) => {
+  const cached = cache.get(key);
+  if (cached && (Date.now() - cached.timestamp < CACHE_EXPIRATION_MS)) {
+    return cached.data;
+  }
+  return null;
+};
 
-// NEW: In-memory cache for NFL players and NFL state
-const nflPlayersCache = new Map(); // Stores { players: {}, timestamp: Date.now() }
-const nflStateCache = new Map(); // Stores { state: {}, timestamp: Date.now() }
-
-// Constants for NFL player cache expiry (moved from localStorage to in-memory)
-const NFL_PLAYERS_CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
-const NFL_STATE_CACHE_EXPIRY_MS = 1 * 60 * 60 * 1000; // 1 hour in milliseconds
+const setCachedData = (cache, key, data) => {
+  cache.set(key, { data, timestamp: Date.now() });
+};
 
 
 /**
- * Constructs the full URL for a Sleeper user avatar.
- * It intelligently handles both avatar hashes and full URLs found in metadata.
- * @param {string} avatarIdentifier The avatar hash or full URL from Sleeper user data.
- * @returns {string} The full URL to the avatar image, or a placeholder if identifier is missing.
- */
-export const getSleeperAvatarUrl = (avatarIdentifier) => {
-  if (!avatarIdentifier) {
-    return 'https://placehold.co/150x150/cccccc/000000?text=No+Avatar';
-  }
-
-  // If the identifier already looks like a full URL, return it directly
-  if (avatarIdentifier.startsWith('http://') || avatarIdentifier.startsWith('https://')) {
-    return avatarIdentifier;
-  }
-
-  // Otherwise, assume it's an avatar hash and construct the URL
-  return `https://sleepercdn.com/avatars/thumb_${avatarIdentifier}`;
-};
-
-/**
- * Constructs the full URL for a Sleeper NFL player headshot.
- * @param {string} playerId The ID of the NFL player.
- * @returns {string} The full URL to the player's headshot image, or a placeholder if ID is missing.
- */
-export const getSleeperPlayerHeadshotUrl = (playerId) => {
-    if (!playerId) {
-        return 'https://placehold.co/150x150/cccccc/000000?text=No+Headshot';
-    }
-    return `https://sleepercdn.com/content/nfl/players/thumb/${playerId}.jpg`;
-};
-
-/**
- * Fetches league details from the Sleeper API for a given league ID.
+ * Fetches league details for a given league ID.
  * @param {string} leagueId The ID of the Sleeper league.
- * @returns {Promise<Object|null>} A promise that resolves to the league data, or null if an error occurs.
+ * @returns {Promise<Object>} A promise that resolves to the league details object.
  */
 export async function fetchLeagueDetails(leagueId) {
-    // NEW: Add a robust check for valid leagueId before fetching
-    if (!leagueId || typeof leagueId !== 'string' || leagueId === '0') {
-        console.warn(`Attempted to fetch league details with an invalid league ID: ${leagueId}`);
-        return null; // Return null immediately for invalid IDs
+  const cached = getCachedData(leagueDetailsCache, leagueId);
+  if (cached) {
+    console.log(`Returning league details for league ${leagueId} from cache.`);
+    return cached;
+  }
+
+  try {
+    console.log(`Fetching league details for league ID: ${leagueId}...`);
+    const response = await fetch(`${SLEEPER_API_BASE_URL}/league/${leagueId}`);
+    if (!response.ok) {
+      console.error(`Error fetching league details for league ID ${leagueId}: ${response.statusText}`);
+      return null;
     }
-
-  try {
-    const response = await fetch(`https://api.sleeper.app/v1/league/${leagueId}`);
-    if (!response.ok) {
-      console.error(`Error fetching league details for ID ${leagueId}: ${response.statusText}`);
-      return null;
-    }
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error(`Failed to fetch league details for ID ${leagueId}:`, error);
-    return null;
-  }
+    const data = await response.json();
+    setCachedData(leagueDetailsCache, leagueId, data);
+    console.log(`Successfully fetched league details for league ID: ${leagueId}.`);
+    return data;
+  } catch (error) {
+    console.error(`Failed to fetch league details for league ID ${leagueId}:`, error);
+    return null;
+  }
 }
 
 /**
- * Fetches league data for the current season and all available previous seasons.
- * It recursively fetches previous league details using previous_league_id until no more are found.
- *
- * @param {string} currentLeagueId The ID of the current season's league.
- * @returns {Promise<Array<Object>>} A promise that resolves to an array of league data objects,
- * ordered from current season to the oldest available season.
+ * Fetches historical league IDs for a given league lineage.
+ * @param {string} leagueId The ID of the Sleeper league (current or past).
+ * @returns {Promise<Array<string>>} A promise that resolves to an array of historical league IDs.
  */
-export async function fetchLeagueData(currentLeagueId) {
-  const leagueData = [];
-  let currentId = currentLeagueId;
+export async function fetchLeagueHistory(leagueId) {
+  const cached = getCachedData(leagueHistoryCache, leagueId);
+  if (cached) {
+    console.log(`Returning league history for league ${leagueId} from cache.`);
+    return cached;
+  }
 
-  // Loop continues as long as there's a currentId to fetch and it's a valid string ID
-  while (currentId && typeof currentId === 'string' && currentId !== '0') {
-    const details = await fetchLeagueDetails(currentId);
-    if (details) {
-      leagueData.push(details);
-      currentId = details.previous_league_id; // Move to the previous league ID
-    } else {
-      // Stop if a league cannot be fetched (e.g., invalid ID, network error, or previous_league_id is null/invalid)
-      break;
-    }
-  }
-
-  return leagueData;
+  try {
+    console.log(`Fetching league history for league ID: ${leagueId}...`);
+    const response = await fetch(`${SLEEPER_API_BASE_URL}/league/${leagueId}/history`);
+    if (!response.ok) {
+      console.error(`Error fetching league history for league ID ${leagueId}: ${response.statusText}`);
+      return [];
+    }
+    const data = await response.json();
+    const historicalLeagueIds = data.map(league => league.league_id);
+    setCachedData(leagueHistoryCache, leagueId, historicalLeagueIds);
+    console.log(`Successfully fetched league history for league ID: ${leagueId}.`);
+    return historicalLeagueIds;
+  } catch (error) {
+    console.error(`Failed to fetch league history for league ID ${leagueId}:`, error);
+    return [];
+  }
 }
 
+
 /**
- * Fetches user details for a given league ID from the Sleeper API.
+ * Fetches users data for a given league ID.
  * @param {string} leagueId The ID of the Sleeper league.
- * @returns {Promise<Array<Object>>} A promise that resolves to an array of user data objects, or an empty array if an error occurs.
+ * @returns {Promise<Array<Object>>} A promise that resolves to an array of user objects.
  */
 export async function fetchUsersData(leagueId) {
-  try {
-    const response = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/users`);
-    if (!response.ok) {
-      console.error(`Error fetching user details for league ID ${leagueId}: ${response.statusText}`);
-      return [];
-    }
-    const data = await response.json();
+  const cacheKey = `users-${leagueId}`;
+  const cached = getCachedData(usersCache, cacheKey);
+  if (cached) {
+    console.log(`Returning users for league ${leagueId} from cache.`);
+    return cached;
+  }
 
-    const processedUsers = data.map(user => {
-      let finalAvatarIdentifier = ''; // This can be a hash or a full URL
-
-      // Prefer the full URL from metadata if available
-      if (user.metadata && typeof user.metadata.avatar === 'string' && user.metadata.avatar.trim() !== '') {
-        finalAvatarIdentifier = user.metadata.avatar;
-      } else {
-        // Fallback to the main avatar hash
-        finalAvatarIdentifier = user.avatar;
-      }
-
-      return {
-        userId: user.user_id,
-        displayName: user.display_name,
-        // Pass the identifier (which might be a hash or a full URL) to getSleeperAvatarUrl
-        avatar: getSleeperAvatarUrl(finalAvatarIdentifier),
-        // 'team_name' is typically found in the user.metadata object for Sleeper
-        teamName: user.metadata ? user.metadata.team_name : user.display_name, // Fallback to display_name if no team_name
-      };
-    });
-
-    return processedUsers;
-  } catch (error) {
-    console.error(`Failed to fetch user details for league ID ${leagueId}:`, error);
-    return [];
-  }
-}
-
-
-/**
- * Fetches matchup data for a specific league across a given range of regular season weeks.
- * This is a helper function for `fetchAllHistoricalMatchups`.
- *
- * @param {string} leagueId The ID of the Sleeper league to fetch matchups for.
- * @param {number} regularSeasonWeeks The total number of regular season weeks for this league.
- * Matchups will be fetched from Week 1 up to this number.
- * @returns {Promise<Object>} A promise that resolves to an object.
- * Keys are week numbers (e.g., '1', '2'), and values are arrays
- * containing the matchup data for that specific week.
- */
-async function fetchMatchupsForLeague(leagueId, regularSeasonWeeks) {
-    const leagueMatchups = {}; // Object to store matchups for the current league, keyed by week.
-
-    console.log(`Starting to fetch matchups for league ${leagueId} for up to ${regularSeasonWeeks} weeks.`); // NEW LOG
-
-    for (let week = 1; week <= regularSeasonWeeks; week++) {
-        try {
-            const response = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/matchups/${week}`);
-
-            if (!response.ok) {
-                console.warn(`Warning: Could not fetch matchups for league ${leagueId}, Week ${week}: ${response.statusText}`);
-                continue; // Continue to next week even if fetch fails for current week
-            }
-
-            const data = await response.json();
-            console.log(`League ${leagueId}, Week ${week}: Fetched ${data.length} matchups.`); // NEW LOG
-            if (data && data.length > 0) {
-                leagueMatchups[week] = data;
-            } else {
-                console.log(`No matchups found for league ${leagueId}, Week ${week}.`);
-            }
-        } catch (error) {
-            console.error(`Failed to fetch matchups for league ${leagueId}, Week ${week}:`, error);
-            // Continue to the next week even if a specific week's fetch fails.
-        }
+  try {
+    console.log(`Fetching users for league ID: ${leagueId}...`);
+    const response = await fetch(`${SLEEPER_API_BASE_URL}/league/${leagueId}/users`);
+    if (!response.ok) {
+      console.error(`Error fetching users for league ID ${leagueId}: ${response.statusText}`);
+      return [];
     }
-    console.log(`Finished fetching matchups for league ${leagueId}. Total weeks with data: ${Object.keys(leagueMatchups).length}`); // NEW LOG
-    return leagueMatchups;
+    const data = await response.json();
+    setCachedData(usersCache, cacheKey, data);
+    console.log(`Successfully fetched users for league ID: ${leagueId}.`);
+    return data;
+  } catch (error) {
+    console.error(`Failed to fetch users for league ID ${leagueId}:`, error);
+    return [];
+  }
 }
 
 /**
- * Fetches all historical matchup data for the current league and all its previous seasons.
- * Data is fetched once and then cached in memory for subsequent calls within the same session.
- *
- * @returns {Promise<Object>} A promise that resolves to an object containing all historical matchups,
- * structured as { "season_year": { "week_number": [matchup_data], ... }, ... }.
- * Returns the cached data if already fetched.
- */
-export async function fetchAllHistoricalMatchups() {
-    // If data is already in cache, return it immediately.
-    if (historicalMatchupsCache) {
-        console.log('Returning historical matchups from cache.');
-        return historicalMatchupsCache;
-    }
-
-    console.log('Fetching all historical matchup data for the first time... ');
-    const allHistoricalMatchups = {};
-
-    try {
-        const leagues = await fetchLeagueData(CURRENT_LEAGUE_ID);
-
-        if (!leagues || leagues.length === 0) {
-            console.error('No league data found for historical matchup fetching. Check CURRENT_LEAGUE_ID.');
-            return {};
-        }
-
-        for (const league of leagues) {
-            const leagueId = league.league_id;
-            const season = league.season;
-
-            // Determine the number of regular season weeks for the current league.
-            // Sleeper API typically provides `settings.playoff_start_week`.
-            // The regular season ends the week before playoffs start.
-            let regularSeasonWeeks = 14; // Default based on common fantasy league lengths.
-
-            if (league.settings && typeof league.settings.playoff_start_week === 'number' && league.settings.playoff_start_week > 1) {
-                regularSeasonWeeks = league.settings.playoff_start_week - 1;
-                console.log(`For season ${season} (${leagueId}), fetching ${regularSeasonWeeks} regular season weeks.`);
-            } else {
-                 console.log(`No valid 'playoff_start_week' found for league ${season} (${leagueId}). Defaulting to fetching ${regularSeasonWeeks} regular season weeks.`);
-            }
-
-            const matchups = await fetchMatchupsForLeague(leagueId, regularSeasonWeeks);
-            console.log(`For season ${season} (${leagueId}), collected weeks: ${Object.keys(matchups).length}`); // NEW LOG
-
-            // Always add the season key, even if matchups is empty, so it's defined
-            allHistoricalMatchups[season] = matchups;
-
-            if (Object.keys(matchups).length === 0) {
-                console.warn(`No matchups collected for season ${season} (${leagueId}).`);
-            }
-        }
-
-        // Cache the fetched data before returning.
-        historicalMatchupsCache = allHistoricalMatchups;
-        console.log('Successfully fetched and cached all historical matchup data.');
-        return allHistoricalMatchups;
-
-    } catch (error) {
-        console.error('Error fetching all historical matchups:', error);
-        return {}; // Return empty object on error
-    }
-}
-
-/**
- * Fetches NFL player data from the Sleeper API, using in-memory caching.
- * This function will only hit the Sleeper API once every 24 hours within the session.
- *
- * @returns {Promise<Object>} A promise that resolves to an object containing all NFL player data,
- * keyed by player ID. Returns an empty object on error.
- */
-export async function fetchNFLPlayers() {
-    try {
-        const cachedData = nflPlayersCache.get('players');
-        const now = Date.now();
-
-        if (cachedData && (now - cachedData.timestamp < NFL_PLAYERS_CACHE_EXPIRY_MS)) {
-            console.log('Returning NFL players from in-memory cache (still valid).');
-            return cachedData.players;
-        }
-
-        console.log('Fetching NFL players from Sleeper API (cache expired or not found)...');
-        const response = await fetch('https://api.sleeper.app/v1/players/nfl');
-
-        if (!response.ok) {
-            console.error(`Error fetching NFL players: ${response.statusText}`);
-            return {};
-        }
-
-        const players = await response.json();
-
-        // Store the new players data and the current timestamp in in-memory cache
-        nflPlayersCache.set('players', { players, timestamp: now });
-
-        console.log('Successfully fetched and cached NFL players in memory.');
-        return players;
-
-    } catch (error) {
-        console.error('Failed to fetch or cache NFL players:', error);
-        nflPlayersCache.delete('players'); // Clear potentially corrupted cache
-        return {};
-    }
-}
-
-/**
- * Fetches NFL state data from the Sleeper API, using in-memory caching.
- * This data includes current week, season type, etc. Caches for 1 hour by default.
- *
- * @returns {Promise<Object>} A promise that resolves to an object containing NFL state data.
- * Returns an empty object on error.
- */
-export async function fetchNFLState() {
-    try {
-        const cachedData = nflStateCache.get('state');
-        const now = Date.now();
-
-        if (cachedData && (now - cachedData.timestamp < NFL_STATE_CACHE_EXPIRY_MS)) {
-            console.log('Returning NFL state from in-memory cache (still valid).');
-            return cachedData.state;
-        }
-
-        console.log('Fetching NFL state from Sleeper API (cache expired or not found)...');
-        const response = await fetch('https://api.sleeper.app/v1/state/nfl');
-
-        if (!response.ok) {
-            console.error(`Error fetching NFL state: ${response.statusText}`);
-            return {};
-        }
-
-        const state = await response.json();
-
-        nflStateCache.set('state', { state, timestamp: now });
-
-        console.log('Successfully fetched and cached NFL state in memory.');
-        return state;
-
-    } catch (error) {
-        console.error('Failed to fetch or cache NFL state:', error);
-        nflStateCache.delete('state'); // Clear potentially corrupted cache
-        return {};
-    }
-}
-
-
-/**
- * Fetches raw roster data for a given league ID from the Sleeper API.
+ * Fetches rosters data for a given league ID.
  * @param {string} leagueId The ID of the Sleeper league.
- * @returns {Promise<Array<Object>>} A promise that resolves to an array of raw roster data objects, or an empty array if an error occurs.
- */
-export async function fetchRosterData(leagueId) {
-    try {
-        console.log(`Fetching raw roster data for league ID: ${leagueId}...`);
-        const response = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/rosters`);
-
-        if (!response.ok) {
-            console.error(`Error fetching raw roster data for league ID ${leagueId}: ${response.statusText}`);
-            return [];
-        }
-
-        const data = await response.json();
-        console.log(`Successfully fetched raw roster data for league ID: ${leagueId}.`);
-        return data;
-    } catch (error) {
-        console.error(`Failed to fetch raw roster data for league ID ${leagueId}:`, error);
-        return [];
-    }
-}
-
-/**
- * Fetches roster data for a given league ID and enriches it with user/team details.
- * Data is fetched once per league ID and then cached in memory for subsequent calls within the same session.
- *
- * @param {string} leagueId The ID of the Sleeper league.
- * @returns {Promise<Array<Object>>} A promise that resolves to an array of enriched roster data objects.
- * Each roster object will include 'ownerDisplayName' and 'ownerTeamName' properties.
- * Returns an empty array on error.
+ * @returns {Promise<Array<Object>>} A promise that resolves to an array of roster objects.
  */
 export async function fetchRostersWithDetails(leagueId) {
-    // Check if data for this leagueId is already in cache
-    if (rosterDataCache.has(leagueId)) {
-        console.log(`Returning enriched roster data for league ${leagueId} from cache.`);
-        return rosterDataCache.get(leagueId);
+  const cacheKey = `rosters-${leagueId}`;
+  const cached = getCachedData(rostersCache, cacheKey);
+  if (cached) {
+    console.log(`Returning rosters for league ${leagueId} from cache.`);
+    return cached;
+  }
+
+  try {
+    console.log(`Fetching rosters for league ID: ${leagueId}...`);
+    const response = await fetch(`${SLEEPER_API_BASE_URL}/league/${leagueId}/rosters`);
+    if (!response.ok) {
+      console.error(`Error fetching rosters for league ID ${leagueId}: ${response.statusText}`);
+      return [];
     }
-
-    console.log(`Fetching and enriching roster data for league ID: ${leagueId}...`);
-    try {
-        // Fetch raw rosters and users concurrently
-        const [rosters, users] = await Promise.all([
-            fetchRosterData(leagueId),
-            fetchUsersData(leagueId)
-        ]);
-
-        if (!rosters || rosters.length === 0) {
-            console.warn(`No raw roster data found for league ${leagueId}.`);
-            return [];
-        }
-        if (!users || users.length === 0) {
-            console.warn(`No user data found for league ${leagueId}. Rosters cannot be fully enriched.`);
-            // Even without user data, return raw rosters to avoid blocking
-            rosterDataCache.set(leagueId, rosters);
-            return rosters;
-        }
-
-        // Create a map for quick user lookup by userId
-        const userMap = new Map(users.map(user => [user.userId, user]));
-
-        // Enrich each roster with owner details
-        const enrichedRosters = rosters.map(roster => {
-            const owner = userMap.get(roster.owner_id);
-            return {
-                ...roster,
-                ownerDisplayName: owner ? owner.displayName : 'Unknown Owner',
-                ownerTeamName: owner ? owner.teamName : 'Unknown Team',
-                ownerAvatar: owner ? owner.avatar : getSleeperAvatarUrl(null) // Provide a fallback avatar
-            };
-        });
-
-        // Cache the enriched data
-        rosterDataCache.set(leagueId, enrichedRosters);
-        console.log(`Successfully fetched and enriched roster data for league ID: ${leagueId}.`);
-        return enrichedRosters;
-
-    } catch (error) {
-        console.error(`Failed to fetch and enrich roster data for league ID ${leagueId}:`, error);
-        return []; // Return empty array on error
-    }
+    const data = await response.json();
+    setCachedData(rostersCache, cacheKey, data);
+    console.log(`Successfully fetched rosters for league ID: ${leagueId}.`);
+    return data;
+  } catch (error) {
+    console.error(`Failed to fetch rosters for league ID ${leagueId}:`, error);
+    return [];
+  }
 }
 
 /**
- * Fetches transaction data for a specific league and week from the Sleeper API.
- * Data is cached in memory for subsequent calls within the same session.
- *
+ * Fetches NFL players data.
+ * @returns {Promise<Object>} A promise that resolves to an object of NFL players.
+ */
+export async function fetchNFLPlayers() {
+  const cacheKey = 'nflPlayers';
+  const cached = getCachedData(playersCache, cacheKey);
+  if (cached) {
+    console.log("Returning NFL players from cache.");
+    return cached;
+  }
+
+  try {
+    console.log("Fetching NFL players data...");
+    const response = await fetch(`${SLEEPER_API_BASE_URL}/stats/nfl/players/2023`); // Consider making year dynamic
+    if (!response.ok) {
+      console.error(`Error fetching NFL players: ${response.statusText}`);
+      return {};
+    }
+    const data = await response.json();
+    setCachedData(playersCache, cacheKey, data);
+    console.log("Successfully fetched NFL players data.");
+    return data;
+  } catch (error) {
+    console.error("Failed to fetch NFL players data:", error);
+    return {};
+  }
+}
+
+/**
+ * Fetches matchup data for a given week and league ID.
  * @param {string} leagueId The ID of the Sleeper league.
- * @param {number} week The week number for which to retrieve transactions.
- * @returns {Promise<Array<Object>>} A promise that resolves to an array of transaction data objects, or an empty array if an error occurs.
+ * @param {number} week The week number.
+ * @returns {Promise<Array<Object>>} A promise that resolves to an array of matchup objects.
+ */
+export async function fetchMatchupsForWeek(leagueId, week) {
+  const cacheKey = `matchups-${leagueId}-${week}`;
+  const cached = getCachedData(matchupsCache, cacheKey);
+  if (cached) {
+    console.log(`Returning matchups for league ${leagueId}, week ${week} from cache.`);
+    return cached;
+  }
+
+  try {
+    console.log(`Fetching matchups for league ID: ${leagueId}, week: ${week}...`);
+    const response = await fetch(`${SLEEPER_API_BASE_URL}/league/${leagueId}/matchups/${week}`);
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.warn(`No matchups found for league ID ${leagueId}, week ${week}. (Likely end of season or pre-season)`);
+        return [];
+      }
+      console.error(`Error fetching matchups for league ID ${leagueId}, week ${week}: ${response.statusText}`);
+      return [];
+    }
+    const data = await response.json();
+    setCachedData(matchupsCache, cacheKey, data);
+    console.log(`Successfully fetched matchups for league ID: ${leagueId}, week: ${week}.`);
+    return data;
+  } catch (error) {
+    console.error(`Failed to fetch matchups for league ID ${leagueId}, week ${week}:`, error);
+    return [];
+  }
+}
+
+/**
+ * Fetches transactions for a given week in a league.
+ * @param {string} leagueId The ID of the Sleeper league.
+ * @param {number} week The week number.
+ * @returns {Promise<Array<Object>>} A promise that resolves to an array of transaction objects.
  */
 export async function fetchTransactionsForWeek(leagueId, week) {
-    // Initialize cache for this leagueId if it doesn't exist
-    if (!transactionDataCache.has(leagueId)) {
-        transactionDataCache.set(leagueId, new Map());
+  const cacheKey = `transactions-${leagueId}-${week}`;
+  const cached = getCachedData(transactionsCache, cacheKey);
+  if (cached) {
+    console.log(`Returning transactions for league ${leagueId}, week ${week} from cache.`);
+    return cached;
+  }
+
+  try {
+    console.log(`Fetching transactions for league ID: ${leagueId}, week: ${week}...`);
+    const response = await fetch(`${SLEEPER_API_BASE_URL}/league/${leagueId}/transactions/${week}`);
+    if (!response.ok) {
+      console.error(`Error fetching transactions for league ID ${leagueId}, week ${week}: ${response.statusText}`);
+      return [];
     }
-
-    const leagueTransactionsCache = transactionDataCache.get(leagueId);
-
-    // Check if data for this week is already in cache
-    if (leagueTransactionsCache.has(week)) {
-        console.log(`Returning transaction data for league ${leagueId}, week ${week} from cache.`);
-        return leagueTransactionsCache.get(week);
-    }
-
-    try {
-        console.log(`Fetching transaction data for league ID: ${leagueId}, Week: ${week}...`);
-        const response = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/transactions/${week}`);
-
-        if (!response.ok) {
-            console.error(`Error fetching transaction data for league ${leagueId}, Week ${week}: ${response.statusText}`);
-            return [];
-        }
-
-        const data = await response.json();
-        console.log(`Successfully fetched transaction data for league ID: ${leagueId}, Week: ${week}.`);
-
-        // Store in cache
-        leagueTransactionsCache.set(week, data);
-        return data;
-    } catch (error) {
-        console.error(`Failed to fetch transaction data for league ID ${leagueId}, Week ${week}:`, error);
-        return [];
-    }
+    const data = await response.json();
+    setCachedData(transactionsCache, cacheKey, data);
+    console.log(`Successfully fetched transactions for league ID: ${leagueId}, week: ${week}.`);
+    return data;
+  } catch (error) {
+    console.error(`Failed to fetch transactions for league ID ${leagueId}, week ${week}:`, error);
+    return [];
+  }
 }
 
 /**
- * Fetches all drafts for a given league ID.
- * Data is cached in memory for subsequent calls within the same session.
+ * Fetches league drafts for a given league ID.
  * @param {string} leagueId The ID of the Sleeper league.
- * @returns {Promise<Array<Object>>} A promise that resolves to an array of draft objects, or an empty array if an error occurs.
+ * @returns {Promise<Array<Object>>} A promise that resolves to an array of draft objects.
  */
 export async function fetchLeagueDrafts(leagueId) {
-    if (leagueDraftsCache.has(leagueId)) {
-        console.log(`Returning league drafts for ${leagueId} from cache.`);
-        return leagueDraftsCache.get(leagueId);
-    }
+  const cacheKey = `drafts-${leagueId}`;
+  const cached = getCachedData(draftsCache, cacheKey);
+  if (cached) {
+    console.log(`Returning drafts for league ${leagueId} from cache.`);
+    return cached;
+  }
 
-    try {
-        console.log(`Fetching league drafts for ID: ${leagueId}...`);
-        const response = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/drafts`);
-        if (!response.ok) {
-            console.error(`Error fetching drafts for league ID ${leagueId}: ${response.statusText}`);
-            return [];
-        }
-        const data = await response.json();
-        leagueDraftsCache.set(leagueId, data);
-        console.log(`Successfully fetched league drafts for ID: ${leagueId}.`);
-        return data;
-    } catch (error) {
-        console.error(`Failed to fetch league drafts for ID ${leagueId}:`, error);
-        return [];
+  try {
+    console.log(`Fetching drafts for league ID: ${leagueId}...`);
+    const response = await fetch(`${SLEEPER_API_BASE_URL}/league/${leagueId}/drafts`);
+    if (!response.ok) {
+      console.error(`Error fetching drafts for league ID ${leagueId}: ${response.statusText}`);
+      return [];
     }
+    const data = await response.json();
+    setCachedData(draftsCache, cacheKey, data);
+    console.log(`Successfully fetched drafts for league ID: ${leagueId}.`);
+    return data;
+  } catch (error) {
+    console.error(`Failed to fetch drafts for league ID ${leagueId}:`, error);
+    return [];
+  }
 }
 
 /**
- * Fetches details for a specific draft ID.
- * Data is cached in memory for subsequent calls within the same session.
- * @param {string} draftId The ID of the draft.
- * @returns {Promise<Object|null>} A promise that resolves to the draft details object, or null if an error occurs.
+ * Helper to get the Sleeper player headshot URL.
+ * @param {string} playerId The Sleeper player ID.
+ * @returns {string} The URL to the player's headshot.
  */
-export async function fetchDraftDetails(draftId) {
-    if (draftDetailsCache.has(draftId)) {
-        console.log(`Returning draft details for ${draftId} from cache.`);
-        return draftDetailsCache.get(draftId);
-    }
-
-    try {
-        console.log(`Fetching draft details for ID: ${draftId}...`);
-        const response = await fetch(`https://api.sleeper.app/v1/draft/${draftId}`);
-        if (!response.ok) {
-            console.error(`Error fetching draft details for ID ${draftId}: ${response.statusText}`);
-            return null;
-        }
-        const data = await response.json();
-        draftDetailsCache.set(draftId, data);
-        console.log(`Successfully fetched draft details for ID: ${draftId}.`);
-        return data;
-    } catch (error) {
-        console.error(`Failed to fetch draft details for ID ${draftId}:`, error);
-        return null;
-    }
+export function getSleeperPlayerHeadshotUrl(playerId) {
+  if (!playerId) {
+    return 'https://sleeper.app/img/content/default_avatar.jpg'; // Default avatar if no player ID
+  }
+  return `https://sleepercdn.com/content/nfl/players/${playerId}.jpg`;
 }
 
 /**
- * Fetches all picks for a specific draft ID.
- * Data is cached in memory for subsequent calls within the same session.
- * @param {string} draftId The ID of the draft.
- * @returns {Promise<Array<Object>>} A promise that resolves to an array of draft pick objects, or an empty array if an error occurs.
+ * Helper to get the Sleeper user avatar URL.
+ * @param {string} avatarId The Sleeper avatar ID from user object.
+ * @returns {string} The URL to the user's avatar.
  */
-export async function fetchDraftPicks(draftId) {
-    if (draftPicksCache.has(draftId)) {
-        console.log(`Returning draft picks for ${draftId} from cache.`);
-        return draftPicksCache.get(draftId);
-    }
-
-    try {
-        console.log(`Fetching draft picks for ID: ${draftId}...`);
-        const response = await fetch(`https://api.sleeper.app/v1/draft/${draftId}/picks`);
-        if (!response.ok) {
-            console.error(`Error fetching draft picks for ID ${draftId}: ${response.statusText}`);
-            return [];
-        }
-        const data = await response.json();
-        draftPicksCache.set(draftId, data);
-        console.log(`Successfully fetched draft picks for ID: ${draftId}.`);
-        return data;
-    } catch (error) {
-        console.error(`Failed to fetch draft picks for ID ${draftId}:`, error);
-        return [];
-    }
+export function getSleeperAvatarUrl(avatarId) {
+  if (!avatarId) {
+    return 'https://sleeper.app/img/content/default_avatar.jpg'; // Default avatar if no avatarId
+  }
+  return `https://sleepercdn.com/avatars/thumbs/${avatarId}`;
 }
 
+
+// New function to fetch all historical matchups
 /**
- * Fetches all traded picks for a specific draft ID.
- * Data is cached in memory for subsequent calls within the same session.
- * @param {string} draftId The ID of the draft.
- * @returns {Promise<Array<Object>>} A promise that resolves to an array of traded pick objects, or an empty array if an error occurs.
+ * Fetches all historical matchups for a given league lineage from Sleeper API.
+ * Transforms data into a consistent format for the application.
+ * @param {string} currentLeagueId The current season's league ID.
+ * @returns {Promise<Array<Object>>} An array of historical matchup objects.
  */
-export async function fetchTradedPicks(draftId) {
-    if (tradedPicksCache.has(draftId)) {
-        console.log(`Returning traded picks for ${draftId} from cache.`);
-        return tradedPicksCache.get(draftId);
+export async function fetchHistoricalMatchups(currentLeagueId) {
+  const allHistoricalMatchups = [];
+  const processedLeagueIds = new Set(); // To avoid processing the same league ID twice
+
+  try {
+    // 1. Get current league details
+    const currentLeagueDetails = await fetchLeagueDetails(currentLeagueId);
+    if (!currentLeagueDetails) {
+      console.error("Could not fetch current league details. Cannot proceed with historical matchups.");
+      return [];
     }
 
-    try {
-        console.log(`Fetching traded picks for ID: ${draftId}...`);
-        const response = await fetch(`https://api.sleeper.app/v1/draft/${draftId}/traded_picks`);
-        if (!response.ok) {
-            console.error(`Error fetching traded picks for ID ${draftId}: ${response.statusText}`);
-            return [];
+    // 2. Get historical league IDs for this league lineage
+    const historicalLeagueIds = await fetchLeagueHistory(currentLeagueId);
+
+    // Combine current and historical league IDs, then sort by season (assuming chronological order is useful)
+    // The history endpoint returns past seasons, so currentLeagueId might not be in it.
+    // Also, ensure unique IDs just in case.
+    const allRelevantLeagueIds = [...new Set([currentLeagueId, ...historicalLeagueIds])]
+      .sort((a, b) => {
+        // Fetch details for sorting, or make an assumption about ID structure/creation date
+        // For now, a simple lexicographical sort on IDs might work if they're sequentially assigned,
+        // but fetching league details for each to get the actual 'season' is more robust.
+        // This is an intensive operation if not cached. Let's rely on fetchLeagueDetails caching.
+        return 0; // Will sort after fetching details
+      });
+
+    const leagueDetailsMap = new Map(); // Cache for league details during iteration
+    for (const leagueId of allRelevantLeagueIds) {
+      const details = await fetchLeagueDetails(leagueId);
+      if (details) {
+        leagueDetailsMap.set(leagueId, details);
+      }
+    }
+
+    // Sort by season year
+    const sortedLeagueIds = [...leagueDetailsMap.values()]
+      .sort((a, b) => a.season - b.season)
+      .map(details => details.league_id);
+
+
+    console.log("All relevant league IDs for historical data:", sortedLeagueIds);
+
+    for (const leagueId of sortedLeagueIds) {
+      if (processedLeagueIds.has(leagueId)) {
+        continue;
+      }
+      processedLeagueIds.add(leagueId);
+
+      console.log(`Processing historical data for league ID: ${leagueId}`);
+      const leagueDetails = leagueDetailsMap.get(leagueId);
+      if (!leagueDetails) {
+        console.warn(`Skipping league ${leagueId}: details not found.`);
+        continue;
+      }
+
+      const season = parseInt(leagueDetails.season);
+      const lastRegularSeasonWeek = leagueDetails.settings?.playoff_week_start ? leagueDetails.settings.playoff_week_start -1 : leagueDetails.settings?.last_regular_season_week || 14; // Default to 14 if not specified
+      const playoffStartWeek = leagueDetails.settings?.playoff_week_start || 15; // Default to 15
+
+
+      // Fetch users and rosters for this specific season/league ID
+      const users = await fetchUsersData(leagueId);
+      const rosters = await fetchRostersWithDetails(leagueId);
+
+      const userIdToDisplayName = new Map();
+      users.forEach(user => {
+        // Prioritize custom name from TEAM_NAME_TO_SLEEPER_ID_MAP, then display_name, then first_name, then 'Unknown Manager'
+        const customName = Object.keys(TEAM_NAME_TO_SLEEPER_ID_MAP).find(key => TEAM_NAME_TO_SLEEPER_ID_MAP[key] === user.user_id);
+        if (customName) {
+            userIdToDisplayName.set(user.user_id, customName);
+        } else if (user.metadata?.team_name) {
+            userIdToDisplayName.set(user.user_id, user.metadata.team_name);
+        } else if (user.display_name) {
+            userIdToDisplayName.set(user.user_id, user.display_name);
+        } else if (user.first_name) {
+            userIdToDisplayName.set(user.user_id, user.first_name);
+        } else {
+            userIdToDisplayName.set(user.user_id, `User ${user.user_id}`);
         }
-        const data = await response.json();
-        tradedPicksCache.set(draftId, data);
-        console.log(`Successfully fetched traded picks for ID: ${draftId}.`);
-        return data;
-    } catch (error) {
-        console.error(`Failed to fetch traded picks for ID ${draftId}:`, error);
-        return [];
-    }
-}
+      });
+      // Add retired managers if they are not already in the active users
+      Object.entries(RETIRED_MANAGERS).forEach(([userId, displayName]) => {
+          if (!userIdToDisplayName.has(userId)) {
+              userIdToDisplayName.set(userId, displayName);
+          }
+      });
 
-/**
- * Fetches all draft history (details, picks, traded picks) for all leagues.
- * This is a comprehensive function that consolidates all draft-related data.
- * Data is cached in memory for subsequent calls within the same session.
- *
- * @returns {Promise<Object>} A promise that resolves to an object containing all historical draft data,
- * structured as { season: { draftId: { details, picks, tradedPicks } } }.
- * Returns an empty object on error.
- */
-export async function fetchAllDraftHistory() {
-    if (allDraftHistoryCache) {
-        console.log('Returning all draft history from cache.');
-        return allDraftHistoryCache;
-    }
+      const rosterIdToUserId = new Map(rosters.map(r => [r.roster_id, r.owner_id]));
 
-    console.log('Fetching all draft history for the first time... ');
-    const allDraftHistory = {};
+      // Fetch matchups for regular season
+      for (let week = 1; week <= lastRegularSeasonWeek; week++) {
+        const matchups = await fetchMatchupsForWeek(leagueId, week);
 
-    try {
-        const leagues = await fetchLeagueData(CURRENT_LEAGUE_ID);
-        if (!leagues || leagues.length === 0) {
-            console.warn('No league data found to fetch draft history.');
-            return {};
-        }
+        // Group matchups by matchup_id to get head-to-head pairs
+        const groupedMatchups = {};
+        matchups.forEach(m => {
+          if (!groupedMatchups[m.matchup_id]) {
+            groupedMatchups[m.matchup_id] = [];
+          }
+          groupedMatchups[m.matchup_id].push(m);
+        });
 
-        for (const league of leagues) {
-            const season = league.season;
-            allDraftHistory[season] = {}; // Initialize season object
+        for (const matchupId in groupedMatchups) {
+          const game = groupedMatchups[matchupId];
+          if (game.length === 2) { // Ensure it's a valid head-to-head matchup
+            const team1Data = game[0];
+            const team2Data = game[1];
 
-            const drafts = await fetchLeagueDrafts(league.league_id);
-            if (!drafts || drafts.length === 0) {
-                console.log(`No drafts found for league ${league.league_id} (${season}).`);
-                continue; // Skip to next league if no drafts
+            const team1UserId = rosterIdToUserId.get(team1Data.roster_id);
+            const team2UserId = rosterIdToUserId.get(team2Data.roster_id);
+
+            if (team1UserId && team2UserId) {
+              allHistoricalMatchups.push({
+                year: season,
+                week: week,
+                team1: userIdToDisplayName.get(team1UserId) || `Unknown Team (${team1Data.roster_id})`,
+                team2: userIdToDisplayName.get(team2UserId) || `Unknown Team (${team2Data.roster_id})`,
+                team1Score: team1Data.points,
+                team2Score: team2Data.points,
+                playoffs: false, // Regular season games
+                finalSeedingGame: null, // As discussed, complex to derive accurately from Sleeper API
+                team1RosterId: team1Data.roster_id,
+                team2RosterId: team2Data.roster_id,
+                team1UserId: team1UserId,
+                team2UserId: team2UserId,
+              });
+            } else {
+                console.warn(`Skipping matchup for league ${leagueId}, week ${week}, matchup ${matchupId}: Could not find user IDs for roster IDs. Team1 Roster: ${team1Data.roster_id}, Team2 Roster: ${team2Data.roster_id}`);
             }
+          }
+        }
+      }
 
-            for (const draft of drafts) {
-                const draftId = draft.draft_id;
-                console.log(`Fetching data for draft ID: ${draftId} (Season: ${season})...`);
-
-                // Fetch details, picks, and traded picks concurrently for the current draft
-                const [details, picks, tradedPicks] = await Promise.all([
-                    fetchDraftDetails(draftId),
-                    fetchDraftPicks(draftId),
-                    fetchTradedPicks(draftId)
-                ]);
-
-                allDraftHistory[season][draftId] = {
-                    details: details,
-                    picks: picks,
-                    tradedPicks: tradedPicks
-                };
-            }
+      // Fetch matchups for playoff weeks (if they exist)
+      // Sleeper typically has a `playoff_week_start` setting.
+      // We can iterate from `playoff_week_start` up to a reasonable max like week 18 or until 404
+      for (let week = playoffStartWeek; week <= playoffStartWeek + 4; week++) { // Assuming max 4 playoff weeks
+        const matchups = await fetchMatchupsForWeek(leagueId, week);
+        if (matchups.length === 0) {
+          break; // No more playoff matchups for this season
         }
 
-        allDraftHistoryCache = allDraftHistory;
-        console.log('Successfully fetched and cached all draft history.');
-        return allDraftHistory;
+        const groupedMatchups = {};
+        matchups.forEach(m => {
+          if (!groupedMatchups[m.matchup_id]) {
+            groupedMatchups[m.matchup_id] = [];
+          }
+          groupedMatchups[m.matchup_id].push(m);
+        });
 
-    } catch (error) {
-        console.error('Error fetching all draft history:', error);
-        return {};
+        for (const matchupId in groupedMatchups) {
+          const game = groupedMatchups[matchupId];
+          if (game.length === 2) {
+            const team1Data = game[0];
+            const team2Data = game[1];
+
+            const team1UserId = rosterIdToUserId.get(team1Data.roster_id);
+            const team2UserId = rosterIdToUserId.get(team2Data.roster_id);
+
+            if (team1UserId && team2UserId) {
+                allHistoricalMatchups.push({
+                    year: season,
+                    week: week,
+                    team1: userIdToDisplayName.get(team1UserId) || `Unknown Team (${team1Data.roster_id})`,
+                    team2: userIdToDisplayName.get(team2UserId) || `Unknown Team (${team2Data.roster_id})`,
+                    team1Score: team1Data.points,
+                    team2Score: team2Data.points,
+                    playoffs: true, // Mark as playoff game
+                    finalSeedingGame: null, // Still setting to null for simplicity.
+                    team1RosterId: team1Data.roster_id,
+                    team2RosterId: team2Data.roster_id,
+                    team1UserId: team1UserId,
+                    team2UserId: team2UserId,
+                });
+            } else {
+                console.warn(`Skipping playoff matchup for league ${leagueId}, week ${week}, matchup ${matchupId}: Could not find user IDs for roster IDs.`);
+            }
+          }
+        }
+      }
     }
+
+    console.log("Finished fetching all historical matchups.", allHistoricalMatchups);
+    return allHistoricalMatchups;
+
+  } catch (error) {
+    console.error("Error fetching historical matchups from Sleeper:", error);
+    return [];
+  }
 }
+
 
 /**
  * Fetches the winners bracket data for a given league ID.
@@ -691,26 +537,28 @@ export async function fetchAllDraftHistory() {
  * @returns {Promise<Array<Object>>} A promise that resolves to an array of bracket matchup objects, or an empty array if an error occurs.
  */
 export async function fetchWinnersBracket(leagueId) {
-    if (winnersBracketCache.has(leagueId)) {
-        console.log(`Returning winners bracket for league ${leagueId} from cache.`);
-        return winnersBracketCache.get(leagueId);
-    }
+  const cacheKey = `winnersBracket-${leagueId}`;
+  const cached = getCachedData(winnersBracketCache, cacheKey);
+  if (cached) {
+    console.log(`Returning winners bracket for league ${leagueId} from cache.`);
+    return cached;
+  }
 
-    try {
-        console.log(`Fetching winners bracket for league ID: ${leagueId}...`);
-        const response = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/winners_bracket`);
-        if (!response.ok) {
-            console.error(`Error fetching winners bracket for league ID ${leagueId}: ${response.statusText}`);
-            return [];
-        }
-        const data = await response.json();
-        winnersBracketCache.set(leagueId, data);
-        console.log(`Successfully fetched winners bracket for league ID: ${leagueId}.`);
-        return data;
-    } catch (error) {
-        console.error(`Failed to fetch winners bracket for league ID ${leagueId}:`, error);
-        return [];
+  try {
+    console.log(`Fetching winners bracket for league ID: ${leagueId}...`);
+    const response = await fetch(`${SLEEPER_API_BASE_URL}/league/${leagueId}/winners_bracket`);
+    if (!response.ok) {
+      console.error(`Error fetching winners bracket for league ID ${leagueId}: ${response.statusText}`);
+      return [];
     }
+    const data = await response.json();
+    setCachedData(winnersBracketCache, cacheKey, data);
+    console.log(`Successfully fetched winners bracket for league ID: ${leagueId}.`);
+    return data;
+  } catch (error) {
+    console.error(`Failed to fetch winners bracket for league ID ${leagueId}:`, error);
+    return [];
+  }
 }
 
 /**
@@ -720,24 +568,26 @@ export async function fetchWinnersBracket(leagueId) {
  * @returns {Promise<Array<Object>>} A promise that resolves to an array of bracket matchup objects, or an empty array if an error occurs.
  */
 export async function fetchLosersBracket(leagueId) {
-    if (losersBracketCache.has(leagueId)) {
-        console.log(`Returning losers bracket for league ${leagueId} from cache.`);
-        return losersBracketCache.get(leagueId);
-    }
+  const cacheKey = `losersBracket-${leagueId}`;
+  const cached = getCachedData(losersBracketCache, cacheKey);
+  if (cached) {
+    console.log(`Returning losers bracket for league ${leagueId} from cache.`);
+    return cached;
+  }
 
-    try {
-        console.log(`Fetching losers bracket for league ID: ${leagueId}...`);
-        const response = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/losers_bracket`);
-        if (!response.ok) {
-            console.error(`Error fetching losers bracket for league ID ${leagueId}: ${response.statusText}`);
-            return [];
-        }
-        const data = await response.json();
-        losersBracketCache.set(leagueId, data);
-        console.log(`Successfully fetched losers bracket for league ID: ${leagueId}.`);
-        return data;
-    } catch (error) {
-        console.error(`Failed to fetch losers bracket for league ID ${leagueId}:`, error);
-        return [];
+  try {
+    console.log(`Fetching losers bracket for league ID: ${leagueId}...`);
+    const response = await fetch(`${SLEEPER_API_BASE_URL}/league/${leagueId}/losers_bracket`);
+    if (!response.ok) {
+      console.error(`Error fetching losers bracket for league ID ${leagueId}: ${response.statusText}`);
+      return [];
     }
+    const data = await response.json();
+    setCachedData(losersBracketCache, cacheKey, data);
+    console.log(`Successfully fetched losers bracket for league ID: ${leagueId}.`);
+    return data;
+  } catch (error) {
+    console.error(`Failed to fetch losers bracket for league ID ${leagueId}:`, error);
+    return [];
+  }
 }
