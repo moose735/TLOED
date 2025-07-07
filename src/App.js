@@ -17,8 +17,9 @@ import Head2HeadGrid from './lib/Head2HeadGrid'; // Stays for its own tab
 import FinancialTracker from './components/FinancialTracker';
 import Dashboard from './components/Dashboard'; // <--- NEW IMPORT for the homepage
 
-// Import Sleeper API functions to fetch league details for dynamic tab population
-import { fetchLeagueDetails } from './utils/sleeperApi';
+// Import Sleeper API functions
+import { fetchLeagueDetails, fetchAllHistoricalMatchups } from './utils/sleeperApi'; // <--- Import fetchAllHistoricalMatchups
+import MatchupHistory from './components/MatchupHistory'; // <--- NEW IMPORT for the MatchupHistory component
 
 
 // Define the available tabs and their categories for the dropdown
@@ -33,6 +34,7 @@ const NAV_CATEGORIES = {
       { label: 'Head-to-Head', tab: 'headToHead' }, // Separate tab for Head2HeadGrid
       { label: 'DPR Analysis', tab: 'dprAnalysis' },
       { label: 'Luck Rating', tab: 'luckRating' },
+      { label: 'Matchup History', tab: 'matchupHistory' }, // <--- NEW SUB-TAB
     ]
   },
   TEAMS: { // New category for individual team pages
@@ -53,6 +55,7 @@ const TABS = {
   LUCK_RATING: 'luckRating',
   TEAM_DETAIL: 'teamDetail',
   FINANCIALS: 'financials',
+  MATCHUP_HISTORY: 'matchupHistory', // <--- NEW TAB CONSTANT
 };
 
 const App = () => {
@@ -65,6 +68,11 @@ const App = () => {
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // State for mobile menu
   const [openSubMenu, setOpenSubMenu] = useState(null); // State for mobile sub-menus
+
+  // NEW: State for Sleeper historical matchups (from Sleeper API)
+  const [sleeperHistoricalMatchups, setSleeperHistoricalMatchups] = useState(null);
+  const [loadingSleeperMatchups, setLoadingSleeperMatchups] = useState(false);
+  const [sleeperMatchupsError, setSleeperMatchupsError] = useState(null);
 
 
   // Function to toggle sub-menus in mobile view
@@ -80,9 +88,9 @@ const App = () => {
     return trimmedName;
   }, []);
 
-  // Fetch historical matchup data and championship data
+  // Fetch historical matchup data (Google Sheet) and championship data
   useEffect(() => {
-    const fetchHistoricalData = async () => {
+    const fetchGoogleSheetData = async () => {
       setLoadingHistoricalData(true);
       setHistoricalDataError(null); // Clear previous errors
 
@@ -137,7 +145,7 @@ const App = () => {
         NAV_CATEGORIES.TEAMS.subTabs = uniqueTeams.map(team => ({
           label: team,
           tab: TABS.TEAM_DETAIL, // All team links go to the team detail tab
-          teamName: team,           // Pass the team name for rendering
+          teamName: team,            // Pass the team name for rendering
         }));
 
       } catch (error) {
@@ -157,8 +165,32 @@ const App = () => {
       ]);
     };
 
-    fetchHistoricalData();
+    fetchGoogleSheetData();
   }, [getMappedTeamName]);
+
+  // NEW: Effect to fetch historical matchups from Sleeper API
+  useEffect(() => {
+    const fetchSleeperMatchups = async () => {
+      setLoadingSleeperMatchups(true);
+      setSleeperMatchupsError(null);
+      try {
+        const data = await fetchAllHistoricalMatchups();
+        if (data) {
+          setSleeperHistoricalMatchups(data);
+        } else {
+          setSleeperMatchupsError("Failed to load historical matchup data from Sleeper API.");
+        }
+      } catch (error) {
+        console.error("Error fetching Sleeper historical matchups:", error);
+        setSleeperMatchupsError(`Error fetching Sleeper historical matchups: ${error.message}`);
+      } finally {
+        setLoadingSleeperMatchups(false);
+      }
+    };
+
+    fetchSleeperMatchups();
+  }, []); // Run once on component mount
+
 
   // Handle tab change, including setting selectedTeam for TEAM_DETAIL tab
   const handleTabChange = (tab, teamName = null) => {
@@ -359,7 +391,7 @@ const App = () => {
 
 
       <main className="flex-grow w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8 mt-4"> {/* Adjusted for centering and max-width */}
-        {loadingHistoricalData ? (
+        {loadingHistoricalData || loadingSleeperMatchups ? ( // <--- Update loading check
           <div className="flex flex-col items-center justify-center min-h-[200px] text-blue-600">
             <svg className="animate-spin h-10 w-10 text-blue-500 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -367,14 +399,15 @@ const App = () => {
             </svg>
             <p className="text-lg font-medium">Loading league data...</p>
           </div>
-        ) : historicalDataError ? (
+        ) : historicalDataError || sleeperMatchupsError ? ( // <--- Update error check
           <p className="text-center text-red-600 text-lg">
-            {historicalDataError} <br />
+            {historicalDataError || sleeperMatchupsError} <br /> {/* Display the relevant error */}
             <br />
             **Please check the following:**<br />
             1. **Google Apps Script URLs (`config.js`):** Ensure `HISTORICAL_MATCHUPS_API_URL` is correct and points to your deployed Google Apps Script Web App.
             2. **Google Apps Script Deployment:** For your script, verify its deployment settings: "Execute as: Me" and "Who has access: Anyone".
             3. **Vercel Deployment / Local Server:** Ensure your `index.js` file (and other JavaScript files) are being served with the correct MIME type (`application/javascript`). This usually requires proper build configuration (e.g., using a `build` script that generates optimized JavaScript bundles, which Vercel handles automatically for standard React projects). If developing locally, ensure your development server is configured correctly.
+            4. **Sleeper API:** Ensure your Sleeper API calls are not being rate-limited or are encountering network issues. Check your `sleeperApi.js` console logs for more specific Sleeper API errors.
           </p>
         ) : (
           <div className="w-full"> {/* Ensure content area takes full width */}
@@ -424,21 +457,29 @@ const App = () => {
               />
             )}
 
-           {/* Render TeamDetailPage when selected */}
-           {activeTab === TABS.TEAM_DETAIL && selectedTeam && (
-             <TeamDetailPage
-               teamName={selectedTeam}
-               historicalMatchups={historicalMatchups}
-               getMappedTeamName={getMappedTeamName}
-             />
-           )}
-           {/* NEW: Render FinancialTracker */}
-{activeTab === TABS.FINANCIALS && (
-    <FinancialTracker
-        getDisplayTeamName={getMappedTeamName}
-        historicalMatchups={historicalMatchups} // <--- Ensure this prop is present and correctly linked
-    />
-)}
+            {/* Render TeamDetailPage when selected */}
+            {activeTab === TABS.TEAM_DETAIL && selectedTeam && (
+              <TeamDetailPage
+                teamName={selectedTeam}
+                historicalMatchups={historicalMatchups}
+                getMappedTeamName={getMappedTeamName}
+              />
+            )}
+            {/* NEW: Render FinancialTracker */}
+            {activeTab === TABS.FINANCIALS && (
+              <FinancialTracker
+                getDisplayTeamName={getMappedTeamName}
+                historicalMatchups={historicalMatchups} // <--- Ensure this prop is present and correctly linked
+              />
+            )}
+            {/* NEW: Render MatchupHistory */}
+            {activeTab === TABS.MATCHUP_HISTORY && (
+              <MatchupHistory
+                sleeperHistoricalMatchups={sleeperHistoricalMatchups}
+                loading={loadingSleeperMatchups}
+                error={sleeperMatchupsError}
+              />
+            )}
           </div>
         )}
       </main>
