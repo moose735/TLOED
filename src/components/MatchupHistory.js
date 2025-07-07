@@ -1,6 +1,6 @@
 // src/components/MatchupHistory.js
 import React, { useState, useEffect } from 'react';
-import { fetchUsersData, fetchRostersData } from '../utils/sleeperApi';
+import { fetchUsersData, fetchRosterData } from '../utils/sleeperApi';
 import { CURRENT_LEAGUE_ID } from '../config'; // Import CURRENT_LEAGUE_ID
 
 const MatchupHistory = ({ sleeperHistoricalMatchups, loading, error }) => {
