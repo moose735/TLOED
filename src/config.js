@@ -8,6 +8,10 @@ export const GOOGLE_SHEET_POWER_RANKINGS_API_URL = 'https://script.google.com/ma
 export const HISTORICAL_MATCHUPS_API_URL = 'https://script.google.com/macros/s/AKfycbxpo21zzZgNamYShESfqe-SX09miJz2LK7SpdlYrtHXQplneB3bF2xu2byy0HhjM8e-/exec';
 
 export const CURRENT_LEAGUE_ID = '1181984921049018368';
+
+export const RETIRED_MANAGERS = [
+  // ... other retired manager IDs
+];
 // Custom team name mappings (Optional: for use if you want to map names from historical matchups to custom display names)
 // Example: { "TeamA_from_Google_Sheet": "My Awesome Team", "TeamB_from_Google_Sheet": "Gridiron Heroes" }
 // App.js will currently use names directly from HISTORICAL_MATCHUPS_API_URL for dropdown and display.
