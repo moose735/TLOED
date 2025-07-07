@@ -1,11 +1,13 @@
 // src/components/MatchupHistory.js
 import React, { useState, useEffect } from 'react';
+// Correct: Importing fetchRosterData (singular)
 import { fetchUsersData, fetchRosterData } from '../utils/sleeperApi';
-import { CURRENT_LEAGUE_ID } from '../config'; // Import CURRENT_LEAGUE_ID
+import { CURRENT_LEAGUE_ID } from '../config';
 
 const MatchupHistory = ({ sleeperHistoricalMatchups, loading, error }) => {
-  const [users, setUsers] = useState({});
-  const [rosters, setRosters] = useState({});
+  // Initialize as empty objects for map-like access
+  const [usersMap, setUsersMap] = useState({});
+  const [rostersMap, setRostersMap] = useState({});
   const [loadingLeagueData, setLoadingLeagueData] = useState(true);
   const [leagueDataError, setLeagueDataError] = useState(null);
 
@@ -18,16 +20,29 @@ const MatchupHistory = ({ sleeperHistoricalMatchups, loading, error }) => {
           throw new Error("CURRENT_LEAGUE_ID not configured in config.js. Cannot fetch league data.");
         }
 
-        const fetchedUsers = await fetchUsersData(CURRENT_LEAGUE_ID);
-        const fetchedRosters = await fetchRostersData(CURRENT_LEAGUE_ID);
+        const fetchedUsersArray = await fetchUsersData(CURRENT_LEAGUE_ID);
+        // Corrected: Calling fetchRosterData (singular)
+        const fetchedRostersArray = await fetchRosterData(CURRENT_LEAGUE_ID);
 
-        if (fetchedUsers) {
-          setUsers(fetchedUsers);
+        // Convert arrays to maps for easier lookup by ID
+        const usersById = fetchedUsersArray.reduce((acc, user) => {
+          acc[user.user_id] = user;
+          return acc;
+        }, {});
+
+        const rostersById = fetchedRostersArray.reduce((acc, roster) => {
+          acc[roster.roster_id] = roster;
+          return acc;
+        }, {});
+
+
+        if (fetchedUsersArray && fetchedUsersArray.length > 0) {
+          setUsersMap(usersById);
         } else {
           setLeagueDataError("Failed to load user data from Sleeper API.");
         }
-        if (fetchedRosters) {
-          setRosters(fetchedRosters);
+        if (fetchedRostersArray && fetchedRostersArray.length > 0) {
+          setRostersMap(rostersById);
         } else {
           setLeagueDataError(prev => prev ? prev + " And failed to load roster data." : "Failed to load roster data from Sleeper API.");
         }
@@ -44,11 +59,13 @@ const MatchupHistory = ({ sleeperHistoricalMatchups, loading, error }) => {
 
   // Helper function to get team display name
   const getTeamDisplayName = (rosterId) => {
-    const roster = rosters[rosterId];
-    if (roster && roster.ownerId) {
-      const user = users[roster.ownerId];
+    // Now using the map directly
+    const roster = rostersMap[rosterId];
+    if (roster && roster.owner_id) { // Sleeper uses owner_id, not ownerId for raw rosters
+      const user = usersMap[roster.owner_id];
       if (user) {
-        return user.teamName || user.username; // Prefer teamName from metadata, fallback to username
+        // Sleeper user metadata might have `team_name` or fall back to `display_name`
+        return user.metadata?.team_name || user.display_name;
       }
     }
     return `Roster ${rosterId}`; // Fallback if no user or owner found
