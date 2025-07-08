@@ -1,16 +1,36 @@
 // src/lib/DPRAnalysis.js
 import React, { useState, useEffect } from 'react';
 import { calculateAllLeagueMetrics } from '../utils/calculations'; // Import the new utility
+import { useSleeperData } from '../contexts/SleeperDataContext'; // Import the custom hook
 
-const DPRAnalysis = ({ historicalData, getTeamName }) => { // Renamed props for clarity
+const DPRAnalysis = () => { // Removed props as data will come from context
+  const {
+    loading: contextLoading, // Rename to avoid conflict with local loading state
+    error: contextError,     // Rename to avoid conflict with local error state
+    historicalData,
+    getTeamName
+  } = useSleeperData();
+
   const [careerDPRData, setCareerDPRData] = useState([]);
   const [seasonalDPRData, setSeasonalDPRData] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Local loading state for calculations
   const [showAllSeasonal, setShowAllSeasonal] = useState(false); // New state for "Show More"
 
   useEffect(() => {
-    // Check if historicalData is available and has league metadata
-    if (!historicalData || Object.keys(historicalData.leaguesMetadataBySeason).length === 0) {
+    // If context is still loading or has an error, set local loading/error states accordingly
+    if (contextLoading) {
+      setLoading(true);
+      return;
+    }
+    if (contextError) {
+      setLoading(false);
+      // You might want to display contextError message in the UI here as well
+      return;
+    }
+
+    // Check if historicalData is available and has any matchup data
+    // historicalData.matchupsBySeason is an object where keys are years
+    if (!historicalData || Object.keys(historicalData.matchupsBySeason || {}).length === 0) {
       setCareerDPRData([]);
       setSeasonalDPRData([]);
       setLoading(false);
@@ -122,7 +142,7 @@ const DPRAnalysis = ({ historicalData, getTeamName }) => { // Renamed props for 
     setSeasonalDPRData(allSeasonalDPRs);
     setLoading(false);
 
-  }, [historicalData, getTeamName]); // Dependencies updated to historicalData and getTeamName
+  }, [historicalData, getTeamName, contextLoading, contextError]); // Dependencies updated
 
   // Formatter for win percentage (consistent with LeagueHistory)
   const formatPercentage = (value) => {
