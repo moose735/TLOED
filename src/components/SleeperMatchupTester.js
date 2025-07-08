@@ -115,25 +115,29 @@ const SleeperMatchupTester = () => {
     const rosterToUserMap = new Map();
     currentSeasonRosters.forEach(roster => {
         rosterToUserMap.set(roster.roster_id, {
-            displayName: roster.ownerDisplayName,
-            teamName: roster.ownerTeamName,
+            displayName: roster.ownerDisplayName, // This is the user's display_name
+            teamName: roster.ownerTeamName,     // This is the metadata.team_name
             userId: roster.owner_id
         });
     });
 
     // Helper to get team info from roster ID (or bracket object if needed for t1_from/t2_from)
     const getTeamInfo = (teamIdentifier) => {
-        if (typeof teamIdentifier === 'number' || typeof teamIdentifier === 'string') { // Roster ID
-            const team = rosterToUserMap.get(String(teamIdentifier)); // Ensure key is string
-            return team ? `${team.teamName} (Owner: ${team.displayName})` : `Roster ${teamIdentifier}`;
-        } else if (teamIdentifier && (teamIdentifier.w || teamIdentifier.l || teamIdentifier.t1 || teamIdentifier.t2)) { // Bracket object reference
+        // Handle direct roster ID (number or string)
+        if (typeof teamIdentifier === 'number' || typeof teamIdentifier === 'string') {
+            const team = rosterToUserMap.get(String(teamIdentifier)); // Ensure key is string for lookup
+            return team ? `${team.teamName || 'N/A Team Name'} (Owner: ${team.displayName || 'N/A Owner'})` : `Roster ${teamIdentifier}`;
+        }
+        // Handle bracket objects with 'from' references
+        else if (teamIdentifier && (teamIdentifier.w || teamIdentifier.l || teamIdentifier.t1 || teamIdentifier.t2)) {
             const rosterId = teamIdentifier.w || teamIdentifier.l || teamIdentifier.t1 || teamIdentifier.t2;
             const team = rosterToUserMap.get(String(rosterId));
             const fromType = teamIdentifier.w ? 'Winner of Match' : teamIdentifier.l ? 'Loser of Match' : 'From Match';
-            return team ? `${team.teamName} (Owner: ${team.displayName}) - ${fromType} ${teamIdentifier.m}` : `${fromType} ${teamIdentifier.m} (Roster: ${rosterId})`;
+            return team ? `${team.teamName || 'N/A Team Name'} (Owner: ${team.displayName || 'N/A Owner'}) - ${fromType} ${teamIdentifier.m}` : `${fromType} ${teamIdentifier.m} (Roster: ${rosterId})`;
         }
         return 'TBD';
     };
+
 
     return (
         <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }}>
@@ -202,7 +206,7 @@ const SleeperMatchupTester = () => {
                             <ul style={{ listStyleType: 'decimal', paddingLeft: '20px' }}>
                                 {playoffResults.map(team => (
                                     <li key={team.roster_id} style={{ marginBottom: '5px' }}>
-                                        <strong>{team.playoffFinish}</strong>: {team.ownerDisplayName} (<span style={{ fontStyle: 'italic' }}>{team.ownerTeamName}</span>)
+                                        <strong>{team.playoffFinish}</strong>: {team.ownerTeamName} (Owner: {team.ownerDisplayName})
                                     </li>
                                 ))}
                             </ul>
@@ -227,20 +231,21 @@ const SleeperMatchupTester = () => {
                                                     const team1 = rosterToUserMap.get(String(matchup.team1_roster_id));
                                                     const team2 = rosterToUserMap.get(String(matchup.team2_roster_id));
 
-                                                    const team1DisplayName = team1 ? `${team1.teamName} (Owner: ${team1.displayName})` : `Roster ${matchup.team1_roster_id}`;
-                                                    const team2DisplayName = team2 ? `${team2.teamName} (Owner: ${team2.displayName})` : `Roster ${matchup.team2_roster_id}`;
+                                                    // Use ownerTeamName first, then ownerDisplayName as fallback for display
+                                                    const team1Display = team1 ? `${team1.teamName || team1.displayName}` : `Roster ${matchup.team1_roster_id}`;
+                                                    const team2Display = team2 ? `${team2.teamName || team2.displayName}` : `Roster ${matchup.team2_roster_id}`;
 
                                                     const winnerName = (matchup.team1_score > matchup.team2_score)
-                                                        ? (team1 ? team1.teamName : `Roster ${matchup.team1_roster_id}`)
+                                                        ? (team1 ? (team1.teamName || team1.displayName) : `Roster ${matchup.team1_roster_id}`)
                                                         : (matchup.team2_score > matchup.team1_score)
-                                                            ? (team2 ? team2.teamName : `Roster ${matchup.team2_roster_id}`)
+                                                            ? (team2 ? (team2.teamName || team2.displayName) : `Roster ${matchup.team2_roster_id}`)
                                                             : "Tie";
 
                                                     return (
                                                         <li key={`reg-match-${matchup.matchup_id}`} style={{ marginBottom: '10px', padding: '10px', border: '1px solid #eee', borderRadius: '5px', backgroundColor: '#fdfdfd' }}>
                                                             <strong>Matchup ID: {matchup.matchup_id}</strong>
                                                             <br />
-                                                            {team1DisplayName} ({matchup.team1_score} points) vs. {team2DisplayName} ({matchup.team2_score} points)
+                                                            {team1Display} ({matchup.team1_score} points) vs. {team2Display} ({matchup.team2_score} points)
                                                             <br />
                                                             Winner: <strong>{winnerName}</strong>
                                                             <br />
@@ -282,7 +287,6 @@ const SleeperMatchupTester = () => {
                                                     Winner: {match.w ? getTeamInfo(match.w) : 'TBD'}
                                                     <br />
                                                     Loser: {match.l ? getTeamInfo(match.l) : 'TBD'}
-                                                    {/* match.p is from your example, not a standard Sleeper field, so handle it cautiously */}
                                                     {match.p && ` (Playoff Rank: ${match.p})`}
                                                 </li>
                                             ))}
