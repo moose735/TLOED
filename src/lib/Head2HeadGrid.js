@@ -1,5 +1,5 @@
 // src/lib/Head2HeadGrid.js
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react'; // Added useMemo
 import { useSleeperData } from '../contexts/SleeperDataContext'; // Import the custom hook
 
 // Helper function to render record (W-L-T)
@@ -192,12 +192,21 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
         setLoading(false);
     }, [historicalData, getTeamName, contextLoading, contextError]); // Dependencies updated
 
-    // Get a sorted list of all unique owner IDs for the grid axes
-    const allOwners = Object.keys(headToHeadRecords).reduce((acc, key) => {
-        headToHeadRecords[key].owners.forEach(ownerId => acc.add(ownerId));
-        return acc;
-    }, new Set());
-    const sortedOwners = Array.from(allOwners).sort();
+    // Create a single, consistent sorted list of display names for the grid axes
+    const sortedDisplayNamesAndOwners = useMemo(() => {
+        const uniqueOwnerIds = new Set();
+        Object.values(headToHeadRecords).forEach(rivalry => {
+            rivalry.owners.forEach(ownerId => uniqueOwnerIds.add(ownerId));
+        });
+
+        const displayNamesWithOwners = Array.from(uniqueOwnerIds).map(ownerId => ({
+            ownerId: ownerId,
+            displayName: getTeamName(ownerId, null) // Get the canonical display name
+        }));
+
+        // Sort by display name alphabetically
+        return displayNamesWithOwners.sort((a, b) => a.displayName.localeCompare(b.displayName));
+    }, [headToHeadRecords, getTeamName]);
 
     // Component to render the detailed rivalry view
     const renderSelectedRivalryDetails = useCallback(() => {
@@ -550,9 +559,6 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
         );
     }
 
-    // Get sorted display names for the grid headers/rows
-    const sortedDisplayNames = sortedOwners.map(ownerId => getTeamName(ownerId, null)).sort();
-
     return (
         <div className="w-full">
             {selectedRivalryKey ? (
@@ -568,70 +574,67 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                                 <tr>
                                     {/* Empty corner for team names - sticky */}
                                     <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 sticky left-0 bg-blue-50 z-20 shadow-sm"></th>
-                                    {sortedDisplayNames.map(teamName => (
-                                        <th key={teamName} className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 min-w-[90px] sticky top-0 bg-blue-50 z-10"> {/* Sticky top for horizontal scroll */}
-                                            {teamName}
+                                    {sortedDisplayNamesAndOwners.map(team => (
+                                        <th key={team.ownerId} className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 min-w-[90px] sticky top-0 bg-blue-50 z-10"> {/* Sticky top for horizontal scroll */}
+                                            {team.displayName}
                                         </th>
                                     ))}
                                 </tr>
                             </thead>
                             <tbody>
-                                {sortedOwners.map(rowOwnerId => { // Iterate over owner IDs for rows
-                                    const rowTeamDisplayName = getTeamName(rowOwnerId, null); // Get display name for row owner
-                                    return (
-                                        <tr key={rowOwnerId} className="border-b border-gray-100 last:border-b-0">
-                                            <td className="py-2 px-3 text-left text-sm text-gray-800 font-semibold sticky left-0 bg-white z-20 border-r border-gray-200 shadow-sm"> {/* Sticky left for vertical scroll */}
-                                                {rowTeamDisplayName}
-                                            </td>
-                                            {sortedOwners.map(colOwnerId => { // Iterate over owner IDs for columns
-                                                if (rowOwnerId === colOwnerId) {
-                                                    return (
-                                                        <td key={`${rowOwnerId}-${colOwnerId}`} className="py-2 px-3 text-center text-sm text-gray-400 bg-gray-100 border-b border-gray-200">
-                                                            ---
-                                                        </td>
-                                                    );
-                                                }
-                                                // Find the rivalry key in the correct sorted order of owner IDs
-                                                const rivalryKey = [rowOwnerId, colOwnerId].sort().join(' vs ');
-                                                const rivalry = headToHeadRecords[rivalryKey];
-
-                                                let recordForDisplay = '0-0'; // Default for no games or issues
-                                                let cellClassName = 'py-2 px-3 text-center text-sm border-b border-gray-200 cursor-pointer ';
-
-                                                if (rivalry) {
-                                                    const rowOwnerRecord = rivalry[rowOwnerId]; // Get record for the row owner
-                                                    const totalGames = rowOwnerRecord.wins + rowOwnerRecord.losses + rowOwnerRecord.ties;
-
-                                                    if (totalGames > 0) {
-                                                        recordForDisplay = `${rowOwnerRecord.wins}-${rowOwnerRecord.losses}`; // Format as W-L
-                                                        if (rowOwnerRecord.wins > rowOwnerRecord.losses) {
-                                                            cellClassName += 'bg-green-100 text-green-800 hover:bg-green-200'; // Green for win
-                                                        } else if (rowOwnerRecord.losses > rowOwnerRecord.wins) {
-                                                            cellClassName += 'bg-red-100 text-red-800 hover:bg-red-200'; // Red for loss
-                                                        } else {
-                                                            cellClassName += 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'; // Yellow for tie
-                                                        }
-                                                    } else {
-                                                        cellClassName += 'text-gray-600 bg-white hover:bg-gray-50'; // Default for no games
-                                                    }
-                                                } else {
-                                                        cellClassName += 'text-gray-600 bg-white hover:bg-gray-50'; // Default for no rivalry data
-                                                }
-
-
+                                {sortedDisplayNamesAndOwners.map(rowTeam => ( // Iterate over sorted display names for rows
+                                    <tr key={rowTeam.ownerId} className="border-b border-gray-100 last:border-b-0">
+                                        <td className="py-2 px-3 text-left text-sm text-gray-800 font-semibold sticky left-0 bg-white z-20 border-r border-gray-200 shadow-sm"> {/* Sticky left for vertical scroll */}
+                                            {rowTeam.displayName}
+                                        </td>
+                                        {sortedDisplayNamesAndOwners.map(colTeam => { // Iterate over sorted display names for columns
+                                            if (rowTeam.ownerId === colTeam.ownerId) {
                                                 return (
-                                                    <td
-                                                        key={`${rowOwnerId}-${colOwnerId}`}
-                                                        className={cellClassName}
-                                                        onClick={() => rivalry && setSelectedRivalryKey(rivalryKey)} // Only clickable if rivalry data exists
-                                                    >
-                                                        {recordForDisplay}
+                                                    <td key={`${rowTeam.ownerId}-${colTeam.ownerId}`} className="py-2 px-3 text-center text-sm text-gray-400 bg-gray-100 border-b border-gray-200">
+                                                        ---
                                                     </td>
                                                 );
-                                            })}
-                                        </tr>
-                                    );
-                                })}
+                                            }
+                                            // Find the rivalry key in the correct sorted order of owner IDs
+                                            const rivalryKey = [rowTeam.ownerId, colTeam.ownerId].sort().join(' vs ');
+                                            const rivalry = headToHeadRecords[rivalryKey];
+
+                                            let recordForDisplay = '0-0'; // Default for no games or issues
+                                            let cellClassName = 'py-2 px-3 text-center text-sm border-b border-gray-200 cursor-pointer ';
+
+                                            if (rivalry) {
+                                                const rowOwnerRecord = rivalry[rowTeam.ownerId]; // Get record for the row owner
+                                                const totalGames = rowOwnerRecord.wins + rowOwnerRecord.losses + rowOwnerRecord.ties;
+
+                                                if (totalGames > 0) {
+                                                    recordForDisplay = `${rowOwnerRecord.wins}-${rowOwnerRecord.losses}`; // Format as W-L
+                                                    if (rowOwnerRecord.wins > rowOwnerRecord.losses) {
+                                                        cellClassName += 'bg-green-100 text-green-800 hover:bg-green-200'; // Green for win
+                                                    } else if (rowOwnerRecord.losses > rowOwnerRecord.wins) {
+                                                        cellClassName += 'bg-red-100 text-red-800 hover:bg-red-200'; // Red for loss
+                                                    } else {
+                                                        cellClassName += 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'; // Yellow for tie
+                                                    }
+                                                } else {
+                                                    cellClassName += 'text-gray-600 bg-white hover:bg-gray-50'; // Default for no games
+                                                }
+                                            } else {
+                                                    cellClassName += 'text-gray-600 bg-white hover:bg-gray-50'; // Default for no rivalry data
+                                            }
+
+
+                                            return (
+                                                <td
+                                                    key={`${rowTeam.ownerId}-${colTeam.ownerId}`}
+                                                    className={cellClassName}
+                                                    onClick={() => rivalry && setSelectedRivalryKey(rivalryKey)} // Only clickable if rivalry data exists
+                                                >
+                                                    {recordForDisplay}
+                                                </td>
+                                            );
+                                        })}
+                                    </tr>
+                                ))}
                             </tbody>
                         </table>
                     </div>
