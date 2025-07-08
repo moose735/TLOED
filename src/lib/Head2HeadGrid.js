@@ -37,7 +37,7 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
     const {
         loading: contextLoading,
         error: contextError,
-        historicalData, // Contains matchupsBySeason, leaguesMetadataBySeason, rostersBySeason
+        historicalData, // Contains matchupsBySeason, leaguesMetadataBySeason, rostersBySeason, winnersBracketBySeason, losersBracketBySeason
         getTeamName
     } = useSleeperData();
 
@@ -167,6 +167,9 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                     h2hRecord.allMatches.push({
                         year: parseInt(year),
                         week: week,
+                        matchupId: matchup.matchup_id, // Store matchup_id for bracket lookup
+                        team1RosterId: team1RosterId, // Store roster IDs for history
+                        team2RosterId: team2RosterId,
                         team1OwnerId: team1OwnerId, // Store owner IDs for history
                         team2OwnerId: team2OwnerId,
                         team1DisplayName: team1DisplayName, // Store display names for history
@@ -180,10 +183,7 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                         winnerScore: winnerOwnerId === team1OwnerId ? team1Score : team2Score,
                         loserScore: loserOwnerId === team1OwnerId ? team1Score : team2Score,
                         isTie: isTie,
-                        isPlayoff: isPlayoffMatch,
-                        // Sleeper API matchups do not directly provide 'consolation', 'finalSeedingGame', 'pointsOnlyBye' flags.
-                        // These would need to be inferred from bracket data or other league settings if desired.
-                        // For now, we simplify to 'Reg. Season' or 'Playoffs'.
+                        isPlayoff: isPlayoffMatch, // This is just a preliminary flag based on week
                     });
                 });
             });
@@ -338,7 +338,7 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                     <p className="text-sm text-gray-600">Performance, stats, and records</p>
                 </div>
 
-                {/* Main Teams Cards */}
+                {/* Main Teams Cards - Conditionally rendered */}
                 {(() => {
                     const overallTeamAStats = careerDPRData?.find(d => d.ownerId === ownerA);
                     const overallTeamBStats = careerDPRData?.find(d => d.ownerId === ownerB);
@@ -431,15 +431,15 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                     );
                 })()}
 
-                {/* VERSUS Section */}
+                {/* VERSUS Section - Styled */}
                 <div className="bg-gradient-to-r from-blue-700 to-blue-900 text-white p-6 rounded-xl shadow-lg border border-blue-600 text-center mb-8 transform hover:scale-105 transition-transform duration-300 ease-in-out">
-                    <h4 className="text-xl font-bold mb-2">★ VERSUS ★</h4>
-                    <p className="text-lg font-semibold mb-1">Record: {renderRecord(ownerARecord)} vs {renderRecord(ownerBRecord)}</p>
-                    <p className="text-md">Current Streak: {currentStreak}</p>
-                    <p className="text-md">
-                        Playoff Record: {ownerARecord.playoffWins}-{ownerARecord.playoffLosses}-{ownerARecord.playoffTies}
+                    <h4 className="text-2xl font-extrabold mb-3 tracking-wide">★ VERSUS ★</h4>
+                    <p className="text-xl font-semibold mb-2">Record: <span className="font-bold">{renderRecord(ownerARecord)}</span> vs <span className="font-bold">{renderRecord(ownerBRecord)}</span></p>
+                    <p className="text-lg mb-2">Current Streak: <span className="font-medium">{currentStreak}</span></p>
+                    <p className="text-lg">
+                        Playoff Record: <span className="font-bold">{ownerARecord.playoffWins}-{ownerARecord.playoffLosses}-{ownerARecord.playoffTies}</span>
                         {' '}vs{' '}
-                        {ownerBRecord.playoffWins}-{ownerBRecord.playoffLosses}-{ownerBRecord.playoffTies}
+                        <span className="font-bold">{ownerBRecord.playoffWins}-{ownerBRecord.playoffLosses}-{ownerBRecord.playoffTies}</span>
                     </p>
                 </div>
 
@@ -524,14 +524,36 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                                 let currentTeamBScore = (match.team1OwnerId === ownerB) ? match.team1Score : match.team2Score;
 
                                 let matchType = 'Reg. Season';
-                                if (match.isPlayoff) {
-                                    const leagueMetadataForMatchYear = historicalData.leaguesMetadataBySeason?.[match.year];
-                                    const championshipWeek = leagueMetadataForMatchYear?.settings?.championship_week ? parseInt(leagueMetadataForMatchYear.settings.championship_week) : null;
+                                const leagueMetadataForMatchYear = historicalData.leaguesMetadataBySeason?.[match.year];
+                                const playoffStartWeek = leagueMetadataForMatchYear?.settings?.playoff_start_week ? parseInt(leagueMetadataForMatchYear.settings.playoff_start_week) : 99;
+                                const championshipWeek = leagueMetadataForMatchYear?.settings?.championship_week ? parseInt(leagueMetadataForMatchYear.settings.championship_week) : null;
 
-                                    if (championshipWeek && match.week === championshipWeek) {
-                                        matchType = 'Championship';
+                                if (match.week >= playoffStartWeek) {
+                                    const winnersBracketForYear = historicalData.winnersBracketBySeason?.[match.year] || [];
+                                    const losersBracketForYear = historicalData.losersBracketBySeason?.[match.year] || [];
+
+                                    // Check if this match's matchup_id exists in the winners bracket
+                                    const isInWinnersBracket = winnersBracketForYear.some(bracketMatch =>
+                                        String(bracketMatch.match_id) === String(match.matchupId)
+                                    );
+
+                                    // Check if this match's matchup_id exists in the losers bracket
+                                    const isInLosersBracket = losersBracketForYear.some(bracketMatch =>
+                                        String(bracketMatch.match_id) === String(match.matchupId)
+                                    );
+
+                                    if (isInWinnersBracket) {
+                                        if (championshipWeek && match.week === championshipWeek) {
+                                            matchType = 'Championship';
+                                        } else {
+                                            matchType = 'Playoffs';
+                                        }
+                                    } else if (isInLosersBracket) {
+                                        matchType = 'Consolation';
                                     } else {
-                                        matchType = 'Playoffs';
+                                        // This case handles playoff-week games not explicitly found in brackets (e.g., 3rd place game if not in main bracket)
+                                        // For now, if it's a playoff week and not in winners, assume it's part of consolation.
+                                        matchType = 'Playoffs (Uncategorized)'; // Or 'Consolation (Uncategorized)'
                                     }
                                 }
 
