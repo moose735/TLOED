@@ -61,6 +61,9 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
         setLoading(true);
         const newHeadToHeadRecords = {}; // { h2hKey: { owners: [], ownerId1: {w,l,t,pw,pl,pt}, ownerId2: {w,l,t,pw,pl,pt}, allMatches: [] } }
 
+        // Log historicalData received to check bracket data availability
+        console.log("Historical Data received in Head2HeadGrid useEffect:", historicalData);
+
         // Iterate through all seasons and their matchups
         Object.keys(historicalData.matchupsBySeason).forEach(year => {
             const weeklyMatchupsForYear = historicalData.matchupsBySeason[year];
@@ -376,7 +379,7 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                                 // Opponent's Individual Stats values for comparison
                                 const oppTotalWins = opponentTeamStats ? opponentTeamStats.wins : null;
                                 const oppWinPercentage = opponentTeamStats ? opponentTeamStats.winPercentage : null;
-                                const oppCareerDPR = opponentTeamStats ? opponentTeamStats.dpr : null;
+                                const oppCareerDPR = opponentTeamStats ? oppCareerDPR : null;
                                 const oppWeeklyHighScore = opponentTeamStats ? opponentTeamStats.highScore : null;
                                 const oppTotalPointsScored = opponentTeamStats ? opponentTeamStats.pointsFor : null;
 
@@ -528,19 +531,31 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                                 const playoffStartWeek = leagueMetadataForMatchYear?.settings?.playoff_start_week ? parseInt(leagueMetadataForMatchYear.settings.playoff_start_week) : 99;
                                 const championshipWeek = leagueMetadataForMatchYear?.settings?.championship_week ? parseInt(leagueMetadataForMatchYear.settings.championship_week) : null;
 
+                                console.log(`--- Match ${match.matchupId} (Year ${match.year}, Week ${match.week}) ---`);
+                                console.log(`  Playoff Start Week: ${playoffStartWeek}, Championship Week: ${championshipWeek}`);
+
                                 if (match.week >= playoffStartWeek) {
                                     const winnersBracketForYear = historicalData.winnersBracketBySeason?.[match.year] || [];
                                     const losersBracketForYear = historicalData.losersBracketBySeason?.[match.year] || [];
 
+                                    console.log(`  Winners Bracket for ${match.year}:`, winnersBracketForYear);
+                                    console.log(`  Losers Bracket for ${match.year}:`, losersBracketForYear);
+
                                     // Check if this match's matchup_id exists in the winners bracket
-                                    const isInWinnersBracket = winnersBracketForYear.some(bracketMatch =>
-                                        String(bracketMatch.match_id) === String(match.matchupId)
-                                    );
+                                    const isInWinnersBracket = winnersBracketForYear.some(bracketMatch => {
+                                        const found = String(bracketMatch.match_id) === String(match.matchupId);
+                                        if (found) console.log(`  Match ${match.matchupId} FOUND in Winners Bracket.`);
+                                        return found;
+                                    });
 
                                     // Check if this match's matchup_id exists in the losers bracket
-                                    const isInLosersBracket = losersBracketForYear.some(bracketMatch =>
-                                        String(bracketMatch.match_id) === String(match.matchupId)
-                                    );
+                                    const isInLosersBracket = losersBracketForYear.some(bracketMatch => {
+                                        const found = String(bracketMatch.match_id) === String(match.matchupId);
+                                        if (found) console.log(`  Match ${match.matchupId} FOUND in Losers Bracket.`);
+                                        return found;
+                                    });
+
+                                    console.log(`  isInWinnersBracket: ${isInWinnersBracket}, isInLosersBracket: ${isInLosersBracket}`);
 
                                     if (isInWinnersBracket) {
                                         if (championshipWeek && match.week === championshipWeek) {
@@ -552,10 +567,10 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                                         matchType = 'Consolation';
                                     } else {
                                         // This case handles playoff-week games not explicitly found in brackets (e.g., 3rd place game if not in main bracket)
-                                        // For now, if it's a playoff week and not in winners, assume it's part of consolation.
-                                        matchType = 'Playoffs (Uncategorized)'; // Or 'Consolation (Uncategorized)'
+                                        matchType = 'Playoffs (Uncategorized)';
                                     }
                                 }
+                                console.log(`  Final Match Type: ${matchType}`);
 
                                 return (
                                     <tr key={idx} className="border-b border-gray-100 last:border-b-0">
