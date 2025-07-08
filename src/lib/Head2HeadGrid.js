@@ -116,30 +116,30 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                     let matchType = 'Reg. Season';
 
                     if (matchup.playoff) { // This is the primary indicator from Sleeper API
-                        // Check if the matchup's roster IDs are present in the winners bracket for this year
-                        const isWinnersBracketMatch = winnersBracketForYear.some(bracketMatch => {
-                            const bracketTeams = [String(bracketMatch.t1), String(bracketMatch.t2)].filter(Boolean);
-                            return (
-                                bracketTeams.includes(team1RosterId) && bracketTeams.includes(team2RosterId)
-                            );
-                        });
+                        const currentMatchupId = String(matchup.matchup_id);
 
-                        // Check if the matchup's roster IDs are present in the losers bracket for this year
-                        const isLosersBracketMatch = losersBracketForYear.some(bracketMatch => {
-                            const bracketTeams = [String(bracketMatch.t1), String(bracketMatch.t2)].filter(Boolean);
-                            return (
-                                bracketTeams.includes(team1RosterId) && bracketTeams.includes(team2RosterId)
-                            );
-                        });
+                        // Check if this matchup_id exists in the winners bracket
+                        const isInWinnersBracket = winnersBracketForYear.some(bracketMatch =>
+                            String(bracketMatch.match_id) === currentMatchupId
+                        );
 
-                        if (championshipWeek && week === championshipWeek) {
-                            matchType = 'Championship';
-                        } else if (isWinnersBracketMatch) {
-                            matchType = 'Playoffs';
-                        } else if (isLosersBracketMatch) {
+                        // Check if this matchup_id exists in the losers bracket
+                        const isInLosersBracket = losersBracketForYear.some(bracketMatch =>
+                            String(bracketMatch.match_id) === currentMatchupId
+                        );
+
+                        if (isInWinnersBracket) {
+                            if (championshipWeek && week === championshipWeek) {
+                                matchType = 'Championship';
+                            } else {
+                                matchType = 'Playoffs';
+                            }
+                        } else if (isInLosersBracket) {
                             matchType = 'Consolation';
                         } else {
-                            matchType = 'Playoffs (Uncategorized)'; // Fallback if playoff flag is true but not found in explicit brackets by roster ID
+                            // Fallback if playoff flag is true but not found in explicit brackets by match_id,
+                            // it's still a playoff game, but uncategorized (e.g., 3rd place game not in main bracket)
+                            matchType = 'Playoffs (Uncategorized)';
                         }
                     }
 
