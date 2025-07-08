@@ -1,46 +1,34 @@
 // src/components/SleeperMatchupTester.js
-import React, { useEffect, useState } from 'react';
-import {
-    fetchAllHistoricalMatchups
-} from '../utils/sleeperApi';
+import React, { useEffect, useState, useCallback } from 'react';
+// Removed direct API imports as data will come from context
+// import { fetchAllHistoricalMatchups } from '../utils/sleeperApi';
 import { calculatePlayoffFinishes } from '../utils/playoffRankings'; // Import the playoff calculation function
+import { useSleeperData } from '../contexts/SleeperDataContext'; // Import the custom hook
 
 const SleeperMatchupTester = () => {
-    const [historicalData, setHistoricalData] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+    // Consume data and functions from SleeperDataContext
+    const {
+        loading,
+        error,
+        historicalData, // Contains matchupsBySeason, winnersBracketBySeason, losersBracketBySeason, rostersBySeason, leaguesMetadataBySeason
+        getTeamName,    // Utility function to get team display name from owner_id
+        usersData,      // Raw user data for mapping
+    } = useSleeperData();
+
     const [selectedYear, setSelectedYear] = useState(''); // State for the selected year
     const [playoffResults, setPlayoffResults] = useState(null); // State for playoff calculation results
 
+    // Effect to set initial selected year to the latest available once historicalData is loaded
     useEffect(() => {
-        const fetchAndSetData = async () => {
-            try {
-                setLoading(true);
-                setError(null);
-                const data = await fetchAllHistoricalMatchups();
-                setHistoricalData(data);
-                console.log("Fetched Historical Data (with brackets and scores):", data); // Log the full structure
-
-                // Set initial selected year to the latest available if data exists
-                if (data && Object.keys(data.leaguesMetadataBySeason).length > 0) {
-                    const latestYear = Math.max(...Object.keys(data.leaguesMetadataBySeason).map(Number)).toString();
-                    setSelectedYear(latestYear);
-                }
-
-            } catch (err) {
-                console.error("Error fetching historical data in component:", err);
-                setError(err.message || "Failed to fetch historical data.");
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchAndSetData();
-    }, []); // Empty dependency array means this runs once on mount
+        if (!loading && !error && historicalData && Object.keys(historicalData.leaguesMetadataBySeason).length > 0) {
+            const latestYear = Math.max(...Object.keys(historicalData.leaguesMetadataBySeason).map(Number)).toString();
+            setSelectedYear(latestYear);
+        }
+    }, [loading, error, historicalData]); // Re-run when historicalData or its loading/error state changes
 
     // Effect to recalculate playoff finishes when selectedYear or historicalData changes
     useEffect(() => {
-        if (!loading && historicalData && selectedYear) {
+        if (!loading && !error && historicalData && selectedYear) {
             const winnersBracket = historicalData.winnersBracketBySeason?.[selectedYear];
             const losersBracket = historicalData.losersBracketBySeason?.[selectedYear];
             const rostersForYear = historicalData.rostersBySeason?.[selectedYear];
@@ -65,18 +53,58 @@ const SleeperMatchupTester = () => {
         } else if (!loading && !selectedYear) {
             setPlayoffResults(null); // No year selected, no results
         }
-    }, [historicalData, loading, selectedYear]); // Recalculate when these change
+    }, [historicalData, loading, error, selectedYear]); // Recalculate when these change
 
+    // Helper to get team info from roster ID (or bracket object if needed for t1_from/t2_from)
+    // This now uses getTeamName from context
+    const getTeamInfo = useCallback((teamIdentifier) => {
+        const currentSeasonRosters = historicalData?.rostersBySeason?.[selectedYear] || [];
+        const rostersById = new Map(currentSeasonRosters.map(roster => [roster.roster_id, roster]));
+
+        // Handle direct roster ID (number or string)
+        if (typeof teamIdentifier === 'number' || typeof teamIdentifier === 'string') {
+            const roster = rostersById.get(String(teamIdentifier));
+            return roster ? getTeamName(roster.owner_id) : `Roster ${teamIdentifier}`;
+        }
+        // Handle bracket objects with 'from' references
+        else if (teamIdentifier && (teamIdentifier.w || teamIdentifier.l || teamIdentifier.t1 || teamIdentifier.t2)) {
+            const rosterId = teamIdentifier.w || teamIdentifier.l || teamIdentifier.t1 || teamIdentifier.t2;
+            const roster = rostersById.get(String(rosterId));
+            const fromType = teamIdentifier.w ? 'Winner of Match' : teamIdentifier.l ? 'Loser of Match' : 'From Match';
+            return roster ? `${getTeamName(roster.owner_id)} - ${fromType} ${teamIdentifier.m}` : `${fromType} ${teamIdentifier.m} (Roster: ${rosterId})`;
+        }
+        return 'TBD';
+    }, [historicalData, selectedYear, getTeamName]);
+
+
+    // Display loading and error states from the SleeperDataContext
     if (loading) {
-        return <div style={{ color: '#007bff', fontSize: '1.2em' }}>Loading historical league data...</div>;
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[200px] text-blue-600">
+                <svg className="animate-spin h-10 w-10 text-blue-500 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p className="text-lg font-medium">Loading historical league data...</p>
+            </div>
+        );
     }
 
     if (error) {
-        return <div style={{ color: 'red', fontWeight: 'bold' }}>Error: {error}</div>;
+        return (
+            <div className="text-center text-red-600 text-lg p-4">
+                <p>Error: {error.message || error}</p>
+                <p>Failed to load historical data. Please check your Sleeper API configuration.</p>
+            </div>
+        );
     }
 
     if (!historicalData || Object.keys(historicalData.leaguesMetadataBySeason).length === 0) {
-        return <div style={{ color: 'orange' }}>No historical league data found. Check your CURRENT_LEAGUE_ID.</div>;
+        return (
+            <div className="text-center text-orange-600 text-lg p-4">
+                No historical league data found. Check your `CURRENT_LEAGUE_ID` or ensure data is available.
+            </div>
+        );
     }
 
     // --- Data Processing for Display ---
@@ -112,59 +140,45 @@ const SleeperMatchupTester = () => {
 
 
     // Create a map for quick lookup: roster_id -> { displayName, teamName } for the selected year
+    // This is now less critical as getTeamName handles user display, but useful for roster details
     const rosterToUserMap = new Map();
     currentSeasonRosters.forEach(roster => {
         rosterToUserMap.set(roster.roster_id, {
-            displayName: roster.ownerDisplayName, // This is the user's display_name
-            teamName: roster.ownerTeamName,     // This is the metadata.team_name
+            displayName: usersData?.find(u => u.user_id === roster.owner_id)?.display_name,
+            teamName: usersData?.find(u => u.user_id === roster.owner_id)?.metadata?.team_name,
             userId: roster.owner_id
         });
     });
 
-    // Helper to get team info from roster ID (or bracket object if needed for t1_from/t2_from)
-    const getTeamInfo = (teamIdentifier) => {
-        // Handle direct roster ID (number or string)
-        if (typeof teamIdentifier === 'number' || typeof teamIdentifier === 'string') {
-            const team = rosterToUserMap.get(String(teamIdentifier)); // Ensure key is string for lookup
-            return team ? `${team.teamName || 'N/A Team Name'} (Owner: ${team.displayName || 'N/A Owner'})` : `Roster ${teamIdentifier}`;
-        }
-        // Handle bracket objects with 'from' references
-        else if (teamIdentifier && (teamIdentifier.w || teamIdentifier.l || teamIdentifier.t1 || teamIdentifier.t2)) {
-            const rosterId = teamIdentifier.w || teamIdentifier.l || teamIdentifier.t1 || teamIdentifier.t2;
-            const team = rosterToUserMap.get(String(rosterId));
-            const fromType = teamIdentifier.w ? 'Winner of Match' : teamIdentifier.l ? 'Loser of Match' : 'From Match';
-            return team ? `${team.teamName || 'N/A Team Name'} (Owner: ${team.displayName || 'N/A Owner'}) - ${fromType} ${teamIdentifier.m}` : `${fromType} ${teamIdentifier.m} (Roster: ${rosterId})`;
-        }
-        return 'TBD';
-    };
-
 
     return (
-        <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }}>
-            <h1 style={{ color: '#333', borderBottom: '2px solid #eee', paddingBottom: '10px' }}>Sleeper League Historical Data Verification & Playoff Finishes</h1>
+        <div className="container mx-auto p-4 md:p-6 bg-white shadow-lg rounded-lg font-inter">
+            <h1 className="text-3xl font-bold text-gray-800 mb-6 text-center border-b pb-4">
+                Sleeper League Historical Data Verification & Playoff Finishes
+            </h1>
 
             {/* Overall Summary */}
-            <div style={{ marginBottom: '20px', border: '1px solid #ddd', padding: '15px', borderRadius: '8px', backgroundColor: '#f9f9f9' }}>
-                <h2 style={{ color: '#0056b3' }}>Verification Summary:</h2>
-                <p><strong>Total Seasons Found:</strong> {totalSeasonsFound}</p>
-                <p><strong>Total Matchups Found (across all active seasons, including playoffs):</strong> {totalMatchupsOverall}</p>
-                <p><strong>Unique Roster IDs (participating teams across all seasons):</strong> {uniqueRosterIds.size}</p>
-                <p><strong>Unique User IDs (owners across all seasons):</strong> {uniqueUserIds.size}</p>
+            <div className="mb-6 border border-gray-200 p-4 rounded-lg bg-gray-50 shadow-sm">
+                <h2 className="text-2xl font-semibold text-blue-700 mb-3 border-b pb-2">Verification Summary:</h2>
+                <p className="text-gray-700 mb-1"><strong>Total Seasons Found:</strong> {totalSeasonsFound}</p>
+                <p className="text-gray-700 mb-1"><strong>Total Matchups Found (across all active seasons, including playoffs):</strong> {totalMatchupsOverall}</p>
+                <p className="text-gray-700 mb-1"><strong>Unique Roster IDs (participating teams across all seasons):</strong> {uniqueRosterIds.size}</p>
+                <p className="text-gray-700 mb-4"><strong>Unique User IDs (owners across all seasons):</strong> {uniqueUserIds.size}</p>
 
-                <p style={{ fontWeight: 'bold', color: uniqueRosterIds.size > 0 && uniqueRosterIds.size === currentSeasonRosters.length ? 'green' : 'red' }}>
+                <p className={`font-bold text-sm ${uniqueRosterIds.size > 0 && uniqueRosterIds.size === currentSeasonRosters.length ? 'text-green-600' : 'text-red-600'}`}>
                     Recommendation: Compare these numbers (especially unique teams and matchups per season/week) with your league's actual history on Sleeper.
-                    If Unique Roster IDs or Unique User IDs don't match your expected league size, check `config.js` `CURRENT_LEAGUE_ID` and your `sleeperApi.js` `fetchUsersData` and `fetchRostersWithDetails`.
+                    If Unique Roster IDs or Unique User IDs don't match your expected league size, check `config.js` `CURRENT_LEAGUE_ID` and your `sleeperApi.js` `fetchAllHistoricalMatchups` logic.
                 </p>
             </div>
 
             {/* Season Selector */}
-            <div style={{ marginBottom: '20px' }}>
-                <label htmlFor="season-select" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Select Season for Detail:</label>
+            <div className="mb-6">
+                <label htmlFor="season-select" className="block mb-2 font-bold text-gray-700">Select Season for Detail:</label>
                 <select
                     id="season-select"
                     value={selectedYear}
                     onChange={(e) => setSelectedYear(e.target.value)}
-                    style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', width: '100%', maxWidth: '200px' }}
+                    className="p-2 border border-gray-300 rounded-md w-full max-w-xs focus:ring-blue-500 focus:border-blue-500"
                 >
                     {availableSeasons.length > 0 ? (
                         availableSeasons.map(year => (
@@ -177,72 +191,68 @@ const SleeperMatchupTester = () => {
             </div>
 
             {selectedYear && currentSeasonMetadata ? (
-                <div style={{ marginBottom: '30px', border: '1px solid #ccc', padding: '15px', borderRadius: '8px', backgroundColor: '#fff' }}>
-                    <h2 style={{ color: '#0056b3' }}>Season: {selectedYear} ({currentSeasonMetadata.name})</h2>
-                    <p><strong>League ID:</strong> {currentSeasonMetadata.league_id}</p>
-                    <p><strong>Season Start:</strong> {currentSeasonMetadata.season_start_date || 'N/A'}</p>
-                    <p><strong>Total Teams:</strong> {currentSeasonRosters.length}</p>
+                <div className="mb-8 border border-gray-200 p-6 rounded-lg bg-white shadow-md">
+                    <h2 className="text-2xl font-semibold text-blue-700 mb-4 border-b pb-2">Season: {selectedYear} ({currentSeasonMetadata.name})</h2>
+                    <p className="text-gray-700 mb-1"><strong>League ID:</strong> {currentSeasonMetadata.league_id}</p>
+                    <p className="text-gray-700 mb-1"><strong>Season Start:</strong> {currentSeasonMetadata.season_start_date || 'N/A'}</p>
+                    <p className="text-gray-700 mb-4"><strong>Total Teams:</strong> {currentSeasonRosters.length}</p>
 
                     {/* Display Rosters for this season */}
-                    <div style={{ marginTop: '15px', borderTop: '1px dashed #eee', paddingTop: '15px' }}>
-                        <h3 style={{ color: '#444' }}>Teams (Rosters) in {selectedYear}:</h3>
+                    <div className="mt-4 pt-4 border-t border-dashed border-gray-200">
+                        <h3 className="text-xl font-semibold text-gray-800 mb-3">Teams (Rosters) in {selectedYear}:</h3>
                         {currentSeasonRosters.length > 0 ? (
-                            <ul style={{ listStyleType: 'none', padding: 0 }}>
+                            <ul className="list-disc pl-5 space-y-1">
                                 {currentSeasonRosters.map(roster => (
-                                    <li key={roster.roster_id} style={{ marginBottom: '5px' }}>
-                                        <strong>Roster {roster.roster_id}:</strong> {roster.ownerTeamName} (Owner: {roster.ownerDisplayName} - User ID: {roster.owner_id})
+                                    <li key={roster.roster_id} className="text-gray-700">
+                                        <strong>Roster {roster.roster_id}:</strong> {getTeamName(roster.owner_id)} (User ID: {roster.owner_id})
                                     </li>
                                 ))}
                             </ul>
                         ) : (
-                            <p>No roster data available for this season.</p>
+                            <p className="text-gray-500">No roster data available for this season.</p>
                         )}
                     </div>
 
                     {/* Display Playoff Finishes for this season */}
-                    <div style={{ marginTop: '25px', borderTop: '2px solid #ddd', paddingTop: '20px' }}>
-                        <h3 style={{ color: '#007bff' }}>Playoff Finishes in {selectedYear}:</h3>
+                    <div className="mt-8 pt-6 border-t border-gray-300">
+                        <h3 className="text-xl font-semibold text-blue-700 mb-3">Playoff Finishes in {selectedYear}:</h3>
                         {playoffResults && playoffResults.length > 0 ? (
-                            <ul style={{ listStyleType: 'decimal', paddingLeft: '20px' }}>
+                            <ul className="list-decimal pl-5 space-y-1">
                                 {playoffResults.map(team => (
-                                    <li key={team.roster_id} style={{ marginBottom: '5px' }}>
-                                        <strong>{team.playoffFinish}</strong>: {team.ownerTeamName} (Owner: {team.ownerDisplayName})
+                                    <li key={team.roster_id} className="text-gray-700">
+                                        <strong>{team.playoffFinish}</strong>: {getTeamName(team.roster_id)}
                                     </li>
                                 ))}
                             </ul>
                         ) : (
-                            <p>No playoff finish data available for this season. Ensure brackets are complete or check `playoffRankings.js` logic.</p>
+                            <p className="text-gray-500">No playoff finish data available for this season. Ensure brackets are complete or check `playoffRankings.js` logic.</p>
                         )}
                     </div>
 
                     {/* Display Regular Season Matchups for this season */}
-                    <div style={{ marginTop: '25px', borderTop: '2px solid #ddd', paddingTop: '20px' }}>
-                        <h3 style={{ color: '#007bff' }}>Regular Season Matchups in {selectedYear}:</h3>
+                    <div className="mt-8 pt-6 border-t border-gray-300">
+                        <h3 className="text-xl font-semibold text-blue-700 mb-3">Regular Season Matchups in {selectedYear}:</h3>
                         {Object.keys(currentSeasonMatchups).length > 0 ? (
                             Object.entries(currentSeasonMatchups)
                                 .filter(([weekNum]) => parseInt(weekNum) < (currentSeasonMetadata.settings?.playoff_start_week || 99)) // Filter for regular season
                                 .sort(([weekA], [weekB]) => parseInt(weekA) - parseInt(weekB))
                                 .map(([week, matchups]) => (
-                                    <div key={`${selectedYear}-week-${week}-regular`} style={{ marginBottom: '20px' }}>
-                                        <h4 style={{ color: '#666' }}>Week {week} ({matchups.length} Matchups)</h4>
+                                    <div key={`${selectedYear}-week-${week}-regular`} className="mb-6 p-4 border border-gray-100 rounded-md bg-white shadow-sm">
+                                        <h4 className="text-lg font-semibold text-gray-800 mb-2">Week {week} ({matchups.length} Matchups)</h4>
                                         {matchups.length > 0 ? (
-                                            <ul style={{ listStyleType: 'none', padding: 0 }}>
+                                            <ul className="list-disc pl-5 space-y-2">
                                                 {matchups.map(matchup => {
-                                                    const team1 = rosterToUserMap.get(String(matchup.team1_roster_id));
-                                                    const team2 = rosterToUserMap.get(String(matchup.team2_roster_id));
-
-                                                    // Use ownerTeamName first, then ownerDisplayName as fallback for display
-                                                    const team1Display = team1 ? `${team1.teamName || team1.displayName}` : `Roster ${matchup.team1_roster_id}`;
-                                                    const team2Display = team2 ? `${team2.teamName || team2.displayName}` : `Roster ${matchup.team2_roster_id}`;
+                                                    const team1Display = getTeamName(matchup.team1_roster_id);
+                                                    const team2Display = getTeamName(matchup.team2_roster_id);
 
                                                     const winnerName = (matchup.team1_score > matchup.team2_score)
-                                                        ? (team1 ? (team1.teamName || team1.displayName) : `Roster ${matchup.team1_roster_id}`)
+                                                        ? team1Display
                                                         : (matchup.team2_score > matchup.team1_score)
-                                                            ? (team2 ? (team2.teamName || team2.displayName) : `Roster ${matchup.team2_roster_id}`)
+                                                            ? team2Display
                                                             : "Tie";
 
                                                     return (
-                                                        <li key={`reg-match-${matchup.matchup_id}`} style={{ marginBottom: '10px', padding: '10px', border: '1px solid #eee', borderRadius: '5px', backgroundColor: '#fdfdfd' }}>
+                                                        <li key={`reg-match-${matchup.matchup_id}`} className="text-sm text-gray-700">
                                                             <strong>Matchup ID: {matchup.matchup_id}</strong>
                                                             <br />
                                                             {team1Display} ({matchup.team1_score} points) vs. {team2Display} ({matchup.team2_score} points)
@@ -255,36 +265,36 @@ const SleeperMatchupTester = () => {
                                                 })}
                                             </ul>
                                         ) : (
-                                            <p>No regular season matchups found for Week {week}.</p>
+                                            <p className="text-gray-500">No regular season matchups found for Week {week}.</p>
                                         )}
                                     </div>
                                 ))
                         ) : (
-                            <p>No regular season matchup data available for this season (either future season or error fetching).</p>
+                            <p className="text-gray-500">No regular season matchup data available for this season (either future season or error fetching).</p>
                         )}
                     </div>
 
                     {/* Display Playoff Bracket Data for this season */}
-                    <div style={{ marginTop: '25px', borderTop: '2px solid #ddd', paddingTop: '20px' }}>
-                        <h3 style={{ color: '#007bff' }}>Playoff Brackets in {selectedYear}:</h3>
+                    <div className="mt-8 pt-6 border-t border-gray-300">
+                        <h3 className="text-xl font-semibold text-blue-700 mb-3">Playoff Brackets in {selectedYear}:</h3>
 
                         {currentSeasonWinnersBracket.length === 0 && currentSeasonLosersBracket.length === 0 ? (
-                            <p>No playoff bracket data available for this season.</p>
+                            <p className="text-gray-500">No playoff bracket data available for this season.</p>
                         ) : (
                             <>
                                 {currentSeasonWinnersBracket.length > 0 && (
-                                    <div style={{ marginBottom: '20px' }}>
-                                        <h4 style={{ color: '#666' }}>Winners Bracket ({currentSeasonWinnersBracket.length} Matches)</h4>
-                                        <ul style={{ listStyleType: 'none', padding: 0 }}>
+                                    <div className="mb-6 p-4 border border-gray-100 rounded-md bg-white shadow-sm">
+                                        <h4 className="text-lg font-semibold text-gray-800 mb-2">Winners Bracket ({currentSeasonWinnersBracket.length} Matches)</h4>
+                                        <ul className="list-disc pl-5 space-y-2">
                                             {currentSeasonWinnersBracket.sort((a, b) => a.r - b.r || a.m - b.m).map(match => (
-                                                <li key={`wb-${match.m}`} style={{ marginBottom: '10px', padding: '10px', border: '1px solid #eee', borderRadius: '5px', backgroundColor: '#fdfdfd' }}>
+                                                <li key={`wb-${match.m}`} className="text-sm text-gray-700">
                                                     <strong>Round {match.r}, Match {match.m}:</strong>
                                                     <br />
                                                     Team 1: {getTeamInfo(match.t1 || match.t1_from)} {typeof match.t1_score === 'number' ? `(${match.t1_score} points)` : ''}
                                                     <br />
                                                     Team 2: {getTeamInfo(match.t2 || match.t2_from)} {typeof match.t2_score === 'number' ? `(${match.t2_score} points)` : ''}
                                                     <br />
-                                                    Winner: {match.w ? getTeamInfo(match.w) : 'TBD'}
+                                                    Winner: <strong>{match.w ? getTeamInfo(match.w) : 'TBD'}</strong>
                                                     <br />
                                                     Loser: {match.l ? getTeamInfo(match.l) : 'TBD'}
                                                     {match.p && ` (Playoff Rank: ${match.p})`}
@@ -295,11 +305,11 @@ const SleeperMatchupTester = () => {
                                 )}
 
                                 {currentSeasonLosersBracket.length > 0 && (
-                                    <div>
-                                        <h4 style={{ color: '#666' }}>Losers Bracket ({currentSeasonLosersBracket.length} Matches)</h4>
-                                        <ul style={{ listStyleType: 'none', padding: 0 }}>
+                                    <div className="p-4 border border-gray-100 rounded-md bg-white shadow-sm">
+                                        <h4 className="text-lg font-semibold text-gray-800 mb-2">Losers Bracket ({currentSeasonLosersBracket.length} Matches)</h4>
+                                        <ul className="list-disc pl-5 space-y-2">
                                             {currentSeasonLosersBracket.sort((a, b) => a.r - b.r || a.m - b.m).map(match => (
-                                                <li key={`lb-${match.m}`} style={{ marginBottom: '10px', padding: '10px', border: '1px solid #eee', borderRadius: '5px', backgroundColor: '#fdfdfd' }}>
+                                                <li key={`lb-${match.m}`} className="text-sm text-gray-700">
                                                     <strong>Round {match.r}, Match {match.m}:</strong>
                                                     <br />
                                                     Team 1: {getTeamInfo(match.t1 || match.t1_from)} {typeof match.t1_score === 'number' ? `(${match.t1_score} points)` : ''}
@@ -320,7 +330,7 @@ const SleeperMatchupTester = () => {
                     </div>
                 </div>
             ) : (
-                <div style={{ textAlign: 'center', color: '#555' }}>Please select a season to view detailed data.</div>
+                <div className="text-center text-gray-600 text-lg p-4">Please select a season to view detailed data.</div>
             )}
         </div>
     );
