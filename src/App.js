@@ -1,9 +1,9 @@
 // App.js
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-    HISTORICAL_MATCHUPS_API_URL,
-    GOOGLE_SHEET_POWER_RANKINGS_API_URL, // Still here, assuming you might have other GAS APIs
-    CURRENT_LEAGUE_ID, // This is for Sleeper and will be used by SleeperDataProvider's internals
+    // HISTORICAL_MATCHUPS_API_URL, // No longer needed for Google Sheets
+    // GOOGLE_SHEET_POWER_RANKINGS_API_URL, // Keep if other GAS APIs are still in use elsewhere
+    CURRENT_LEAGUE_ID,
 } from './config';
 
 // Import all your components
@@ -19,7 +19,7 @@ import Dashboard from './components/Dashboard';
 import MatchupHistory from './components/MatchupHistory';
 
 // Import the custom hook from your SleeperDataContext
-import { SleeperDataProvider, useSleeperData } from './contexts/SleeperDataContext'; // Now we'll use both
+import { SleeperDataProvider, useSleeperData } from './contexts/SleeperDataContext';
 
 // Define the available tabs and their categories
 const NAV_CATEGORIES = {
@@ -38,7 +38,7 @@ const NAV_CATEGORIES = {
     },
     TEAMS: {
         label: 'Teams',
-        subTabs: [], // This will be populated dynamically from Sleeper data later
+        subTabs: [], // This will be populated dynamically from Sleeper data
     },
     FINANCIALS: { label: 'Financials', tab: 'financials' },
 };
@@ -59,113 +59,61 @@ const TABS = {
 
 
 const AppContent = () => {
-    // These states and useEffect are *still* fetching from Google Sheets.
-    // We will progressively replace these within individual components.
-    const [activeTab, setActiveTab] = useState(TABS.DASHBOARD);
-    const [historicalMatchups, setHistoricalMatchups] = useState([]);
-    const [historicalChampions, setHistoricalChampions] = useState([]);
-    const [loadingHistoricalData, setLoadingHistoricalData] = useState(true);
-    const [historicalDataError, setHistoricalDataError] = useState(null);
-    const [selectedTeam, setSelectedTeam] = useState(null);
+    // Consume data from SleeperDataContext
+    const {
+        state: {
+            loading,
+            error,
+            historicalData, // Contains historicalMatchups, historicalChampions, etc.
+            rostersBySeason, // Useful for dynamic team lists
+        },
+        getTeamName, // The Sleeper-aware version of getMappedTeamName
+    } = useSleeperData();
 
+    const [activeTab, setActiveTab] = useState(TABS.DASHBOARD);
+    const [selectedTeam, setSelectedTeam] = useState(null);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [openSubMenu, setOpenSubMenu] = useState(null);
 
-    // This getMappedTeamName is currently used by the Google Sheet fetching logic.
-    // It will eventually be replaced by the getTeamName from SleeperDataContext.
-    const getMappedTeamName = useCallback((teamName) => {
-        if (typeof teamName !== 'string' || !teamName) return '';
-        const trimmedName = teamName.trim();
-        return trimmedName;
-    }, []);
-
-    // Original useEffect for Google Sheet data remains for now.
-    // We will remove this *after* all components that depend on it are migrated.
+    // Effect to dynamically populate team sub-tabs when rostersBySeason is available
     useEffect(() => {
-        const fetchGoogleSheetData = async () => {
-            setLoadingHistoricalData(true);
-            setHistoricalDataError(null);
+        if (rostersBySeason && Object.keys(rostersBySeason).length > 0) {
+            // Get unique team names from all seasons
+            const allTeamNames = new Set();
+            Object.values(rostersBySeason).forEach(seasonRosters => {
+                seasonRosters.forEach(roster => {
+                    allTeamNames.add(roster.teamName); // Assuming your roster object has a teamName property
+                });
+            });
+            const uniqueTeams = Array.from(allTeamNames).sort();
 
-            let fetchedMatchupData = [];
-            try {
-                if (HISTORICAL_MATCHUPS_API_URL === 'YOUR_GOOGLE_SHEET_HISTORICAL_MATCHUPS_API_URL') {
-                    throw new Error("HISTORICAL_MATCHUPS_API_URL not configured in config.js. Please update it or note that historical data won't load.");
-                }
-                const response = await fetch(HISTORICAL_MATCHUPS_API_URL, { mode: 'cors' });
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status} - Could not load historical matchup data.`);
-                }
-
-                const textResponse = await response.text();
-                try {
-                    const parsedData = JSON.parse(textResponse);
-                    if (parsedData && typeof parsedData === 'object' && Array.isArray(parsedData.data)) {
-                        fetchedMatchupData = parsedData.data;
-                        setHistoricalMatchups(fetchedMatchupData);
-                    } else {
-                        console.error("API response for historical matchups is not in the expected format (object with 'data' array):", parsedData);
-                        throw new Error("Historical matchup data is not in the expected array format. Raw response: " + textResponse);
-                    }
-                } catch (jsonError) {
-                    console.error("Error parsing historical matchup data JSON. Raw response:", textResponse, jsonError);
-                    setHistoricalDataError(`Failed to load historical matchup data: The API response was not valid JSON. Please ensure your Google Apps Script for HISTORICAL_MATCHUPS_API_URL is correctly deployed as a Web App and returns JSON (e.g., using ContentService.MimeType.JSON). Raw response snippet: ${textResponse.substring(0, 200)}...`);
-                    setLoadingHistoricalData(false);
-                    return;
-                }
-
-                const uniqueTeamsSet = new Set();
-                if (Array.isArray(fetchedMatchupData)) {
-                    fetchedMatchupData.forEach(match => {
-                        const team1 = getMappedTeamName(match.team1);
-                        const team2 = getMappedTeamName(match.team2);
-                        if (team1) uniqueTeamsSet.add(team1);
-                        if (team2) uniqueTeamsSet.add(team2);
-                    });
-                } else {
-                    console.warn("fetchedMatchupData is not an array after processing, cannot populate team list.");
-                }
-
-                // This section for populating NAV_CATEGORIES.TEAMS.subTabs will be replaced
-                // by using `historicalData.rostersBySeason` from the Sleeper Context.
-                const uniqueTeams = Array.from(uniqueTeamsSet).sort();
-                NAV_CATEGORIES.TEAMS.subTabs = uniqueTeams.map(team => ({
-                    label: team,
-                    tab: TABS.TEAM_DETAIL,
-                    teamName: team,
-                }));
-
-            } catch (error) {
-                console.error("Error fetching historical matchup data:", error);
-                setHistoricalDataError(`Failed to load historical data: ${error.message}. Please check your HISTORICAL_MATCHUPS_API_URL in config.js and ensure your Google Apps Script is deployed correctly as a Web App (Execute as: Me, Who has access: Anyone).`);
-                setLoadingHistoricalData(false);
-                return;
-            } finally {
-                setLoadingHistoricalData(false);
-            }
-
-            setHistoricalChampions([
-                { year: 2023, champion: "Mock Champion 2023" },
-                { year: 2022, champion: "Mock Champion 2022" },
-            ]);
-        };
-
-        fetchGoogleSheetData();
-    }, [getMappedTeamName]);
+            NAV_CATEGORIES.TEAMS.subTabs = uniqueTeams.map(team => ({
+                label: team,
+                tab: TABS.TEAM_DETAIL,
+                teamName: team,
+            }));
+            // Force re-render if the active tab is 'teams' and subtabs change
+            // This might not be strictly necessary if state updates naturally trigger re-renders,
+            // but it's a safeguard if the NAV_CATEGORIES object mutation doesn't
+            // immediately cause the component to re-render the menu.
+            setActiveTab(prevTab => prevTab);
+        }
+    }, [rostersBySeason]);
 
 
-    // Placeholder functions for UI interactions (you likely have these already)
+    // Placeholder functions for UI interactions
     const handleTabClick = (tab) => {
         setActiveTab(tab);
-        setSelectedTeam(null); // Clear selected team when switching main tabs
-        setIsMobileMenuOpen(false); // Close mobile menu on tab click
-        setOpenSubMenu(null); // Close any open sub-menus
+        setSelectedTeam(null);
+        setIsMobileMenuOpen(false);
+        setOpenSubMenu(null);
     };
 
     const handleSubTabClick = (tab, teamName = null) => {
         setActiveTab(tab);
         setSelectedTeam(teamName);
-        setIsMobileMenuOpen(false); // Close mobile menu on sub-tab click
-        setOpenSubMenu(null); // Close any open sub-menus
+        setIsMobileMenuOpen(false);
+        setOpenSubMenu(null);
     };
 
     const toggleMobileMenu = () => {
@@ -177,30 +125,33 @@ const AppContent = () => {
     };
 
     const renderContent = () => {
-        if (loadingHistoricalData) {
-            return <div>Loading initial Google Sheet data...</div>;
+        // Use the loading and error states from SleeperDataContext
+        if (loading) {
+            return <div>Loading Sleeper fantasy data...</div>;
         }
-        if (historicalDataError) {
-            return <div style={{ color: 'red' }}>Error: {historicalDataError}</div>;
+        if (error) {
+            return <div style={{ color: 'red' }}>Error: {error}</div>;
         }
 
         switch (activeTab) {
             case TABS.DASHBOARD:
-                return <Dashboard />; // This will eventually use Sleeper Context
+                return <Dashboard />;
             case TABS.POWER_RANKINGS:
-                return <PowerRankings />; // This will need Sleeper Context for team names, etc.
+                return <PowerRankings />;
             case TABS.LEAGUE_HISTORY:
-                return <LeagueHistory historicalMatchups={historicalMatchups} historicalChampions={historicalChampions} getMappedTeamName={getMappedTeamName} />;
+                // Pass historicalData.matchups and historicalData.champions directly
+                return <LeagueHistory historicalMatchups={historicalData.matchups} historicalChampions={historicalData.champions} />;
             case TABS.RECORD_BOOK:
-                return <RecordBook historicalMatchups={historicalMatchups} getMappedTeamName={getMappedTeamName} />;
+                return <RecordBook historicalMatchups={historicalData.matchups} />;
             case TABS.HEAD_TO_HEAD:
-                return <Head2HeadGrid historicalMatchups={historicalMatchups} getMappedTeamName={getMappedTeamName} />;
+                return <Head2HeadGrid historicalMatchups={historicalData.matchups} />;
             case TABS.DPR_ANALYSIS:
-                return <DPRAnalysis historicalMatchups={historicalMatchups} getMappedTeamName={getMappedTeamName} />;
+                return <DPRAnalysis historicalMatchups={historicalData.matchups} />;
             case TABS.LUCK_RATING:
-                return <LuckRatingAnalysis historicalMatchups={historicalMatchups} getMappedTeamName={getMappedTeamName} />;
+                return <LuckRatingAnalysis historicalMatchups={historicalData.matchups} />;
             case TABS.TEAM_DETAIL:
-                return <TeamDetailPage teamName={selectedTeam} historicalMatchups={historicalMatchups} getMappedTeamName={getMappedTeamName} />;
+                // TeamDetailPage will now internally use getTeamName and historicalData
+                return <TeamDetailPage teamName={selectedTeam} />;
             case TABS.FINANCIALS:
                 return <FinancialTracker />;
             case TABS.MATCHUP_HISTORY:
@@ -240,6 +191,7 @@ const AppContent = () => {
                         {NAV_CATEGORIES.TEAMS.label} ▼
                         {openSubMenu === 'teams' && (
                             <ul className="submenu">
+                                {/* Map dynamically populated subTabs here */}
                                 {NAV_CATEGORIES.TEAMS.subTabs.map(subTab => (
                                     <li key={subTab.label} onClick={(e) => { e.stopPropagation(); handleSubTabClick(subTab.tab, subTab.teamName); }}>
                                         {subTab.label}
