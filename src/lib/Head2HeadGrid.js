@@ -263,13 +263,10 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
         const ownerARecord = rivalry[ownerA]; // Access records by owner ID
         const ownerBRecord = rivalry[ownerB]; // Access records by owner ID
 
-        // Initialize highlight stats with null values for robust 'N/A' display
-        let teamAHighestScore = { value: null, year: null, week: null };
-        let teamBHighestScore = { value: null, year: null, week: null };
-        let teamABiggestWinMargin = { value: null, year: null, week: null };
-        let teamBBiggestWinMargin = { value: null, year: null, week: null };
-        let teamASlimmestWinMargin = { value: null, year: null, week: null, margin: Infinity }; // Added margin for tracking
-        let teamBSlimmestWinMargin = { value: null, year: null, week: null, margin: Infinity }; // Added margin for tracking
+        // Initialize overall highlight stats
+        let overallHighestScore = { value: null, year: null, week: null, teamDisplayName: null };
+        let overallBiggestWinMargin = { value: null, year: null, week: null, winningTeamDisplayName: null };
+        let overallSlimmestWinMargin = { value: Infinity, year: null, week: null, winningTeamDisplayName: null };
 
         // Initialize total points for each team in the rivalry
         let teamATotalPointsScored = 0;
@@ -305,36 +302,43 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
             if (isNaN(scoreAValue) || isNaN(scoreBValue)) return;
 
 
-            // --- Calculate and store highlight stats ---
+            // --- Calculate and store overall highlight stats ---
 
             // Total Points Scored
             teamATotalPointsScored += scoreAValue;
             teamBTotalPointsScored += scoreBValue;
 
-            // Highest Score
-            if (teamAHighestScore.value === null || scoreAValue > teamAHighestScore.value) {
-                teamAHighestScore = { value: scoreAValue, year: match.year, week: match.week };
+            // Overall Highest Score
+            if (scoreAValue > (overallHighestScore.value || 0)) {
+                overallHighestScore = { value: scoreAValue, year: match.year, week: match.week, teamDisplayName: match.team1DisplayName };
             }
-            if (teamBHighestScore.value === null || scoreBValue > teamBHighestScore.value) {
-                teamBHighestScore = { value: scoreBValue, year: match.year, week: match.week };
+            if (scoreBValue > (overallHighestScore.value || 0)) {
+                overallHighestScore = { value: scoreBValue, year: match.year, week: match.week, teamDisplayName: match.team2DisplayName };
             }
 
-            // Biggest/Slimmest Win Margin
-            if (scoreAValue > scoreBValue) { // Team A won
-                const margin = scoreAValue - scoreBValue;
-                if (teamABiggestWinMargin.value === null || margin > teamABiggestWinMargin.value) {
-                    teamABiggestWinMargin = { value: margin, year: match.year, week: match.week };
+            // Overall Biggest Win Margin
+            if (!match.isTie) {
+                const margin = Math.abs(scoreAValue - scoreBValue);
+                if (margin > (overallBiggestWinMargin.value || 0)) {
+                    overallBiggestWinMargin = {
+                        value: margin,
+                        year: match.year,
+                        week: match.week,
+                        winningTeamDisplayName: match.winnerDisplayName
+                    };
                 }
-                if (teamASlimmestWinMargin.value === null || margin < teamASlimmestWinMargin.margin) { // Compare with margin property
-                    teamASlimmestWinMargin = { value: margin, year: match.year, week: match.week, margin: margin };
-                }
-            } else if (scoreBValue > scoreAValue) { // Team B won
-                const margin = scoreBValue - scoreAValue;
-                if (teamBBiggestWinMargin.value === null || margin > teamBBiggestWinMargin.value) {
-                    teamBBiggestWinMargin = { value: margin, year: match.year, week: match.week };
-                }
-                if (teamBSlimmestWinMargin.value === null || margin < teamBSlimmestWinMargin.margin) { // Compare with margin property
-                    teamBSlimmestWinMargin = { value: margin, year: match.year, week: match.week, margin: margin };
+            }
+
+            // Overall Slimmest Win Margin (excluding ties)
+            if (!match.isTie) {
+                const margin = Math.abs(scoreAValue - scoreBValue);
+                if (margin < overallSlimmestWinMargin.value) {
+                    overallSlimmestWinMargin = {
+                        value: margin,
+                        year: match.year,
+                        week: match.week,
+                        winningTeamDisplayName: match.winnerDisplayName
+                    };
                 }
             }
 
@@ -489,60 +493,35 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                 <h4 className="text-xl font-bold text-gray-800 mt-6 mb-4 border-b pb-2">Matchup Highlights</h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                     <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
-                        <p className="text-md font-semibold text-blue-700">{teamADisplayName} Highest Score</p>
+                        <p className="text-md font-semibold text-blue-700">Highest Score</p>
                         <p className="text-xl font-bold text-gray-800">
-                            {teamAHighestScore.value !== null ? teamAHighestScore.value.toFixed(2) : 'N/A'}
+                            {overallHighestScore.value !== null ? overallHighestScore.value.toFixed(2) : 'N/A'}
                         </p>
                         <p className="text-xs text-gray-500">
-                            {teamAHighestScore.value !== null ? `${teamAHighestScore.year} Week ${teamAHighestScore.week}` : ''}
+                            {overallHighestScore.value !== null ?
+                                `${overallHighestScore.teamDisplayName} (${overallHighestScore.year} Week ${overallHighestScore.week})` : ''}
                         </p>
                     </div>
                     <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
-                        <p className="text-md font-semibold text-blue-700">{teamADisplayName} Biggest Win</p>
+                        <p className="text-md font-semibold text-blue-700">Biggest Win Margin</p>
                         <p className="text-xl font-bold text-gray-800">
-                            {teamABiggestWinMargin.value !== null ? teamABiggestWinMargin.value.toFixed(2) : 'N/A'}
+                            {overallBiggestWinMargin.value !== null ? overallBiggestWinMargin.value.toFixed(2) : 'N/A'}
                         </p>
                         <p className="text-xs text-gray-500">
-                            {teamABiggestWinMargin.value !== null ? `Margin (${teamABiggestWinMargin.year} Week ${teamABiggestWinMargin.week})` : 'Margin'}
+                            {overallBiggestWinMargin.value !== null ?
+                                `${overallBiggestWinMargin.winningTeamDisplayName} (${overallBiggestWinMargin.year} Week ${overallBiggestWinMargin.week})` : ''}
                         </p>
                     </div>
                     <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
-                        <p className="text-md font-semibold text-blue-700">{teamADisplayName} Slimmest Win</p>
+                        <p className="text-md font-semibold text-blue-700">Slimmest Win Margin</p>
                         <p className="text-xl font-bold text-gray-800">
-                            {teamASlimmestWinMargin.value !== null ? teamASlimmestWinMargin.value.toFixed(2) : 'N/A'}
+                            {overallSlimmestWinMargin.value !== Infinity ? overallSlimmestWinMargin.value.toFixed(2) : 'N/A'}
                         </p>
                         <p className="text-xs text-gray-500">
-                            {teamASlimmestWinMargin.value !== null ? `Margin (${teamASlimmestWinMargin.year} Week ${teamASlimmestWinMargin.week})` : 'Margin'}
+                            {overallSlimmestWinMargin.value !== Infinity ?
+                                `${overallSlimmestWinMargin.winningTeamDisplayName} (${overallSlimmestWinMargin.year} Week ${overallSlimmestWinMargin.week})` : ''}
                         </p>
                     </div>
-                    {/* Repeat similar sections for Team B's highlights */}
-                        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
-                            <p className="text-md font-semibold text-red-700">{teamBDisplayName} Highest Score</p>
-                            <p className="text-xl font-bold text-gray-800">
-                            {teamBHighestScore.value !== null ? teamBHighestScore.value.toFixed(2) : 'N/A'}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                            {teamBHighestScore.value !== null ? `${teamBHighestScore.year} Week ${teamBHighestScore.week}` : ''}
-                            </p>
-                        </div>
-                        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
-                            <p className="text-md font-semibold text-red-700">{teamBDisplayName} Biggest Win</p>
-                            <p className="text-xl font-bold text-gray-800">
-                            {teamBBiggestWinMargin.value !== null ? teamBBiggestWinMargin.value.toFixed(2) : 'N/A'}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                            {teamBBiggestWinMargin.value !== null ? `Margin (${teamBBiggestWinMargin.year} Week ${teamBBiggestWinMargin.week})` : 'Margin'}
-                            </p>
-                        </div>
-                        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
-                            <p className="text-md font-semibold text-red-700">{teamBDisplayName} Slimmest Win</p>
-                            <p className="text-xl font-bold text-gray-800">
-                            {teamBSlimmestWinMargin.value !== null ? teamBSlimmestWinMargin.value.toFixed(2) : 'N/A'}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                            {teamBSlimmestWinMargin.value !== null ? `Margin (${teamBSlimmestWinMargin.year} Week ${teamBSlimmestWinMargin.week})` : 'Margin'}
-                            </p>
-                        </div>
                 </div>
 
                 {/* Detailed Match History */}
