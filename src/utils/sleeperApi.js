@@ -42,7 +42,12 @@ async function fetchDataWithCache(url, cacheKey, expirationHours = 24) {
     } catch (error) {
         console.error(`Error fetching ${cacheKey} from ${url}:`, error);
         inMemoryCache.delete(cacheKey); // Clear potentially stale/failed cache entry
-        throw error; // Re-throw to be handled by the calling function
+        // For data that can be empty but not an error (e.g., no bracket data), return empty array/object
+        if (error.message.includes('404') || error.message.includes('No data')) {
+            console.warn(`No data found for ${cacheKey} at ${url}. Returning empty.`);
+            return url.includes('brackets') || url.includes('transactions') || url.includes('drafts') || url.includes('picks') ? [] : {};
+        }
+        throw error; // Re-throw to be handled by the calling function for other errors
     }
 }
 
@@ -369,92 +374,101 @@ async function fetchMatchupsForLeague(leagueId, regularSeasonWeeks) {
  * structured as {
  * matchupsBySeason: { "season_year": { "week_number": [processed_matchup_data], ... }, ... },
  * rostersBySeason: { "season_year": [enriched_roster_data], ... },
- * leaguesMetadataBySeason: { "season_year": { league_details_object }, ... }
+ * leaguesMetadataBySeason: { "season_year": { league_details_object }, ... },
+ * winnersBracketBySeason: { "season_year": [bracket_matchup_data], ... },
+ * losersBracketBySeason: { "season_year": [bracket_matchup_data], ... }
  * }.
  * Returns the cached data if already fetched.
  */
 export async function fetchAllHistoricalMatchups() {
     const CACHE_KEY = 'all_historical_matchups_details';
-    const cachedData = inMemoryCache.get(CACHE_KEY);
+    const cachedEntry = inMemoryCache.get(CACHE_KEY);
     const now = Date.now();
     const expiryMs = 24 * 60 * 60 * 1000; // 24 hours for full historical data
 
-    if (cachedData && (now - cachedData.timestamp < expiryMs)) {
-        console.log('Returning historical matchups, rosters, and league metadata from cache.');
-        return cachedData.data;
+    if (cachedEntry && (now - cachedEntry.timestamp < expiryMs)) {
+        console.log('Returning historical matchups, rosters, league metadata, and bracket data from cache.');
+        return cachedEntry.data;
     }
 
     console.log('Fetching all historical matchup data for the first time...');
     const allHistoricalData = {
         matchupsBySeason: {},
         rostersBySeason: {},
-        leaguesMetadataBySeason: {}
+        leaguesMetadataBySeason: {},
+        winnersBracketBySeason: {}, // New property for winners bracket data
+        losersBracketBySeason: {}   // New property for losers bracket data
     };
 
     try {
-        // Use your existing fetchLeagueData to get the chain of leagues
-        // This array is ordered from current to oldest
         const leagues = await fetchLeagueData(CURRENT_LEAGUE_ID);
 
         if (!leagues || leagues.length === 0) {
             console.error('No league data found for historical matchup fetching. Check CURRENT_LEAGUE_ID in config.js.');
-            return allHistoricalData; // Return empty structure
+            return allHistoricalData;
         }
 
-        // Process leagues in chronological order (oldest to newest) or reverse (newest to oldest)
-        // For historical data, it's often more intuitive to process from newest to oldest as Sleeper's
-        // previous_league_id links backwards from the current league.
-        // The `leagues` array from `fetchLeagueData` is already ordered from current (newest) to oldest.
         for (const league of leagues) {
             const leagueId = league.league_id;
             const season = league.season;
 
             console.log(`Processing historical data for season: ${season} (League ID: ${leagueId})`);
 
-            // Store league metadata
             allHistoricalData.leaguesMetadataBySeason[season] = league;
 
-            // Fetch and store rosters for this specific season (leagueId)
-            // Use your existing fetchRostersWithDetails, which already uses centralized caching
             const rosters = await fetchRostersWithDetails(leagueId);
             allHistoricalData.rostersBySeason[season] = rosters;
 
-            // Determine regular season weeks (using playoff_start_week)
-            let regularSeasonWeeks = 14; // Default
+            let regularSeasonWeeks = 14;
             if (league.settings && typeof league.settings.playoff_start_week === 'number' && league.settings.playoff_start_week > 1) {
                 regularSeasonWeeks = league.settings.playoff_start_week - 1;
             }
 
-            // Only fetch matchups if the season is in the past or current (has actually happened/started)
-            // Get current year from NFL state if possible, otherwise use local date
-            const nflState = await fetchNFLState(); // This is cached
+            const nflState = await fetchNFLState();
             const currentNFLSeason = nflState?.season || new Date().getFullYear();
 
-            // Only attempt to fetch matchups if the season is relevant
+            // Fetch regular season matchups only for past/current seasons
             if (parseInt(season) <= parseInt(currentNFLSeason)) {
-                // Fetch and process matchups for this specific season (leagueId)
-                // This uses the internal fetchMatchupsForLeague helper, which uses fetchDataWithCache
                 const matchupsByWeek = await fetchMatchupsForLeague(leagueId, regularSeasonWeeks);
                 allHistoricalData.matchupsBySeason[season] = matchupsByWeek;
 
                 if (Object.keys(matchupsByWeek).length === 0) {
-                    console.warn(`No matchups collected for active/past season ${season} (${leagueId}). This might be expected for early parts of a season.`);
+                    console.warn(`No regular season matchups collected for active/past season ${season} (${leagueId}). This might be expected for early parts of a season.`);
                 }
             } else {
-                console.log(`Skipping matchup data for future season: ${season} (League ID: ${leagueId}).`);
-                allHistoricalData.matchupsBySeason[season] = {}; // Ensure empty object for future seasons
+                console.log(`Skipping regular season matchup data for future season: ${season} (League ID: ${leagueId}).`);
+                allHistoricalData.matchupsBySeason[season] = {};
+            }
+
+            // Fetch playoff bracket data for past/current seasons as well
+            if (parseInt(season) <= parseInt(currentNFLSeason)) {
+                console.log(`Fetching playoff bracket data for season ${season} (${leagueId})...`);
+                const [winnersBracket, losersBracket] = await Promise.all([
+                    fetchWinnersBracket(leagueId), // This uses centralized caching
+                    fetchLosersBracket(leagueId)   // This uses centralized caching
+                ]);
+
+                allHistoricalData.winnersBracketBySeason[season] = winnersBracket;
+                allHistoricalData.losersBracketBySeason[season] = losersBracket;
+
+                if (winnersBracket.length === 0 && losersBracket.length === 0) {
+                    console.log(`No playoff bracket data found for season ${season} (${leagueId}). This is common for current season before playoffs start.`);
+                }
+            } else {
+                console.log(`Skipping playoff bracket data for future season: ${season} (League ID: ${leagueId}).`);
+                allHistoricalData.winnersBracketBySeason[season] = [];
+                allHistoricalData.losersBracketBySeason[season] = [];
             }
         }
 
-        // Cache the fetched data before returning.
         inMemoryCache.set(CACHE_KEY, { data: allHistoricalData, timestamp: now, expirationHours: 24 });
-        console.log('Successfully fetched and cached all historical data (matchups, rosters, league metadata).');
+        console.log('Successfully fetched and cached all historical data (matchups, rosters, league metadata, and brackets).');
         return allHistoricalData;
 
     } catch (error) {
         console.error('Critical error in fetchAllHistoricalMatchups:', error);
-        inMemoryCache.delete(CACHE_KEY); // Clear potentially bad cache
-        return { matchupsBySeason: {}, rostersBySeason: {}, leaguesMetadataBySeason: {} }; // Return empty structure on error
+        inMemoryCache.delete(CACHE_KEY);
+        return { matchupsBySeason: {}, rostersBySeason: {}, leaguesMetadataBySeason: {}, winnersBracketBySeason: {}, losersBracketBySeason: {} };
     }
 }
 
@@ -552,13 +566,13 @@ export async function fetchTradedPicks(draftId) {
  */
 export async function fetchAllDraftHistory() {
     const CACHE_KEY = 'all_draft_history';
-    const cachedData = inMemoryCache.get(CACHE_KEY);
+    const cachedEntry = inMemoryCache.get(CACHE_KEY);
     const now = Date.now();
     const expiryMs = 24 * 60 * 60 * 1000; // 24 hours expiry for full draft history
 
-    if (cachedData && (now - cachedData.timestamp < expiryMs)) {
+    if (cachedEntry && (now - cachedEntry.timestamp < expiryMs)) {
         console.log('Returning all draft history from cache.');
-        return cachedData.data;
+        return cachedEntry.data;
     }
 
     console.log('Fetching all draft history for the first time... ');
