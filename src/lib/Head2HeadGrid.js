@@ -65,14 +65,11 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
         Object.keys(historicalData.matchupsBySeason).forEach(year => {
             const weeklyMatchupsForYear = historicalData.matchupsBySeason[year];
             const leagueMetadataForYear = historicalData.leaguesMetadataBySeason[year];
-            // playoffStartWeek and championshipWeek are now used as hints, but bracket data is primary
-            const playoffStartWeek = leagueMetadataForYear?.settings?.playoff_start_week ? parseInt(leagueMetadataForYear.settings.playoff_start_week) : 99;
             const championshipWeek = leagueMetadataForYear?.settings?.championship_week ? parseInt(leagueMetadataForYear.settings.championship_week) : null;
 
             const rostersForYear = historicalData.rostersBySeason?.[year] || [];
             const winnersBracketForYear = historicalData.winnersBracketBySeason?.[year] || [];
             const losersBracketForYear = historicalData.losersBracketBySeason?.[year] || [];
-
 
             Object.keys(weeklyMatchupsForYear).forEach(weekStr => {
                 const week = parseInt(weekStr);
@@ -115,30 +112,36 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                     const isTie = team1Score === team2Score;
                     const team1Won = team1Score > team2Score;
 
-                    // Determine match type based on bracket data (primary source)
+                    // Determine match type based on matchup.playoff flag and bracket data
                     let matchType = 'Reg. Season';
-                    const isInWinnersBracket = winnersBracketForYear.some(bracketMatch =>
-                        String(bracketMatch.match_id) === String(matchup.match_id)
-                    );
-                    const isInLosersBracket = losersBracketForYear.some(bracketMatch =>
-                        String(bracketMatch.match_id) === String(matchup.match_id)
-                    );
 
-                    if (isInWinnersBracket) {
+                    if (matchup.playoff) { // This is the primary indicator from Sleeper API
+                        // Check if the matchup's roster IDs are present in the winners bracket for this year
+                        const isWinnersBracketMatch = winnersBracketForYear.some(bracketMatch => {
+                            const bracketTeams = [String(bracketMatch.t1), String(bracketMatch.t2)].filter(Boolean);
+                            return (
+                                bracketTeams.includes(team1RosterId) && bracketTeams.includes(team2RosterId)
+                            );
+                        });
+
+                        // Check if the matchup's roster IDs are present in the losers bracket for this year
+                        const isLosersBracketMatch = losersBracketForYear.some(bracketMatch => {
+                            const bracketTeams = [String(bracketMatch.t1), String(bracketMatch.t2)].filter(Boolean);
+                            return (
+                                bracketTeams.includes(team1RosterId) && bracketTeams.includes(team2RosterId)
+                            );
+                        });
+
                         if (championshipWeek && week === championshipWeek) {
                             matchType = 'Championship';
-                        } else {
+                        } else if (isWinnersBracketMatch) {
                             matchType = 'Playoffs';
+                        } else if (isLosersBracketMatch) {
+                            matchType = 'Consolation';
+                        } else {
+                            matchType = 'Playoffs (Uncategorized)'; // Fallback if playoff flag is true but not found in explicit brackets by roster ID
                         }
-                    } else if (isInLosersBracket) {
-                        matchType = 'Consolation';
-                    } else if (week >= playoffStartWeek) {
-                        // This case is for games in playoff weeks that are not explicitly in winners/losers brackets.
-                        // For example, some leagues might have a separate 3rd place game not formally in brackets.
-                        // We classify them as uncategorized playoff games if they occur during playoff weeks.
-                        matchType = 'Playoffs (Uncategorized)';
                     }
-                    // If none of the above, it remains 'Reg. Season'
 
                     // Ensure consistent ordering for H2H keys using owner IDs
                     const sortedOwners = [team1OwnerId, team2OwnerId].sort();
@@ -171,7 +174,7 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                     const recordForOwner2 = (team2OwnerId === sortedOwners[0]) ? h2hRecord[sortedOwners[0]] : h2hRecord[sortedOwners[1]];
 
                     // Only update playoff record if the matchType is indeed a playoff/championship/consolation game
-                    const isActualPlayoffGame = matchType !== 'Reg. Season';
+                    const isActualPlayoffGame = (matchType === 'Playoffs' || matchType === 'Championship' || matchType === 'Consolation');
 
                     if (isTie) {
                         recordForOwner1.ties++;
@@ -257,7 +260,7 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
 
         // Initialize highlight stats with null values for robust 'N/A' display
         let teamAHighestScore = { value: null, year: null, week: null };
-        let teamBHighestScore = { value: null, year: null, week: null }; // FIX: Corrected typo here
+        let teamBHighestScore = { value: null, year: null, week: null };
         let teamABiggestWinMargin = { value: null, year: null, week: null };
         let teamBBiggestWinMargin = { value: null, year: null, week: null };
         let teamASlimmestWinMargin = { value: null, year: null, week: null, margin: Infinity }; // Added margin for tracking
