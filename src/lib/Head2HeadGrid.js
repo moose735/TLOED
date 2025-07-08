@@ -257,7 +257,7 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
 
         // Initialize highlight stats with null values for robust 'N/A' display
         let teamAHighestScore = { value: null, year: null, week: null };
-        let teamBHighestScore = { value, year: null, week: null };
+        let teamBHighestScore = { value: null, year: null, week: null }; // FIX: Corrected typo here
         let teamABiggestWinMargin = { value: null, year: null, week: null };
         let teamBBiggestWinMargin = { value: null, year: null, week: null };
         let teamASlimmestWinMargin = { value: null, year: null, week: null, margin: Infinity }; // Added margin for tracking
