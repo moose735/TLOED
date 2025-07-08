@@ -535,7 +535,8 @@ export async function fetchAllHistoricalMatchups() {
         rostersBySeason: {},
         leaguesMetadataBySeason: {},
         winnersBracketBySeason: {}, // New property for winners bracket data
-        losersBracketBySeason: {}    // New property for losers bracket data
+        losersBracketBySeason: {},    // New property for losers bracket data
+        usersBySeason: {}, // NEW: Add a property to store users per season
     };
 
     try {
@@ -556,6 +557,10 @@ export async function fetchAllHistoricalMatchups() {
             console.log(`Processing historical data for season: ${season} (League ID: ${leagueId})`);
 
             allHistoricalData.leaguesMetadataBySeason[season] = league;
+
+            // NEW: Fetch users for this specific historical league
+            const users = await fetchUsersData(leagueId);
+            allHistoricalData.usersBySeason[season] = users; // Store users for this season
 
             const rosters = await fetchRostersWithDetails(leagueId);
             allHistoricalData.rostersBySeason[season] = rosters;
@@ -631,7 +636,7 @@ export async function fetchAllHistoricalMatchups() {
     } catch (error) {
         console.error('Critical error in fetchAllHistoricalMatchups:', error);
         inMemoryCache.delete(CACHE_KEY); // Clear cache on critical error to force refetch next time
-        return { matchupsBySeason: {}, rostersBySeason: {}, leaguesMetadataBySeason: {}, winnersBracketBySeason: {}, losersBracketBySeason: {} };
+        return { matchupsBySeason: {}, rostersBySeason: {}, leaguesMetadataBySeason: {}, winnersBracketBySeason: {}, losersBracketBySeason: {}, usersBySeason: {} }; // Include usersBySeason in error return
     }
 }
 
