@@ -1,12 +1,12 @@
 // src/components/SleeperMatchupTester.js
 import React, { useState, useEffect } from 'react';
 import { fetchAllHistoricalMatchups, fetchUsersData, fetchLeagueData } from '../utils/sleeperApi';
-import { CURRENT_LEAGUE_ID, TEAM_NAME_TO_SLEEPER_ID_MAP } from '../config';
+import { CURRENT_LEAGUE_ID, TEAM_NAME_TO_SLEEPER_ID_MAP } from '../config'; // Make sure TEAM_NAME_TO_SLEEPER_ID_MAP is actually used or remove it if not needed
 
 const SleeperMatchupTester = () => {
     const [matchupData, setMatchupData] = useState(null);
     const [usersData, setUsersData] = useState(null);
-    const [leagueData, setLeague] = useState(null); // Renamed to avoid conflict with `league` in Promise.all
+    const [leagueData, setLeagueData] = useState(null); // Changed from league to leagueData for clarity and consistency
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
@@ -16,7 +16,7 @@ const SleeperMatchupTester = () => {
             setError(null);
             try {
                 // Fetch all necessary data concurrently
-                const [matchups, users, leagueInfo] = await Promise.all([ // Renamed league to leagueInfo
+                const [matchups, users, leagueInfo] = await Promise.all([
                     fetchAllHistoricalMatchups(),
                     fetchUsersData(CURRENT_LEAGUE_ID),
                     fetchLeagueData(CURRENT_LEAGUE_ID)
@@ -24,7 +24,7 @@ const SleeperMatchupTester = () => {
 
                 setMatchupData(matchups);
                 setUsersData(users);
-                setLeague(leagueInfo); // Using setLeague
+                setLeagueData(leagueInfo); // Using setLeagueData
 
             } catch (err) {
                 console.error("Error fetching Sleeper historical data for testing:", err);
@@ -39,13 +39,15 @@ const SleeperMatchupTester = () => {
 
     // Helper to get user display name from user ID
     const getUserDisplayName = (userId) => {
-        const user = usersData?.find(u => u.user_id === userId);
+        // Ensure usersData is an array before trying to find
+        const user = usersData?.find(u => u?.user_id === userId); // Added ?. for u.user_id just in case
         return user ? user.display_name : `Unknown User (${userId})`;
     };
 
     // Helper to get roster ID to user ID mapping (for convenience)
     const getRosterOwnerId = (rosterId) => {
-        const roster = leagueData?.rosters.find(r => r.roster_id === rosterId);
+        // Ensure leagueData and leagueData.rosters exist before trying to find
+        const roster = leagueData?.rosters?.find(r => r?.roster_id === rosterId); // Added ?. for r.roster_id and leagueData.rosters
         return roster ? roster.owner_id : null;
     };
 
@@ -73,7 +75,7 @@ const SleeperMatchupTester = () => {
             if (typeof weeks === 'object' && weeks !== null) {
                 Object.entries(weeks).forEach(([weekNum, matchupsInWeek]) => {
                     // Ensure 'matchupsInWeek' is an array before calling forEach
-                    if (Array.isArray(matchupsInWeek)) { // <-- ADDED CHECK HERE
+                    if (Array.isArray(matchupsInWeek)) {
                         totalMatchups += matchupsInWeek.length;
                         matchupsInWeek.forEach(matchup => {
                             totalTeamsParticipating.add(matchup.team1_roster_id);
@@ -94,12 +96,12 @@ const SleeperMatchupTester = () => {
                 <p><strong>Total Seasons Found:</strong> {totalSeasons}</p>
                 <p><strong>Total Matchups Found:</strong> {totalMatchups}</p>
                 <p><strong>Unique Roster IDs (participating teams):</strong> {totalTeamsParticipating.size}</p>
-                <p>
-                    **Recommendation:** Compare these numbers (especially unique teams and matchups per season/week)
-                    with your league's actual history on Sleeper.
-                </p>
                 <p className="mt-2 text-sm text-blue-700">
                     If `Unique Roster IDs` doesn't match your league size, check `config.js` `CURRENT_LEAGUE_ID` and your `sleeperApi.js` `fetchUsersData` and `fetchRostersWithDetails`.
+                </p>
+                <p className="mt-2 text-sm text-blue-700">
+                    **Recommendation:** Compare these numbers (especially unique teams and matchups per season/week)
+                    with your league's actual history on Sleeper.
                 </p>
             </div>
         );
@@ -120,14 +122,16 @@ const SleeperMatchupTester = () => {
                             <div key={`${season}-week-${weekNum}`} className="mb-6 p-3 bg-gray-50 rounded-md">
                                 <h3 className="text-xl font-medium text-gray-700 mb-3">Week {weekNum} ({Array.isArray(matchupsInWeek) ? matchupsInWeek.length : 0} Matchups)</h3>
                                 <ul className="space-y-2">
-                                    {Array.isArray(matchupsInWeek) && matchupsInWeek.map((matchup) => { // <-- ADDED CHECK HERE
-                                        const team1UserId = getRosterOwnerId(matchup.team1_roster_id);
-                                        const team2UserId = getRosterOwnerId(matchup.team2_roster_id);
-                                        const team1Name = getUserDisplayName(team1UserId);
-                                        const team2Name = getUserDisplayName(team2UserId);
+                                    {Array.isArray(matchupsInWeek) && matchupsInWeek.map((matchup) => {
+                                        // Add checks for usersData and leagueData.rosters before using getRosterOwnerId and getUserDisplayName
+                                        const team1UserId = leagueData && usersData ? getRosterOwnerId(matchup.team1_roster_id) : null;
+                                        const team2UserId = leagueData && usersData ? getRosterOwnerId(matchup.team2_roster_id) : null;
+
+                                        const team1Name = team1UserId ? getUserDisplayName(team1UserId) : `Roster ${matchup.team1_roster_id}`;
+                                        const team2Name = team2UserId ? getUserDisplayName(team2UserId) : `Roster ${matchup.team2_roster_id}`;
 
                                         const winner = matchup.team1_score > matchup.team2_score ? team1Name :
-                                                       matchup.team2_score > matchup.team1_score ? team2Name : "Tie";
+                                                        matchup.team2_score > matchup.team1_score ? team2Name : "Tie";
 
                                         return (
                                             <li key={matchup.matchup_id} className="p-2 border border-gray-100 rounded bg-white text-sm">
