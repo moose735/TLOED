@@ -17,7 +17,7 @@ const SleeperMatchupTester = () => {
                 setError(null);
                 const data = await fetchAllHistoricalMatchups();
                 setHistoricalData(data);
-                console.log("Fetched Historical Data:", data); // Log the full structure
+                console.log("Fetched Historical Data (with brackets):", data); // Log the full structure
             } catch (err) {
                 console.error("Error fetching historical data in component:", err);
                 setError(err.message || "Failed to fetch historical data.");
@@ -56,14 +56,14 @@ const SleeperMatchupTester = () => {
                 <h2 style={{ color: '#0056b3' }}>Verification Summary:</h2>
                 <p><strong>Total Seasons Found:</strong> {totalSeasonsFound}</p>
 
-                {Object.entries(historicalData.matchupsBySeason).map(([season, weeks]) => {
+                {Object.entries(historicalData.matchupsBySeason).map(([, weeks]) => {
                     Object.values(weeks).forEach(matchups => {
                         totalMatchupsFound += matchups.length;
                     });
                 })}
                 <p><strong>Total Matchups Found (across all active seasons):</strong> {totalMatchupsFound}</p>
 
-                {Object.entries(historicalData.rostersBySeason).forEach(([season, rosters]) => {
+                {Object.entries(historicalData.rostersBySeason).forEach(([, rosters]) => {
                     rosters.forEach(roster => {
                         uniqueRosterIds.add(roster.roster_id);
                         if (roster.owner_id) { // Ensure owner_id exists
@@ -86,6 +86,8 @@ const SleeperMatchupTester = () => {
                 .map(([season, leagueMeta]) => {
                     const seasonMatchups = historicalData.matchupsBySeason[season] || {};
                     const seasonRosters = historicalData.rostersBySeason[season] || [];
+                    const seasonWinnersBracket = historicalData.winnersBracketBySeason[season] || [];
+                    const seasonLosersBracket = historicalData.losersBracketBySeason[season] || [];
 
                     // Create a map for quick lookup: roster_id -> { displayName, teamName }
                     const rosterToUserMap = new Map();
@@ -97,11 +99,24 @@ const SleeperMatchupTester = () => {
                         });
                     });
 
+                    // Helper to get team info from roster ID or bracket object
+                    const getTeamInfo = (teamIdentifier) => {
+                        if (typeof teamIdentifier === 'number') { // It's a roster_id
+                            const team = rosterToUserMap.get(teamIdentifier);
+                            return team ? `${team.teamName} (Owner: ${team.displayName})` : `Roster ${teamIdentifier}`;
+                        } else if (teamIdentifier && (teamIdentifier.w || teamIdentifier.l)) { // It's a bracket winner/loser object
+                            const type = teamIdentifier.w ? 'Winner' : 'Loser';
+                            const matchId = teamIdentifier.w || teamIdentifier.l;
+                            return `${type} of Match ${matchId}`;
+                        }
+                        return 'TBD'; // Default for null or unexpected
+                    };
+
                     return (
                         <div key={season} style={{ marginBottom: '30px', border: '1px solid #ccc', padding: '15px', borderRadius: '8px', backgroundColor: '#fff' }}>
                             <h2 style={{ color: '#0056b3' }}>Season: {season} ({leagueMeta.name})</h2>
                             <p><strong>League ID:</strong> {leagueMeta.league_id}</p>
-                            <p><strong>Season Start:</strong> {leagueMeta.season_start_date}</p>
+                            <p><strong>Season Start:</strong> {leagueMeta.season_start_date || 'N/A'}</p>
                             <p><strong>Total Teams:</strong> {seasonRosters.length}</p>
 
                             {/* Display Rosters for this season */}
@@ -120,14 +135,14 @@ const SleeperMatchupTester = () => {
                                 )}
                             </div>
 
-                            {/* Display Matchups for this season */}
-                            <div style={{ marginTop: '15px', borderTop: '1px dashed #eee', paddingTop: '15px' }}>
-                                <h3 style={{ color: '#444' }}>Matchups in {season}:</h3>
+                            {/* Display Regular Season Matchups for this season */}
+                            <div style={{ marginTop: '25px', borderTop: '2px solid #ddd', paddingTop: '20px' }}>
+                                <h3 style={{ color: '#007bff' }}>Regular Season Matchups in {season}:</h3>
                                 {Object.keys(seasonMatchups).length > 0 ? (
                                     Object.entries(seasonMatchups)
                                         .sort(([weekA], [weekB]) => parseInt(weekA) - parseInt(weekB)) // Sort weeks numerically
                                         .map(([week, matchups]) => (
-                                            <div key={`${season}-week-${week}`} style={{ marginBottom: '20px' }}>
+                                            <div key={`${season}-week-${week}-regular`} style={{ marginBottom: '20px' }}>
                                                 <h4 style={{ color: '#666' }}>Week {week} ({matchups.length} Matchups)</h4>
                                                 {matchups.length > 0 ? (
                                                     <ul style={{ listStyleType: 'none', padding: 0 }}>
@@ -145,7 +160,7 @@ const SleeperMatchupTester = () => {
                                                                     : "Tie";
 
                                                             return (
-                                                                <li key={matchup.matchup_id} style={{ marginBottom: '10px', padding: '10px', border: '1px solid #eee', borderRadius: '5px', backgroundColor: '#fdfdfd' }}>
+                                                                <li key={`reg-match-${matchup.matchup_id}`} style={{ marginBottom: '10px', padding: '10px', border: '1px solid #eee', borderRadius: '5px', backgroundColor: '#fdfdfd' }}>
                                                                     <strong>Matchup ID: {matchup.matchup_id}</strong>
                                                                     <br />
                                                                     {team1DisplayName} ({matchup.team1_score} points) vs. {team2DisplayName} ({matchup.team2_score} points)
@@ -158,12 +173,71 @@ const SleeperMatchupTester = () => {
                                                         })}
                                                     </ul>
                                                 ) : (
-                                                    <p>No matchups found for Week {week}.</p>
+                                                    <p>No regular season matchups found for Week {week}.</p>
                                                 )}
                                             </div>
                                         ))
                                 ) : (
-                                    <p>No matchup data available for this season (either future season or error fetching).</p>
+                                    <p>No regular season matchup data available for this season (either future season or error fetching).</p>
+                                )}
+                            </div>
+
+                            {/* Display Playoff Bracket Data for this season */}
+                            <div style={{ marginTop: '25px', borderTop: '2px solid #ddd', paddingTop: '20px' }}>
+                                <h3 style={{ color: '#007bff' }}>Playoff Brackets in {season}:</h3>
+
+                                {seasonWinnersBracket.length === 0 && seasonLosersBracket.length === 0 ? (
+                                    <p>No playoff bracket data available for this season.</p>
+                                ) : (
+                                    <>
+                                        {seasonWinnersBracket.length > 0 && (
+                                            <div style={{ marginBottom: '20px' }}>
+                                                <h4 style={{ color: '#666' }}>Winners Bracket ({seasonWinnersBracket.length} Matches)</h4>
+                                                <ul style={{ listStyleType: 'none', padding: 0 }}>
+                                                    {seasonWinnersBracket.sort((a,b) => a.r - b.r || a.m - b.m).map(match => (
+                                                        <li key={`wb-${match.m}`} style={{ marginBottom: '10px', padding: '10px', border: '1px solid #eee', borderRadius: '5px', backgroundColor: '#fdfdfd' }}>
+                                                            <strong>Round {match.r}, Match {match.m}:</strong>
+                                                            <br />
+                                                            Team 1: {getTeamInfo(match.t1 || match.t1_from)} {match.t1 && `(${rosterToUserMap.get(match.t1)?.teamName || match.t1})`}
+                                                            <br />
+                                                            Team 2: {getTeamInfo(match.t2 || match.t2_from)} {match.t2 && `(${rosterToUserMap.get(match.t2)?.teamName || match.t2})`}
+                                                            <br />
+                                                            Winner: {match.w ? getTeamInfo(match.w) : 'TBD'}
+                                                            {match.w && ` (${rosterToUserMap.get(match.w)?.teamName || match.w})`}
+                                                            <br />
+                                                            Loser: {match.l ? getTeamInfo(match.l) : 'TBD'}
+                                                            {match.l && ` (${rosterToUserMap.get(match.l)?.teamName || match.l})`}
+                                                            {match.p && ` (Playoff Rank: ${match.p})`}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+
+                                        {seasonLosersBracket.length > 0 && (
+                                            <div>
+                                                <h4 style={{ color: '#666' }}>Losers Bracket ({seasonLosersBracket.length} Matches)</h4>
+                                                <ul style={{ listStyleType: 'none', padding: 0 }}>
+                                                    {seasonLosersBracket.sort((a,b) => a.r - b.r || a.m - b.m).map(match => (
+                                                        <li key={`lb-${match.m}`} style={{ marginBottom: '10px', padding: '10px', border: '1px solid #eee', borderRadius: '5px', backgroundColor: '#fdfdfd' }}>
+                                                            <strong>Round {match.r}, Match {match.m}:</strong>
+                                                            <br />
+                                                            Team 1: {getTeamInfo(match.t1 || match.t1_from)} {match.t1 && `(${rosterToUserMap.get(match.t1)?.teamName || match.t1})`}
+                                                            <br />
+                                                            Team 2: {getTeamInfo(match.t2 || match.t2_from)} {match.t2 && `(${rosterToUserMap.get(match.t2)?.teamName || match.t2})`}
+                                                            <br />
+                                                            Winner: {match.w ? getTeamInfo(match.w) : 'TBD'}
+                                                            {match.w && ` (${rosterToUserMap.get(match.w)?.teamName || match.w})`}
+                                                            <br />
+                                                            Loser: {match.l ? getTeamInfo(match.l) : 'TBD'}
+                                                            {match.l && ` (${rosterToUserMap.get(match.l)?.teamName || match.l})`}
+                                                            {match.p && ` (Playoff Rank: ${match.p})`}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+                                    </>
                                 )}
                             </div>
                         </div>
