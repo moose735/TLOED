@@ -140,22 +140,24 @@ const MatchupHistory = () => {
                                         {weeksData[week].map((matchup, index) => (
                                             <li key={`matchup-${selectedYear}-${week}-${matchup.matchup_id}`} className="flex flex-col space-y-1 p-2 bg-white border border-gray-200 rounded-md shadow-sm">
                                                 <div className="flex justify-between text-sm text-gray-700">
-                                                    <span className="font-medium">
+                                                    <span className={`font-medium ${matchup.winner_roster_id === matchup.team1_roster_id ? 'font-bold' : 'text-gray-500'}`}>
                                                         {/* Pass selectedYear to getTeamName for season-specific names */}
                                                         {getTeamName(matchup.team1_roster_id, selectedYear)}
                                                     </span>
-                                                    <span className="font-bold text-blue-600">{matchup.team1_score ? matchup.team1_score.toFixed(2) : 'N/A'}</span>
+                                                    <span className={`font-bold ${matchup.winner_roster_id === matchup.team1_roster_id ? 'text-blue-600' : 'text-gray-500'}`}>{matchup.team1_score ? matchup.team1_score.toFixed(2) : 'N/A'}</span>
                                                 </div>
                                                 <div className="flex justify-between text-sm text-gray-700">
-                                                    <span className="font-medium">
+                                                    <span className={`font-medium ${matchup.winner_roster_id === matchup.team2_roster_id ? 'font-bold' : 'text-gray-500'}`}>
                                                         {/* Pass selectedYear to getTeamName for season-specific names */}
                                                         {getTeamName(matchup.team2_roster_id, selectedYear)}
                                                     </span>
-                                                    <span className="font-bold text-blue-600">{matchup.team2_score ? matchup.team2_score.toFixed(2) : 'N/A'}</span>
+                                                    <span className={`font-bold ${matchup.winner_roster_id === matchup.team2_roster_id ? 'text-blue-600' : 'text-gray-500'}`}>{matchup.team2_score ? matchup.team2_score.toFixed(2) : 'N/A'}</span>
                                                 </div>
-                                                <div className="text-xs text-gray-500 mt-1">
-                                                    Winner: <strong>{matchup.winner_roster_id ? getTeamName(matchup.winner_roster_id, selectedYear) : 'Tie'}</strong>
-                                                </div>
+                                                {matchup.winner_roster_id === null && ( // Display "Tie" only if it's actually a tie
+                                                    <div className="text-xs text-gray-500 mt-1 text-center">
+                                                        <strong>Tie</strong>
+                                                    </div>
+                                                )}
                                             </li>
                                         ))}
                                     </ul>
