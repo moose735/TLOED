@@ -4,8 +4,9 @@ import {
     fetchLeagueData,
     fetchUsersData,
     fetchRostersWithDetails,
-    fetchMatchupsForLeague, // Corrected import name from fetchMatchupsForSeason to fetchMatchupsForLeague
-    fetchPlayoffBracket,
+    fetchMatchupsForLeague,
+    fetchWinnersBracket, // Corrected: Import fetchWinnersBracket
+    fetchLosersBracket,  // Corrected: Import fetchLosersBracket
     fetchNFLPlayers,
     fetchDrafts,
 } from '../utils/sleeperApi';
@@ -123,8 +124,9 @@ export const SleeperDataProvider = ({ children }) => {
                     newHistoricalData.matchupsBySeason[year] = matchups;
 
                     // Fetch playoff brackets for this specific historical league ID
-                    const winnersBracket = await fetchPlayoffBracket(historicalLeagueId, 'winner');
-                    const losersBracket = await fetchPlayoffBracket(historicalLeagueId, 'loser');
+                    // Corrected: Use fetchWinnersBracket and fetchLosersBracket
+                    const winnersBracket = await fetchWinnersBracket(historicalLeagueId);
+                    const losersBracket = await fetchLosersBracket(historicalLeagueId);
                     newHistoricalData.winnersBracketBySeason[year] = winnersBracket;
                     newHistoricalData.losersBracketBySeason[year] = losersBracket;
                 }
