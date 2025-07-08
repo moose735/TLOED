@@ -1,12 +1,12 @@
 // src/components/SleeperMatchupTester.js
 import React, { useState, useEffect } from 'react';
-import { fetchAllHistoricalMatchups, fetchUsersData, fetchLeagueData } from '../utils/sleeperApi';
-import { CURRENT_LEAGUE_ID, TEAM_NAME_TO_SLEEPER_ID_MAP } from '../config'; // Make sure TEAM_NAME_TO_SLEEPER_ID_MAP is actually used or remove it if not needed
+import { fetchAllHistoricalMatchups, fetchUsersData } from '../utils/sleeperApi'; // Removed fetchLeagueData
+import { CURRENT_LEAGUE_ID, TEAM_NAME_TO_SLEEPER_ID_MAP } from '../config';
 
 const SleeperMatchupTester = () => {
-    const [matchupData, setMatchupData] = useState(null);
+    // matchupData will now contain { matchupsBySeason, rostersBySeason, leaguesMetadataBySeason }
+    const [historicalData, setHistoricalData] = useState(null);
     const [usersData, setUsersData] = useState(null);
-    const [leagueData, setLeagueData] = useState(null); // Changed from league to leagueData for clarity and consistency
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
@@ -16,15 +16,13 @@ const SleeperMatchupTester = () => {
             setError(null);
             try {
                 // Fetch all necessary data concurrently
-                const [matchups, users, leagueInfo] = await Promise.all([
-                    fetchAllHistoricalMatchups(),
-                    fetchUsersData(CURRENT_LEAGUE_ID),
-                    fetchLeagueData(CURRENT_LEAGUE_ID)
+                const [allHistoricalMatchupsResult, users] = await Promise.all([
+                    fetchAllHistoricalMatchups(), // This now returns an object with matchups, rosters, and league metadata
+                    fetchUsersData(CURRENT_LEAGUE_ID), // User data is universal across seasons
                 ]);
 
-                setMatchupData(matchups);
+                setHistoricalData(allHistoricalMatchupsResult);
                 setUsersData(users);
-                setLeagueData(leagueInfo); // Using setLeagueData
 
             } catch (err) {
                 console.error("Error fetching Sleeper historical data for testing:", err);
@@ -39,15 +37,15 @@ const SleeperMatchupTester = () => {
 
     // Helper to get user display name from user ID
     const getUserDisplayName = (userId) => {
-        // Ensure usersData is an array before trying to find
-        const user = usersData?.find(u => u?.user_id === userId); // Added ?. for u.user_id just in case
+        const user = usersData?.find(u => u?.user_id === userId);
         return user ? user.display_name : `Unknown User (${userId})`;
     };
 
-    // Helper to get roster ID to user ID mapping (for convenience)
-    const getRosterOwnerId = (rosterId) => {
-        // Ensure leagueData and leagueData.rosters exist before trying to find
-        const roster = leagueData?.rosters?.find(r => r?.roster_id === rosterId); // Added ?. for r.roster_id and leagueData.rosters
+    // Helper to get roster owner ID for a specific season and roster ID
+    const getRosterOwnerId = (season, rosterId) => {
+        // Access the rosters for the specific season
+        const rostersForSeason = historicalData?.rostersBySeason?.[season];
+        const roster = rostersForSeason?.find(r => r?.roster_id === rosterId);
         return roster ? roster.owner_id : null;
     };
 
@@ -59,22 +57,23 @@ const SleeperMatchupTester = () => {
         return <div className="text-center p-4 text-red-600">Error: {error}</div>;
     }
 
-    // Check if matchupData is null or empty object before trying to iterate
-    if (!matchupData || Object.keys(matchupData).length === 0) {
+    // Deconstruct historicalData after loading check
+    const { matchupsBySeason, rostersBySeason, leaguesMetadataBySeason } = historicalData || {};
+
+    // Check if matchupsBySeason is null or empty object before trying to iterate
+    if (!matchupsBySeason || Object.keys(matchupsBySeason).length === 0) {
         return <div className="text-center p-4">No historical matchup data found from Sleeper API.</div>;
     }
 
     // Basic Data Verification Output
     const renderVerificationSummary = () => {
-        const totalSeasons = Object.keys(matchupData).length;
+        const totalSeasons = Object.keys(matchupsBySeason).length;
         let totalMatchups = 0;
         let totalTeamsParticipating = new Set();
 
-        Object.entries(matchupData).forEach(([season, weeks]) => {
-            // Ensure 'weeks' is an object before iterating its entries
+        Object.entries(matchupsBySeason).forEach(([season, weeks]) => {
             if (typeof weeks === 'object' && weeks !== null) {
                 Object.entries(weeks).forEach(([weekNum, matchupsInWeek]) => {
-                    // Ensure 'matchupsInWeek' is an array before calling forEach
                     if (Array.isArray(matchupsInWeek)) {
                         totalMatchups += matchupsInWeek.length;
                         matchupsInWeek.forEach(matchup => {
@@ -97,7 +96,7 @@ const SleeperMatchupTester = () => {
                 <p><strong>Total Matchups Found:</strong> {totalMatchups}</p>
                 <p><strong>Unique Roster IDs (participating teams):</strong> {totalTeamsParticipating.size}</p>
                 <p className="mt-2 text-sm text-blue-700">
-                    If `Unique Roster IDs` doesn't match your league size, check `config.js` `CURRENT_LEAGUE_ID` and your `sleeperApi.js` `fetchUsersData` and `fetchRostersWithDetails`.
+                    If `Unique Roster IDs` doesn't match your league size, check `config.js` `CURRENT_LEAGUE_ID` and your `sleeperApi.js` `fetchUsersData` and `fetchRostersForLeague`.
                 </p>
                 <p className="mt-2 text-sm text-blue-700">
                     **Recommendation:** Compare these numbers (especially unique teams and matchups per season/week)
@@ -113,22 +112,22 @@ const SleeperMatchupTester = () => {
 
             {renderVerificationSummary()}
 
-            {Object.entries(matchupData).sort((a, b) => parseInt(b[0]) - parseInt(a[0])).map(([season, weeks]) => (
+            {Object.entries(matchupsBySeason).sort((a, b) => parseInt(b[0]) - parseInt(a[0])).map(([season, weeks]) => (
                 <div key={season} className="mb-8 p-4 border border-gray-200 rounded-md shadow-sm">
                     <h2 className="text-2xl font-semibold text-gray-800 mb-4">Season: {season}</h2>
-                    {/* Ensure 'weeks' is an object before iterating */}
                     {typeof weeks === 'object' && weeks !== null ?
                         Object.entries(weeks).sort((a, b) => parseInt(a[0]) - parseInt(b[0])).map(([weekNum, matchupsInWeek]) => (
                             <div key={`${season}-week-${weekNum}`} className="mb-6 p-3 bg-gray-50 rounded-md">
                                 <h3 className="text-xl font-medium text-gray-700 mb-3">Week {weekNum} ({Array.isArray(matchupsInWeek) ? matchupsInWeek.length : 0} Matchups)</h3>
                                 <ul className="space-y-2">
                                     {Array.isArray(matchupsInWeek) && matchupsInWeek.map((matchup) => {
-                                        // Add checks for usersData and leagueData.rosters before using getRosterOwnerId and getUserDisplayName
-                                        const team1UserId = leagueData && usersData ? getRosterOwnerId(matchup.team1_roster_id) : null;
-                                        const team2UserId = leagueData && usersData ? getRosterOwnerId(matchup.team2_roster_id) : null;
+                                        // Pass the current season to getRosterOwnerId
+                                        const team1UserId = getRosterOwnerId(season, matchup.team1_roster_id);
+                                        const team2UserId = getRosterOwnerId(season, matchup.team2_roster_id);
 
-                                        const team1Name = team1UserId ? getUserDisplayName(team1UserId) : `Roster ${matchup.team1_roster_id}`;
-                                        const team2Name = team2UserId ? getUserDisplayName(team2UserId) : `Roster ${matchup.team2_roster_id}`;
+                                        // Ensure usersData is loaded before trying to get display names
+                                        const team1Name = team1UserId && usersData ? getUserDisplayName(team1UserId) : `Roster ${matchup.team1_roster_id}`;
+                                        const team2Name = team2UserId && usersData ? getUserDisplayName(team2UserId) : `Roster ${matchup.team2_roster_id}`;
 
                                         const winner = matchup.team1_score > matchup.team2_score ? team1Name :
                                                         matchup.team2_score > matchup.team1_score ? team2Name : "Tie";
