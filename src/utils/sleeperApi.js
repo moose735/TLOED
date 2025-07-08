@@ -46,7 +46,7 @@ async function fetchDataWithCache(url, cacheKey, expirationHours = 1) {
  * Gets a Sleeper CDN avatar URL.
  * @param {string} avatarId The avatar ID.
  * @returns {string} The full avatar URL.
- */
+*/
 export function getSleeperAvatarUrl(avatarId) {
     if (!avatarId) return 'https://sleeper.app/_next/static/images/default_avatar-e314631317c0a0c20a46960d705a2046.png'; // Default Sleeper avatar
     return `https://sleepercdn.com/avatars/thumb/${avatarId}`;
@@ -56,7 +56,7 @@ export function getSleeperAvatarUrl(avatarId) {
  * Gets a Sleeper CDN player headshot URL.
  * @param {string} playerId The player ID.
  * @returns {string} The full player headshot URL.
- */
+*/
 export function getSleeperPlayerHeadshotUrl(playerId) {
     if (!playerId) return null;
     return `https://sleepercdn.com/content/nfl/players/thumb/${playerId}.jpg`;
@@ -66,7 +66,7 @@ export function getSleeperPlayerHeadshotUrl(playerId) {
  * Fetches details for a specific league.
  * @param {string} leagueId The ID of the Sleeper league.
  * @returns {Promise<Object>} A promise that resolves to the league details object.
- */
+*/
 export async function fetchLeagueDetails(leagueId) {
     return fetchDataWithCache(`${BASE_URL}/league/${leagueId}`, `league_details_${leagueId}`, 1); // Cache for 1 hour
 }
@@ -76,7 +76,7 @@ export async function fetchLeagueDetails(leagueId) {
  * This is crucial for navigating historical seasons.
  * @param {string} currentLeagueId The ID of the current Sleeper league.
  * @returns {Promise<Array<Object>>} A promise that resolves to an array of league objects (current and historical).
- */
+*/
 export async function fetchLeagueData(currentLeagueId) {
     let leagues = [];
     let leagueId = currentLeagueId;
@@ -115,7 +115,7 @@ export async function fetchLeagueData(currentLeagueId) {
  * Fetches user data for a given league ID.
  * @param {string} leagueId The ID of the Sleeper league.
  * @returns {Promise<Array<Object>>} A promise that resolves to an array of user objects.
- */
+*/
 export async function fetchUsersData(leagueId) {
     return fetchDataWithCache(`${BASE_URL}/league/${leagueId}/users`, `users_${leagueId}`, 24); // Cache for 24 hours as user data changes less frequently
 }
@@ -123,7 +123,7 @@ export async function fetchUsersData(leagueId) {
 /**
  * Fetches NFL player data.
  * @returns {Promise<Object>} A promise that resolves to an object of NFL player data.
- */
+*/
 export async function fetchNFLPlayers() {
     // Player data is large and rarely changes within a day, cache for longer
     return fetchDataWithCache('https://api.sleeper.app/v1/players/nfl', 'nfl_players', 24); // Cache for 24 hours
@@ -132,7 +132,7 @@ export async function fetchNFLPlayers() {
 /**
  * Fetches current NFL state (e.g., current week, season).
  * @returns {Promise<Object>} A promise that resolves to the NFL state object.
- */
+*/
 export async function fetchNFLState() {
     return fetchDataWithCache(`${BASE_URL}/state/nfl`, 'nfl_state', 0.5); // Cache for 30 minutes, as it updates often
 }
@@ -141,7 +141,7 @@ export async function fetchNFLState() {
  * Fetches roster data for a given league ID.
  * @param {string} leagueId The ID of the Sleeper league.
  * @returns {Promise<Array<Object>>} A promise that resolves to an array of roster objects.
- */
+*/
 export async function fetchRosterData(leagueId) {
     return fetchDataWithCache(`${BASE_URL}/league/${leagueId}/rosters`, `rosters_${leagueId}`, 1); // Cache for 1 hour
 }
@@ -150,7 +150,7 @@ export async function fetchRosterData(leagueId) {
  * Fetches rosters and enriches them with user display names and team names.
  * @param {string} leagueId The ID of the Sleeper league.
  * @returns {Promise<Array<Object>>} A promise that resolves to an array of enriched roster objects.
- */
+*/
 export async function fetchRostersWithDetails(leagueId) {
     const [rosters, users] = await Promise.all([
         fetchRosterData(leagueId),
@@ -183,7 +183,7 @@ export async function fetchRostersWithDetails(leagueId) {
  * @param {Array<Object>} rawMatchups An array of raw matchup objects from the Sleeper API.
  * @param {Map<string, Object>} rosterIdToDetailsMap A map for roster_id to enriched roster details.
  * @returns {Array<Object>} An array of processed matchup objects.
- */
+*/
 function processRawMatchups(rawMatchups, rosterIdToDetailsMap) {
     const matchupsMap = new Map();
 
@@ -200,12 +200,10 @@ function processRawMatchups(rawMatchups, rosterIdToDetailsMap) {
                 week: teamMatchup.week,
                 team1_roster_id: teamMatchup.roster_id,
                 team1_score: teamMatchup.points,
-                // Ensure details are pulled from the enriched map
-                team1_details: rosterIdToDetailsMap.get(teamMatchup.roster_id),
-                // Initialize team2 as null, will be filled by the second team
+                team1_details: rosterIdToDetailsMap.get(String(teamMatchup.roster_id)), // Ensure string key
                 team2_roster_id: null,
                 team2_score: null,
-                team2_details: null
+                team2_details: null // Will be filled by the second team
             });
         } else {
             // Second team in the matchup
@@ -219,8 +217,7 @@ function processRawMatchups(rawMatchups, rosterIdToDetailsMap) {
 
             existingMatchup.team2_roster_id = teamMatchup.roster_id;
             existingMatchup.team2_score = teamMatchup.points;
-            // Ensure details are pulled from the enriched map
-            existingMatchup.team2_details = rosterIdToDetailsMap.get(teamMatchup.roster_id);
+            existingMatchup.team2_details = rosterIdToDetailsMap.get(String(teamMatchup.roster_id)); // FIXED: Correctly set for team2 and ensure string key
 
             // Determine winner/loser
             if (existingMatchup.team1_score > existingMatchup.team2_score) {
@@ -245,7 +242,7 @@ function processRawMatchups(rawMatchups, rosterIdToDetailsMap) {
  * @param {string} leagueId The ID of the Sleeper league.
  * @param {number | number[]} weeks The week number(s) to fetch matchups for. Can be a single number or an array.
  * @returns {Promise<Object>} A promise that resolves to an object where keys are week numbers and values are arrays of processed matchup data.
- */
+*/
 export async function fetchMatchupsForLeague(leagueId, weeks) {
     let weeksToFetch = [];
     if (typeof weeks === 'number') {
@@ -259,7 +256,7 @@ export async function fetchMatchupsForLeague(leagueId, weeks) {
 
     const allMatchupsByWeek = {};
     const rosters = await fetchRostersWithDetails(leagueId); // Fetch once
-    const rosterIdToDetailsMap = new Map(rosters.map(r => [r.roster_id, r]));
+    const rosterIdToDetailsMap = new Map(rosters.map(r => [String(r.roster_id), r])); // Ensure key is string here
 
     const fetchPromises = weeksToFetch.map(async (week) => {
         try {
@@ -286,7 +283,7 @@ export async function fetchMatchupsForLeague(leagueId, weeks) {
  * Uses the centralized caching.
  * @param {string} leagueId The ID of the Sleeper league.
  * @returns {Promise<Array<Object>>} A promise that resolves to an array of bracket matchup objects, or an empty array if an error occurs.
- */
+*/
 export async function fetchWinnersBracket(leagueId) {
     try {
         return await fetchDataWithCache(`${BASE_URL}/league/${leagueId}/winners_bracket`, `winners_bracket_${leagueId}`, 24);
@@ -301,7 +298,7 @@ export async function fetchWinnersBracket(leagueId) {
  * Uses the centralized caching.
  * @param {string} leagueId The ID of the Sleeper league.
  * @returns {Promise<Array<Object>>} A promise that resolves to an array of bracket matchup objects, or an empty array if an error occurs.
- */
+*/
 export async function fetchLosersBracket(leagueId) {
     try {
         return await fetchDataWithCache(`${BASE_URL}/league/${leagueId}/losers_bracket`, `losers_bracket_${leagueId}`, 24);
@@ -318,7 +315,7 @@ export async function fetchLosersBracket(leagueId) {
  * @param {Map<string, Object>} rosterIdToDetailsMap A map for roster_id to enriched roster details.
  * @param {number} playoffStartWeek The week number when playoffs begin for this league.
  * @returns {Array<Object>} The bracket data with added score information and bye teams.
- */
+*/
 function enrichBracketWithScores(bracketData, allWeeklyScoresForSeason, rosterIdToDetailsMap, playoffStartWeek) {
     if (!bracketData || bracketData.length === 0 || !allWeeklyScoresForSeason || !rosterIdToDetailsMap) {
         return bracketData;
@@ -385,19 +382,19 @@ function enrichBracketWithScores(bracketData, allWeeklyScoresForSeason, rosterId
                 }
 
                 // IMPORTANT: Always set team details from the map, which has the correct ownerTeamName
-                enrichedMatch.team1_details = rosterIdToDetailsMap.get(matchupFound.team1_roster_id);
-                enrichedMatch.team2_details = rosterIdToDetailsMap.get(matchupFound.team2_roster_id);
+                enrichedMatch.team1_details = rosterIdToDetailsMap.get(String(matchupFound.team1_roster_id));
+                enrichedMatch.team2_details = rosterIdToDetailsMap.get(String(matchupFound.team2_roster_id));
 
             } else {
                 // Matchup not found in weekly scores, possibly a future match or bye that wasn't scored.
                 // Attempt to get details for future matchups based on t1/t2 if they are direct roster IDs.
                 if (typeof bracketMatch.t1 === 'number') {
                     enrichedMatch.team1_roster_id = bracketMatch.t1;
-                    enrichedMatch.team1_details = rosterIdToDetailsMap.get(bracketMatch.t1);
+                    enrichedMatch.team1_details = rosterIdToDetailsMap.get(String(bracketMatch.t1));
                 }
                 if (typeof bracketMatch.t2 === 'number') {
                     enrichedMatch.team2_roster_id = bracketMatch.t2;
-                    enrichedMatch.team2_details = rosterIdToDetailsMap.get(bracketMatch.t2);
+                    enrichedMatch.team2_details = rosterIdToDetailsMap.get(String(bracketMatch.t2));
                 }
                 // console.warn(`No direct matchup found for bracket match ${bracketMatch.m} in week ${correspondingPlayoffWeek}.`);
             }
@@ -444,7 +441,7 @@ function enrichBracketWithScores(bracketData, allWeeklyScoresForSeason, rosterId
                         byeTeamScore = (byeMatchup.team1_roster_id === rosterId) ? byeMatchup.team1_score : byeMatchup.team2_score;
                     }
 
-                    const byeTeamDetails = rosterIdToDetailsMap.get(rosterId);
+                    const byeTeamDetails = rosterIdToDetailsMap.get(String(rosterId));
                     if (byeTeamDetails) {
                         byeTeams.push({
                             roster_id: rosterId,
@@ -464,7 +461,7 @@ function enrichBracketWithScores(bracketData, allWeeklyScoresForSeason, rosterId
         // Find the lowest `m` (matchup_id) in the current round to attach byes to, or simply attach to the first element
         const firstMatchOfRound = enrichedBracket.reduce((prev, current) => (prev.m < current.m ? prev : current));
         if (firstMatchOfRound) {
-             firstMatchOfRound.byeTeams = byeTeams;
+            firstMatchOfRound.byeTeams = byeTeams;
         } else {
             // Fallback for an unexpected scenario where enrichedBracket has no matches but byeTeams exist
             console.warn(`No matches found in enriched bracket for round, but bye teams exist. Attaching to new placeholder.`);
@@ -503,7 +500,7 @@ function enrichBracketWithScores(bracketData, allWeeklyScoresForSeason, rosterId
  * losersBracketBySeason: { "season_year": [bracket_matchup_data], ... }
  * }.
  * Returns the cached data if already fetched.
- */
+*/
 export async function fetchAllHistoricalMatchups() {
     const CACHE_KEY = 'all_historical_matchups_details';
     const cachedEntry = inMemoryCache.get(CACHE_KEY);
@@ -521,7 +518,7 @@ export async function fetchAllHistoricalMatchups() {
         rostersBySeason: {},
         leaguesMetadataBySeason: {},
         winnersBracketBySeason: {}, // New property for winners bracket data
-        losersBracketBySeason: {}   // New property for losers bracket data
+        losersBracketBySeason: {}    // New property for losers bracket data
     };
 
     try {
@@ -545,8 +542,7 @@ export async function fetchAllHistoricalMatchups() {
 
             const rosters = await fetchRostersWithDetails(leagueId);
             allHistoricalData.rostersBySeason[season] = rosters;
-            const rosterIdToDetailsMap = new Map(rosters.map(r => [r.roster_id, r]));
-
+            const rosterIdToDetailsMap = new Map(rosters.map(r => [String(r.roster_id), r])); // Ensure key is string here
 
             // Determine regular season weeks and playoff start week
             let playoffStartWeek = league.settings?.playoff_start_week;
@@ -628,7 +624,7 @@ export async function fetchAllHistoricalMatchups() {
  * @param {string} leagueId The ID of the Sleeper league.
  * @param {number} week The week number for which to fetch transactions.
  * @returns {Promise<Array<Object>>} A promise that resolves to an array of transaction objects.
- */
+*/
 export async function fetchTransactionsForWeek(leagueId, week) {
     return fetchDataWithCache(`${BASE_URL}/league/${leagueId}/transactions/${week}`, `transactions_${leagueId}_${week}`, 1);
 }
@@ -637,7 +633,7 @@ export async function fetchTransactionsForWeek(leagueId, week) {
  * Fetches all drafts for a given league.
  * @param {string} leagueId The ID of the Sleeper league.
  * @returns {Promise<Array<Object>>} A promise that resolves to an array of draft objects.
- */
+*/
 export async function fetchLeagueDrafts(leagueId) {
     return fetchDataWithCache(`${BASE_URL}/league/${leagueId}/drafts`, `drafts_${leagueId}`, 24); // Drafts change rarely, cache for 24h
 }
@@ -646,7 +642,7 @@ export async function fetchLeagueDrafts(leagueId) {
  * Fetches details for a specific draft.
  * @param {string} draftId The ID of the draft.
  * @returns {Promise<Object>} A promise that resolves to the draft details object.
- */
+*/
 export async function fetchDraftDetails(draftId) {
     return fetchDataWithCache(`${BASE_URL}/draft/${draftId}`, `draft_details_${draftId}`, 24);
 }
@@ -655,7 +651,7 @@ export async function fetchDraftDetails(draftId) {
  * Fetches all picks for a specific draft.
  * @param {string} draftId The ID of the draft.
  * @returns {Promise<Array<Object>>} A promise that resolves to an array of draft pick objects.
- */
+*/
 export async function fetchDraftPicks(draftId) {
     return fetchDataWithCache(`${BASE_URL}/draft/${draftId}/picks`, `draft_picks_${draftId}`, 24);
 }
@@ -664,7 +660,7 @@ export async function fetchDraftPicks(draftId) {
  * Fetches all traded picks for a specific league.
  * @param {string} leagueId The ID of the league.
  * @returns {Promise<Array<Object>>} A promise that resolves to an array of traded pick objects.
- */
+*/
 export async function fetchTradedPicks(leagueId) {
     return fetchDataWithCache(`${BASE_URL}/league/${leagueId}/traded_picks`, `traded_picks_${leagueId}`, 24);
 }
@@ -673,7 +669,7 @@ export async function fetchTradedPicks(leagueId) {
  * Fetches all draft history for a given league ID across all its past seasons.
  * This includes draft details, picks, and traded picks.
  * @returns {Promise<Object>} A promise that resolves to an object structured by season.
- */
+*/
 export async function fetchAllDraftHistory() {
     const CACHE_KEY = 'all_draft_history';
     const cachedEntry = inMemoryCache.get(CACHE_KEY);
