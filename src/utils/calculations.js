@@ -454,7 +454,8 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
 
         // Calculate adjusted DPR for each team in the current season
         const allRawDPRsInSeason = rosterIdsInSeason.map(rosterId => seasonalMetrics[year][rosterId].rawDPR).filter(dpr => dpr !== 0);
-        const avgRawDPRInSeason = allRawDPRsInSeason.length > 0 ? allRawDPRs.reduce((sum, dpr) => sum + dpr, 0) / allRawDPRsInSeason.length : 0;
+        // FIX: Corrected typo from 'allRawDPRs' to 'allRawDPRsInSeason'
+        const avgRawDPRInSeason = allRawDPRsInSeason.length > 0 ? allRawDPRsInSeason.reduce((sum, dpr) => sum + dpr, 0) / allRawDPRsInSeason.length : 0;
 
         rosterIdsInSeason.forEach(rosterId => {
             if (avgRawDPRInSeason > 0) {
