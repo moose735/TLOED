@@ -65,8 +65,8 @@ const LeagueHistory = () => {
         const completedSeasons = new Set();
         const allYears = Object.keys(historicalData.matchupsBySeason).map(Number).sort((a, b) => a - b);
 
-        // A temporary set to track processed match_ids to avoid duplicates in allMatchupsFlat
-        const processedMatchIds = new Set();
+        // A temporary set to track processed unique games (using sorted roster IDs)
+        const processedGameKeys = new Set();
 
         allYears.forEach(year => {
             const weeklyMatchupsForYear = historicalData.matchupsBySeason[year] || {};
@@ -81,26 +81,28 @@ const LeagueHistory = () => {
                 completedSeasons.add(year);
             }
 
+            // Create a map for quick lookup of bracket matches by their actual match_id from bracket data
+            const bracketMatchIdMap = new Map();
+            [...winnersBracketForYear, ...losersBracketForYear].forEach(bMatch => {
+                bracketMatchIdMap.set(String(bMatch.match_id), bMatch);
+            });
+
             Object.keys(weeklyMatchupsForYear).forEach(weekStr => {
                 const week = parseInt(weekStr);
                 weeklyMatchupsForYear[weekStr].forEach(matchup => {
-                    // Each 'matchup' object from Sleeper API represents one team's side of a game.
-                    // It contains roster_id and opponent_roster_id.
-                    // We need to ensure we only process each unique game (defined by match_id) once.
-                    const currentMatchId = String(matchup.match_id);
-
-                    // Create a canonical match ID for uniqueness, e.g., by sorting roster IDs
-                    // This is for internal tracking of unique games, not related to Sleeper's match_id
                     const rosterId1 = String(matchup.roster_id);
                     const rosterId2 = String(matchup.opponent_roster_id);
-                    // Sort the roster IDs to create a consistent unique key for the pair, regardless of which team is 'team1' or 'team2' in the original API response
-                    const canonicalGameId = [rosterId1, rosterId2].sort().join('-');
 
-                    // Use a combined key for uniqueness across years and weeks
-                    if (processedMatchIds.has(`${year}-${week}-${canonicalGameId}`)) {
-                        return; // This game (pair of teams in this week/year) has already been processed
+                    // Create a canonical game key using sorted roster IDs to identify unique games
+                    const gameKey = [rosterId1, rosterId2].sort().join('-');
+
+                    // Use a combined key (year-week-gameKey) to ensure uniqueness for each actual game instance
+                    const uniqueGameInstanceKey = `${year}-${week}-${gameKey}`;
+
+                    if (processedGameKeys.has(uniqueGameInstanceKey)) {
+                        return; // This unique game instance has already been processed
                     }
-                    processedMatchIds.add(`${year}-${week}-${canonicalGameId}`);
+                    processedGameKeys.add(uniqueGameInstanceKey);
 
                     const team1Roster = historicalData.rostersBySeason[year]?.find(r => String(r.roster_id) === rosterId1);
                     const team2Roster = historicalData.rostersBySeason[year]?.find(r => String(r.roster_id) === rosterId2);
@@ -109,35 +111,47 @@ const LeagueHistory = () => {
                     const team2OwnerId = team2Roster?.owner_id;
 
                     if (!team1OwnerId || !team2OwnerId) {
-                        console.warn(`Skipping matchup (week ${week}, year ${year}, match_id ${currentMatchId}) due to unresolved owner IDs.`);
+                        console.warn(`Skipping matchup (week ${week}, year ${year}, rosters ${rosterId1}, ${rosterId2}) due to unresolved owner IDs.`);
                         return;
                     }
 
                     let matchType = 'Reg. Season';
-                    const playoffMatchIds = new Set(winnersBracketForYear.map(m => String(m.match_id)));
-                    const consolationMatchIds = new Set(losersBracketForYear.map(m => String(m.match_id)));
 
-                    if (playoffMatchIds.has(currentMatchId)) {
-                        if (championshipWeek && week === championshipWeek) {
-                            matchType = 'Championship';
-                        } else {
-                            matchType = 'Playoffs';
+                    // Check if this weekly matchup's matchup_id corresponds to a bracket match_id
+                    // Note: Sleeper's weekly matchup objects have a 'matchup_id' field.
+                    // Sleeper's bracket objects have a 'match_id' field.
+                    // These are often the same value for playoff games, but the structure is different.
+                    // We need to check if the 'matchup_id' from the weekly matchup exists in the list of 'match_id's from the brackets.
+                    const bracketMatch = bracketMatchIdMap.get(String(matchup.matchup_id)); // Use matchup.matchup_id from weekly matchup
+
+                    if (bracketMatch) {
+                        // If it's found in a bracket match, determine its type
+                        const isWinnerBracketMatch = winnersBracketForYear.some(b => String(b.match_id) === String(matchup.matchup_id));
+                        const isLoserBracketMatch = losersBracketForYear.some(b => String(b.match_id) === String(matchup.matchup_id));
+
+                        if (isWinnerBracketMatch) {
+                            if (championshipWeek && week === championshipWeek) {
+                                matchType = 'Championship';
+                            } else {
+                                matchType = 'Playoffs';
+                            }
+                        } else if (isLoserBracketMatch) {
+                            matchType = 'Consolation';
                         }
-                    } else if (consolationMatchIds.has(currentMatchId)) {
-                        matchType = 'Consolation';
-                    } else if (matchup.playoff) { // Fallback for playoff flag
+                    } else if (matchup.playoff) { // Fallback if playoff flag is true but not found in explicit brackets
                         matchType = 'Playoffs (Uncategorized)';
                     }
 
-                    // Add to flat list for overall calculations
+
                     allMatchupsFlat.push({
                         year: year,
                         week: week,
-                        match_id: currentMatchId,
-                        team1: team1OwnerId, // Owner ID for team1
-                        team2: team2OwnerId, // Owner ID for team2
-                        team1_score: parseFloat(matchup.points), // Score for team1 (from its perspective)
-                        team2_score: parseFloat(matchup.opponent_points), // Score for team2 (from team1's perspective)
+                        // Use the matchup_id from the weekly matchup, as it's what links to the bracket match_id
+                        match_id: String(matchup.matchup_id),
+                        team1: team1OwnerId,
+                        team2: team2OwnerId,
+                        team1_score: parseFloat(matchup.points),
+                        team2_score: parseFloat(matchup.opponent_points),
                         matchType: matchType,
                         // finalSeedingGame is not directly available on Sleeper matchup objects,
                         // it's derived from playoff brackets. We'll handle awards separately.
