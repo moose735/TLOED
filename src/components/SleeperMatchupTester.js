@@ -11,8 +11,8 @@ const SleeperMatchupTester = () => {
         loading,
         error,
         historicalData, // Contains matchupsBySeason, winnersBracketBySeason, losersBracketBySeason, rostersBySeason, leaguesMetadataBySeason
-        getTeamName,    // Utility function to get team display name from owner_id
-        usersData,      // Raw user data for mapping
+        getTeamName,    // Utility function to get team display name from owner_id or roster_id, now accepts season
+        usersData,      // Raw user data for mapping (though getTeamName now handles this internally)
     } = useSleeperData();
 
     const [selectedYear, setSelectedYear] = useState(''); // State for the selected year
@@ -56,26 +56,22 @@ const SleeperMatchupTester = () => {
     }, [historicalData, loading, error, selectedYear]); // Recalculate when these change
 
     // Helper to get team info from roster ID (or bracket object if needed for t1_from/t2_from)
-    // This now uses getTeamName from context
+    // This now uses getTeamName from context, passing the selectedYear
     const getTeamInfo = useCallback((teamIdentifier) => {
-        const currentSeasonRosters = historicalData?.rostersBySeason?.[selectedYear] || [];
-        const rostersById = new Map(currentSeasonRosters.map(roster => [roster.roster_id, roster]));
-
-        // Handle direct roster ID (number or string)
+        // The getTeamName from context can handle both roster_id and user_id.
+        // For bracket objects, we extract the roster_id.
         if (typeof teamIdentifier === 'number' || typeof teamIdentifier === 'string') {
-            const roster = rostersById.get(String(teamIdentifier));
-            return roster ? getTeamName(roster.owner_id) : `Roster ${teamIdentifier}`;
+            return getTeamName(teamIdentifier, selectedYear);
         }
         // Handle bracket objects with 'from' references
         else if (teamIdentifier && (teamIdentifier.w || teamIdentifier.l || teamIdentifier.t1 || teamIdentifier.t2)) {
             const rosterId = teamIdentifier.w || teamIdentifier.l || teamIdentifier.t1 || teamIdentifier.t2;
-            const roster = rostersById.get(String(rosterId));
             const fromType = teamIdentifier.w ? 'Winner of Match' : teamIdentifier.l ? 'Loser of Match' : 'From Match';
-            return roster ? `${getTeamName(roster.owner_id)} - ${fromType} ${teamIdentifier.m}` : `${fromType} ${teamIdentifier.m} (Roster: ${rosterId})`;
+            // Use getTeamName with the extracted rosterId and selectedYear
+            return `${getTeamName(rosterId, selectedYear)} - ${fromType} ${teamIdentifier.m}`;
         }
         return 'TBD';
-    }, [historicalData, selectedYear, getTeamName]);
-
+    }, [getTeamName, selectedYear]); // getTeamName and selectedYear are dependencies
 
     // Display loading and error states from the SleeperDataContext
     if (loading) {
@@ -141,11 +137,11 @@ const SleeperMatchupTester = () => {
 
     // Create a map for quick lookup: roster_id -> { displayName, teamName } for the selected year
     // This is now less critical as getTeamName handles user display, but useful for roster details
+    // Removed the direct use of usersData here as getTeamName handles it.
     const rosterToUserMap = new Map();
     currentSeasonRosters.forEach(roster => {
+        // We still need owner_id for the getTeamName function if it's a roster_id
         rosterToUserMap.set(roster.roster_id, {
-            displayName: usersData?.find(u => u.user_id === roster.owner_id)?.display_name,
-            teamName: usersData?.find(u => u.user_id === roster.owner_id)?.metadata?.team_name,
             userId: roster.owner_id
         });
     });
@@ -204,7 +200,8 @@ const SleeperMatchupTester = () => {
                             <ul className="list-disc pl-5 space-y-1">
                                 {currentSeasonRosters.map(roster => (
                                     <li key={roster.roster_id} className="text-gray-700">
-                                        <strong>Roster {roster.roster_id}:</strong> {getTeamName(roster.owner_id)} (User ID: {roster.owner_id})
+                                        {/* Pass selectedYear to getTeamName for season-specific names */}
+                                        <strong>Roster {roster.roster_id}:</strong> {getTeamName(roster.roster_id, selectedYear)} (User ID: {roster.owner_id})
                                     </li>
                                 ))}
                             </ul>
@@ -220,7 +217,8 @@ const SleeperMatchupTester = () => {
                             <ul className="list-decimal pl-5 space-y-1">
                                 {playoffResults.map(team => (
                                     <li key={team.roster_id} className="text-gray-700">
-                                        <strong>{team.playoffFinish}</strong>: {getTeamName(team.roster_id)}
+                                        {/* Pass selectedYear to getTeamName for season-specific names */}
+                                        <strong>{team.playoffFinish}</strong>: {getTeamName(team.roster_id, selectedYear)}
                                     </li>
                                 ))}
                             </ul>
@@ -242,8 +240,8 @@ const SleeperMatchupTester = () => {
                                         {matchups.length > 0 ? (
                                             <ul className="list-disc pl-5 space-y-2">
                                                 {matchups.map(matchup => {
-                                                    const team1Display = getTeamName(matchup.team1_roster_id);
-                                                    const team2Display = getTeamName(matchup.team2_roster_id);
+                                                    const team1Display = getTeamName(matchup.team1_roster_id, selectedYear);
+                                                    const team2Display = getTeamName(matchup.team2_roster_id, selectedYear);
 
                                                     const winnerName = (matchup.team1_score > matchup.team2_score)
                                                         ? team1Display
@@ -294,9 +292,9 @@ const SleeperMatchupTester = () => {
                                                     <br />
                                                     Team 2: {getTeamInfo(match.t2 || match.t2_from)} {typeof match.t2_score === 'number' ? `(${match.t2_score} points)` : ''}
                                                     <br />
-                                                    Winner: <strong>{match.w ? getTeamInfo(match.w) : 'TBD'}</strong>
+                                                    Winner: <strong>{match.w ? getTeamName(match.w, selectedYear) : 'TBD'}</strong>
                                                     <br />
-                                                    Loser: {match.l ? getTeamInfo(match.l) : 'TBD'}
+                                                    Loser: {match.l ? getTeamName(match.l, selectedYear) : 'TBD'}
                                                     {match.p && ` (Playoff Rank: ${match.p})`}
                                                 </li>
                                             ))}
@@ -316,9 +314,9 @@ const SleeperMatchupTester = () => {
                                                     <br />
                                                     Team 2: {getTeamInfo(match.t2 || match.t2_from)} {typeof match.t2_score === 'number' ? `(${match.t2_score} points)` : ''}
                                                     <br />
-                                                    Winner: {match.w ? getTeamInfo(match.w) : 'TBD'}
+                                                    Winner: {match.w ? getTeamName(match.w, selectedYear) : 'TBD'}
                                                     <br />
-                                                    Loser: {match.l ? getTeamInfo(match.l) : 'TBD'}
+                                                    Loser: {match.l ? getTeamName(match.l, selectedYear) : 'TBD'}
                                                     {match.p && ` (Playoff Rank: ${match.p})`}
                                                 </li>
                                             ))}
@@ -329,9 +327,7 @@ const SleeperMatchupTester = () => {
                         )}
                     </div>
                 </div>
-            ) : (
-                <div className="text-center text-gray-600 text-lg p-4">Please select a season to view detailed data.</div>
-            )}
+            </div>
         </div>
     );
 };
