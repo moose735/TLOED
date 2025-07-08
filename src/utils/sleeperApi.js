@@ -81,6 +81,13 @@ export async function fetchLeagueData(currentLeagueId) {
     let leagues = [];
     let leagueId = currentLeagueId;
 
+    // --- Added check for valid CURRENT_LEAGUE_ID ---
+    if (!currentLeagueId || currentLeagueId === '0' || currentLeagueId === '') {
+        console.error("CURRENT_LEAGUE_ID is invalid. Please ensure it's set correctly in config.js.");
+        return [];
+    }
+    // --- End Added check ---
+
     // Cache the entire chain of leagues for longer
     const CACHE_KEY = `league_chain_${currentLeagueId}`;
     const cachedEntry = inMemoryCache.get(CACHE_KEY);
@@ -368,7 +375,7 @@ function enrichBracketWithScores(bracketData, allWeeklyScoresForSeason, rosterId
 
                 if (rosterId_t1_from_bracket === matchupFound.team1_roster_id && rosterId_t2_from_bracket === matchupFound.team2_roster_id) {
                     enrichedMatch.t1_score = matchupFound.team1_score;
-                    enrichedMatch.t2_score = matchupFound.replicatedMatchup.team2_score;
+                    enrichedMatch.t2_score = matchupFound.team2_score; // CORRECTED THIS LINE
                 } else if (rosterId_t1_from_bracket === matchupFound.team2_roster_id && rosterId_t2_from_bracket === matchupFound.team1_roster_id) {
                     enrichedMatch.t1_score = matchupFound.team2_score;
                     enrichedMatch.t2_score = matchupFound.team1_score;
