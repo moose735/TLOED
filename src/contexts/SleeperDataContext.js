@@ -7,7 +7,7 @@ import {
     fetchNFLPlayers,
     fetchNFLState,
     fetchAllHistoricalMatchups,
-    fetchLeagueDrafts, // Corrected import: fetchDrafts changed to fetchLeagueDrafts
+    fetchAllDraftHistory, // Corrected import: fetchLeagueDrafts changed to fetchAllDraftHistory
 } from '../utils/sleeperApi'; // Adjust path if necessary
 import { CURRENT_LEAGUE_ID } from '../config'; // Adjust path if necessary
 
@@ -51,7 +51,7 @@ export const SleeperDataProvider = ({ children }) => {
                     fetchNFLPlayers(),
                     fetchNFLState(),
                     fetchAllHistoricalMatchups(), // This now fetches historical users too
-                    fetchAllDraftHistory(),
+                    fetchAllDraftHistory(), // Corrected function call
                 ]);
 
                 // Update state with fetched data
