@@ -65,6 +65,7 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
         Object.keys(historicalData.matchupsBySeason).forEach(year => {
             const weeklyMatchupsForYear = historicalData.matchupsBySeason[year];
             const leagueMetadataForYear = historicalData.leaguesMetadataBySeason[year];
+            // playoffStartWeek and championshipWeek are now used as hints, but bracket data is primary
             const playoffStartWeek = leagueMetadataForYear?.settings?.playoff_start_week ? parseInt(leagueMetadataForYear.settings.playoff_start_week) : 99;
             const championshipWeek = leagueMetadataForYear?.settings?.championship_week ? parseInt(leagueMetadataForYear.settings.championship_week) : null;
 
@@ -113,30 +114,31 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
 
                     const isTie = team1Score === team2Score;
                     const team1Won = team1Score > team2Score;
-                    const isPlayoffMatchWeek = week >= playoffStartWeek; // This indicates it's a playoff *week*
 
-                    // Determine match type based on bracket data
+                    // Determine match type based on bracket data (primary source)
                     let matchType = 'Reg. Season';
-                    if (isPlayoffMatchWeek) {
-                        const isInWinnersBracket = winnersBracketForYear.some(bracketMatch =>
-                            String(bracketMatch.match_id) === String(matchup.match_id)
-                        );
-                        const isInLosersBracket = losersBracketForYear.some(bracketMatch =>
-                            String(bracketMatch.match_id) === String(matchup.match_id)
-                        );
+                    const isInWinnersBracket = winnersBracketForYear.some(bracketMatch =>
+                        String(bracketMatch.match_id) === String(matchup.match_id)
+                    );
+                    const isInLosersBracket = losersBracketForYear.some(bracketMatch =>
+                        String(bracketMatch.match_id) === String(matchup.match_id)
+                    );
 
-                        if (isInWinnersBracket) {
-                            if (championshipWeek && week === championshipWeek) {
-                                matchType = 'Championship';
-                            } else {
-                                matchType = 'Playoffs';
-                            }
-                        } else if (isInLosersBracket) {
-                            matchType = 'Consolation';
+                    if (isInWinnersBracket) {
+                        if (championshipWeek && week === championshipWeek) {
+                            matchType = 'Championship';
                         } else {
-                            matchType = 'Playoffs (Uncategorized)'; // Fallback for playoff weeks not in explicit brackets
+                            matchType = 'Playoffs';
                         }
+                    } else if (isInLosersBracket) {
+                        matchType = 'Consolation';
+                    } else if (week >= playoffStartWeek) {
+                        // This case is for games in playoff weeks that are not explicitly in winners/losers brackets.
+                        // For example, some leagues might have a separate 3rd place game not formally in brackets.
+                        // We classify them as uncategorized playoff games if they occur during playoff weeks.
+                        matchType = 'Playoffs (Uncategorized)';
                     }
+                    // If none of the above, it remains 'Reg. Season'
 
                     // Ensure consistent ordering for H2H keys using owner IDs
                     const sortedOwners = [team1OwnerId, team2OwnerId].sort();
@@ -255,7 +257,7 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
 
         // Initialize highlight stats with null values for robust 'N/A' display
         let teamAHighestScore = { value: null, year: null, week: null };
-        let teamBHighestScore = { value: null, year: null, week: null };
+        let teamBHighestScore = { value, year: null, week: null };
         let teamABiggestWinMargin = { value: null, year: null, week: null };
         let teamBBiggestWinMargin = { value: null, year: null, week: null };
         let teamASlimmestWinMargin = { value: null, year: null, week: null, margin: Infinity }; // Added margin for tracking
