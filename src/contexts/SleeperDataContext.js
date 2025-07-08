@@ -4,7 +4,7 @@ import {
     fetchLeagueData,
     fetchUsersData,
     fetchRostersWithDetails,
-    fetchMatchupsForSeason,
+    fetchMatchupsForLeague, // Corrected import name from fetchMatchupsForSeason to fetchMatchupsForLeague
     fetchPlayoffBracket,
     fetchNFLPlayers,
     fetchDrafts,
@@ -119,7 +119,7 @@ export const SleeperDataProvider = ({ children }) => {
                     newHistoricalData.rostersBySeason[year] = rosters;
 
                     // Fetch matchups for this specific historical league ID
-                    const matchups = await fetchMatchupsForSeason(historicalLeagueId, year, leagueForThisYear.settings?.playoff_start_week);
+                    const matchups = await fetchMatchupsForLeague(historicalLeagueId, Array.from({ length: leagueForThisYear.settings?.last_regular_season_week || 14 }, (_, i) => i + 1)); // Fetch all regular season weeks
                     newHistoricalData.matchupsBySeason[year] = matchups;
 
                     // Fetch playoff brackets for this specific historical league ID
