@@ -2,14 +2,14 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import {
     fetchLeagueData,
-    fetchUsersData, // Corrected import name from fetchUsers to fetchUsersData
+    fetchUsersData,
     fetchRostersWithDetails,
     fetchMatchupsForSeason,
     fetchPlayoffBracket,
     fetchNFLPlayers,
     fetchDrafts,
 } from '../utils/sleeperApi';
-import { CURRENT_LEAGUE_ID, START_YEAR } from '../config';
+import { CURRENT_LEAGUE_ID } from '../config'; // Removed START_YEAR from import
 
 const SleeperDataContext = createContext();
 
@@ -65,7 +65,7 @@ export const SleeperDataProvider = ({ children }) => {
                 setLeagueData(currentLeague);
 
                 // 2. Fetch all users from the current league (users are generally consistent across seasons)
-                const users = await fetchUsersData(CURRENT_LEAGUE_ID); // Corrected function call
+                const users = await fetchUsersData(CURRENT_LEAGUE_ID);
                 setUsersData(users);
 
                 // 3. Fetch NFL players data
@@ -75,7 +75,8 @@ export const SleeperDataProvider = ({ children }) => {
                 // 4. Build historical league chain (crucial for getting correct historical league IDs)
                 const leagueChain = {}; // Stores { year: league_object }
                 let currentLeagueObj = currentLeague;
-                const startYearNum = parseInt(START_YEAR || '2019');
+                // Define START_YEAR here or ensure it's globally available if not imported
+                const startYearNum = parseInt(process.env.REACT_APP_START_YEAR || '2019'); // Fallback to '2019' if not set
 
                 // Traverse back through previous_league_id to get all historical league objects
                 while (currentLeagueObj && currentLeagueObj.season >= startYearNum) {
@@ -114,7 +115,7 @@ export const SleeperDataProvider = ({ children }) => {
                     console.log(`Fetching data for season: ${year} (League ID: ${historicalLeagueId})`);
 
                     // Fetch rosters for this specific historical league ID
-                    const rosters = await fetchRostersWithDetails(historicalLeagueId); // Removed year param as fetchRostersWithDetails doesn't use it
+                    const rosters = await fetchRostersWithDetails(historicalLeagueId);
                     newHistoricalData.rostersBySeason[year] = rosters;
 
                     // Fetch matchups for this specific historical league ID
