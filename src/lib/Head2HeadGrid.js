@@ -353,11 +353,7 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                     );
 
                     if (!hasAnyStats(overallTeamAStats) && !hasAnyStats(overallTeamBStats)) {
-                        return (
-                            <div className="text-center text-gray-600 text-lg p-4 bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
-                                No detailed career statistics available for this rivalry's teams.
-                            </div>
-                        );
+                        return null; // Remove the box and statement if no stats
                     }
 
                     return (
@@ -436,7 +432,7 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                 })()}
 
                 {/* VERSUS Section */}
-                <div className="bg-blue-700 text-white p-4 rounded-lg shadow-inner text-center mb-6">
+                <div className="bg-gradient-to-r from-blue-700 to-blue-900 text-white p-6 rounded-xl shadow-lg border border-blue-600 text-center mb-8 transform hover:scale-105 transition-transform duration-300 ease-in-out">
                     <h4 className="text-xl font-bold mb-2">★ VERSUS ★</h4>
                     <p className="text-lg font-semibold mb-1">Record: {renderRecord(ownerARecord)} vs {renderRecord(ownerBRecord)}</p>
                     <p className="text-md">Current Streak: {currentStreak}</p>
@@ -528,7 +524,16 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                                 let currentTeamBScore = (match.team1OwnerId === ownerB) ? match.team1Score : match.team2Score;
 
                                 let matchType = 'Reg. Season';
-                                if (match.isPlayoff) matchType = 'Playoffs';
+                                if (match.isPlayoff) {
+                                    const leagueMetadataForMatchYear = historicalData.leaguesMetadataBySeason?.[match.year];
+                                    const championshipWeek = leagueMetadataForMatchYear?.settings?.championship_week ? parseInt(leagueMetadataForMatchYear.settings.championship_week) : null;
+
+                                    if (championshipWeek && match.week === championshipWeek) {
+                                        matchType = 'Championship';
+                                    } else {
+                                        matchType = 'Playoffs';
+                                    }
+                                }
 
                                 return (
                                     <tr key={idx} className="border-b border-gray-100 last:border-b-0">
@@ -546,7 +551,7 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                 </div>
             </div>
         );
-    }, [selectedRivalryKey, headToHeadRecords, careerDPRData, getTeamName]);
+    }, [selectedRivalryKey, headToHeadRecords, careerDPRData, getTeamName, historicalData]); // Added historicalData to dependencies
 
     if (loading) {
         return (
@@ -602,7 +607,7 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                                     <tr key={rowTeam.ownerId} className="border-b border-gray-100 last:border-b-0">
                                         <td className="py-2 px-3 text-left text-sm text-gray-800 font-semibold sticky left-0 bg-white z-20 border-r border-gray-200 shadow-sm"> {/* Sticky left for vertical scroll */}
                                             {rowTeam.displayName}
-                                                                                        </td>
+                                        </td>
                                         {sortedDisplayNamesAndOwners.map(colTeam => { // Iterate over sorted display names for columns
                                             if (rowTeam.ownerId === colTeam.ownerId) {
                                                 return (
