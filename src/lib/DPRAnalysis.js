@@ -2,14 +2,15 @@
 import React, { useState, useEffect } from 'react';
 import { calculateAllLeagueMetrics } from '../utils/calculations'; // Import the new utility
 
-const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
+const DPRAnalysis = ({ historicalData, getTeamName }) => { // Renamed props for clarity
   const [careerDPRData, setCareerDPRData] = useState([]);
   const [seasonalDPRData, setSeasonalDPRData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAllSeasonal, setShowAllSeasonal] = useState(false); // New state for "Show More"
 
   useEffect(() => {
-    if (!historicalMatchups || historicalMatchups.length === 0) {
+    // Check if historicalData is available and has league metadata
+    if (!historicalData || Object.keys(historicalData.leaguesMetadataBySeason).length === 0) {
       setCareerDPRData([]);
       setSeasonalDPRData([]);
       setLoading(false);
@@ -19,7 +20,8 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
     setLoading(true);
 
     // Use the centralized calculation logic to get seasonal and career metrics
-    const { seasonalMetrics, careerDPRData: calculatedCareerDPRs } = calculateAllLeagueMetrics(historicalMatchups, getDisplayTeamName);
+    // Pass historicalData and the getTeamName function from context
+    const { seasonalMetrics, careerDPRData: calculatedCareerDPRs } = calculateAllLeagueMetrics(historicalData, getTeamName);
 
     // Enhance careerDPRData with additional metrics
     const enhancedCareerDPRs = calculatedCareerDPRs.map(teamData => {
@@ -32,16 +34,14 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
         let seasonsPlayedCount = 0;
 
         // Iterate through seasonal metrics to find highest and lowest seasonal points average for this team
+        // Use teamData.rosterId to correctly access seasonalMetrics
         Object.keys(seasonalMetrics).forEach(year => {
-            if (seasonalMetrics[year][teamData.team]) {
-                const seasonalPoints = seasonalMetrics[year][teamData.team].pointsFor;
-                const seasonalWins = seasonalMetrics[year][teamData.team].wins;
-                const seasonalLosses = seasonalMetrics[year][teamData.team].losses;
-                const seasonalTies = seasonalMetrics[year][teamData.team].ties;
-                const seasonalGames = seasonalWins + seasonalLosses + seasonalTies;
+            if (seasonalMetrics[year][teamData.rosterId]) {
+                const seasonalStats = seasonalMetrics[year][teamData.rosterId];
+                const seasonalGames = seasonalStats.totalGames;
 
                 if (seasonalGames > 0) {
-                    const seasonalAvg = seasonalPoints / seasonalGames;
+                    const seasonalAvg = seasonalStats.pointsFor / seasonalGames;
                     if (seasonalAvg > highestSeasonalPointsAvg) {
                         highestSeasonalPointsAvg = seasonalAvg;
                     }
@@ -59,7 +59,7 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
         }
 
         return {
-            ...teamData,
+            ...teamData, // This already includes teamName and rosterId
             winPercentage: winPercentage,
             pointsPerGame: pointsPerGame,
             highestSeasonalPointsAvg: highestSeasonalPointsAvg,
@@ -68,65 +68,24 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
     });
 
     // Flatten seasonalMetrics into an array for display in the table
-    let allSeasonalDPRs = []; // Changed to 'let' because we'll modify it
-    Object.keys(seasonalMetrics).forEach(year => {
-      Object.keys(seasonalMetrics[year]).forEach(team => {
-        const teamSeasonalData = seasonalMetrics[year][team];
-        const seasonalWins = teamSeasonalData.wins;
-        const seasonalLosses = teamSeasonalData.losses;
-        const seasonalTies = teamSeasonalData.ties;
-        const seasonalPointsFor = teamSeasonalData.pointsFor;
-        const seasonalTotalGames = seasonalWins + seasonalLosses + seasonalTies;
+    let allSeasonalDPRs = [];
+    Object.keys(seasonalMetrics).sort((a, b) => parseInt(b) - parseInt(a)).forEach(year => { // Sort years descending
+      Object.keys(seasonalMetrics[year]).forEach(rosterId => { // Use rosterId as key
+        const teamSeasonalData = seasonalMetrics[year][rosterId];
 
-        const seasonalWinPercentage = seasonalTotalGames > 0 ? ((seasonalWins + (0.5 * seasonalTies)) / seasonalTotalGames) : 0;
-        const seasonalPointsPerGame = seasonalTotalGames > 0 ? (seasonalPointsFor / seasonalTotalGames) : 0;
-
-        let seasonalHighestPointsGame = 0;
-        let seasonalLowestPointsGame = Infinity;
-
-        // Find highest and lowest points scored in a single game for this team in this season
-        historicalMatchups.forEach(match => {
-            const matchYear = parseInt(match.year);
-            const team1 = getDisplayTeamName(String(match.team1 || '').trim());
-            const team2 = getDisplayTeamName(String(match.team2 || '').trim());
-            const team1Score = parseFloat(match.team1Score);
-            const team2Score = parseFloat(match.team2Score);
-
-            if (matchYear === parseInt(year) && !isNaN(team1Score) && !isNaN(team2Score)) {
-                if (team1 === team) {
-                    if (team1Score > seasonalHighestPointsGame) {
-                        seasonalHighestPointsGame = team1Score;
-                    }
-                    if (team1Score < seasonalLowestPointsGame) {
-                        seasonalLowestPointsGame = team1Score;
-                    }
-                } else if (team2 === team) {
-                    if (team2Score > seasonalHighestPointsGame) {
-                        seasonalHighestPointsGame = team2Score;
-                    }
-                    if (team2Score < seasonalLowestPointsGame) {
-                        seasonalLowestPointsGame = team2Score;
-                    }
-                }
-            }
-        });
-
-        // If no games played, set lowest game score to 0 instead of Infinity
-        if (seasonalTotalGames === 0 || seasonalLowestPointsGame === Infinity) {
-            seasonalLowestPointsGame = 0;
-        }
-
+        // All these metrics are already calculated and available in teamSeasonalData
         allSeasonalDPRs.push({
           year: parseInt(year),
-          team: team,
+          team: teamSeasonalData.teamName, // Use the teamName already resolved by calculations.js
+          rosterId: rosterId, // Keep rosterId for potential future use
           dpr: teamSeasonalData.adjustedDPR,
-          wins: seasonalWins,
-          losses: seasonalLosses,
-          ties: seasonalTies,
-          winPercentage: seasonalWinPercentage,
-          pointsPerGame: seasonalPointsPerGame,
-          highestPointsGame: seasonalHighestPointsGame,
-          lowestPointsGame: seasonalLowestPointsGame
+          wins: teamSeasonalData.wins,
+          losses: teamSeasonalData.losses,
+          ties: teamSeasonalData.ties,
+          winPercentage: teamSeasonalData.winPercentage,
+          pointsPerGame: teamSeasonalData.averageScore, // 'averageScore' in seasonalMetrics is points per game
+          highestPointsGame: teamSeasonalData.highScore, // Use highScore from seasonalMetrics
+          lowestPointsGame: teamSeasonalData.lowScore // Use lowScore from seasonalMetrics
         });
       });
     });
@@ -163,17 +122,12 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
     setSeasonalDPRData(allSeasonalDPRs);
     setLoading(false);
 
-  }, [historicalMatchups, getDisplayTeamName]);
+  }, [historicalData, getTeamName]); // Dependencies updated to historicalData and getTeamName
 
   // Formatter for win percentage (consistent with LeagueHistory)
   const formatPercentage = (value) => {
     if (typeof value === 'number' && !isNaN(value)) {
-      let formatted = value.toFixed(3);
-      if (formatted.startsWith('0.')) {
-        formatted = formatted.substring(1); // Remove the '0'
-      } else if (formatted.startsWith('-0.')) {
-        formatted = `-${formatted.substring(2)}`; // Remove '-0'
-      }
+      let formatted = (value * 100).toFixed(1); // Format as percentage (e.g., 0.5 -> 50.0)
       return `${formatted}%`;
     }
     return ''; // Return empty string for non-numeric or null values
@@ -247,9 +201,9 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                   </thead>
                   <tbody>
                     {careerDPRData.map((data, index) => (
-                      <tr key={data.team} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                      <tr key={data.rosterId || data.teamName} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                         <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{index + 1}</td>
-                        <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.team}</td>
+                        <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.teamName}</td> {/* Use data.teamName */}
                         <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatDPR(data.dpr)}</td>
                         <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPercentage(data.winPercentage)}</td>
                         <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{renderRecord(data.wins, data.losses, data.ties)}</td>
@@ -294,7 +248,7 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                         actualRank++; // Increment rank only for non-average rows
                       }
                       return (
-                        <tr key={`${data.team}-${data.year}-${data.dpr}`} className={data.isAverageRow ? 'bg-yellow-100 font-bold' : (actualRank % 2 === 0 ? 'bg-gray-50' : 'bg-white')}>
+                        <tr key={`${data.rosterId}-${data.year}`} className={data.isAverageRow ? 'bg-yellow-100 font-bold' : (actualRank % 2 === 0 ? 'bg-gray-50' : 'bg-white')}>
                           {data.isAverageRow ? (
                             <td colSpan={numberOfSeasonalColumns} className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap text-center">
                               {data.team}
@@ -302,7 +256,7 @@ const DPRAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
                           ) : (
                             <>
                               <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{actualRank}</td>
-                              <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.team}</td>
+                              <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.team}</td> {/* Use data.team (which is teamName) */}
                               <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.year}</td>
                               <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatDPR(data.dpr)}</td>
                               <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPercentage(data.winPercentage)}</td>
