@@ -1,174 +1,209 @@
-// src/components/MatchupHistory.js
-import React, { useState, useEffect, useCallback } from 'react';
-// No longer need to import fetchRostersWithDetails or CURRENT_LEAGUE_ID directly
-// import { fetchRostersWithDetails } from '../utils/sleeperApi';
-// import { CURRENT_LEAGUE_ID } from '../config';
+// src/contexts/SleeperDataContext.js
+import React, { createContext, useState, useEffect, useContext, useMemo } from 'react';
+import {
+    fetchLeagueData,
+    fetchUsersData,
+    fetchRostersWithDetails,
+    fetchNFLPlayers,
+    fetchNFLState,
+    fetchAllHistoricalMatchups,
+    fetchAllDraftHistory,
+} from '../utils/sleeperApi'; // Adjust path if necessary
+import { CURRENT_LEAGUE_ID } from '../config'; // Adjust path if necessary
 
-// Import the custom hook from your SleeperDataContext
-import { useSleeperData } from '../contexts/SleeperDataContext';
+// 1. Create the Context
+const SleeperDataContext = createContext();
 
-const MatchupHistory = () => {
-    // Consume data and functions from SleeperDataContext
-    const {
+// 2. Create the Provider Component
+export const SleeperDataProvider = ({ children }) => {
+    // State to hold all the fetched data
+    const [leagueData, setLeagueData] = useState(null);
+    const [usersData, setUsersData] = useState(null); // This holds current league's users
+    const [rostersWithDetails, setRostersWithDetails] = useState(null); // This holds current league's rosters
+    const [nflPlayers, setNflPlayers] = useState(null);
+    const [nflState, setNflState] = useState(null);
+    const [historicalMatchups, setHistoricalMatchups] = useState(null); // This holds historicalData with rostersBySeason AND usersBySeason
+    const [allDraftHistory, setAllDraftHistory] = useState(null);
+
+    // State for loading and error handling
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    // 3. Fetch data on component mount
+    useEffect(() => {
+        const loadAllSleeperData = async () => {
+            setLoading(true); // Start loading
+            setError(null);
+            try {
+                // Use Promise.all to fetch all data concurrently for efficiency
+                const [
+                    leagues,
+                    users, // Current league's users
+                    rosters, // Current league's rosters
+                    players,
+                    state,
+                    matchups, // All historical data including rostersBySeason and usersBySeason
+                    draftHistory
+                ] = await Promise.all([
+                    fetchLeagueData(CURRENT_LEAGUE_ID),
+                    fetchUsersData(CURRENT_LEAGUE_ID), // Fetch current league's users
+                    fetchRostersWithDetails(CURRENT_LEAGUE_ID),
+                    fetchNFLPlayers(),
+                    fetchNFLState(),
+                    fetchAllHistoricalMatchups(), // This now fetches historical users too
+                    fetchAllDraftHistory(),
+                ]);
+
+                // Update state with fetched data
+                setLeagueData(leagues);
+                setUsersData(users); // Set current league's users
+                setRostersWithDetails(rosters); // Set current league's rosters
+                setNflPlayers(players);
+                setNflState(state);
+                setHistoricalMatchups(matchups); // Set all historical data
+                setAllDraftHistory(draftHistory);
+
+                // Set loading to false ONLY after all data states have been updated
+                setLoading(false);
+            } catch (err) {
+                console.error("Failed to load initial Sleeper data:", err);
+                setError(err); // Store the error object
+                setLoading(false); // Set loading to false even on error
+            }
+        };
+
+        loadAllSleeperData();
+    }, []); // Empty dependency array ensures this runs only once on mount
+
+    // Memoize the getTeamName function so it's stable across renders
+    // It depends on usersData and historicalMatchups (specifically historicalMatchups.rostersBySeason and historicalMatchups.usersBySeason)
+    const getTeamName = useMemo(() => {
+        // Create a comprehensive map for user_id to user details across ALL historical seasons
+        // This will be used as a fallback if season-specific data isn't found
+        const globalUserMap = new Map();
+        if (historicalMatchups?.usersBySeason) {
+            Object.values(historicalMatchups.usersBySeason).forEach(seasonUsers => {
+                if (Array.isArray(seasonUsers)) {
+                    seasonUsers.forEach(user => {
+                        globalUserMap.set(user.user_id, user);
+                    });
+                }
+            });
+        }
+        // Also add users from the current league's usersData, prioritizing it
+        if (usersData) {
+            usersData.forEach(user => {
+                globalUserMap.set(user.user_id, user);
+            });
+        }
+
+        // Create a comprehensive map for roster_id to owner_id across ALL historical seasons
+        // This will be used as a fallback if season-specific data isn't found
+        const globalRosterToOwnerMap = new Map();
+        if (historicalMatchups?.rostersBySeason) {
+            Object.values(historicalMatchups.rostersBySeason).forEach(seasonRosters => {
+                if (Array.isArray(seasonRosters)) {
+                    seasonRosters.forEach(roster => {
+                        globalRosterToOwnerMap.set(roster.roster_id, roster.owner_id);
+                    });
+                }
+            });
+        }
+        // Also add current league's rosters to the map
+        if (rostersWithDetails) {
+            rostersWithDetails.forEach(roster => {
+                globalRosterToOwnerMap.set(roster.roster_id, roster.owner_id);
+            });
+        }
+
+
+        // The main getTeamName function, now accepting an optional 'season' parameter
+        return (id, season = null) => {
+            let user = null;
+            let ownerId = null;
+
+            // --- Attempt to get season-specific name first if season is provided ---
+            if (season && historicalMatchups?.usersBySeason?.[season] && historicalMatchups?.rostersBySeason?.[season]) {
+                const seasonUsers = historicalMatchups.usersBySeason[season];
+                const seasonRosters = historicalMatchups.rostersBySeason[season];
+
+                // Check if ID is a user_id for this season
+                user = seasonUsers.find(u => u.user_id === id);
+                if (user) {
+                    return user.metadata?.team_name || user.display_name || `User ${id} (${season})`;
+                }
+
+                // Check if ID is a roster_id for this season and find its owner
+                const rosterForSeason = seasonRosters.find(r => r.roster_id === id);
+                if (rosterForSeason?.owner_id) {
+                    ownerId = rosterForSeason.owner_id;
+                    user = seasonUsers.find(u => u.user_id === ownerId);
+                    if (user) {
+                        return user.metadata?.team_name || user.display_name || `Roster Owner ${ownerId} (${season})`;
+                    }
+                }
+            }
+
+            // --- Fallback to global maps if season-specific lookup fails or no season provided ---
+
+            // 1. Check if the ID is a user_id directly in the global map
+            user = globalUserMap.get(id);
+            if (user) {
+                return user.metadata?.team_name || user.display_name || `User ${id}`;
+            }
+
+            // 2. If not a user_id, check if it's a roster_id in the global map and find its owner
+            ownerId = globalRosterToOwnerMap.get(id);
+            if (ownerId) {
+                const ownerUser = globalUserMap.get(ownerId);
+                if (ownerUser) {
+                    return ownerUser.metadata?.team_name || ownerUser.display_name || `Roster Owner ${ownerId}`;
+                }
+            }
+
+            return `Unknown Team (ID: ${id})`; // Final fallback
+        };
+    }, [usersData, rostersWithDetails, historicalMatchups]); // Re-memoize if these dependencies change
+
+    // 4. Memoize the context value to prevent unnecessary re-renders of consumers
+    // Only update the 'value' object if any of its dependencies change
+    const contextValue = useMemo(() => ({
+        leagueData,
+        usersData, // Current league's users
+        rostersWithDetails, // Current league's rosters
+        nflPlayers,
+        nflState,
+        historicalData: historicalMatchups, // Renamed for clarity in context
+        allDraftHistory,
         loading,
         error,
-        historicalData, // Contains matchupsBySeason, rostersBySeason, leaguesMetadataBySeason, etc.
-        getTeamName,    // Utility function to get team display name from owner_id or roster_id
-    } = useSleeperData();
-
-    // State for the currently selected year in the dropdown
-    const [selectedYear, setSelectedYear] = useState(null);
-
-    // Effect to initialize selectedYear to the newest available year
-    useEffect(() => {
-        // Only proceed if historicalData is loaded and not in an error state
-        if (!loading && !error && historicalData && Object.keys(historicalData.leaguesMetadataBySeason).length > 0) {
-            const sortedYears = Object.keys(historicalData.leaguesMetadataBySeason).sort((a, b) => parseInt(b) - parseInt(a));
-            if (sortedYears.length > 0 && selectedYear === null) {
-                setSelectedYear(parseInt(sortedYears[0])); // Set to the newest year by default
-            }
-        }
-    }, [historicalData, loading, error, selectedYear]); // selectedYear dependency prevents re-initializing if user changes it
-
-    // Handle year selection from dropdown
-    const handleYearChange = useCallback((event) => {
-        setSelectedYear(parseInt(event.target.value));
-    }, []);
-
-    // Get all available years from the historical data, sorted descending
-    const allAvailableYears = historicalData ? Object.keys(historicalData.leaguesMetadataBySeason).sort((a, b) => parseInt(b) - parseInt(a)) : [];
-
-    // --- Render Logic ---
-    // Display a loading spinner if primary data is loading or no year is selected yet
-    if (loading || selectedYear === null) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-[200px] text-blue-600">
-                <svg className="animate-spin h-10 w-10 text-blue-500 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <p className="text-lg font-medium">Loading matchup history and league data...</p>
-            </div>
-        );
-    }
-
-    // Display error messages if there's an issue with primary data
-    if (error) {
-        return (
-            <div className="text-center text-red-600 p-4 bg-red-100 border border-red-400 rounded-md">
-                <p className="font-semibold text-lg">Error loading Matchup History:</p>
-                <p>{error.message || error}</p>
-                <p className="mt-2 text-sm">Please check your Sleeper API configuration and network connection.</p>
-            </div>
-        );
-    }
-
-    // Display a message if no historical matchup data is available at all
-    if (!historicalData || Object.keys(historicalData.leaguesMetadataBySeason).length === 0) {
-        return (
-            <div className="text-center p-4 bg-yellow-100 border border-yellow-400 rounded-md">
-                <p className="text-lg font-medium text-yellow-800">No historical matchup data available from Sleeper API.</p>
-                <p className="text-yellow-700 text-sm">This might mean the league ID is incorrect, or there's no data for previous seasons.</p>
-            </div>
-        );
-    }
-
-    // Get data for the currently selected year from historicalData
-    const selectedYearMetadata = historicalData.leaguesMetadataBySeason[selectedYear];
-    const weeksData = historicalData.matchupsBySeason[selectedYear];
-
-    // Display a message if no matchup data is found for the specifically selected year
-    if (!selectedYearMetadata || !weeksData || Object.keys(weeksData).length === 0) {
-        return (
-            <div className="text-center p-4 bg-orange-100 border border-orange-400 rounded-md">
-                <p className="text-lg font-medium text-orange-800">No matchup data found for the selected {selectedYear} season.</p>
-                <p className="text-orange-700 text-sm">Please select another year, or verify data for this season.</p>
-                {/* Year dropdown still visible in this error state for user interaction */}
-                <div className="flex justify-center mt-4">
-                    <label htmlFor="year-select" className="mr-2 text-gray-700 font-medium">Select Season:</label>
-                    <select
-                        id="year-select"
-                        value={selectedYear}
-                        onChange={handleYearChange}
-                        className="p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                        {allAvailableYears.map(year => (
-                            <option key={year} value={year}>{year}</option>
-                        ))}
-                    </select>
-                </div>
-            </div>
-        );
-    }
-
-    // Sort weeks numerically for display
-    const sortedWeeks = Object.keys(weeksData).sort((a, b) => parseInt(a) - parseInt(b));
+        getTeamName, // Include the memoized getTeamName function
+    }), [
+        leagueData,
+        usersData,
+        rostersWithDetails,
+        nflPlayers,
+        nflState,
+        historicalMatchups,
+        allDraftHistory,
+        loading,
+        error,
+        getTeamName, // Dependency for the context value
+    ]);
 
     return (
-        <div className="container mx-auto p-4">
-            <h2 className="text-3xl font-extrabold text-gray-900 mb-6 text-center">Historical Matchup Data (Sleeper API)</h2>
-            <p className="text-lg text-gray-700 mb-8 text-center max-w-2xl mx-auto">
-                Select a season from the dropdown below to view its historical matchup data.
-            </p>
-
-            {/* Year Selection Dropdown */}
-            <div className="flex justify-center mb-8">
-                <label htmlFor="year-select" className="mr-2 text-gray-700 font-medium">Select Season:</label>
-                <select
-                    id="year-select"
-                    value={selectedYear}
-                    onChange={handleYearChange}
-                    className="p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                    {allAvailableYears.map(year => (
-                        <option key={year} value={year}>{year}</option>
-                    ))}
-                </select>
-            </div>
-
-            {/* Display data for the selected year only */}
-            <div key={selectedYear} className="bg-white shadow-lg rounded-xl p-6 mb-8 border border-gray-200">
-                <h3 className="text-2xl font-bold text-blue-700 mb-5 border-b-2 border-blue-100 pb-3">Season: {selectedYear}</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {sortedWeeks.length > 0 ? (
-                        sortedWeeks.map(week => (
-                            <div key={`${selectedYear}-week-${week}`} className="bg-gray-50 p-4 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-200">
-                                <h4 className="text-lg font-semibold text-gray-800 mb-3">Week {week}</h4>
-                                {weeksData[week] && weeksData[week].length > 0 ? (
-                                    <ul className="space-y-3">
-                                        {/* Iterate directly over the processed matchup objects */}
-                                        {weeksData[week].map((matchup, index) => (
-                                            <li key={`matchup-${selectedYear}-${week}-${matchup.matchup_id}`} className="flex flex-col space-y-1 p-2 bg-white border border-gray-200 rounded-md shadow-sm">
-                                                <div className="flex justify-between text-sm text-gray-700">
-                                                    <span className="font-medium">
-                                                        {getTeamName(matchup.team1_roster_id)}
-                                                    </span>
-                                                    <span className="font-bold text-blue-600">{matchup.team1_score ? matchup.team1_score.toFixed(2) : 'N/A'}</span>
-                                                </div>
-                                                <div className="flex justify-between text-sm text-gray-700">
-                                                    <span className="font-medium">
-                                                        {getTeamName(matchup.team2_roster_id)}
-                                                    </span>
-                                                    <span className="font-bold text-blue-600">{matchup.team2_score ? matchup.team2_score.toFixed(2) : 'N/A'}</span>
-                                                </div>
-                                                <div className="text-xs text-gray-500 mt-1">
-                                                    Winner: <strong>{matchup.winner_roster_id ? getTeamName(matchup.winner_roster_id) : 'Tie'}</strong>
-                                                </div>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                ) : (
-                                    <p className="text-gray-600 text-sm italic">No matchup data for this week.</p>
-                                )}
-                            </div>
-                        ))
-                    ) : (
-                        <p className="text-gray-600 italic col-span-full">No matchup data found for the selected season.</p>
-                    )}
-                </div>
-            </div>
-        </div>
+        <SleeperDataContext.Provider value={contextValue}>
+            {children}
+        </SleeperDataContext.Provider>
     );
 };
 
-export default MatchupHistory;
+// 5. Create a Custom Hook to consume the context
+export const useSleeperData = () => {
+    const context = useContext(SleeperDataContext);
+    // Add a check to ensure the hook is used within the Provider
+    if (context === undefined) {
+        throw new Error('useSleeperData must be used within a SleeperDataProvider');
+    }
+    return context;
+};
