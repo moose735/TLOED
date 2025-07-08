@@ -13,7 +13,7 @@ const MatchupHistory = () => {
         loading,
         error,
         historicalData, // Contains matchupsBySeason, rostersBySeason, leaguesMetadataBySeason, etc.
-        getTeamName,    // Utility function to get team display name from owner_id
+        getTeamName,    // Utility function to get team display name from owner_id or roster_id
     } = useSleeperData();
 
     // State for the currently selected year in the dropdown
@@ -35,7 +35,7 @@ const MatchupHistory = () => {
         setSelectedYear(parseInt(event.target.value));
     }, []);
 
-    // Get all available years from the historical matchups data, sorted descending
+    // Get all available years from the historical data, sorted descending
     const allAvailableYears = historicalData ? Object.keys(historicalData.leaguesMetadataBySeason).sort((a, b) => parseInt(b) - parseInt(a)) : [];
 
     // --- Render Logic ---
@@ -74,11 +74,11 @@ const MatchupHistory = () => {
     }
 
     // Get data for the currently selected year from historicalData
-    const selectedYearData = historicalData.leaguesMetadataBySeason[selectedYear];
+    const selectedYearMetadata = historicalData.leaguesMetadataBySeason[selectedYear];
     const weeksData = historicalData.matchupsBySeason[selectedYear];
 
     // Display a message if no matchup data is found for the specifically selected year
-    if (!selectedYearData || !weeksData || Object.keys(weeksData).length === 0) {
+    if (!selectedYearMetadata || !weeksData || Object.keys(weeksData).length === 0) {
         return (
             <div className="text-center p-4 bg-orange-100 border border-orange-400 rounded-md">
                 <p className="text-lg font-medium text-orange-800">No matchup data found for the selected {selectedYear} season.</p>
@@ -150,7 +150,7 @@ const MatchupHistory = () => {
                                                 {matchupPair.map(teamData => (
                                                     <div key={teamData.roster_id} className="flex justify-between text-sm text-gray-700">
                                                         <span className="font-medium">
-                                                            {/* getTeamName from context is used here */}
+                                                            {/* Directly use getTeamName from context, passing roster_id */}
                                                             {getTeamName(teamData.roster_id)}
                                                         </span>
                                                         <span className="font-bold text-blue-600">{teamData.points ? teamData.points.toFixed(2) : 'N/A'}</span>
