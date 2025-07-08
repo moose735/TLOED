@@ -1,163 +1,175 @@
 // src/components/SleeperMatchupTester.js
-import React, { useState, useEffect } from 'react';
-import { fetchAllHistoricalMatchups, fetchUsersData } from '../utils/sleeperApi'; // Removed fetchLeagueData
-import { CURRENT_LEAGUE_ID, TEAM_NAME_TO_SLEEPER_ID_MAP } from '../config';
+import React, { useEffect, useState } from 'react';
+import {
+    fetchAllHistoricalMatchups
+    // Import other functions if you want to display their results here too
+} from '../utils/sleeperApi';
 
 const SleeperMatchupTester = () => {
-    // matchupData will now contain { matchupsBySeason, rostersBySeason, leaguesMetadataBySeason }
     const [historicalData, setHistoricalData] = useState(null);
-    const [usersData, setUsersData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
     useEffect(() => {
-        const loadData = async () => {
-            setLoading(true);
-            setError(null);
+        const fetchAndSetData = async () => {
             try {
-                // Fetch all necessary data concurrently
-                const [allHistoricalMatchupsResult, users] = await Promise.all([
-                    fetchAllHistoricalMatchups(), // This now returns an object with matchups, rosters, and league metadata
-                    fetchUsersData(CURRENT_LEAGUE_ID), // User data is universal across seasons
-                ]);
-
-                setHistoricalData(allHistoricalMatchupsResult);
-                setUsersData(users);
-
+                setLoading(true);
+                setError(null);
+                const data = await fetchAllHistoricalMatchups();
+                setHistoricalData(data);
+                console.log("Fetched Historical Data:", data); // Log the full structure
             } catch (err) {
-                console.error("Error fetching Sleeper historical data for testing:", err);
-                setError(`Failed to load data: ${err.message}. Check console for details.`);
+                console.error("Error fetching historical data in component:", err);
+                setError(err.message || "Failed to fetch historical data.");
             } finally {
                 setLoading(false);
             }
         };
 
-        loadData();
+        fetchAndSetData();
     }, []);
 
-    // Helper to get user display name from user ID
-    const getUserDisplayName = (userId) => {
-        const user = usersData?.find(u => u?.user_id === userId);
-        return user ? user.display_name : `Unknown User (${userId})`;
-    };
-
-    // Helper to get roster owner ID for a specific season and roster ID
-    const getRosterOwnerId = (season, rosterId) => {
-        // Access the rosters for the specific season
-        const rostersForSeason = historicalData?.rostersBySeason?.[season];
-        const roster = rostersForSeason?.find(r => r?.roster_id === rosterId);
-        return roster ? roster.owner_id : null;
-    };
-
     if (loading) {
-        return <div className="text-center p-4">Loading Sleeper Historical Matchups for Verification...</div>;
+        return <div style={{ color: '#007bff', fontSize: '1.2em' }}>Loading historical league data...</div>;
     }
 
     if (error) {
-        return <div className="text-center p-4 text-red-600">Error: {error}</div>;
+        return <div style={{ color: 'red', fontWeight: 'bold' }}>Error: {error}</div>;
     }
 
-    // Deconstruct historicalData after loading check
-    const { matchupsBySeason, rostersBySeason, leaguesMetadataBySeason } = historicalData || {};
-
-    // Check if matchupsBySeason is null or empty object before trying to iterate
-    if (!matchupsBySeason || Object.keys(matchupsBySeason).length === 0) {
-        return <div className="text-center p-4">No historical matchup data found from Sleeper API.</div>;
+    if (!historicalData || Object.keys(historicalData.leaguesMetadataBySeason).length === 0) {
+        return <div style={{ color: 'orange' }}>No historical league data found. Check your CURRENT_LEAGUE_ID.</div>;
     }
 
-    // Basic Data Verification Output
-    const renderVerificationSummary = () => {
-        const totalSeasons = Object.keys(matchupsBySeason).length;
-        let totalMatchups = 0;
-        let totalTeamsParticipating = new Set();
-
-        Object.entries(matchupsBySeason).forEach(([season, weeks]) => {
-            if (typeof weeks === 'object' && weeks !== null) {
-                Object.entries(weeks).forEach(([weekNum, matchupsInWeek]) => {
-                    if (Array.isArray(matchupsInWeek)) {
-                        totalMatchups += matchupsInWeek.length;
-                        matchupsInWeek.forEach(matchup => {
-                            totalTeamsParticipating.add(matchup.team1_roster_id);
-                            totalTeamsParticipating.add(matchup.team2_roster_id);
-                        });
-                    } else {
-                        console.warn(`SleeperMatchupTester: Expected array for matchups in Week ${weekNum}, Season ${season}, but got:`, matchupsInWeek);
-                    }
-                });
-            } else {
-                console.warn(`SleeperMatchupTester: Expected object for weeks in Season ${season}, but got:`, weeks);
-            }
-        });
-
-        return (
-            <div className="bg-blue-50 border-l-4 border-blue-500 text-blue-800 p-4 mb-6 rounded">
-                <h3 className="font-bold text-lg mb-2">Verification Summary:</h3>
-                <p><strong>Total Seasons Found:</strong> {totalSeasons}</p>
-                <p><strong>Total Matchups Found:</strong> {totalMatchups}</p>
-                <p><strong>Unique Roster IDs (participating teams):</strong> {totalTeamsParticipating.size}</p>
-                <p className="mt-2 text-sm text-blue-700">
-                    If `Unique Roster IDs` doesn't match your league size, check `config.js` `CURRENT_LEAGUE_ID` and your `sleeperApi.js` `fetchUsersData` and `fetchRostersForLeague`.
-                </p>
-                <p className="mt-2 text-sm text-blue-700">
-                    **Recommendation:** Compare these numbers (especially unique teams and matchups per season/week)
-                    with your league's actual history on Sleeper.
-                </p>
-            </div>
-        );
-    };
+    // --- Data Processing for Display ---
+    let totalSeasonsFound = Object.keys(historicalData.leaguesMetadataBySeason).length;
+    let totalMatchupsFound = 0;
+    const uniqueRosterIds = new Set();
+    const uniqueUserIds = new Set(); // To track actual users
 
     return (
-        <div className="container mx-auto p-4 bg-white shadow-lg rounded-lg">
-            <h1 className="text-3xl font-bold text-blue-800 mb-6">Sleeper Historical Matchup Data Verification</h1>
+        <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }}>
+            <h1 style={{ color: '#333', borderBottom: '2px solid #eee', paddingBottom: '10px' }}>Sleeper League Historical Data Verification</h1>
 
-            {renderVerificationSummary()}
+            {/* Overall Summary */}
+            <div style={{ marginBottom: '20px', border: '1px solid #ddd', padding: '15px', borderRadius: '8px', backgroundColor: '#f9f9f9' }}>
+                <h2 style={{ color: '#0056b3' }}>Verification Summary:</h2>
+                <p><strong>Total Seasons Found:</strong> {totalSeasonsFound}</p>
 
-            {Object.entries(matchupsBySeason).sort((a, b) => parseInt(b[0]) - parseInt(a[0])).map(([season, weeks]) => (
-                <div key={season} className="mb-8 p-4 border border-gray-200 rounded-md shadow-sm">
-                    <h2 className="text-2xl font-semibold text-gray-800 mb-4">Season: {season}</h2>
-                    {typeof weeks === 'object' && weeks !== null ?
-                        Object.entries(weeks).sort((a, b) => parseInt(a[0]) - parseInt(b[0])).map(([weekNum, matchupsInWeek]) => (
-                            <div key={`${season}-week-${weekNum}`} className="mb-6 p-3 bg-gray-50 rounded-md">
-                                <h3 className="text-xl font-medium text-gray-700 mb-3">Week {weekNum} ({Array.isArray(matchupsInWeek) ? matchupsInWeek.length : 0} Matchups)</h3>
-                                <ul className="space-y-2">
-                                    {Array.isArray(matchupsInWeek) && matchupsInWeek.map((matchup) => {
-                                        // Pass the current season to getRosterOwnerId
-                                        const team1UserId = getRosterOwnerId(season, matchup.team1_roster_id);
-                                        const team2UserId = getRosterOwnerId(season, matchup.team2_roster_id);
+                {Object.entries(historicalData.matchupsBySeason).map(([season, weeks]) => {
+                    Object.values(weeks).forEach(matchups => {
+                        totalMatchupsFound += matchups.length;
+                    });
+                })}
+                <p><strong>Total Matchups Found (across all active seasons):</strong> {totalMatchupsFound}</p>
 
-                                        // Ensure usersData is loaded before trying to get display names
-                                        const team1Name = team1UserId && usersData ? getUserDisplayName(team1UserId) : `Roster ${matchup.team1_roster_id}`;
-                                        const team2Name = team2UserId && usersData ? getUserDisplayName(team2UserId) : `Roster ${matchup.team2_roster_id}`;
+                {Object.entries(historicalData.rostersBySeason).forEach(([season, rosters]) => {
+                    rosters.forEach(roster => {
+                        uniqueRosterIds.add(roster.roster_id);
+                        if (roster.owner_id) { // Ensure owner_id exists
+                            uniqueUserIds.add(roster.owner_id);
+                        }
+                    });
+                })}
+                <p><strong>Unique Roster IDs (participating teams):</strong> {uniqueRosterIds.size}</p>
+                <p><strong>Unique User IDs (owners):</strong> {uniqueUserIds.size}</p>
 
-                                        const winner = matchup.team1_score > matchup.team2_score ? team1Name :
-                                                        matchup.team2_score > matchup.team1_score ? team2Name : "Tie";
+                <p style={{ fontWeight: 'bold', color: uniqueRosterIds.size === historicalData.rostersBySeason[Object.keys(historicalData.rostersBySeason)[0]]?.length ? 'green' : 'red' }}>
+                    Recommendation: Compare these numbers (especially unique teams and matchups per season/week) with your league's actual history on Sleeper.
+                    If Unique Roster IDs or Unique User IDs don't match your expected league size, check `config.js` `CURRENT_LEAGUE_ID` and your `sleeperApi.js` `fetchUsersData` and `fetchRostersWithDetails`.
+                </p>
+            </div>
 
-                                        return (
-                                            <li key={matchup.matchup_id} className="p-2 border border-gray-100 rounded bg-white text-sm">
-                                                <p><strong>Matchup ID:</strong> {matchup.matchup_id}</p>
-                                                <p><strong>{team1Name}</strong> ({matchup.team1_score} points) vs. <strong>{team2Name}</strong> ({matchup.team2_score} points)</p>
-                                                <p>Winner: {winner}</p>
-                                                <p className="text-xs text-gray-500">
-                                                    (Roster IDs: {matchup.team1_roster_id}, {matchup.team2_roster_id})
-                                                </p>
+            {/* Detailed Season Breakdown */}
+            {Object.entries(historicalData.leaguesMetadataBySeason)
+                .sort(([seasonA], [seasonB]) => parseInt(seasonB) - parseInt(seasonA)) // Sort seasons from newest to oldest
+                .map(([season, leagueMeta]) => {
+                    const seasonMatchups = historicalData.matchupsBySeason[season] || {};
+                    const seasonRosters = historicalData.rostersBySeason[season] || [];
+
+                    // Create a map for quick lookup: roster_id -> { displayName, teamName }
+                    const rosterToUserMap = new Map();
+                    seasonRosters.forEach(roster => {
+                        rosterToUserMap.set(roster.roster_id, {
+                            displayName: roster.ownerDisplayName,
+                            teamName: roster.ownerTeamName,
+                            userId: roster.owner_id // Include userId for verification
+                        });
+                    });
+
+                    return (
+                        <div key={season} style={{ marginBottom: '30px', border: '1px solid #ccc', padding: '15px', borderRadius: '8px', backgroundColor: '#fff' }}>
+                            <h2 style={{ color: '#0056b3' }}>Season: {season} ({leagueMeta.name})</h2>
+                            <p><strong>League ID:</strong> {leagueMeta.league_id}</p>
+                            <p><strong>Season Start:</strong> {leagueMeta.season_start_date}</p>
+                            <p><strong>Total Teams:</strong> {seasonRosters.length}</p>
+
+                            {/* Display Rosters for this season */}
+                            <div style={{ marginTop: '15px', borderTop: '1px dashed #eee', paddingTop: '15px' }}>
+                                <h3 style={{ color: '#444' }}>Teams (Rosters) in {season}:</h3>
+                                {seasonRosters.length > 0 ? (
+                                    <ul style={{ listStyleType: 'none', padding: 0 }}>
+                                        {seasonRosters.map(roster => (
+                                            <li key={roster.roster_id} style={{ marginBottom: '5px' }}>
+                                                <strong>Roster {roster.roster_id}:</strong> {roster.ownerTeamName} (Owner: {roster.ownerDisplayName} - User ID: {roster.owner_id})
                                             </li>
-                                        );
-                                    })}
-                                    {!Array.isArray(matchupsInWeek) && (
-                                        <li className="p-2 border border-red-100 rounded bg-red-50 text-sm text-red-700">
-                                            No valid matchup data for this week. Expected an array but got: {JSON.stringify(matchupsInWeek)}
-                                        </li>
-                                    )}
-                                </ul>
+                                        ))}
+                                    </ul>
+                                ) : (
+                                    <p>No roster data available for this season.</p>
+                                )}
                             </div>
-                        )) : (
-                            <div className="p-2 border border-red-100 rounded bg-red-50 text-sm text-red-700">
-                                No valid week data for this season. Expected an object but got: {JSON.stringify(weeks)}
+
+                            {/* Display Matchups for this season */}
+                            <div style={{ marginTop: '15px', borderTop: '1px dashed #eee', paddingTop: '15px' }}>
+                                <h3 style={{ color: '#444' }}>Matchups in {season}:</h3>
+                                {Object.keys(seasonMatchups).length > 0 ? (
+                                    Object.entries(seasonMatchups)
+                                        .sort(([weekA], [weekB]) => parseInt(weekA) - parseInt(weekB)) // Sort weeks numerically
+                                        .map(([week, matchups]) => (
+                                            <div key={`${season}-week-${week}`} style={{ marginBottom: '20px' }}>
+                                                <h4 style={{ color: '#666' }}>Week {week} ({matchups.length} Matchups)</h4>
+                                                {matchups.length > 0 ? (
+                                                    <ul style={{ listStyleType: 'none', padding: 0 }}>
+                                                        {matchups.map(matchup => {
+                                                            const team1 = rosterToUserMap.get(matchup.team1_roster_id);
+                                                            const team2 = rosterToUserMap.get(matchup.team2_roster_id);
+
+                                                            const team1DisplayName = team1 ? `${team1.teamName} (Owner: ${team1.displayName})` : `Roster ${matchup.team1_roster_id}`;
+                                                            const team2DisplayName = team2 ? `${team2.teamName} (Owner: ${team2.displayName})` : `Roster ${matchup.team2_roster_id}`;
+
+                                                            const winnerName = (matchup.team1_score > matchup.team2_score)
+                                                                ? (team1 ? team1.teamName : `Roster ${matchup.team1_roster_id}`)
+                                                                : (matchup.team2_score > matchup.team1_score)
+                                                                    ? (team2 ? team2.teamName : `Roster ${matchup.team2_roster_id}`)
+                                                                    : "Tie";
+
+                                                            return (
+                                                                <li key={matchup.matchup_id} style={{ marginBottom: '10px', padding: '10px', border: '1px solid #eee', borderRadius: '5px', backgroundColor: '#fdfdfd' }}>
+                                                                    <strong>Matchup ID: {matchup.matchup_id}</strong>
+                                                                    <br />
+                                                                    {team1DisplayName} ({matchup.team1_score} points) vs. {team2DisplayName} ({matchup.team2_score} points)
+                                                                    <br />
+                                                                    Winner: <strong>{winnerName}</strong>
+                                                                    <br />
+                                                                    (Roster IDs: {matchup.team1_roster_id}, {matchup.team2_roster_id})
+                                                                </li>
+                                                            );
+                                                        })}
+                                                    </ul>
+                                                ) : (
+                                                    <p>No matchups found for Week {week}.</p>
+                                                )}
+                                            </div>
+                                        ))
+                                ) : (
+                                    <p>No matchup data available for this season (either future season or error fetching).</p>
+                                )}
                             </div>
-                        )
-                    }
-                </div>
-            ))}
+                        </div>
+                    );
+                })
+            }
         </div>
     );
 };
