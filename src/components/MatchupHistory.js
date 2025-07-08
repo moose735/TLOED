@@ -136,26 +136,24 @@ const MatchupHistory = () => {
                                 <h4 className="text-lg font-semibold text-gray-800 mb-3">Week {week}</h4>
                                 {weeksData[week] && weeksData[week].length > 0 ? (
                                     <ul className="space-y-3">
-                                        {/* Group matchups by matchup_id to display as pairs */}
-                                        {Object.values(
-                                            weeksData[week].reduce((acc, current) => {
-                                                if (!acc[current.matchup_id]) {
-                                                    acc[current.matchup_id] = [];
-                                                }
-                                                acc[current.matchup_id].push(current);
-                                                return acc;
-                                            }, {})
-                                        ).map((matchupPair, index) => (
-                                            <li key={`matchup-${selectedYear}-${week}-${index}`} className="flex flex-col space-y-1 p-2 bg-white border border-gray-200 rounded-md shadow-sm">
-                                                {matchupPair.map(teamData => (
-                                                    <div key={teamData.roster_id} className="flex justify-between text-sm text-gray-700">
-                                                        <span className="font-medium">
-                                                            {/* Directly use getTeamName from context, passing roster_id */}
-                                                            {getTeamName(teamData.roster_id)}
-                                                        </span>
-                                                        <span className="font-bold text-blue-600">{teamData.points ? teamData.points.toFixed(2) : 'N/A'}</span>
-                                                    </div>
-                                                ))}
+                                        {/* Iterate directly over the processed matchup objects */}
+                                        {weeksData[week].map((matchup, index) => (
+                                            <li key={`matchup-${selectedYear}-${week}-${matchup.matchup_id}`} className="flex flex-col space-y-1 p-2 bg-white border border-gray-200 rounded-md shadow-sm">
+                                                <div className="flex justify-between text-sm text-gray-700">
+                                                    <span className="font-medium">
+                                                        {getTeamName(matchup.team1_roster_id)}
+                                                    </span>
+                                                    <span className="font-bold text-blue-600">{matchup.team1_score ? matchup.team1_score.toFixed(2) : 'N/A'}</span>
+                                                </div>
+                                                <div className="flex justify-between text-sm text-gray-700">
+                                                    <span className="font-medium">
+                                                        {getTeamName(matchup.team2_roster_id)}
+                                                    </span>
+                                                    <span className="font-bold text-blue-600">{matchup.team2_score ? matchup.team2_score.toFixed(2) : 'N/A'}</span>
+                                                </div>
+                                                <div className="text-xs text-gray-500 mt-1">
+                                                    Winner: <strong>{matchup.winner_roster_id ? getTeamName(matchup.winner_roster_id) : 'Tie'}</strong>
+                                                </div>
                                             </li>
                                         ))}
                                     </ul>
