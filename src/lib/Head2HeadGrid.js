@@ -487,7 +487,7 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                         <thead className="bg-gray-50">
                             <tr>
                                 <th className="py-2 px-3 text-left font-semibold text-blue-700">Year</th>
-                                <th className="py-2 px-3 text-left font-semibold text-blue-700">Week</th>
+                                <th className="py-2 px-3 text-left font-semibold text-blue-700">Week</th> {/* Added Week header */}
                                 <th className="py-2 px-3 text-left font-semibold text-blue-700">{teamADisplayName} Score</th>
                                 <th className="py-2 px-3 text-left font-semibold text-blue-700">{teamBDisplayName} Score</th>
                                 <th className="py-2 px-3 text-left font-semibold text-blue-700">Winner</th>
@@ -506,6 +506,7 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                                 return (
                                     <tr key={idx} className="border-b border-gray-100 last:border-b-0">
                                         <td className="py-2 px-3">{match.year}</td>
+                                        <td className="py-2 px-3">{match.week}</td> {/* Display match.week */}
                                         <td className="py-2 px-3">{currentTeamAScore.toFixed(2)}</td>
                                         <td className="py-2 px-3">{currentTeamBScore.toFixed(2)}</td>
                                         <td className="py-2 px-3">{match.winnerDisplayName === 'Tie' ? 'Tie' : match.winnerDisplayName}</td>
