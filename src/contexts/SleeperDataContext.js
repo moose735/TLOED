@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import {
     fetchLeagueData,
-    fetchUsers,
+    fetchUsersData, // Corrected import name from fetchUsers to fetchUsersData
     fetchRostersWithDetails,
     fetchMatchupsForSeason,
     fetchPlayoffBracket,
@@ -65,7 +65,7 @@ export const SleeperDataProvider = ({ children }) => {
                 setLeagueData(currentLeague);
 
                 // 2. Fetch all users from the current league (users are generally consistent across seasons)
-                const users = await fetchUsers(CURRENT_LEAGUE_ID);
+                const users = await fetchUsersData(CURRENT_LEAGUE_ID); // Corrected function call
                 setUsersData(users);
 
                 // 3. Fetch NFL players data
@@ -114,7 +114,7 @@ export const SleeperDataProvider = ({ children }) => {
                     console.log(`Fetching data for season: ${year} (League ID: ${historicalLeagueId})`);
 
                     // Fetch rosters for this specific historical league ID
-                    const rosters = await fetchRostersWithDetails(historicalLeagueId, year);
+                    const rosters = await fetchRostersWithDetails(historicalLeagueId); // Removed year param as fetchRostersWithDetails doesn't use it
                     newHistoricalData.rostersBySeason[year] = rosters;
 
                     // Fetch matchups for this specific historical league ID
