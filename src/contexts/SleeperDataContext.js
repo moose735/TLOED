@@ -76,65 +76,111 @@ export const SleeperDataProvider = ({ children }) => {
     }, []); // Empty dependency array ensures this runs only once on mount
 
     // Memoize the getTeamName function so it's stable across renders
-    // It depends on historicalMatchups (specifically historicalMatchups.rostersBySeason and historicalMatchups.usersBySeason)
+    // It depends on usersData, rostersWithDetails, and historicalMatchups
     const getTeamName = useMemo(() => {
-        // Create a comprehensive map for user_id to display name/team name across ALL historical seasons
-        const allUserMap = new Map();
+        // Create global maps for fallback if season-specific data isn't found
+        const globalUserMap = new Map();
+        const globalRosterToOwnerMap = new Map();
+
+        // Populate global maps with ALL historical and current data
         if (historicalMatchups?.usersBySeason) {
             Object.values(historicalMatchups.usersBySeason).forEach(seasonUsers => {
                 if (Array.isArray(seasonUsers)) {
                     seasonUsers.forEach(user => {
-                        allUserMap.set(user.user_id, user);
+                        globalUserMap.set(user.user_id, user);
                     });
                 }
             });
         }
-        // Also add users from the current league's usersData, if it's different or more up-to-date
-        // This ensures the current league's users are prioritized if there's overlap or new users
-        if (usersData) {
+        if (usersData) { // Add current users, prioritizing them if there's overlap
             usersData.forEach(user => {
-                allUserMap.set(user.user_id, user);
+                globalUserMap.set(user.user_id, user);
             });
         }
 
-
-        // Create a comprehensive map for roster_id to owner_id across ALL historical seasons
-        const allRosterToOwnerMap = new Map();
         if (historicalMatchups?.rostersBySeason) {
             Object.values(historicalMatchups.rostersBySeason).forEach(seasonRosters => {
                 if (Array.isArray(seasonRosters)) {
                     seasonRosters.forEach(roster => {
-                        allRosterToOwnerMap.set(roster.roster_id, roster.owner_id);
+                        globalRosterToOwnerMap.set(roster.roster_id, roster.owner_id);
                     });
                 }
             });
         }
-        // Also add current league's rosters to the map
-        if (rostersWithDetails) {
+        if (rostersWithDetails) { // Add current rosters, prioritizing them if there's overlap
             rostersWithDetails.forEach(roster => {
-                allRosterToOwnerMap.set(roster.roster_id, roster.owner_id);
+                globalRosterToOwnerMap.set(roster.roster_id, roster.owner_id);
             });
         }
 
 
-        return (id) => {
-            // 1. Check if the ID is a user_id directly
-            const user = allUserMap.get(id);
-            if (user) {
-                return user.metadata?.team_name || user.display_name || `User ${id}`;
-            }
+        // The main getTeamName function, now accepting an optional 'season' parameter
+        return (id, season = null) => {
+            let user = null;
+            let ownerId = null;
 
-            // 2. If not a user_id, check if it's a roster_id (from any season) and find its owner
-            const ownerId = allRosterToOwnerMap.get(id);
-            if (ownerId) {
-                const ownerUser = allUserMap.get(ownerId);
-                if (ownerUser) {
-                    return ownerUser.metadata?.team_name || ownerUser.display_name || `Roster Owner ${ownerId}`;
+            // --- Attempt to get season-specific name first if season is provided ---
+            if (season && historicalMatchups?.usersBySeason?.[season] && historicalMatchups?.rostersBySeason?.[season]) {
+                const seasonUsers = historicalMatchups.usersBySeason[season];
+                const seasonRosters = historicalMatchups.rostersBySeason[season];
+
+                // 1. Check if ID is a user_id for this specific season
+                user = seasonUsers.find(u => u.user_id === id);
+                if (user) {
+                    return user.metadata?.team_name || user.display_name || `User ${id} (${season})`;
+                }
+
+                // 2. Check if ID is a roster_id for this specific season and find its owner
+                const rosterForSeason = seasonRosters.find(r => r.roster_id === id);
+                if (rosterForSeason?.owner_id) {
+                    ownerId = rosterForSeason.owner_id;
+                    user = seasonUsers.find(u => u.user_id === ownerId);
+                    if (user) {
+                        return user.metadata?.team_name || user.display_name || `Roster Owner ${ownerId} (${season})`;
+                    }
                 }
             }
-            return `Unknown Team (ID: ${id})`; // Fallback if no name found
+
+            // --- Fallback to current league data if season-specific lookup fails or no season provided ---
+            // This covers cases where the ID might be from the current year, or if historical data is missing
+            // for a specific season.
+            if (usersData) {
+                user = usersData.find(u => u.user_id === id);
+                if (user) {
+                    return user.metadata?.team_name || user.display_name || `User ${id} (Current)`;
+                }
+            }
+            if (rostersWithDetails) {
+                const rosterForCurrent = rostersWithDetails.find(r => r.roster_id === id);
+                if (rosterForCurrent?.owner_id) {
+                    ownerId = rosterForCurrent.owner_id;
+                    user = usersData.find(u => u.user_id === ownerId);
+                    if (user) {
+                        return user.metadata?.team_name || user.display_name || `Roster Owner ${ownerId} (Current)`;
+                    }
+                }
+            }
+
+
+            // --- Final Fallback: Use global aggregated maps ---
+            // This catches any IDs that weren't found in season-specific or current league data,
+            // but might exist in other historical seasons.
+            user = globalUserMap.get(id);
+            if (user) {
+                return user.metadata?.team_name || user.display_name || `User ${id} (Global)`;
+            }
+
+            ownerId = globalRosterToOwnerMap.get(id);
+            if (ownerId) {
+                const ownerUser = globalUserMap.get(ownerId);
+                if (ownerUser) {
+                    return ownerUser.metadata?.team_name || ownerUser.display_name || `Roster Owner ${ownerId} (Global)`;
+                }
+            }
+
+            return `Unknown Team (ID: ${id})`; // Final fallback
         };
-    }, [usersData, rostersWithDetails, historicalMatchups]); // Re-memoize if usersData, rostersWithDetails, or historicalMatchups change
+    }, [usersData, rostersWithDetails, historicalMatchups]); // Re-memoize if these dependencies change
 
     // 4. Memoize the context value to prevent unnecessary re-renders of consumers
     // Only update the 'value' object if any of its dependencies change
