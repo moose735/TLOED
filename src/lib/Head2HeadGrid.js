@@ -192,7 +192,7 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
         setLoading(false);
     }, [historicalData, getTeamName, contextLoading, contextError]); // Dependencies updated
 
-    // Create a single, consistent sorted list of display names for the grid axes
+    // Create a single, consistent sorted list of display names and their corresponding owner IDs for the grid axes
     const sortedDisplayNamesAndOwners = useMemo(() => {
         const uniqueOwnerIds = new Set();
         Object.values(headToHeadRecords).forEach(rivalry => {
@@ -315,8 +315,7 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
         const currentStreak = currentStreakTeam ? `${getTeamName(currentStreakTeam, null)} ${currentStreakCount}-game W streak` : 'No current streak';
 
         // Prepare data for ranking and comparison using careerDPRData prop
-        // careerDPRData is keyed by rosterId and contains teamName.
-        // We need to find the careerDPRData entry for the current owner's team name.
+        // careerDPRData is keyed by ownerId and contains teamName.
         const allTotalWins = careerDPRData ? careerDPRData.map(d => d.wins) : [];
         const allWinPercentages = careerDPRData ? careerDPRData.map(d => d.winPercentage) : [];
         const allCareerDPRs = careerDPRData ? careerDPRData.map(d => d.dpr) : [];
@@ -343,9 +342,10 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                     {[ownerA, ownerB].map(currentOwnerId => { // Iterate through owner IDs
                         const currentTeamDisplayName = getTeamName(currentOwnerId, null); // Get display name for current owner
-                        const overallTeamStats = careerDPRData?.find(d => d.teamName === currentTeamDisplayName); // Find stats by resolved team name
-                        const opponentTeamDisplayName = (currentTeamDisplayName === teamADisplayName) ? teamBDisplayName : teamADisplayName;
-                        const opponentTeamStats = careerDPRData?.find(d => d.teamName === opponentTeamDisplayName);
+                        // FIX: Look up overallTeamStats by ownerId directly
+                        const overallTeamStats = careerDPRData?.find(d => d.ownerId === currentOwnerId);
+                        const opponentOwnerId = (currentOwnerId === ownerA) ? ownerB : ownerA;
+                        const opponentTeamStats = careerDPRData?.find(d => d.ownerId === opponentOwnerId);
 
                         // Individual Stats values
                         const totalWins = overallTeamStats ? overallTeamStats.wins : null;
