@@ -79,7 +79,7 @@ export async function fetchLeagueDetails(leagueId) {
  */
 export async function fetchLeagueData(currentLeagueId) {
     let leagues = [];
-    let leagueId = currentLeagueId;
+    let leagueIdToFetch = currentLeagueId; // Use a distinct variable name for clarity in the loop
 
     // --- Added check for valid CURRENT_LEAGUE_ID ---
     if (!currentLeagueId || currentLeagueId === '0' || currentLeagueId === '') {
@@ -90,22 +90,32 @@ export async function fetchLeagueData(currentLeagueId) {
 
     // Cache the entire chain of leagues for longer
     const CACHE_KEY = `league_chain_${currentLeagueId}`;
-    const cachedEntry = inMemoryCache.get(CACHE_KEY);
     const now = Date.now();
     const expiryMs = 24 * 60 * 60 * 1000; // 24 hours for league chain
 
+    const cachedEntry = inMemoryCache.get(CACHE_KEY);
     if (cachedEntry && (now - cachedEntry.timestamp < expiryMs)) {
+        console.log(`Cache hit for ${CACHE_KEY}`);
         return cachedEntry.data;
     }
 
     try {
-        while (leagueId) {
-            const league = await fetchLeagueDetails(leagueId);
+        while (leagueIdToFetch) { // Loop as long as leagueIdToFetch is a truthy value
+            const league = await fetchLeagueDetails(leagueIdToFetch);
             if (league) {
                 leagues.push(league);
-                leagueId = league.previous_league_id; // Move to the previous season's league ID
+                // Crucial change: Ensure previous_league_id is not '0' or an empty string,
+                // otherwise set it to null to terminate the loop.
+                if (league.previous_league_id && league.previous_league_id !== '0' && league.previous_league_id !== '') {
+                    leagueIdToFetch = league.previous_league_id;
+                } else {
+                    leagueIdToFetch = null; // Terminate the loop
+                }
             } else {
-                break; // No more previous leagues or error fetching
+                // If fetchLeagueDetails returns null (e.g., 404 for a non-existent league),
+                // or any other error, break the loop.
+                console.warn(`Could not fetch details for league ID ${leagueIdToFetch}. Terminating historical league chain fetch.`);
+                leagueIdToFetch = null; // Terminate the loop
             }
         }
     } catch (error) {
