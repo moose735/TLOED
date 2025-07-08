@@ -18,11 +18,11 @@ const SleeperDataContext = createContext();
 export const SleeperDataProvider = ({ children }) => {
     // State to hold all the fetched data
     const [leagueData, setLeagueData] = useState(null);
-    const [usersData, setUsersData] = useState(null);
-    const [rostersWithDetails, setRostersWithDetails] = useState(null);
+    const [usersData, setUsersData] = useState(null); // This holds current league's users
+    const [rostersWithDetails, setRostersWithDetails] = useState(null); // This holds current league's rosters
     const [nflPlayers, setNflPlayers] = useState(null);
     const [nflState, setNflState] = useState(null);
-    const [historicalMatchups, setHistoricalMatchups] = useState(null);
+    const [historicalMatchups, setHistoricalMatchups] = useState(null); // This holds historicalData with rostersBySeason AND usersBySeason
     const [allDraftHistory, setAllDraftHistory] = useState(null);
 
     // State for loading and error handling
@@ -38,33 +38,33 @@ export const SleeperDataProvider = ({ children }) => {
                 // Use Promise.all to fetch all data concurrently for efficiency
                 const [
                     leagues,
-                    users,
-                    rosters,
+                    users, // Current league's users
+                    rosters, // Current league's rosters
                     players,
                     state,
-                    matchups,
+                    matchups, // All historical data including rostersBySeason and usersBySeason
                     draftHistory
                 ] = await Promise.all([
                     fetchLeagueData(CURRENT_LEAGUE_ID),
-                    fetchUsersData(CURRENT_LEAGUE_ID),
+                    fetchUsersData(CURRENT_LEAGUE_ID), // Fetch current league's users
                     fetchRostersWithDetails(CURRENT_LEAGUE_ID),
                     fetchNFLPlayers(),
                     fetchNFLState(),
-                    fetchAllHistoricalMatchups(),
+                    fetchAllHistoricalMatchups(), // This now fetches historical users too
                     fetchAllDraftHistory(),
                 ]);
 
                 // Update state with fetched data
                 setLeagueData(leagues);
-                setUsersData(users);
-                setRostersWithDetails(rosters);
+                setUsersData(users); // Set current league's users
+                setRostersWithDetails(rosters); // Set current league's rosters
                 setNflPlayers(players);
                 setNflState(state);
-                setHistoricalMatchups(matchups);
+                setHistoricalMatchups(matchups); // Set all historical data
                 setAllDraftHistory(draftHistory);
 
                 // Set loading to false ONLY after all data states have been updated
-                setLoading(false); 
+                setLoading(false);
             } catch (err) {
                 console.error("Failed to load initial Sleeper data:", err);
                 setError(err); // Store the error object
@@ -76,52 +76,72 @@ export const SleeperDataProvider = ({ children }) => {
     }, []); // Empty dependency array ensures this runs only once on mount
 
     // Memoize the getTeamName function so it's stable across renders
-    // It depends on usersData and rostersWithDetails
+    // It depends on historicalMatchups (specifically historicalMatchups.rostersBySeason and historicalMatchups.usersBySeason)
     const getTeamName = useMemo(() => {
-        // Create a map for quick lookup of user_id to display name/team name
-        const userMap = new Map();
+        // Create a comprehensive map for user_id to display name/team name across ALL historical seasons
+        const allUserMap = new Map();
+        if (historicalMatchups?.usersBySeason) {
+            Object.values(historicalMatchups.usersBySeason).forEach(seasonUsers => {
+                if (Array.isArray(seasonUsers)) {
+                    seasonUsers.forEach(user => {
+                        allUserMap.set(user.user_id, user);
+                    });
+                }
+            });
+        }
+        // Also add users from the current league's usersData, if it's different or more up-to-date
+        // This ensures the current league's users are prioritized if there's overlap or new users
         if (usersData) {
             usersData.forEach(user => {
-                userMap.set(user.user_id, user);
+                allUserMap.set(user.user_id, user);
             });
         }
 
-        // Create a map for quick lookup of roster_id to owner_id for the *current* league
-        // Assuming rostersWithDetails contains roster data for the current league.
-        // If rostersWithDetails contains multiple seasons, this needs refinement.
-        // For now, it's assumed to be the current league's rosters as fetched by fetchRostersWithDetails(CURRENT_LEAGUE_ID)
-        const rosterToOwnerMap = new Map();
+
+        // Create a comprehensive map for roster_id to owner_id across ALL historical seasons
+        const allRosterToOwnerMap = new Map();
+        if (historicalMatchups?.rostersBySeason) {
+            Object.values(historicalMatchups.rostersBySeason).forEach(seasonRosters => {
+                if (Array.isArray(seasonRosters)) {
+                    seasonRosters.forEach(roster => {
+                        allRosterToOwnerMap.set(roster.roster_id, roster.owner_id);
+                    });
+                }
+            });
+        }
+        // Also add current league's rosters to the map
         if (rostersWithDetails) {
             rostersWithDetails.forEach(roster => {
-                rosterToOwnerMap.set(roster.roster_id, roster.owner_id);
+                allRosterToOwnerMap.set(roster.roster_id, roster.owner_id);
             });
         }
 
+
         return (id) => {
-            // Check if the ID is a user_id first
-            const user = userMap.get(id);
+            // 1. Check if the ID is a user_id directly
+            const user = allUserMap.get(id);
             if (user) {
                 return user.metadata?.team_name || user.display_name || `User ${id}`;
             }
 
-            // If not a user_id, check if it's a roster_id and find its owner
-            const ownerId = rosterToOwnerMap.get(id);
+            // 2. If not a user_id, check if it's a roster_id (from any season) and find its owner
+            const ownerId = allRosterToOwnerMap.get(id);
             if (ownerId) {
-                const ownerUser = userMap.get(ownerId);
+                const ownerUser = allUserMap.get(ownerId);
                 if (ownerUser) {
                     return ownerUser.metadata?.team_name || ownerUser.display_name || `Roster Owner ${ownerId}`;
                 }
             }
-            return `Loading Team...`; // Fallback if no name found
+            return `Unknown Team (ID: ${id})`; // Fallback if no name found
         };
-    }, [usersData, rostersWithDetails]); // Re-memoize if usersData or rostersWithDetails change
+    }, [usersData, rostersWithDetails, historicalMatchups]); // Re-memoize if usersData, rostersWithDetails, or historicalMatchups change
 
     // 4. Memoize the context value to prevent unnecessary re-renders of consumers
     // Only update the 'value' object if any of its dependencies change
     const contextValue = useMemo(() => ({
         leagueData,
-        usersData,
-        rostersWithDetails, // This is the current league's rosters
+        usersData, // Current league's users
+        rostersWithDetails, // Current league's rosters
         nflPlayers,
         nflState,
         historicalData: historicalMatchups, // Renamed for clarity in context
