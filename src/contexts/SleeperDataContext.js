@@ -116,68 +116,108 @@ export const SleeperDataProvider = ({ children }) => {
 
         // The main getTeamName function, now accepting an optional 'season' parameter
         return (id, season = null) => {
+            console.log(`getTeamName called for ID: ${id}, Season: ${season}`);
             let user = null;
             let ownerId = null;
+            let resolvedName = null;
 
             // --- Attempt to get season-specific name first if season is provided ---
             if (season && historicalMatchups?.usersBySeason?.[season] && historicalMatchups?.rostersBySeason?.[season]) {
                 const seasonUsers = historicalMatchups.usersBySeason[season];
                 const seasonRosters = historicalMatchups.rostersBySeason[season];
+                console.log(`  Attempting season-specific lookup for ${season}...`);
 
                 // 1. Check if ID is a user_id for this specific season
                 user = seasonUsers.find(u => u.user_id === id);
                 if (user) {
-                    return user.metadata?.team_name || user.display_name || `User ${id} (${season})`;
+                    resolvedName = user.metadata?.team_name || user.display_name;
+                    if (resolvedName) {
+                        console.log(`  Found user_id directly in season ${season}: ${resolvedName}`);
+                        return resolvedName;
+                    }
+                    console.log(`  User ID ${id} found in season ${season}, but no team_name or display_name. Falling back.`);
                 }
 
                 // 2. Check if ID is a roster_id for this specific season and find its owner
-                const rosterForSeason = seasonRosters.find(r => r.roster_id === id);
+                const rosterForSeason = seasonRosters.find(r => String(r.roster_id) === String(id)); // Ensure string comparison
                 if (rosterForSeason?.owner_id) {
                     ownerId = rosterForSeason.owner_id;
                     user = seasonUsers.find(u => u.user_id === ownerId);
                     if (user) {
-                        return user.metadata?.team_name || user.display_name || `Roster Owner ${ownerId} (${season})`;
+                        resolvedName = user.metadata?.team_name || user.display_name;
+                        if (resolvedName) {
+                            console.log(`  Found roster_id ${id} (owner ${ownerId}) in season ${season}: ${resolvedName}`);
+                            return resolvedName;
+                        }
+                        console.log(`  Roster ID ${id} (owner ${ownerId}) found in season ${season}, but no team_name or display_name. Falling back.`);
+                    } else {
+                        console.log(`  Roster ID ${id} found in season ${season}, but owner_id ${ownerId} not found in season users.`);
                     }
+                } else {
+                    console.log(`  Roster ID ${id} not found in season ${season} rosters, or no owner_id.`);
                 }
             }
 
             // --- Fallback to current league data if season-specific lookup fails or no season provided ---
-            // This covers cases where the ID might be from the current year, or if historical data is missing
-            // for a specific season.
-            if (usersData) {
+            console.log(`  Attempting current league lookup...`);
+            if (usersData) { // usersData is the current league's users
                 user = usersData.find(u => u.user_id === id);
                 if (user) {
-                    return user.metadata?.team_name || user.display_name || `User ${id} (Current)`;
+                    resolvedName = user.metadata?.team_name || user.display_name;
+                    if (resolvedName) {
+                        console.log(`  Found user_id directly in current league: ${resolvedName}`);
+                        return resolvedName;
+                    }
+                    console.log(`  User ID ${id} found in current league, but no team_name or display_name. Falling back.`);
                 }
             }
-            if (rostersWithDetails) {
-                const rosterForCurrent = rostersWithDetails.find(r => r.roster_id === id);
+            if (rostersWithDetails) { // rostersWithDetails is the current league's rosters
+                const rosterForCurrent = rostersWithDetails.find(r => String(r.roster_id) === String(id)); // Ensure string comparison
                 if (rosterForCurrent?.owner_id) {
                     ownerId = rosterForCurrent.owner_id;
                     user = usersData.find(u => u.user_id === ownerId);
                     if (user) {
-                        return user.metadata?.team_name || user.display_name || `Roster Owner ${ownerId} (Current)`;
+                        resolvedName = user.metadata?.team_name || user.display_name;
+                        if (resolvedName) {
+                            console.log(`  Found roster_id ${id} (owner ${ownerId}) in current league: ${resolvedName}`);
+                            return resolvedName;
+                        }
+                        console.log(`  Roster ID ${id} (owner ${ownerId}) found in current league, but no team_name or display_name. Falling back.`);
+                    } else {
+                        console.log(`  Roster ID ${id} found in current league, but owner_id ${ownerId} not found in current users.`);
                     }
+                } else {
+                    console.log(`  Roster ID ${id} not found in current league rosters, or no owner_id.`);
                 }
             }
 
-
             // --- Final Fallback: Use global aggregated maps ---
-            // This catches any IDs that weren't found in season-specific or current league data,
-            // but might exist in other historical seasons.
+            console.log(`  Attempting global lookup...`);
             user = globalUserMap.get(id);
             if (user) {
-                return user.metadata?.team_name || user.display_name || `User ${id} (Global)`;
+                resolvedName = user.metadata?.team_name || user.display_name;
+                if (resolvedName) {
+                    console.log(`  Found user_id directly in global map: ${resolvedName}`);
+                    return resolvedName;
+                }
+                console.log(`  User ID ${id} found in global map, but no team_name or display_name. Falling back.`);
             }
 
             ownerId = globalRosterToOwnerMap.get(id);
             if (ownerId) {
                 const ownerUser = globalUserMap.get(ownerId);
                 if (ownerUser) {
-                    return ownerUser.metadata?.team_name || ownerUser.display_name || `Roster Owner ${ownerId} (Global)`;
+                    resolvedName = ownerUser.metadata?.team_name || ownerUser.display_name;
+                    if (resolvedName) {
+                        console.log(`  Found roster_id ${id} (owner ${ownerId}) in global map: ${resolvedName}`);
+                        return resolvedName;
+                    }
+                    console.log(`  Roster ID ${id} (owner ${ownerId}) found in global map, but no team_name or display_name. Falling back.`);
+                } else {
+                    console.log(`  Roster ID ${id} found in global map, but owner_id ${ownerId} not found in global users.`);
                 }
             }
-
+            console.log(`  No team name found for ID: ${id}. Returning fallback.`);
             return `Unknown Team (ID: ${id})`; // Final fallback
         };
     }, [usersData, rostersWithDetails, historicalMatchups]); // Re-memoize if these dependencies change
