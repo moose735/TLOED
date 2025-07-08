@@ -2,7 +2,6 @@
 import React, { useEffect, useState } from 'react';
 import {
     fetchAllHistoricalMatchups
-    // Import other functions if you want to display their results here too
 } from '../utils/sleeperApi';
 
 const SleeperMatchupTester = () => {
@@ -17,7 +16,7 @@ const SleeperMatchupTester = () => {
                 setError(null);
                 const data = await fetchAllHistoricalMatchups();
                 setHistoricalData(data);
-                console.log("Fetched Historical Data (with brackets):", data); // Log the full structure
+                console.log("Fetched Historical Data (with brackets and scores):", data); // Log the full structure
             } catch (err) {
                 console.error("Error fetching historical data in component:", err);
                 setError(err.message || "Failed to fetch historical data.");
@@ -43,7 +42,7 @@ const SleeperMatchupTester = () => {
 
     // --- Data Processing for Display ---
     let totalSeasonsFound = Object.keys(historicalData.leaguesMetadataBySeason).length;
-    let totalMatchupsFound = 0;
+    let totalRegularSeasonMatchupsFound = 0; // Renamed to clarify
     const uniqueRosterIds = new Set();
     const uniqueUserIds = new Set(); // To track actual users
 
@@ -57,16 +56,19 @@ const SleeperMatchupTester = () => {
                 <p><strong>Total Seasons Found:</strong> {totalSeasonsFound}</p>
 
                 {Object.entries(historicalData.matchupsBySeason).map(([, weeks]) => {
-                    Object.values(weeks).forEach(matchups => {
-                        totalMatchupsFound += matchups.length;
+                    Object.entries(weeks).forEach(([weekNum, matchups]) => {
+                        // Assuming weeks up to playoff_start_week-1 are regular season.
+                        // We need leagueMetadata to get playoff_start_week here for accurate count.
+                        // For simplicity in the summary, we'll count all fetched matchups as a total.
+                        totalRegularSeasonMatchupsFound += matchups.length;
                     });
                 })}
-                <p><strong>Total Matchups Found (across all active seasons):</strong> {totalMatchupsFound}</p>
+                <p><strong>Total Matchups Found (across all active seasons, including playoffs):</strong> {totalRegularSeasonMatchupsFound}</p> {/* Adjusted text */}
 
                 {Object.entries(historicalData.rostersBySeason).forEach(([, rosters]) => {
                     rosters.forEach(roster => {
                         uniqueRosterIds.add(roster.roster_id);
-                        if (roster.owner_id) { // Ensure owner_id exists
+                        if (roster.owner_id) {
                             uniqueUserIds.add(roster.owner_id);
                         }
                     });
@@ -82,7 +84,7 @@ const SleeperMatchupTester = () => {
 
             {/* Detailed Season Breakdown */}
             {Object.entries(historicalData.leaguesMetadataBySeason)
-                .sort(([seasonA], [seasonB]) => parseInt(seasonB) - parseInt(seasonA)) // Sort seasons from newest to oldest
+                .sort(([seasonA], [seasonB]) => parseInt(seasonB) - parseInt(seasonA))
                 .map(([season, leagueMeta]) => {
                     const seasonMatchups = historicalData.matchupsBySeason[season] || {};
                     const seasonRosters = historicalData.rostersBySeason[season] || [];
@@ -95,21 +97,21 @@ const SleeperMatchupTester = () => {
                         rosterToUserMap.set(roster.roster_id, {
                             displayName: roster.ownerDisplayName,
                             teamName: roster.ownerTeamName,
-                            userId: roster.owner_id // Include userId for verification
+                            userId: roster.owner_id
                         });
                     });
 
                     // Helper to get team info from roster ID or bracket object
                     const getTeamInfo = (teamIdentifier) => {
-                        if (typeof teamIdentifier === 'number') { // It's a roster_id
+                        if (typeof teamIdentifier === 'number') {
                             const team = rosterToUserMap.get(teamIdentifier);
                             return team ? `${team.teamName} (Owner: ${team.displayName})` : `Roster ${teamIdentifier}`;
-                        } else if (teamIdentifier && (teamIdentifier.w || teamIdentifier.l)) { // It's a bracket winner/loser object
+                        } else if (teamIdentifier && (teamIdentifier.w || teamIdentifier.l)) {
                             const type = teamIdentifier.w ? 'Winner' : 'Loser';
                             const matchId = teamIdentifier.w || teamIdentifier.l;
                             return `${type} of Match ${matchId}`;
                         }
-                        return 'TBD'; // Default for null or unexpected
+                        return 'TBD';
                     };
 
                     return (
@@ -140,7 +142,8 @@ const SleeperMatchupTester = () => {
                                 <h3 style={{ color: '#007bff' }}>Regular Season Matchups in {season}:</h3>
                                 {Object.keys(seasonMatchups).length > 0 ? (
                                     Object.entries(seasonMatchups)
-                                        .sort(([weekA], [weekB]) => parseInt(weekA) - parseInt(weekB)) // Sort weeks numerically
+                                        .filter(([weekNum]) => parseInt(weekNum) < (leagueMeta.settings?.playoff_start_week || 99)) // Filter for regular season
+                                        .sort(([weekA], [weekB]) => parseInt(weekA) - parseInt(weekB))
                                         .map(([week, matchups]) => (
                                             <div key={`${season}-week-${week}-regular`} style={{ marginBottom: '20px' }}>
                                                 <h4 style={{ color: '#666' }}>Week {week} ({matchups.length} Matchups)</h4>
@@ -198,15 +201,14 @@ const SleeperMatchupTester = () => {
                                                         <li key={`wb-${match.m}`} style={{ marginBottom: '10px', padding: '10px', border: '1px solid #eee', borderRadius: '5px', backgroundColor: '#fdfdfd' }}>
                                                             <strong>Round {match.r}, Match {match.m}:</strong>
                                                             <br />
-                                                            Team 1: {getTeamInfo(match.t1 || match.t1_from)} {match.t1 && `(${rosterToUserMap.get(match.t1)?.teamName || match.t1})`}
+                                                            {/* Display scores if available */}
+                                                            Team 1: {getTeamInfo(match.t1 || match.t1_from)} {typeof match.t1_score === 'number' ? `(${match.t1_score} points)` : ''}
                                                             <br />
-                                                            Team 2: {getTeamInfo(match.t2 || match.t2_from)} {match.t2 && `(${rosterToUserMap.get(match.t2)?.teamName || match.t2})`}
+                                                            Team 2: {getTeamInfo(match.t2 || match.t2_from)} {typeof match.t2_score === 'number' ? `(${match.t2_score} points)` : ''}
                                                             <br />
                                                             Winner: {match.w ? getTeamInfo(match.w) : 'TBD'}
-                                                            {match.w && ` (${rosterToUserMap.get(match.w)?.teamName || match.w})`}
                                                             <br />
                                                             Loser: {match.l ? getTeamInfo(match.l) : 'TBD'}
-                                                            {match.l && ` (${rosterToUserMap.get(match.l)?.teamName || match.l})`}
                                                             {match.p && ` (Playoff Rank: ${match.p})`}
                                                         </li>
                                                     ))}
@@ -222,15 +224,14 @@ const SleeperMatchupTester = () => {
                                                         <li key={`lb-${match.m}`} style={{ marginBottom: '10px', padding: '10px', border: '1px solid #eee', borderRadius: '5px', backgroundColor: '#fdfdfd' }}>
                                                             <strong>Round {match.r}, Match {match.m}:</strong>
                                                             <br />
-                                                            Team 1: {getTeamInfo(match.t1 || match.t1_from)} {match.t1 && `(${rosterToUserMap.get(match.t1)?.teamName || match.t1})`}
+                                                            {/* Display scores if available */}
+                                                            Team 1: {getTeamInfo(match.t1 || match.t1_from)} {typeof match.t1_score === 'number' ? `(${match.t1_score} points)` : ''}
                                                             <br />
-                                                            Team 2: {getTeamInfo(match.t2 || match.t2_from)} {match.t2 && `(${rosterToUserMap.get(match.t2)?.teamName || match.t2})`}
+                                                            Team 2: {getTeamInfo(match.t2 || match.t2_from)} {typeof match.t2_score === 'number' ? `(${match.t2_score} points)` : ''}
                                                             <br />
                                                             Winner: {match.w ? getTeamInfo(match.w) : 'TBD'}
-                                                            {match.w && ` (${rosterToUserMap.get(match.w)?.teamName || match.w})`}
                                                             <br />
                                                             Loser: {match.l ? getTeamInfo(match.l) : 'TBD'}
-                                                            {match.l && ` (${rosterToUserMap.get(match.l)?.teamName || match.l})`}
                                                             {match.p && ` (Playoff Rank: ${match.p})`}
                                                         </li>
                                                     ))}
