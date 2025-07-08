@@ -339,82 +339,101 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                 </div>
 
                 {/* Main Teams Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    {[ownerA, ownerB].map(currentOwnerId => { // Iterate through owner IDs
-                        const currentTeamDisplayName = getTeamName(currentOwnerId, null); // Get display name for current owner
-                        // FIX: Look up overallTeamStats by ownerId directly
-                        const overallTeamStats = careerDPRData?.find(d => d.ownerId === currentOwnerId);
-                        const opponentOwnerId = (currentOwnerId === ownerA) ? ownerB : ownerA;
-                        const opponentTeamStats = careerDPRData?.find(d => d.ownerId === opponentOwnerId);
+                {(() => {
+                    const overallTeamAStats = careerDPRData?.find(d => d.ownerId === ownerA);
+                    const overallTeamBStats = careerDPRData?.find(d => d.ownerId === ownerB);
 
-                        // Individual Stats values
-                        const totalWins = overallTeamStats ? overallTeamStats.wins : null;
-                        const winPercentage = overallTeamStats && typeof overallTeamStats.winPercentage === 'number'
-                                                 ? overallTeamStats.winPercentage
-                                                 : null;
-                        const careerDPR = overallTeamStats ? overallTeamStats.dpr : null;
-                        const weeklyHighScore = overallTeamStats ? overallTeamStats.highScore : null;
-                        const totalPointsScored = overallTeamStats ? overallTeamStats.pointsFor : null;
+                    // Check if at least one team has some meaningful stats to display
+                    const hasAnyStats = (stats) => stats && (
+                        (stats.wins !== null && stats.wins !== 0) ||
+                        (stats.pointsFor !== null && stats.pointsFor !== 0) ||
+                        (stats.dpr !== null && stats.dpr !== 0) ||
+                        (stats.highScore !== null && stats.highScore !== 0) ||
+                        (stats.winPercentage !== null && stats.winPercentage !== 0)
+                    );
 
-                        // Opponent's Individual Stats values for comparison
-                        const oppTotalWins = opponentTeamStats ? opponentTeamStats.wins : null;
-                        const oppWinPercentage = opponentTeamStats ? opponentTeamStats.winPercentage : null;
-                        const oppCareerDPR = opponentTeamStats ? opponentTeamStats.dpr : null;
-                        const oppWeeklyHighScore = opponentTeamStats ? opponentTeamStats.highScore : null;
-                        const oppTotalPointsScored = opponentTeamStats ? opponentTeamStats.pointsFor : null;
-
-                        // Function to determine cell background class
-                        const getComparisonClass = (teamValue, opponentValue, isHigherBetter = true) => {
-                            if (teamValue === null || opponentValue === null || typeof teamValue === 'undefined' || typeof opponentValue === 'undefined') {
-                                return 'bg-blue-50'; // Default if data is missing
-                            }
-                            if (teamValue === opponentValue) return 'bg-yellow-100 text-yellow-800'; // Tie
-                            if (isHigherBetter) {
-                                return teamValue > opponentValue ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
-                            } else { // Lower is better (e.g., lower rank)
-                                return teamValue < opponentValue ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
-                            }
-                        };
-
-                        // Rank calculations
-                        const totalWinsRank = calculateRank(totalWins, allTotalWins, true);
-                        const winPercentageRank = calculateRank(winPercentage, allWinPercentages, true);
-                        const careerDPRRank = calculateRank(careerDPR, allCareerDPRs, true);
-                        const weeklyHighScoreRank = calculateRank(weeklyHighScore, allHighestSingleGameScores, true);
-                        const totalPointsScoredRank = calculateRank(totalPointsScored, allTotalPointsScored, true);
-
-
+                    if (!hasAnyStats(overallTeamAStats) && !hasAnyStats(overallTeamBStats)) {
                         return (
-                            <div key={currentOwnerId} className="bg-white p-5 rounded-lg shadow-md border border-gray-200 flex flex-col items-center text-center">
-                                <div className="w-16 h-16 bg-blue-200 rounded-full flex items-center justify-center text-blue-800 font-bold text-2xl mb-3">
-                                    {currentTeamDisplayName.charAt(0)} {/* Placeholder avatar */}
-                                </div>
-                                <h4 className="text-xl font-bold text-gray-800 mb-2">{currentTeamDisplayName}</h4>
-                                <div className="grid grid-cols-2 gap-2 w-full text-xs font-medium text-gray-700">
-                                    <div className={`${getComparisonClass(totalWins, oppTotalWins)} p-2 rounded-md`}>
-                                        Total Wins: {totalWins !== null ? totalWins : 'N/A'} (Rank: {totalWinsRank})
-                                    </div>
-                                    <div className={`${getComparisonClass(winPercentage, oppWinPercentage)} p-2 rounded-md`}>
-                                        Win %: {winPercentage !== null ? (winPercentage * 100).toFixed(1) + '%' : 'N/A'} (Rank: {winPercentageRank})
-                                    </div>
-                                    <div className={`${getComparisonClass(careerDPR, oppCareerDPR)} p-2 rounded-md`}>
-                                        Career DPR: {careerDPR !== null ? careerDPR.toFixed(2) : 'N/A'} (Rank: {careerDPRRank})
-                                    </div>
-                                    <div className={`${getComparisonClass(weeklyHighScore, oppWeeklyHighScore)} p-2 rounded-md`}>
-                                        Weekly High Score: {weeklyHighScore !== null ? weeklyHighScore.toFixed(2) : 'N/A'} (Rank: {weeklyHighScoreRank})
-                                    </div>
-                                    <div className={`${getComparisonClass(totalPointsScored, oppTotalPointsScored)} p-2 rounded-md`}>
-                                        Total Points Scored: {totalPointsScored !== null ? totalPointsScored.toFixed(2) : 'N/A'} (Rank: {totalPointsScoredRank})
-                                    </div>
-                                    {/* Add other stats if needed from overallTeamStats that are not directly compared */}
-                                    <div className="bg-blue-50 p-2 rounded-md">Draft Rank: N/A</div>
-                                    <div className="bg-blue-50 p-2 rounded-md">Manager Rank: N/A</div>
-                                    <div className="bg-blue-50 p-2 rounded-md">Medal Score: N/A</div>
-                                </div>
+                            <div className="text-center text-gray-600 text-lg p-4 bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+                                No detailed career statistics available for this rivalry's teams.
                             </div>
                         );
-                    })}
-                </div>
+                    }
+
+                    return (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                            {[ownerA, ownerB].map(currentOwnerId => {
+                                const currentTeamDisplayName = getTeamName(currentOwnerId, null);
+                                const overallTeamStats = careerDPRData?.find(d => d.ownerId === currentOwnerId);
+                                const opponentOwnerId = (currentOwnerId === ownerA) ? ownerB : ownerA;
+                                const opponentTeamStats = careerDPRData?.find(d => d.ownerId === opponentOwnerId);
+
+                                // Individual Stats values
+                                const totalWins = overallTeamStats ? overallTeamStats.wins : null;
+                                const winPercentage = overallTeamStats && typeof overallTeamStats.winPercentage === 'number'
+                                                         ? overallTeamStats.winPercentage
+                                                         : null;
+                                const careerDPR = overallTeamStats ? overallTeamStats.dpr : null;
+                                const weeklyHighScore = overallTeamStats ? overallTeamStats.highScore : null;
+                                const totalPointsScored = overallTeamStats ? overallTeamStats.pointsFor : null;
+
+                                // Opponent's Individual Stats values for comparison
+                                const oppTotalWins = opponentTeamStats ? opponentTeamStats.wins : null;
+                                const oppWinPercentage = opponentTeamStats ? opponentTeamStats.winPercentage : null;
+                                const oppCareerDPR = opponentTeamStats ? opponentTeamStats.dpr : null;
+                                const oppWeeklyHighScore = opponentTeamStats ? opponentTeamStats.highScore : null;
+                                const oppTotalPointsScored = opponentTeamStats ? opponentTeamStats.pointsFor : null;
+
+                                const getComparisonClass = (teamValue, opponentValue, isHigherBetter = true) => {
+                                    if (teamValue === null || opponentValue === null || typeof teamValue === 'undefined' || typeof opponentValue === 'undefined' || isNaN(teamValue) || isNaN(opponentValue)) {
+                                        return 'bg-blue-50';
+                                    }
+                                    if (teamValue === opponentValue) return 'bg-yellow-100 text-yellow-800';
+                                    if (isHigherBetter) {
+                                        return teamValue > opponentValue ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+                                    } else {
+                                        return teamValue < opponentValue ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+                                    }
+                                };
+
+                                const totalWinsRank = calculateRank(totalWins, allTotalWins, true);
+                                const winPercentageRank = calculateRank(winPercentage, allWinPercentages, true);
+                                const careerDPRRank = calculateRank(careerDPR, allCareerDPRs, true);
+                                const weeklyHighScoreRank = calculateRank(weeklyHighScore, allHighestSingleGameScores, true);
+                                const totalPointsScoredRank = calculateRank(totalPointsScored, allTotalPointsScored, true);
+
+                                return (
+                                    <div key={currentOwnerId} className="bg-white p-5 rounded-lg shadow-md border border-gray-200 flex flex-col items-center text-center">
+                                        <div className="w-16 h-16 bg-blue-200 rounded-full flex items-center justify-center text-blue-800 font-bold text-2xl mb-3">
+                                            {currentTeamDisplayName.charAt(0)}
+                                        </div>
+                                        <h4 className="text-xl font-bold text-gray-800 mb-2">{currentTeamDisplayName}</h4>
+                                        <div className="grid grid-cols-2 gap-2 w-full text-xs font-medium text-gray-700">
+                                            <div className={`${getComparisonClass(totalWins, oppTotalWins)} p-2 rounded-md`}>
+                                                Total Wins: {totalWins !== null ? totalWins : 'N/A'} (Rank: {totalWinsRank})
+                                            </div>
+                                            <div className="bg-blue-50 p-2 rounded-md">
+                                                Win %: {winPercentage !== null ? (winPercentage * 100).toFixed(1) + '%' : 'N/A'} (Rank: {winPercentageRank})
+                                            </div>
+                                            <div className={`${getComparisonClass(careerDPR, oppCareerDPR)} p-2 rounded-md`}>
+                                                Career DPR: {careerDPR !== null ? careerDPR.toFixed(2) : 'N/A'} (Rank: {careerDPRRank})
+                                            </div>
+                                            <div className={`${getComparisonClass(weeklyHighScore, oppWeeklyHighScore)} p-2 rounded-md`}>
+                                                Weekly High Score: {weeklyHighScore !== null ? weeklyHighScore.toFixed(2) : 'N/A'} (Rank: {weeklyHighScoreRank})
+                                            </div>
+                                            <div className={`${getComparisonClass(totalPointsScored, oppTotalPointsScored)} p-2 rounded-md`}>
+                                                Total Points Scored: {totalPointsScored !== null ? totalPointsScored.toFixed(2) : 'N/A'} (Rank: {totalPointsScoredRank})
+                                            </div>
+                                            <div className="bg-blue-50 p-2 rounded-md">Draft Rank: N/A</div>
+                                            <div className="bg-blue-50 p-2 rounded-md">Manager Rank: N/A</div>
+                                            <div className="bg-blue-50 p-2 rounded-md">Medal Score: N/A</div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    );
+                })()}
 
                 {/* VERSUS Section */}
                 <div className="bg-blue-700 text-white p-4 rounded-lg shadow-inner text-center mb-6">
@@ -496,7 +515,7 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                         <thead className="bg-gray-50">
                             <tr>
                                 <th className="py-2 px-3 text-left font-semibold text-blue-700">Year</th>
-                                <th className="py-2 px-3 text-left font-semibold text-blue-700">Week</th> {/* Added Week header */}
+                                <th className="py-2 px-3 text-left font-semibold text-blue-700">Week</th>
                                 <th className="py-2 px-3 text-left font-semibold text-blue-700">{teamADisplayName} Score</th>
                                 <th className="py-2 px-3 text-left font-semibold text-blue-700">{teamBDisplayName} Score</th>
                                 <th className="py-2 px-3 text-left font-semibold text-blue-700">Winner</th>
@@ -505,7 +524,6 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                         </thead>
                         <tbody>
                             {rivalry.allMatches.sort((a,b) => b.year - a.year || b.week - a.week).map((match, idx) => {
-                                // Scores are already correctly assigned based on owner IDs in the stored match object
                                 let currentTeamAScore = (match.team1OwnerId === ownerA) ? match.team1Score : match.team2Score;
                                 let currentTeamBScore = (match.team1OwnerId === ownerB) ? match.team1Score : match.team2Score;
 
@@ -515,7 +533,7 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                                 return (
                                     <tr key={idx} className="border-b border-gray-100 last:border-b-0">
                                         <td className="py-2 px-3">{match.year}</td>
-                                        <td className="py-2 px-3">{match.week}</td> {/* Display match.week */}
+                                        <td className="py-2 px-3">{match.week}</td>
                                         <td className="py-2 px-3">{currentTeamAScore.toFixed(2)}</td>
                                         <td className="py-2 px-3">{currentTeamBScore.toFixed(2)}</td>
                                         <td className="py-2 px-3">{match.winnerDisplayName === 'Tie' ? 'Tie' : match.winnerDisplayName}</td>
@@ -528,7 +546,7 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                 </div>
             </div>
         );
-    }, [selectedRivalryKey, headToHeadRecords, careerDPRData, getTeamName]); // Dependencies for useCallback
+    }, [selectedRivalryKey, headToHeadRecords, careerDPRData, getTeamName]);
 
     if (loading) {
         return (
@@ -562,10 +580,8 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
     return (
         <div className="w-full">
             {selectedRivalryKey ? (
-                // Display details for the selected rivalry
                 renderSelectedRivalryDetails()
             ) : (
-                // Display the grid of all rivalries
                 <>
                     <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Head-to-Head Rivalries</h3>
                     <div className="overflow-x-auto relative"> {/* Added relative for sticky positioning */}
@@ -586,7 +602,7 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                                     <tr key={rowTeam.ownerId} className="border-b border-gray-100 last:border-b-0">
                                         <td className="py-2 px-3 text-left text-sm text-gray-800 font-semibold sticky left-0 bg-white z-20 border-r border-gray-200 shadow-sm"> {/* Sticky left for vertical scroll */}
                                             {rowTeam.displayName}
-                                        </td>
+                                                                                        </td>
                                         {sortedDisplayNamesAndOwners.map(colTeam => { // Iterate over sorted display names for columns
                                             if (rowTeam.ownerId === colTeam.ownerId) {
                                                 return (
@@ -599,27 +615,27 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                                             const rivalryKey = [rowTeam.ownerId, colTeam.ownerId].sort().join(' vs ');
                                             const rivalry = headToHeadRecords[rivalryKey];
 
-                                            let recordForDisplay = '0-0'; // Default for no games or issues
+                                            let recordForDisplay = '0-0';
                                             let cellClassName = 'py-2 px-3 text-center text-sm border-b border-gray-200 cursor-pointer ';
 
                                             if (rivalry) {
-                                                const rowOwnerRecord = rivalry[rowTeam.ownerId]; // Get record for the row owner
+                                                const rowOwnerRecord = rivalry[rowTeam.ownerId];
                                                 const totalGames = rowOwnerRecord.wins + rowOwnerRecord.losses + rowOwnerRecord.ties;
 
                                                 if (totalGames > 0) {
-                                                    recordForDisplay = `${rowOwnerRecord.wins}-${rowOwnerRecord.losses}`; // Format as W-L
+                                                    recordForDisplay = `${rowOwnerRecord.wins}-${rowOwnerRecord.losses}`;
                                                     if (rowOwnerRecord.wins > rowOwnerRecord.losses) {
-                                                        cellClassName += 'bg-green-100 text-green-800 hover:bg-green-200'; // Green for win
+                                                        cellClassName += 'bg-green-100 text-green-800 hover:bg-green-200';
                                                     } else if (rowOwnerRecord.losses > rowOwnerRecord.wins) {
-                                                        cellClassName += 'bg-red-100 text-red-800 hover:bg-red-200'; // Red for loss
+                                                        cellClassName += 'bg-red-100 text-red-800 hover:bg-red-200';
                                                     } else {
-                                                        cellClassName += 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'; // Yellow for tie
+                                                        cellClassName += 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200';
                                                     }
                                                 } else {
-                                                    cellClassName += 'text-gray-600 bg-white hover:bg-gray-50'; // Default for no games
+                                                    cellClassName += 'text-gray-600 bg-white hover:bg-gray-50';
                                                 }
                                             } else {
-                                                    cellClassName += 'text-gray-600 bg-white hover:bg-gray-50'; // Default for no rivalry data
+                                                    cellClassName += 'text-gray-600 bg-white hover:bg-gray-50';
                                             }
 
 
@@ -627,7 +643,7 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                                                 <td
                                                     key={`${rowTeam.ownerId}-${colTeam.ownerId}`}
                                                     className={cellClassName}
-                                                    onClick={() => rivalry && setSelectedRivalryKey(rivalryKey)} // Only clickable if rivalry data exists
+                                                    onClick={() => rivalry && setSelectedRivalryKey(rivalryKey)}
                                                 >
                                                     {recordForDisplay}
                                                 </td>
