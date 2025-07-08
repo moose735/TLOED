@@ -65,11 +65,14 @@ const LeagueHistory = () => {
         const completedSeasons = new Set();
         const allYears = Object.keys(historicalData.matchupsBySeason).map(Number).sort((a, b) => a - b);
 
+        // A temporary set to track processed match_ids to avoid duplicates in allMatchupsFlat
+        const processedMatchIds = new Set();
+
         allYears.forEach(year => {
             const weeklyMatchupsForYear = historicalData.matchupsBySeason[year] || {};
             const leagueMetadataForYear = historicalData.leaguesMetadataBySeason[year];
             const winnersBracketForYear = historicalData.winnersBracketBySeason[year] || [];
-            const losersBracketForYear = historicalData.losersBracketBySeason[year] || [];
+            const losersBracketForYear = historicalData.losersBracketBySeason?.[year] || [];
             const championshipWeek = leagueMetadataForYear?.settings?.championship_week ? parseInt(leagueMetadataForYear.settings.championship_week) : null;
 
             // Determine if the season is completed by checking if a championship match has a winner
@@ -81,46 +84,63 @@ const LeagueHistory = () => {
             Object.keys(weeklyMatchupsForYear).forEach(weekStr => {
                 const week = parseInt(weekStr);
                 weeklyMatchupsForYear[weekStr].forEach(matchup => {
-                    const team1Roster = historicalData.rostersBySeason[year]?.find(r => String(r.roster_id) === String(matchup.roster_id));
-                    const team2Roster = historicalData.rostersBySeason[year]?.find(r => String(r.roster_id) === String(matchup.matchup_id === matchup.roster_id ? matchup.roster_id : matchup.matchup_id)); // Corrected logic for team2 roster
+                    // Each 'matchup' object from Sleeper API represents one team's side of a game.
+                    // It contains roster_id and opponent_roster_id.
+                    // We need to ensure we only process each unique game (defined by match_id) once.
+                    const currentMatchId = String(matchup.match_id);
+
+                    // Create a canonical match ID for uniqueness, e.g., by sorting roster IDs
+                    // This is for internal tracking of unique games, not related to Sleeper's match_id
+                    const rosterId1 = String(matchup.roster_id);
+                    const rosterId2 = String(matchup.opponent_roster_id);
+                    // Sort the roster IDs to create a consistent unique key for the pair, regardless of which team is 'team1' or 'team2' in the original API response
+                    const canonicalGameId = [rosterId1, rosterId2].sort().join('-');
+
+                    // Use a combined key for uniqueness across years and weeks
+                    if (processedMatchIds.has(`${year}-${week}-${canonicalGameId}`)) {
+                        return; // This game (pair of teams in this week/year) has already been processed
+                    }
+                    processedMatchIds.add(`${year}-${week}-${canonicalGameId}`);
+
+                    const team1Roster = historicalData.rostersBySeason[year]?.find(r => String(r.roster_id) === rosterId1);
+                    const team2Roster = historicalData.rostersBySeason[year]?.find(r => String(r.roster_id) === rosterId2);
 
                     const team1OwnerId = team1Roster?.owner_id;
                     const team2OwnerId = team2Roster?.owner_id;
 
-                    // Ensure both owner IDs are resolved
                     if (!team1OwnerId || !team2OwnerId) {
+                        console.warn(`Skipping matchup (week ${week}, year ${year}, match_id ${currentMatchId}) due to unresolved owner IDs.`);
                         return;
                     }
 
-                    // Determine match type using the playoff flag and bracket IDs
                     let matchType = 'Reg. Season';
-                    const currentMatchupId = String(matchup.match_id); // Use match_id for bracket lookup
-
                     const playoffMatchIds = new Set(winnersBracketForYear.map(m => String(m.match_id)));
                     const consolationMatchIds = new Set(losersBracketForYear.map(m => String(m.match_id)));
 
-                    if (playoffMatchIds.has(currentMatchupId)) {
+                    if (playoffMatchIds.has(currentMatchId)) {
                         if (championshipWeek && week === championshipWeek) {
                             matchType = 'Championship';
                         } else {
                             matchType = 'Playoffs';
                         }
-                    } else if (consolationMatchIds.has(currentMatchupId)) {
+                    } else if (consolationMatchIds.has(currentMatchId)) {
                         matchType = 'Consolation';
-                    } else if (matchup.playoff) { // Fallback if playoff flag is true but not found in explicit brackets
+                    } else if (matchup.playoff) { // Fallback for playoff flag
                         matchType = 'Playoffs (Uncategorized)';
                     }
 
                     // Add to flat list for overall calculations
                     allMatchupsFlat.push({
-                        ...matchup,
                         year: year,
                         week: week,
-                        team1: team1OwnerId, // Use owner IDs
-                        team2: team2OwnerId,
-                        team1_score: parseFloat(matchup.points), // Use 'points' for team1's score
-                        team2_score: parseFloat(matchup.opponent_points), // Use 'opponent_points' for team2's score
+                        match_id: currentMatchId,
+                        team1: team1OwnerId, // Owner ID for team1
+                        team2: team2OwnerId, // Owner ID for team2
+                        team1_score: parseFloat(matchup.points), // Score for team1 (from its perspective)
+                        team2_score: parseFloat(matchup.opponent_points), // Score for team2 (from team1's perspective)
                         matchType: matchType,
+                        // finalSeedingGame is not directly available on Sleeper matchup objects,
+                        // it's derived from playoff brackets. We'll handle awards separately.
                     });
                 });
             });
@@ -202,7 +222,7 @@ const LeagueHistory = () => {
             }
 
             const winnersBracketForYear = historicalData.winnersBracketBySeason[year] || [];
-            const losersBracketForYear = historicalData.losersBracketBySeason[year] || [];
+            const losersBracketForYear = historicalData.losersBracketBySeason?.[year] || [];
             const rostersForYear = historicalData.rostersBySeason[year] || [];
 
             // Map roster_id to owner_id for playoff rankings
@@ -226,12 +246,17 @@ const LeagueHistory = () => {
 
             playoffFinishes.forEach(finish => {
                 const teamDisplayName = getDisplayTeamNameFromContext(finish.owner_id, year);
-                if (finish.playoffFinish === '1st Place') {
-                    newSeasonAwardsSummary[year].champion = teamDisplayName;
-                } else if (finish.playoffFinish === '2nd Place') {
-                    newSeasonAwardsSummary[year].secondPlace = teamDisplayName;
-                } else if (finish.playoffFinish === '3rd Place') {
-                    newSeasonAwardsSummary[year].thirdPlace = teamDisplayName;
+                if (teamOverallStats[teamDisplayName]) { // Ensure team exists in overall stats
+                    if (finish.playoffFinish === '1st Place') {
+                        newSeasonAwardsSummary[year].champion = teamDisplayName;
+                        teamOverallStats[teamDisplayName].awards.championships++;
+                    } else if (finish.playoffFinish === '2nd Place') {
+                        newSeasonAwardsSummary[year].secondPlace = teamDisplayName;
+                        teamOverallStats[teamDisplayName].awards.runnerUps++;
+                    } else if (finish.playoffFinish === '3rd Place') {
+                        newSeasonAwardsSummary[year].thirdPlace = teamDisplayName;
+                        teamOverallStats[teamDisplayName].awards.thirdPlace++;
+                    }
                 }
             });
 
@@ -239,11 +264,22 @@ const LeagueHistory = () => {
             const leaders = yearlyPointsLeaders[year];
             if (leaders && leaders.length > 0) {
                 newSeasonAwardsSummary[year].pointsChamp = leaders[0].team;
+                if (teamOverallStats[leaders[0].team]) {
+                    teamOverallStats[leaders[0].team].awards.firstPoints++;
+                }
+
                 if (leaders.length > 1 && leaders[1].points < leaders[0].points) {
                     newSeasonAwardsSummary[year].pointsSecond = leaders[1].team;
+                    if (teamOverallStats[leaders[1].team]) {
+                        teamOverallStats[leaders[1].team].awards.secondPoints++;
+                    }
                 }
-                if (leaders.length > 2 && leaders[2].points < leaders[1].points && leaders[2].points < leaders[1].points) {
+                // Corrected condition: only check against the second place score, as it's already sorted
+                if (leaders.length > 2 && leaders[2].points < leaders[1].points) {
                     newSeasonAwardsSummary[year].pointsThird = leaders[2].team;
+                    if (teamOverallStats[leaders[2].team]) {
+                        teamOverallStats[leaders[2].team].awards.thirdPoints++;
+                    }
                 }
             }
         });
