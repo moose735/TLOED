@@ -37,12 +37,12 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
     const {
         loading: contextLoading,
         error: contextError,
-        historicalData, // Contains matchupsBySeason, leaguesMetadataBySeason
+        historicalData, // Contains matchupsBySeason, leaguesMetadataBySeason, rostersBySeason
         getTeamName
     } = useSleeperData();
 
     const [headToHeadRecords, setHeadToHeadRecords] = useState({});
-    const [selectedRivalryKey, setSelectedRivalryKey] = useState(null); // Stores the H2H key (e.g., "TeamA vs TeamB")
+    const [selectedRivalryKey, setSelectedRivalryKey] = useState(null); // Stores the H2H key (e.g., "ownerId1 vs ownerId2")
     const [loading, setLoading] = useState(true); // Local loading state for calculations
 
     // Data processing for head-to-head records
@@ -59,13 +59,14 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
         }
 
         setLoading(true);
-        const newHeadToHeadRecords = {}; // { h2hKey: { teams: [], teamA: {w,l,t,pw,pl,pt}, teamB: {w,l,t,pw,pl,pt}, allMatches: [] } }
+        const newHeadToHeadRecords = {}; // { h2hKey: { owners: [], ownerId1: {w,l,t,pw,pl,pt}, ownerId2: {w,l,t,pw,pl,pt}, allMatches: [] } }
 
         // Iterate through all seasons and their matchups
         Object.keys(historicalData.matchupsBySeason).forEach(year => {
             const weeklyMatchupsForYear = historicalData.matchupsBySeason[year];
             const leagueMetadataForYear = historicalData.leaguesMetadataBySeason[year];
             const playoffStartWeek = leagueMetadataForYear?.settings?.playoff_start_week ? parseInt(leagueMetadataForYear.settings.playoff_start_week) : 99;
+            const rostersForYear = historicalData.rostersBySeason?.[year] || [];
 
             Object.keys(weeklyMatchupsForYear).forEach(weekStr => {
                 const week = parseInt(weekStr);
@@ -84,12 +85,24 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                         return;
                     }
 
-                    // Get display names for the current matchup's year
-                    const team1DisplayName = getTeamName(team1RosterId, year);
-                    const team2DisplayName = getTeamName(team2RosterId, year);
+                    // Get owner IDs from roster IDs for the current year
+                    const team1Roster = rostersForYear.find(r => String(r.roster_id) === team1RosterId);
+                    const team2Roster = rostersForYear.find(r => String(r.roster_id) === team2RosterId);
 
-                    // Skip if display names are not resolved
-                    if (!team1DisplayName || !team2DisplayName || team1DisplayName === `Unknown Team (ID: ${team1RosterId})` || team2DisplayName === `Unknown Team (ID: ${team2RosterId})`) {
+                    const team1OwnerId = team1Roster?.owner_id;
+                    const team2OwnerId = team2Roster?.owner_id;
+
+                    // Skip if owner IDs cannot be resolved
+                    if (!team1OwnerId || !team2OwnerId) {
+                        return;
+                    }
+
+                    // Get display names using owner IDs for the current matchup's year
+                    const team1DisplayName = getTeamName(team1OwnerId, year);
+                    const team2DisplayName = getTeamName(team2OwnerId, year);
+
+                    // Skip if display names are not resolved to actual names (i.e., they are still 'Unknown Team (ID:...)')
+                    if (team1DisplayName.startsWith('Unknown Team') || team2DisplayName.startsWith('Unknown Team')) {
                         return;
                     }
 
@@ -97,57 +110,56 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                     const team1Won = team1Score > team2Score;
                     const isPlayoffMatch = week >= playoffStartWeek;
 
-                    // Ensure consistent ordering for H2H keys (e.g., "TeamA vs TeamB" where TeamA < TeamB alphabetically)
-                    const sortedTeams = [team1DisplayName, team2DisplayName].sort();
-                    const h2hKey = `${sortedTeams[0]} vs ${sortedTeams[1]}`;
+                    // Ensure consistent ordering for H2H keys using owner IDs
+                    const sortedOwners = [team1OwnerId, team2OwnerId].sort();
+                    const h2hKey = `${sortedOwners[0]} vs ${sortedOwners[1]}`;
 
                     if (!newHeadToHeadRecords[h2hKey]) {
                         newHeadToHeadRecords[h2hKey] = {
-                            teams: sortedTeams, // Store sorted teams for easy access
-                            [sortedTeams[0]]: { wins: 0, losses: 0, ties: 0, playoffWins: 0, playoffLosses: 0, playoffTies: 0 },
-                            [sortedTeams[1]]: { wins: 0, losses: 0, ties: 0, playoffWins: 0, playoffLosses: 0, playoffTies: 0 },
+                            owners: sortedOwners, // Store sorted owner IDs
+                            [sortedOwners[0]]: { wins: 0, losses: 0, ties: 0, playoffWins: 0, playoffLosses: 0, playoffTies: 0 },
+                            [sortedOwners[1]]: { wins: 0, losses: 0, ties: 0, playoffWins: 0, playoffLosses: 0, playoffTies: 0 },
                             allMatches: []
                         };
                     }
 
                     const h2hRecord = newHeadToHeadRecords[h2hKey];
 
-                    // Determine the winner and loser for this specific match (using display names)
-                    let winnerDisplayName = 'Tie';
-                    let loserDisplayName = 'Tie';
+                    // Determine the winner and loser for this specific match (using owner IDs)
+                    let winnerOwnerId = 'Tie';
+                    let loserOwnerId = 'Tie';
                     if (team1Won) {
-                        winnerDisplayName = team1DisplayName;
-                        loserDisplayName = team2DisplayName;
+                        winnerOwnerId = team1OwnerId;
+                        loserOwnerId = team2OwnerId;
                     } else if (team2Score > team1Score) {
-                        winnerDisplayName = team2DisplayName;
-                        loserDisplayName = team1DisplayName;
+                        winnerOwnerId = team2OwnerId;
+                        loserOwnerId = team1OwnerId;
                     }
 
-                    // Update records from the perspective of each team in the pair
-                    // Use the display names (team1DisplayName, team2DisplayName) to update the correct sub-objects
-                    const recordForTeam1 = (team1DisplayName === sortedTeams[0]) ? h2hRecord[sortedTeams[0]] : h2hRecord[sortedTeams[1]];
-                    const recordForTeam2 = (team2DisplayName === sortedTeams[0]) ? h2hRecord[sortedTeams[0]] : h2hRecord[sortedTeams[1]];
+                    // Update records from the perspective of each owner in the pair
+                    const recordForOwner1 = (team1OwnerId === sortedOwners[0]) ? h2hRecord[sortedOwners[0]] : h2hRecord[sortedOwners[1]];
+                    const recordForOwner2 = (team2OwnerId === sortedOwners[0]) ? h2hRecord[sortedOwners[0]] : h2hRecord[sortedOwners[1]];
 
                     if (isTie) {
-                        recordForTeam1.ties++;
-                        recordForTeam2.ties++;
+                        recordForOwner1.ties++;
+                        recordForOwner2.ties++;
                         if (isPlayoffMatch) {
-                            recordForTeam1.playoffTies++;
-                            recordForTeam2.playoffTies++;
+                            recordForOwner1.playoffTies++;
+                            recordForOwner2.playoffTies++;
                         }
                     } else if (team1Won) {
-                        recordForTeam1.wins++;
-                        recordForTeam2.losses++;
+                        recordForOwner1.wins++;
+                        recordForOwner2.losses++;
                         if (isPlayoffMatch) {
-                            recordForTeam1.playoffWins++;
-                            recordForTeam2.playoffLosses++;
+                            recordForOwner1.playoffWins++;
+                            recordForOwner2.playoffLosses++;
                         }
                     } else { // team2Won
-                        recordForTeam2.wins++;
-                        recordForTeam1.losses++;
+                        recordForOwner2.wins++;
+                        recordForOwner1.losses++;
                         if (isPlayoffMatch) {
-                            recordForTeam2.playoffWins++;
-                            recordForTeam1.playoffLosses++;
+                            recordForOwner2.playoffWins++;
+                            recordForOwner1.playoffLosses++;
                         }
                     }
 
@@ -155,19 +167,23 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                     h2hRecord.allMatches.push({
                         year: parseInt(year),
                         week: week,
+                        team1OwnerId: team1OwnerId, // Store owner IDs for history
+                        team2OwnerId: team2OwnerId,
                         team1DisplayName: team1DisplayName, // Store display names for history
                         team2DisplayName: team2DisplayName,
                         team1Score: team1Score,
                         team2Score: team2Score,
-                        winnerDisplayName: winnerDisplayName, // Store display name of winner
-                        loserDisplayName: loserDisplayName,
-                        winnerScore: winnerDisplayName === team1DisplayName ? team1Score : team2Score,
-                        loserScore: loserDisplayName === team1DisplayName ? team1Score : team2Score,
+                        winnerOwnerId: winnerOwnerId, // Store owner ID of winner
+                        loserOwnerId: loserOwnerId,
+                        winnerDisplayName: winnerOwnerId === team1OwnerId ? team1DisplayName : team2DisplayName,
+                        loserDisplayName: loserOwnerId === team1OwnerId ? team1DisplayName : team2DisplayName,
+                        winnerScore: winnerOwnerId === team1OwnerId ? team1Score : team2Score,
+                        loserScore: loserOwnerId === team1OwnerId ? team1Score : team2Score,
                         isTie: isTie,
                         isPlayoff: isPlayoffMatch,
-                        // Other match types like consolation, finalSeedingGame, pointsOnlyBye are not directly
-                        // available from Sleeper API matchups. Infer if needed, or simplify.
-                        // For now, simplify to 'Reg. Season' or 'Playoffs'.
+                        // Sleeper API matchups do not directly provide 'consolation', 'finalSeedingGame', 'pointsOnlyBye' flags.
+                        // These would need to be inferred from bracket data or other league settings if desired.
+                        // For now, we simplify to 'Reg. Season' or 'Playoffs'.
                     });
                 });
             });
@@ -176,23 +192,26 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
         setLoading(false);
     }, [historicalData, getTeamName, contextLoading, contextError]); // Dependencies updated
 
-    // Get a sorted list of all unique teams for the grid axes
-    const allTeams = Object.keys(headToHeadRecords).reduce((acc, key) => {
-        headToHeadRecords[key].teams.forEach(team => acc.add(team));
+    // Get a sorted list of all unique owner IDs for the grid axes
+    const allOwners = Object.keys(headToHeadRecords).reduce((acc, key) => {
+        headToHeadRecords[key].owners.forEach(ownerId => acc.add(ownerId));
         return acc;
     }, new Set());
-    const sortedTeams = Array.from(allTeams).sort();
+    const sortedOwners = Array.from(allOwners).sort();
 
     // Component to render the detailed rivalry view
     const renderSelectedRivalryDetails = useCallback(() => {
         const rivalry = headToHeadRecords[selectedRivalryKey];
         if (!rivalry) return null;
 
-        const teamA = rivalry.teams[0];
-        const teamB = rivalry.teams[1];
+        const ownerA = rivalry.owners[0]; // These are now owner IDs
+        const ownerB = rivalry.owners[1]; // These are now owner IDs
 
-        const teamARecord = rivalry[teamA];
-        const teamBRecord = rivalry[teamB];
+        const teamADisplayName = getTeamName(ownerA, null); // Resolve display name for owner A
+        const teamBDisplayName = getTeamName(ownerB, null); // Resolve display name for owner B
+
+        const ownerARecord = rivalry[ownerA]; // Access records by owner ID
+        const ownerBRecord = rivalry[ownerB]; // Access records by owner ID
 
         // Initialize highlight stats with null values for robust 'N/A' display
         let teamAHighestScore = { value: null, year: null, week: null };
@@ -207,7 +226,7 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
         let teamBTotalPointsScored = 0;
 
         // Streak calculation
-        let currentStreakTeam = null;
+        let currentStreakTeam = null; // Stores owner ID of the team on streak
         let currentStreakCount = 0;
 
         // Sort matches by year then week for streak and biggest/slimmest win
@@ -219,12 +238,12 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
         sortedMatches.forEach(match => {
             let scoreAValue, scoreBValue;
 
-            // Assign scores based on whether team1DisplayName or team2DisplayName in the match is teamA in the rivalry
-            if (match.team1DisplayName === teamA) {
+            // Assign scores based on whether team1OwnerId or team2OwnerId in the match is ownerA in the rivalry
+            if (match.team1OwnerId === ownerA) {
                 scoreAValue = match.team1Score;
                 scoreBValue = match.team2Score;
-            } else if (match.team1DisplayName === teamB) {
-                // If team1 is teamB, then team2 must be teamA
+            } else if (match.team1OwnerId === ownerB) {
+                // If team1 is ownerB, then team2 must be ownerA
                 scoreAValue = match.team2Score;
                 scoreBValue = match.team1Score;
             } else {
@@ -271,11 +290,11 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
 
             // Streak
             if (!match.isTie) {
-                const matchWinner = scoreAValue > scoreBValue ? teamA : teamB;
-                if (currentStreakTeam === matchWinner) {
+                const matchWinnerOwnerId = scoreAValue > scoreBValue ? ownerA : ownerB;
+                if (currentStreakTeam === matchWinnerOwnerId) {
                     currentStreakCount++;
                 } else {
-                    currentStreakTeam = matchWinner;
+                    currentStreakTeam = matchWinnerOwnerId;
                     currentStreakCount = 1;
                 }
             } else {
@@ -284,14 +303,15 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
             }
         });
 
-        const currentStreak = currentStreakTeam ? `${currentStreakTeam} ${currentStreakCount}-game W streak` : 'No current streak';
+        const currentStreak = currentStreakTeam ? `${getTeamName(currentStreakTeam, null)} ${currentStreakCount}-game W streak` : 'No current streak';
 
         // Prepare data for ranking and comparison using careerDPRData prop
+        // careerDPRData is keyed by rosterId and contains teamName.
+        // We need to find the careerDPRData entry for the current owner's team name.
         const allTotalWins = careerDPRData ? careerDPRData.map(d => d.wins) : [];
         const allWinPercentages = careerDPRData ? careerDPRData.map(d => d.winPercentage) : [];
-        const allCareerDPRs = careerDPRData ? careerDPRData.map(d => d.dpr) : []; // Use 'dpr' property
-        const allTotalPointsScored = careerDPRData ? careerDPRData.map(d => d.pointsFor) : []; // Use 'pointsFor' property
-        // For highestWeeklyScore, we'll use 'highScore' from careerDPRData, which is the highest single game score
+        const allCareerDPRs = careerDPRData ? careerDPRData.map(d => d.dpr) : [];
+        const allTotalPointsScored = careerDPRData ? careerDPRData.map(d => d.pointsFor) : [];
         const allHighestSingleGameScores = careerDPRData ? careerDPRData.map(d => d.highScore) : [];
 
 
@@ -306,24 +326,26 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
 
                 {/* Header Section */}
                 <div className="text-center mb-6">
-                    <h3 className="text-2xl font-extrabold text-gray-800 mb-2">{teamA} vs {teamB}</h3>
+                    <h3 className="text-2xl font-extrabold text-gray-800 mb-2">{teamADisplayName} vs {teamBDisplayName}</h3>
                     <p className="text-sm text-gray-600">Performance, stats, and records</p>
                 </div>
 
                 {/* Main Teams Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    {[teamA, teamB].map(team => {
-                        const overallTeamStats = careerDPRData?.find(d => d.teamName === team); // Use teamName
-                        const opponentTeamStats = careerDPRData?.find(d => d.teamName === (team === teamA ? teamB : teamA));
+                    {[ownerA, ownerB].map(currentOwnerId => { // Iterate through owner IDs
+                        const currentTeamDisplayName = getTeamName(currentOwnerId, null); // Get display name for current owner
+                        const overallTeamStats = careerDPRData?.find(d => d.teamName === currentTeamDisplayName); // Find stats by resolved team name
+                        const opponentTeamDisplayName = (currentTeamDisplayName === teamADisplayName) ? teamBDisplayName : teamADisplayName;
+                        const opponentTeamStats = careerDPRData?.find(d => d.teamName === opponentTeamDisplayName);
 
                         // Individual Stats values
-                        const totalWins = overallTeamStats ? overallTeamStats.wins : null; // Use 'wins'
+                        const totalWins = overallTeamStats ? overallTeamStats.wins : null;
                         const winPercentage = overallTeamStats && typeof overallTeamStats.winPercentage === 'number'
                                                  ? overallTeamStats.winPercentage
                                                  : null;
-                        const careerDPR = overallTeamStats ? overallTeamStats.dpr : null; // Use 'dpr'
-                        const weeklyHighScore = overallTeamStats ? overallTeamStats.highScore : null; // Use 'highScore'
-                        const totalPointsScored = overallTeamStats ? overallTeamStats.pointsFor : null; // Use 'pointsFor'
+                        const careerDPR = overallTeamStats ? overallTeamStats.dpr : null;
+                        const weeklyHighScore = overallTeamStats ? overallTeamStats.highScore : null;
+                        const totalPointsScored = overallTeamStats ? overallTeamStats.pointsFor : null;
 
                         // Opponent's Individual Stats values for comparison
                         const oppTotalWins = opponentTeamStats ? opponentTeamStats.wins : null;
@@ -349,16 +371,16 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                         const totalWinsRank = calculateRank(totalWins, allTotalWins, true);
                         const winPercentageRank = calculateRank(winPercentage, allWinPercentages, true);
                         const careerDPRRank = calculateRank(careerDPR, allCareerDPRs, true);
-                        const weeklyHighScoreRank = calculateRank(weeklyHighScore, allHighestSingleGameScores, true); // Use allHighestSingleGameScores
+                        const weeklyHighScoreRank = calculateRank(weeklyHighScore, allHighestSingleGameScores, true);
                         const totalPointsScoredRank = calculateRank(totalPointsScored, allTotalPointsScored, true);
 
 
                         return (
-                            <div key={team} className="bg-white p-5 rounded-lg shadow-md border border-gray-200 flex flex-col items-center text-center">
+                            <div key={currentOwnerId} className="bg-white p-5 rounded-lg shadow-md border border-gray-200 flex flex-col items-center text-center">
                                 <div className="w-16 h-16 bg-blue-200 rounded-full flex items-center justify-center text-blue-800 font-bold text-2xl mb-3">
-                                    {team.charAt(0)} {/* Placeholder avatar */}
+                                    {currentTeamDisplayName.charAt(0)} {/* Placeholder avatar */}
                                 </div>
-                                <h4 className="text-xl font-bold text-gray-800 mb-2">{team}</h4>
+                                <h4 className="text-xl font-bold text-gray-800 mb-2">{currentTeamDisplayName}</h4>
                                 <div className="grid grid-cols-2 gap-2 w-full text-xs font-medium text-gray-700">
                                     <div className={`${getComparisonClass(totalWins, oppTotalWins)} p-2 rounded-md`}>
                                         Total Wins: {totalWins !== null ? totalWins : 'N/A'} (Rank: {totalWinsRank})
@@ -388,12 +410,12 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                 {/* VERSUS Section */}
                 <div className="bg-blue-700 text-white p-4 rounded-lg shadow-inner text-center mb-6">
                     <h4 className="text-xl font-bold mb-2">★ VERSUS ★</h4>
-                    <p className="text-lg font-semibold mb-1">Record: {renderRecord(teamARecord)} vs {renderRecord(teamBRecord)}</p>
+                    <p className="text-lg font-semibold mb-1">Record: {renderRecord(ownerARecord)} vs {renderRecord(ownerBRecord)}</p>
                     <p className="text-md">Current Streak: {currentStreak}</p>
                     <p className="text-md">
-                        Playoff Record: {teamARecord.playoffWins}-{teamARecord.playoffLosses}-{teamARecord.playoffTies}
+                        Playoff Record: {ownerARecord.playoffWins}-{ownerARecord.playoffLosses}-{ownerARecord.playoffTies}
                         {' '}vs{' '}
-                        {teamBRecord.playoffWins}-{teamBRecord.playoffLosses}-{teamBRecord.playoffTies}
+                        {ownerBRecord.playoffWins}-{ownerBRecord.playoffLosses}-{ownerBRecord.playoffTies}
                     </p>
                 </div>
 
@@ -402,7 +424,7 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                 <h4 className="text-xl font-bold text-gray-800 mt-6 mb-4 border-b pb-2">Matchup Highlights</h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                     <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
-                        <p className="text-md font-semibold text-blue-700">{teamA} Highest Score</p>
+                        <p className="text-md font-semibold text-blue-700">{teamADisplayName} Highest Score</p>
                         <p className="text-xl font-bold text-gray-800">
                             {teamAHighestScore.value !== null ? teamAHighestScore.value.toFixed(2) : 'N/A'}
                         </p>
@@ -411,7 +433,7 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                         </p>
                     </div>
                     <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
-                        <p className="text-md font-semibold text-blue-700">{teamA} Biggest Win</p>
+                        <p className="text-md font-semibold text-blue-700">{teamADisplayName} Biggest Win</p>
                         <p className="text-xl font-bold text-gray-800">
                             {teamABiggestWinMargin.value !== null ? teamABiggestWinMargin.value.toFixed(2) : 'N/A'}
                         </p>
@@ -420,7 +442,7 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                         </p>
                     </div>
                     <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
-                        <p className="text-md font-semibold text-blue-700">{teamA} Slimmest Win</p>
+                        <p className="text-md font-semibold text-blue-700">{teamADisplayName} Slimmest Win</p>
                         <p className="text-xl font-bold text-gray-800">
                             {teamASlimmestWinMargin.value !== null ? teamASlimmestWinMargin.value.toFixed(2) : 'N/A'}
                         </p>
@@ -430,7 +452,7 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                     </div>
                     {/* Repeat similar sections for Team B's highlights */}
                         <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
-                            <p className="text-md font-semibold text-red-700">{teamB} Highest Score</p>
+                            <p className="text-md font-semibold text-red-700">{teamBDisplayName} Highest Score</p>
                             <p className="text-xl font-bold text-gray-800">
                             {teamBHighestScore.value !== null ? teamBHighestScore.value.toFixed(2) : 'N/A'}
                             </p>
@@ -439,7 +461,7 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                             </p>
                         </div>
                         <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
-                            <p className="text-md font-semibold text-red-700">{teamB} Biggest Win</p>
+                            <p className="text-md font-semibold text-red-700">{teamBDisplayName} Biggest Win</p>
                             <p className="text-xl font-bold text-gray-800">
                             {teamBBiggestWinMargin.value !== null ? teamBBiggestWinMargin.value.toFixed(2) : 'N/A'}
                             </p>
@@ -448,7 +470,7 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                             </p>
                         </div>
                         <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
-                            <p className="text-md font-semibold text-red-700">{teamB} Slimmest Win</p>
+                            <p className="text-md font-semibold text-red-700">{teamBDisplayName} Slimmest Win</p>
                             <p className="text-xl font-bold text-gray-800">
                             {teamBSlimmestWinMargin.value !== null ? teamBSlimmestWinMargin.value.toFixed(2) : 'N/A'}
                             </p>
@@ -466,32 +488,24 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                             <tr>
                                 <th className="py-2 px-3 text-left font-semibold text-blue-700">Year</th>
                                 <th className="py-2 px-3 text-left font-semibold text-blue-700">Week</th>
-                                <th className="py-2 px-3 text-left font-semibold text-blue-700">{teamA} Score</th>
-                                <th className="py-2 px-3 text-left font-semibold text-blue-700">{teamB} Score</th>
+                                <th className="py-2 px-3 text-left font-semibold text-blue-700">{teamADisplayName} Score</th>
+                                <th className="py-2 px-3 text-left font-semibold text-blue-700">{teamBDisplayName} Score</th>
                                 <th className="py-2 px-3 text-left font-semibold text-blue-700">Winner</th>
                                 <th className="py-2 px-3 text-left font-semibold text-blue-700">Type</th>
                             </tr>
                         </thead>
                         <tbody>
                             {rivalry.allMatches.sort((a,b) => b.year - a.year || b.week - a.week).map((match, idx) => {
-                                // Scores are already correctly assigned to team1Score/team2Score in the stored match object
-                                // based on the original matchup's team1_roster_id and team2_roster_id
-                                let currentTeamAScore = (match.team1DisplayName === teamA) ? match.team1Score : match.team2Score;
-                                let currentTeamBScore = (match.team1DisplayName === teamB) ? match.team1Score : match.team2Score;
+                                // Scores are already correctly assigned based on owner IDs in the stored match object
+                                let currentTeamAScore = (match.team1OwnerId === ownerA) ? match.team1Score : match.team2Score;
+                                let currentTeamBScore = (match.team1OwnerId === ownerB) ? match.team1Score : match.team2Score;
 
                                 let matchType = 'Reg. Season';
                                 if (match.isPlayoff) matchType = 'Playoffs';
-                                // Add more specific types if you have a way to infer them from Sleeper data
-                                // e.g., if you have a `consolation` flag in your processed matchup data
-                                // if (match.consolation) matchType = 'Consolation';
-                                // if (match.finalSeedingGame) matchType = `Final Seeding (${match.finalSeedingGame}${getOrdinalSuffix(match.finalSeedingGame)})`;
-                                // if (match.pointsOnlyBye) matchType = 'Points Only Bye';
-
 
                                 return (
                                     <tr key={idx} className="border-b border-gray-100 last:border-b-0">
                                         <td className="py-2 px-3">{match.year}</td>
-                                        <td className="py-2 px-3">{match.week}</td>
                                         <td className="py-2 px-3">{currentTeamAScore.toFixed(2)}</td>
                                         <td className="py-2 px-3">{currentTeamBScore.toFixed(2)}</td>
                                         <td className="py-2 px-3">{match.winnerDisplayName === 'Tie' ? 'Tie' : match.winnerDisplayName}</td>
@@ -504,7 +518,7 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                 </div>
             </div>
         );
-    }, [selectedRivalryKey, headToHeadRecords, careerDPRData]); // Dependencies for useCallback
+    }, [selectedRivalryKey, headToHeadRecords, careerDPRData, getTeamName]); // Dependencies for useCallback
 
     if (loading) {
         return (
@@ -535,6 +549,9 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
         );
     }
 
+    // Get sorted display names for the grid headers/rows
+    const sortedDisplayNames = sortedOwners.map(ownerId => getTeamName(ownerId, null)).sort();
+
     return (
         <div className="w-full">
             {selectedRivalryKey ? (
@@ -550,67 +567,70 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                                 <tr>
                                     {/* Empty corner for team names - sticky */}
                                     <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 sticky left-0 bg-blue-50 z-20 shadow-sm"></th>
-                                    {sortedTeams.map(team => (
-                                        <th key={team} className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 min-w-[90px] sticky top-0 bg-blue-50 z-10"> {/* Sticky top for horizontal scroll */}
-                                            {team}
+                                    {sortedDisplayNames.map(teamName => (
+                                        <th key={teamName} className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 min-w-[90px] sticky top-0 bg-blue-50 z-10"> {/* Sticky top for horizontal scroll */}
+                                            {teamName}
                                         </th>
                                     ))}
                                 </tr>
                             </thead>
                             <tbody>
-                                {sortedTeams.map(rowTeam => (
-                                    <tr key={rowTeam} className="border-b border-gray-100 last:border-b-0">
-                                        <td className="py-2 px-3 text-left text-sm text-gray-800 font-semibold sticky left-0 bg-white z-20 border-r border-gray-200 shadow-sm"> {/* Sticky left for vertical scroll */}
-                                            {rowTeam}
-                                        </td>
-                                        {sortedTeams.map(colTeam => {
-                                            if (rowTeam === colTeam) {
-                                                return (
-                                                    <td key={`${rowTeam}-${colTeam}`} className="py-2 px-3 text-center text-sm text-gray-400 bg-gray-100 border-b border-gray-200">
-                                                        ---
-                                                    </td>
-                                                );
-                                            }
-                                            // Find the rivalry key in the correct sorted order
-                                            const rivalryKey = [rowTeam, colTeam].sort().join(' vs ');
-                                            const rivalry = headToHeadRecords[rivalryKey];
+                                {sortedOwners.map(rowOwnerId => { // Iterate over owner IDs for rows
+                                    const rowTeamDisplayName = getTeamName(rowOwnerId, null); // Get display name for row owner
+                                    return (
+                                        <tr key={rowOwnerId} className="border-b border-gray-100 last:border-b-0">
+                                            <td className="py-2 px-3 text-left text-sm text-gray-800 font-semibold sticky left-0 bg-white z-20 border-r border-gray-200 shadow-sm"> {/* Sticky left for vertical scroll */}
+                                                {rowTeamDisplayName}
+                                            </td>
+                                            {sortedOwners.map(colOwnerId => { // Iterate over owner IDs for columns
+                                                if (rowOwnerId === colOwnerId) {
+                                                    return (
+                                                        <td key={`${rowOwnerId}-${colOwnerId}`} className="py-2 px-3 text-center text-sm text-gray-400 bg-gray-100 border-b border-gray-200">
+                                                            ---
+                                                        </td>
+                                                    );
+                                                }
+                                                // Find the rivalry key in the correct sorted order of owner IDs
+                                                const rivalryKey = [rowOwnerId, colOwnerId].sort().join(' vs ');
+                                                const rivalry = headToHeadRecords[rivalryKey];
 
-                                            let recordForDisplay = '0-0'; // Default for no games or issues
-                                            let cellClassName = 'py-2 px-3 text-center text-sm border-b border-gray-200 cursor-pointer ';
+                                                let recordForDisplay = '0-0'; // Default for no games or issues
+                                                let cellClassName = 'py-2 px-3 text-center text-sm border-b border-gray-200 cursor-pointer ';
 
-                                            if (rivalry) {
-                                                const rowTeamRecord = rivalry[rowTeam];
-                                                const totalGames = rowTeamRecord.wins + rowTeamRecord.losses + rowTeamRecord.ties;
+                                                if (rivalry) {
+                                                    const rowOwnerRecord = rivalry[rowOwnerId]; // Get record for the row owner
+                                                    const totalGames = rowOwnerRecord.wins + rowOwnerRecord.losses + rowOwnerRecord.ties;
 
-                                                if (totalGames > 0) {
-                                                    recordForDisplay = `${rowTeamRecord.wins}-${rowTeamRecord.losses}`; // Format as W-L
-                                                    if (rowTeamRecord.wins > rowTeamRecord.losses) {
-                                                        cellClassName += 'bg-green-100 text-green-800 hover:bg-green-200'; // Green for win
-                                                    } else if (rowTeamRecord.losses > rowTeamRecord.wins) {
-                                                        cellClassName += 'bg-red-100 text-red-800 hover:bg-red-200'; // Red for loss
+                                                    if (totalGames > 0) {
+                                                        recordForDisplay = `${rowOwnerRecord.wins}-${rowOwnerRecord.losses}`; // Format as W-L
+                                                        if (rowOwnerRecord.wins > rowOwnerRecord.losses) {
+                                                            cellClassName += 'bg-green-100 text-green-800 hover:bg-green-200'; // Green for win
+                                                        } else if (rowOwnerRecord.losses > rowOwnerRecord.wins) {
+                                                            cellClassName += 'bg-red-100 text-red-800 hover:bg-red-200'; // Red for loss
+                                                        } else {
+                                                            cellClassName += 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'; // Yellow for tie
+                                                        }
                                                     } else {
-                                                        cellClassName += 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'; // Yellow for tie
+                                                        cellClassName += 'text-gray-600 bg-white hover:bg-gray-50'; // Default for no games
                                                     }
                                                 } else {
-                                                    cellClassName += 'text-gray-600 bg-white hover:bg-gray-50'; // Default for no games
+                                                        cellClassName += 'text-gray-600 bg-white hover:bg-gray-50'; // Default for no rivalry data
                                                 }
-                                            } else {
-                                                    cellClassName += 'text-gray-600 bg-white hover:bg-gray-50'; // Default for no rivalry data
-                                            }
 
 
-                                            return (
-                                                <td
-                                                    key={`${rowTeam}-${colTeam}`}
-                                                    className={cellClassName}
-                                                    onClick={() => rivalry && setSelectedRivalryKey(rivalryKey)} // Only clickable if rivalry data exists
-                                                >
-                                                    {recordForDisplay}
-                                                </td>
-                                            );
-                                        })}
-                                    </tr>
-                                ))}
+                                                return (
+                                                    <td
+                                                        key={`${rowOwnerId}-${colOwnerId}`}
+                                                        className={cellClassName}
+                                                        onClick={() => rivalry && setSelectedRivalryKey(rivalryKey)} // Only clickable if rivalry data exists
+                                                    >
+                                                        {recordForDisplay}
+                                                    </td>
+                                                );
+                                            })}
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
