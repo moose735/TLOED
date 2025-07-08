@@ -147,7 +147,12 @@ const DPRAnalysis = () => { // Removed props as data will come from context
   // Formatter for win percentage (consistent with LeagueHistory)
   const formatPercentage = (value) => {
     if (typeof value === 'number' && !isNaN(value)) {
-      let formatted = (value * 100).toFixed(1); // Format as percentage (e.g., 0.5 -> 50.0)
+      let formatted = value.toFixed(3); // Keep as decimal, fix to 3 places
+      if (formatted.startsWith('0.')) {
+        formatted = formatted.substring(1); // Remove the leading '0' for values between 0 and 1
+      } else if (formatted.startsWith('-0.')) {
+        formatted = `-${formatted.substring(2)}`; // Remove '-0' for negative values between -1 and 0
+      }
       return `${formatted}%`;
     }
     return ''; // Return empty string for non-numeric or null values
