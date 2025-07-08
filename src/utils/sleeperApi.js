@@ -432,7 +432,7 @@ function enrichBracketWithScores(bracketData, allWeeklyScoresForSeason, rosterId
             });
 
             rosterIdsWithScoresThisWeek.forEach(rosterId => {
-                if (!participatingRosterIdsInRound.has(roosterId)) {
+                if (!participatingRosterIdsInRound.has(rosterId)) {
                     // This roster ID had a score this week but wasn't in a bracket matchup
                     // Find their score
                     let byeTeamScore = 0;
