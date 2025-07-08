@@ -261,6 +261,7 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
         const leagueMetadataForYear = historicalData.leaguesMetadataBySeason[year];
         // Default playoffStartWeek to a high number if not found, to treat all weeks as regular season
         const playoffStartWeek = leagueMetadataForYear?.settings?.playoff_start_week ? parseInt(leagueMetadataForYear.settings.playoff_start_week) : 99;
+        const rostersForYear = historicalData.rostersBySeason?.[year] || []; // Get rosters for the current year
 
         if (!seasonalTeamStatsRaw[year]) seasonalTeamStatsRaw[year] = {};
 
@@ -282,6 +283,16 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
                     return;
                 }
 
+                // Get owner IDs for current teams
+                const team1OwnerId = rostersForYear.find(r => String(r.roster_id) === team1RosterId)?.owner_id;
+                const team2OwnerId = rostersForYear.find(r => String(r.roster_id) === team2RosterId)?.owner_id;
+
+                // Skip if owner IDs are not found (shouldn't happen if data is consistent, but good safeguard)
+                if (!team1OwnerId || !team2OwnerId) {
+                    return;
+                }
+
+
                 const isRegularSeasonMatch = week < playoffStartWeek;
                 const isTie = team1Score === team2Score;
                 const team1Won = team1Score > team2Score;
@@ -294,6 +305,7 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
                         highScore: -Infinity, lowScore: Infinity,
                         weeklyScores: [],
                         isPlayoffTeam: false,
+                        ownerId: team1OwnerId, // Store ownerId
                     };
                 }
                 seasonalTeamStatsRaw[year][team1RosterId].totalPointsFor += team1Score;
@@ -315,29 +327,30 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
                     seasonalTeamStatsRaw[year][team1RosterId].isPlayoffTeam = true;
                 }
 
-                // Update career stats for Team 1
-                if (!careerTeamStatsRaw[team1RosterId]) {
-                    careerTeamStatsRaw[team1RosterId] = {
+                // Update career stats for Team 1 (using ownerId as key for career stats)
+                if (!careerTeamStatsRaw[team1OwnerId]) { // Use ownerId here
+                    careerTeamStatsRaw[team1OwnerId] = {
                         totalPointsFor: 0, pointsAgainst: 0,
                         wins: 0, losses: 0, ties: 0, totalGames: 0,
                         careerWeeklyScores: [],
                         highScore: -Infinity, lowScore: Infinity, // Add high/low for career
+                        rosterId: team1RosterId, // Store an example rosterId for this owner
                     };
                 }
-                careerTeamStatsRaw[team1RosterId].totalPointsFor += team1Score;
-                careerTeamStatsRaw[team1RosterId].pointsAgainst += team2Score;
-                careerTeamStatsRaw[team1RosterId].careerWeeklyScores.push(team1Score);
-                careerTeamStatsRaw[team1RosterId].highScore = Math.max(careerTeamStatsRaw[team1RosterId].highScore, team1Score);
-                careerTeamStatsRaw[team1RosterId].lowScore = Math.min(careerTeamStatsRaw[team1RosterId].lowScore, team1Score);
+                careerTeamStatsRaw[team1OwnerId].totalPointsFor += team1Score;
+                careerTeamStatsRaw[team1OwnerId].pointsAgainst += team2Score;
+                careerTeamStatsRaw[team1OwnerId].careerWeeklyScores.push(team1Score);
+                careerTeamStatsRaw[team1OwnerId].highScore = Math.max(careerTeamStatsRaw[team1OwnerId].highScore, team1Score);
+                careerTeamStatsRaw[team1OwnerId].lowScore = Math.min(careerTeamStatsRaw[team1OwnerId].lowScore, team1Score);
 
                 if (isRegularSeasonMatch) {
-                    careerTeamStatsRaw[team1RosterId].totalGames++;
+                    careerTeamStatsRaw[team1OwnerId].totalGames++;
                     if (team1Won) {
-                        careerTeamStatsRaw[team1RosterId].wins++;
+                        careerTeamStatsRaw[team1OwnerId].wins++;
                     } else if (isTie) {
-                        careerTeamStatsRaw[team1RosterId].ties++;
+                        careerTeamStatsRaw[team1OwnerId].ties++;
                     } else {
-                        careerTeamStatsRaw[team1RosterId].losses++;
+                        careerTeamStatsRaw[team1OwnerId].losses++;
                     }
                 }
 
@@ -349,6 +362,7 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
                         highScore: -Infinity, lowScore: Infinity,
                         weeklyScores: [],
                         isPlayoffTeam: false,
+                        ownerId: team2OwnerId, // Store ownerId
                     };
                 }
                 seasonalTeamStatsRaw[year][team2RosterId].totalPointsFor += team2Score;
@@ -370,29 +384,30 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
                     seasonalTeamStatsRaw[year][team2RosterId].isPlayoffTeam = true;
                 }
 
-                // Update career stats for Team 2
-                if (!careerTeamStatsRaw[team2RosterId]) {
-                    careerTeamStatsRaw[team2RosterId] = {
+                // Update career stats for Team 2 (using ownerId as key for career stats)
+                if (!careerTeamStatsRaw[team2OwnerId]) { // Use ownerId here
+                    careerTeamStatsRaw[team2OwnerId] = {
                         totalPointsFor: 0, pointsAgainst: 0,
                         wins: 0, losses: 0, ties: 0, totalGames: 0,
                         careerWeeklyScores: [],
                         highScore: -Infinity, lowScore: Infinity, // Add high/low for career
+                        rosterId: team2RosterId, // Store an example rosterId for this owner
                     };
                 }
-                careerTeamStatsRaw[team2RosterId].totalPointsFor += team2Score;
-                careerTeamStatsRaw[team2RosterId].pointsAgainst += team1Score;
-                careerTeamStatsRaw[team2RosterId].careerWeeklyScores.push(team2Score);
-                careerTeamStatsRaw[team2RosterId].highScore = Math.max(careerTeamStatsRaw[team2RosterId].highScore, team2Score);
-                careerTeamStatsRaw[team2RosterId].lowScore = Math.min(careerTeamStatsRaw[team2RosterId].lowScore, team2Score);
+                careerTeamStatsRaw[team2OwnerId].totalPointsFor += team2Score;
+                careerTeamStatsRaw[team2OwnerId].pointsAgainst += team1Score;
+                careerTeamStatsRaw[team2OwnerId].careerWeeklyScores.push(team2Score);
+                careerTeamStatsRaw[team2OwnerId].highScore = Math.max(careerTeamStatsRaw[team2OwnerId].highScore, team2Score);
+                careerTeamStatsRaw[team2OwnerId].lowScore = Math.min(careerTeamStatsRaw[team2OwnerId].lowScore, team2Score);
 
                 if (isRegularSeasonMatch) {
-                    careerTeamStatsRaw[team2RosterId].totalGames++;
+                    careerTeamStatsRaw[team2OwnerId].totalGames++;
                     if (!team1Won && !isTie) { // Team 2 won
-                        careerTeamStatsRaw[team2RosterId].wins++;
+                        careerTeamStatsRaw[team2OwnerId].wins++;
                     } else if (isTie) {
-                        careerTeamStatsRaw[team2RosterId].ties++;
+                        careerTeamStatsRaw[team2OwnerId].ties++;
                     } else { // Team 2 lost
-                        careerTeamStatsRaw[team2RosterId].losses++;
+                        careerTeamStatsRaw[team2OwnerId].losses++;
                     }
                 }
             });
@@ -425,6 +440,7 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
             seasonalMetrics[year][rosterId] = {
                 teamName: getTeamName(rosterId, year), // Use getTeamName with season
                 rosterId: rosterId, // Store roster ID
+                ownerId: stats.ownerId, // Store ownerId
                 wins: stats.wins,
                 losses: stats.losses,
                 ties: stats.ties,
@@ -454,7 +470,6 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
 
         // Calculate adjusted DPR for each team in the current season
         const allRawDPRsInSeason = rosterIdsInSeason.map(rosterId => seasonalMetrics[year][rosterId].rawDPR).filter(dpr => dpr !== 0);
-        // FIX: Corrected typo from 'allRawDPRs' to 'allRawDPRsInSeason'
         const avgRawDPRInSeason = allRawDPRsInSeason.length > 0 ? allRawDPRsInSeason.reduce((sum, dpr) => sum + dpr, 0) / allRawDPRsInSeason.length : 0;
 
         rosterIdsInSeason.forEach(rosterId => {
@@ -537,8 +552,8 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
     const allCareerRawDPRs = [];
 
     // Calculate career average scores and DPRs for all teams
-    Object.keys(careerTeamStatsRaw).forEach(rosterId => {
-        const stats = careerTeamStatsRaw[rosterId];
+    Object.keys(careerTeamStatsRaw).forEach(ownerId => { // Iterate over owner IDs
+        const stats = careerTeamStatsRaw[ownerId];
         const careerScores = stats.careerWeeklyScores;
         const careerHighScore = careerScores.length > 0 ? Math.max(...careerScores) : 0;
         const careerLowScore = careerScores.length > 0 ? Math.min(...careerScores) : 0;
@@ -557,11 +572,13 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
             stats.rawDPR = 0;
         }
 
-        const careerTopScoreWeeksCount = calculateTopScoreWeeksCount(historicalData, rosterId, null); // Pass historicalData, null for career total
+        // Use the ownerId to get the team name for career stats
+        const teamNameForOwner = getTeamName(ownerId, null);
+        const careerTopScoreWeeksCount = calculateTopScoreWeeksCount(historicalData, stats.rosterId, null); // Pass historicalData, use an example rosterId for this owner, null for career total
 
         careerDPRData.push({
-            teamName: getTeamName(rosterId, null), // Use getTeamName for career, pass null for season
-            rosterId: rosterId,
+            ownerId: ownerId, // Store ownerId
+            teamName: teamNameForOwner, // Use the resolved team name for this owner
             dpr: stats.rawDPR, // Will be adjusted later
             wins: stats.wins,
             losses: stats.losses,
@@ -572,22 +589,26 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
             winPercentage: careerWinPercentage,
             totalGames: stats.totalGames,
             topScoreWeeksCount: careerTopScoreWeeksCount,
+            highScore: careerHighScore, // Ensure this is the career high score
+            lowScore: careerLowScore, // Ensure this is the career low score
             // Luck rating for career is sum of seasonal luck ratings
             totalLuckRating: Object.keys(seasonalMetrics).reduce((sum, year) => {
-                return sum + (seasonalMetrics[year][rosterId]?.luckRating || 0);
+                // Find the seasonal stats for this owner's roster in this year
+                const seasonalStatsForOwnerRoster = Object.values(seasonalMetrics[year]).find(s => s.ownerId === ownerId);
+                return sum + (seasonalStatsForOwnerRoster?.luckRating || 0);
             }, 0),
             // Add highest/lowest seasonal points avg to career data
             highestSeasonalPointsAvg: Object.keys(seasonalMetrics).reduce((maxAvg, year) => {
-                const seasonalStats = seasonalMetrics[year][rosterId];
+                const seasonalStats = Object.values(seasonalMetrics[year]).find(s => s.ownerId === ownerId);
                 if (seasonalStats && seasonalStats.totalGames > 0) {
-                    return Math.max(maxAvg, seasonalStats.pointsFor / seasonalStats.totalGames);
+                    return Math.max(maxAvg, seasonalStats.pointsFor / seasonalStats.totalGames); // FIX: Corrected typo
                 }
                 return maxAvg;
             }, 0),
             lowestSeasonalPointsAvg: Object.keys(seasonalMetrics).reduce((minAvg, year) => {
-                const seasonalStats = seasonalMetrics[year][rosterId];
+                const seasonalStats = Object.values(seasonalMetrics[year]).find(s => s.ownerId === ownerId);
                 if (seasonalStats && seasonalStats.totalGames > 0) {
-                    return Math.min(minAvg, seasonalStats.pointsFor / seasonalStats.totalGames);
+                    return Math.min(minAvg, seasonalStats.pointsFor / seasonalStats.totalGames); // FIX: Corrected typo
                 }
                 return minAvg;
             }, Infinity),
