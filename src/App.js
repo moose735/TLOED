@@ -165,16 +165,16 @@ const AppContent = () => {
             case TABS.POWER_RANKINGS:
                 return <PowerRankings />; // This will need Sleeper Context internally
             case TABS.LEAGUE_HISTORY:
-                // Pass historicalData.matchups and historicalData.champions directly
-                return <LeagueHistory historicalMatchups={historicalData.matchups} historicalChampions={historicalData.champions} />;
+                // LeagueHistory now directly consumes historicalData from context, no props needed here
+                return <LeagueHistory />;
             case TABS.RECORD_BOOK:
-                return <RecordBook historicalMatchups={historicalData.matchups} />;
+                return <RecordBook historicalMatchups={historicalData.matchupsBySeason} />; // Pass matchupsBySeason
             case TABS.HEAD_TO_HEAD:
-                return <Head2HeadGrid historicalMatchups={historicalData.matchups} />;
+                return <Head2HeadGrid />; // Head2HeadGrid also consumes historicalData from context
             case TABS.DPR_ANALYSIS:
-                return <DPRAnalysis historicalMatchups={historicalData.matchups} />;
+                return <DPRAnalysis historicalMatchups={historicalData.matchupsBySeason} />; // Pass matchupsBySeason
             case TABS.LUCK_RATING:
-                return <LuckRatingAnalysis historicalMatchups={historicalData.matchups} />;
+                return <LuckRatingAnalysis historicalMatchups={historicalData.matchupsBySeason} />; // Pass matchupsBySeason
             case TABS.TEAM_DETAIL:
                 // TeamDetailPage will now internally use useSleeperData for its data needs
                 return <TeamDetailPage teamName={selectedTeam} />;
