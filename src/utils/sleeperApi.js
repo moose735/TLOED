@@ -49,17 +49,17 @@ const NFL_STATE_CACHE_EXPIRY_MS = 1 * 60 * 60 * 1000; // 1 hour in milliseconds
  * @returns {string} The full URL to the avatar image, or a placeholder if identifier is missing.
  */
 export const getSleeperAvatarUrl = (avatarIdentifier) => {
-  if (!avatarIdentifier) {
-    return 'https://placehold.co/150x150/cccccc/000000?text=No+Avatar';
-  }
+    if (!avatarIdentifier) {
+        return 'https://placehold.co/150x150/cccccc/000000?text=No+Avatar';
+    }
 
-  // If the identifier already looks like a full URL, return it directly
-  if (avatarIdentifier.startsWith('http://') || avatarIdentifier.startsWith('https://')) {
-    return avatarIdentifier;
-  }
+    // If the identifier already looks like a full URL, return it directly
+    if (avatarIdentifier.startsWith('http://') || avatarIdentifier.startsWith('https://')) {
+        return avatarIdentifier;
+    }
 
-  // Otherwise, assume it's an avatar hash and construct the URL
-  return `https://sleepercdn.com/avatars/thumb_${avatarIdentifier}`;
+    // Otherwise, assume it's an avatar hash and construct the URL
+    return `https://sleepercdn.com/avatars/thumb_${avatarIdentifier}`;
 };
 
 /**
@@ -86,18 +86,18 @@ export async function fetchLeagueDetails(leagueId) {
         return null; // Return null immediately for invalid IDs
     }
 
-  try {
-    const response = await fetch(`${BASE_URL}/league/${leagueId}`);
-    if (!response.ok) {
-      console.error(`Error fetching league details for ID ${leagueId}: ${response.statusText}`);
-      return null;
+    try {
+        const response = await fetch(`${BASE_URL}/league/${leagueId}`);
+        if (!response.ok) {
+            console.error(`Error fetching league details for ID ${leagueId}: ${response.statusText}`);
+            return null;
+        }
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error(`Failed to fetch league details for ID ${leagueId}:`, error);
+        return null;
     }
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error(`Failed to fetch league details for ID ${leagueId}:`, error);
-    return null;
-  }
 }
 
 /**
@@ -109,22 +109,22 @@ export async function fetchLeagueDetails(leagueId) {
  * ordered from current season to the oldest available season.
  */
 export async function fetchLeagueData(currentLeagueId) {
-  const leagueData = [];
-  let currentId = currentLeagueId;
+    const leagueData = [];
+    let currentId = currentLeagueId;
 
-  // Loop continues as long as there's a currentId to fetch and it's a valid string ID
-  while (currentId && typeof currentId === 'string' && currentId !== '0') {
-    const details = await fetchLeagueDetails(currentId);
-    if (details) {
-      leagueData.push(details);
-      currentId = details.previous_league_id; // Move to the previous league ID
-    } else {
-      // Stop if a league cannot be fetched (e.g., invalid ID, network error, or previous_league_id is null/invalid)
-      break;
+    // Loop continues as long as there's a currentId to fetch and it's a valid string ID
+    while (currentId && typeof currentId === 'string' && currentId !== '0') {
+        const details = await fetchLeagueDetails(currentId);
+        if (details) {
+            leagueData.push(details);
+            currentId = details.previous_league_id; // Move to the previous league ID
+        } else {
+            // Stop if a league cannot be fetched (e.g., invalid ID, network error, or previous_league_id is null/invalid)
+            break;
+        }
     }
-  }
 
-  return leagueData;
+    return leagueData;
 }
 
 /**
@@ -133,40 +133,92 @@ export async function fetchLeagueData(currentLeagueId) {
  * @returns {Promise<Array<Object>>} A promise that resolves to an array of user data objects, or an empty array if an error occurs.
  */
 export async function fetchUsersData(leagueId) {
-  try {
-    const response = await fetch(`${BASE_URL}/league/${leagueId}/users`);
-    if (!response.ok) {
-      console.error(`Error fetching user details for league ID ${leagueId}: ${response.statusText}`);
-      return [];
+    try {
+        const response = await fetch(`${BASE_URL}/league/${leagueId}/users`);
+        if (!response.ok) {
+            console.error(`Error fetching user details for league ID ${leagueId}: ${response.statusText}`);
+            return [];
+        }
+        const data = await response.json();
+
+        const processedUsers = data.map(user => {
+            let finalAvatarIdentifier = ''; // This can be a hash or a full URL
+
+            // Prefer the full URL from metadata if available
+            if (user.metadata && typeof user.metadata.avatar === 'string' && user.metadata.avatar.trim() !== '') {
+                finalAvatarIdentifier = user.metadata.avatar;
+            } else {
+                // Fallback to the main avatar hash
+                finalAvatarIdentifier = user.avatar;
+            }
+
+            return {
+                userId: user.user_id,
+                displayName: user.display_name,
+                // Pass the identifier (which might be a hash or a full URL) to getSleeperAvatarUrl
+                avatar: getSleeperAvatarUrl(finalAvatarIdentifier),
+                // 'team_name' is typically found in the user.metadata object for Sleeper
+                teamName: user.metadata ? user.metadata.team_name : user.display_name, // Fallback to display_name if no team_name
+            };
+        });
+
+        return processedUsers;
+    } catch (error) {
+        console.error(`Failed to fetch user details for league ID ${leagueId}:`, error);
+        return [];
     }
-    const data = await response.json();
+}
 
-    const processedUsers = data.map(user => {
-      let finalAvatarIdentifier = ''; // This can be a hash or a full URL
+/**
+ * Helper function to process raw matchup data into a structured format (team1 vs team2).
+ * Sleeper's /matchups endpoint returns two entries for each matchup (one per team).
+ * This function groups them by matchup_id.
+ * @param {Array<Object>} rawMatchups An array of raw matchup objects from the Sleeper API.
+ * @returns {Array<Object>} An array of structured matchup objects, each containing team1 and team2 details.
+ */
+function processRawMatchups(rawMatchups) {
+    // Group by matchup_id
+    const groupedMatchups = rawMatchups.reduce((acc, current) => {
+        if (!acc[current.matchup_id]) {
+            acc[current.matchup_id] = { team1: null, team2: null, matchup_id: current.matchup_id };
+        }
+        // Assign current team's data to either team1 or team2 slot
+        // This assumes exactly two teams per matchup_id.
+        if (acc[current.matchup_id].team1 === null) {
+            acc[current.matchup_id].team1 = {
+                roster_id: current.roster_id,
+                points: current.points,
+            };
+        } else {
+            acc[current.matchup_id].team2 = {
+                roster_id: current.roster_id,
+                points: current.points,
+            };
+        }
+        return acc;
+    }, {});
 
-      // Prefer the full URL from metadata if available
-      if (user.metadata && typeof user.metadata.avatar === 'string' && user.metadata.avatar.trim() !== '') {
-        finalAvatarIdentifier = user.metadata.avatar;
-      } else {
-        // Fallback to the main avatar hash
-        finalAvatarIdentifier = user.avatar;
-      }
+    // Convert grouped matchups back into an array of simplified matchup objects
+    const simplifiedMatchups = Object.values(groupedMatchups).map(grouped => {
+        const team1 = grouped.team1;
+        const team2 = grouped.team2;
 
-      return {
-        userId: user.user_id,
-        displayName: user.display_name,
-        // Pass the identifier (which might be a hash or a full URL) to getSleeperAvatarUrl
-        avatar: getSleeperAvatarUrl(finalAvatarIdentifier),
-        // 'team_name' is typically found in the user.metadata object for Sleeper
-        teamName: user.metadata ? user.metadata.team_name : user.display_name, // Fallback to display_name if no team_name
-      };
-    });
+        // Handle potential cases where a matchup might only have one team listed (unlikely but safe)
+        if (!team1 || !team2) {
+            // console.warn(`Incomplete matchup found for ID ${grouped.matchup_id}. Skipping.`);
+            return null; // Filter these out later
+        }
 
-    return processedUsers;
-  } catch (error) {
-    console.error(`Failed to fetch user details for league ID ${leagueId}:`, error);
-    return [];
-  }
+        return {
+            matchup_id: grouped.matchup_id,
+            team1_roster_id: team1.roster_id,
+            team1_score: team1.points,
+            team2_roster_id: team2.roster_id,
+            team2_score: team2.points,
+        };
+    }).filter(Boolean); // Filter out any null entries (incomplete matchups)
+
+    return simplifiedMatchups;
 }
 
 
@@ -179,7 +231,7 @@ export async function fetchUsersData(leagueId) {
  * Matchups will be fetched from Week 1 up to this number.
  * @returns {Promise<Object>} A promise that resolves to an object.
  * Keys are week numbers (e.g., '1', '2'), and values are arrays
- * containing the matchup data for that specific week.
+ * containing the **processed** matchup data for that specific week.
  */
 async function fetchMatchupsForLeague(leagueId, regularSeasonWeeks) {
     const leagueMatchups = {}; // Object to store matchups for the current league, keyed by week.
@@ -190,18 +242,21 @@ async function fetchMatchupsForLeague(leagueId, regularSeasonWeeks) {
 
             if (!response.ok) {
                 console.warn(`Warning: Could not fetch matchups for league ${leagueId}, Week ${week}: ${response.statusText}`);
+                leagueMatchups[week] = []; // Ensure it's an empty array even on error
                 continue; // Continue to next week even if fetch fails for current week
             }
 
-            const data = await response.json();
-            if (data && data.length > 0) {
-                leagueMatchups[week] = data;
+            const rawMatchups = await response.json();
+            if (rawMatchups && rawMatchups.length > 0) {
+                // Process the raw data into combined matchups before storing
+                leagueMatchups[week] = processRawMatchups(rawMatchups);
             } else {
-                // If no data for a week, it might mean the season ended or this week doesn't exist.
-                // We don't need a console.log for this common occurrence.
+                leagueMatchups[week] = []; // Explicitly set to empty array if no data
+                // console.log(`No raw matchup data for league ${leagueId}, Week ${week}.`);
             }
         } catch (error) {
             console.error(`Failed to fetch matchups for league ${leagueId}, Week ${week}:`, error);
+            leagueMatchups[week] = []; // Ensure it's an empty array on error
             // Continue to the next week even if a specific week's fetch fails.
         }
     }
@@ -213,7 +268,7 @@ async function fetchMatchupsForLeague(leagueId, regularSeasonWeeks) {
  * Data is fetched once and then cached in memory for subsequent calls within the same session.
  *
  * @returns {Promise<Object>} A promise that resolves to an object containing all historical matchups,
- * structured as { "season_year": { id: "league_id_for_that_season", "weeks": { "week_number": [matchup_data], ... } }, ... }.
+ * structured as { "season_year": { "week_number": [processed_matchup_data], ... }, ... }.
  * Returns the cached data if already fetched.
  */
 export async function fetchAllHistoricalMatchups() {
@@ -224,6 +279,7 @@ export async function fetchAllHistoricalMatchups() {
     }
 
     console.log('Fetching all historical matchup data for the first time...');
+    // This will now directly store { [season]: { [week_num]: [matchup_array] } }
     const allHistoricalMatchups = {};
 
     try {
@@ -238,27 +294,25 @@ export async function fetchAllHistoricalMatchups() {
             const leagueId = league.league_id;
             const season = league.season;
 
+            // Initialize the season in the main historicalMatchups object
+            allHistoricalMatchups[season] = {};
+
             // Determine the number of regular season weeks for the current league.
             let regularSeasonWeeks = 14; // Default based on common fantasy league lengths.
 
             if (league.settings && typeof league.settings.playoff_start_week === 'number' && league.settings.playoff_start_week > 1) {
                 regularSeasonWeeks = league.settings.playoff_start_week - 1;
             } else {
-                // If playoff_start_week is not available or invalid, use default and log a warning.
-                // This warning can be removed if a default is expected behavior.
+                // If playoff_start_week is not available or invalid, use default.
                 // console.warn(`No valid 'playoff_start_week' found for league ${season} (${leagueId}). Defaulting to fetching ${regularSeasonWeeks} regular season weeks.`);
             }
 
-            const matchups = await fetchMatchupsForLeague(leagueId, regularSeasonWeeks);
+            const matchupsByWeek = await fetchMatchupsForLeague(leagueId, regularSeasonWeeks);
 
-            // IMPORTANT CHANGE HERE: Include the leagueId for the specific season.
-            // The MatchupHistory component needs this 'id' to fetch rosters for that season.
-            allHistoricalMatchups[season] = {
-                id: leagueId, // This is the crucial addition!
-                weeks: matchups
-            };
+            // Assign the fetched and processed matchups directly to the season
+            allHistoricalMatchups[season] = matchupsByWeek; // This is the key change here!
 
-            if (Object.keys(matchups).length === 0) {
+            if (Object.keys(matchupsByWeek).length === 0) {
                 console.warn(`No matchups collected for season ${season} (${leagueId}).`);
             }
         }
