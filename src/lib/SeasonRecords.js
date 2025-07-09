@@ -8,7 +8,7 @@ import { formatNumber } from '../utils/formatUtils'; // Assuming you have this u
  */
 const SeasonRecords = () => {
     // Consume processedSeasonalRecords and getTeamName from the context
-    const { processedSeasonalRecords, getTeamName, loading, error } = useSleeperData();
+    const { processedSeasonalRecords, getTeamName, getOwnerName, loading, error } = useSleeperData();
 
     // State to hold the "seasonal highlights" (e.g., highest DPR ever in a single season)
     const [seasonalHighlights, setSeasonalHighlights] = useState({});
@@ -85,13 +85,14 @@ const SeasonRecords = () => {
 
         // Iterate through each season and each team's processed stats
         Object.keys(processedSeasonalRecords).forEach(year => {
-            const teamsInSeason = processedSeasonalRecords[year];
+            // CRITICAL FIX: Convert the object of teams to an array of teamStats values
+            const teamsInSeason = Object.values(processedSeasonalRecords[year]);
             teamsInSeason.forEach(teamStats => {
                 const teamInfo = {
-                    teamName: teamStats.teamName,
-                    year: teamStats.year,
+                    teamName: getTeamName(teamStats.rosterId, year), // Get team name from context using rosterId and year
+                    year: year, // Use the actual year from the loop
                     rosterId: teamStats.rosterId,
-                    ownerId: teamStats.ownerId, // Include ownerId for better identification
+                    ownerId: teamStats.ownerId,
                 };
 
                 // Update highlights based on seasonal team stats
@@ -165,7 +166,7 @@ const SeasonRecords = () => {
             lowestLuckRatingSeason,
         });
 
-    }, [processedSeasonalRecords, getTeamName, loading, error]); // Depend on processed data and getTeamName
+    }, [processedSeasonalRecords, getTeamName, getOwnerName, loading, error]); // Depend on processed data and getTeamName
 
 
     if (loading) {
@@ -325,8 +326,8 @@ const SeasonRecords = () => {
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                            {processedSeasonalRecords[year]
-                                .sort((a, b) => a.regularSeasonRank - b.regularSeasonRank) // Sort by regular season rank
+                            {Object.values(processedSeasonalRecords[year]) // CRITICAL FIX: Use Object.values here
+                                .sort((a, b) => a.rank - b.rank) // Sort by regular season rank from calculations.js
                                 .map((teamStats, index) => (
                                     <tr key={teamStats.rosterId} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                                         <td className="py-2 px-4 text-left font-medium text-gray-800">
@@ -342,7 +343,7 @@ const SeasonRecords = () => {
                                             {formatNumber(teamStats.pointsAgainst, 2, 'points')}
                                         </td>
                                         <td className="py-2 px-4 text-center text-gray-700">
-                                            {teamStats.regularSeasonRank || 'N/A'}
+                                            {teamStats.rank || 'N/A'}
                                         </td>
                                         <td className="py-2 px-4 text-center text-gray-700">
                                             {teamStats.pointsRank || 'N/A'}
