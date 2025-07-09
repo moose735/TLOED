@@ -56,6 +56,7 @@ const TABS = {
     TEAM_DETAIL: 'teamDetail',
     FINANCIALS: 'financials',
     MATCHUP_HISTORY: 'matchupHistory',
+    SEASON_RECORDS: 'seasonRecords', // Added this for the new tab
 };
 
 
@@ -64,7 +65,7 @@ const AppContent = () => {
     const {
         loading,
         error,
-        historicalMatchups,
+        historicalMatchups, // CORRECTED: Destructure as historicalMatchups
         rostersWithDetails, // This is the current league's rosters
         getTeamName,
         usersData // Also useful for team names
