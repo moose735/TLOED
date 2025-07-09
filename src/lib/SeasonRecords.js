@@ -114,13 +114,16 @@ const SeasonRecords = () => {
                 // DEBUGGING LOG: Check teamStats.teamName directly from processedSeasonalRecords
                 console.log(`SeasonRecords: Processing year ${year}, Roster ID ${teamStats.rosterId}. teamStats.teamName: "${teamStats.teamName}"`);
 
-                // IMPORTANT: Prioritize teamStats.teamName which should be populated by SleeperDataContext
-                // Fallback to getTeamName if teamStats.teamName is truly missing or empty.
-                const resolvedTeamName = teamStats.teamName || getTeamName(teamStats.rosterId, year) || 'Unknown Team';
+                // FIXED: Explicitly use getTeamName with the year for the team name
+                let resolvedTeamName = getTeamName(teamStats.rosterId, year);
+                // Fallback to teamStats.teamName if getTeamName returns a generic ID string
+                if (resolvedTeamName.startsWith('Unknown Team (ID:')) {
+                    resolvedTeamName = teamStats.teamName || 'Unknown Team';
+                }
                 console.log(`SeasonRecords: Resolved team name for ${teamStats.rosterId} in ${year}: "${resolvedTeamName}"`);
 
                 const teamInfo = {
-                    teamName: resolvedTeamName,
+                    teamName: resolvedTeamName, // Use the resolved year-specific name
                     year: year,
                     rosterId: teamStats.rosterId,
                     ownerId: teamStats.ownerId, // ownerId is crucial for linking to users
@@ -142,7 +145,7 @@ const SeasonRecords = () => {
                     if (typeof teamStats.blowoutWins === 'number') updateRecord(mostBlowoutWinsSeason, teamStats.blowoutWins, { ...teamInfo, value: teamStats.blowoutWins });
                     if (typeof teamStats.blowoutLosses === 'number') updateRecord(mostBlowoutLossesSeason, teamStats.blowoutLosses, { ...teamInfo, value: teamStats.blowoutLosses });
                     if (typeof teamStats.slimWins === 'number') updateRecord(mostSlimWinsSeason, teamStats.slimWins, { ...teamInfo, value: teamStats.slimWins });
-                    if (typeof teamStats.slimLosses === 'number') updateRecord(mostSlimLossesSeason, teamStats.slimLosses, { ...teamInfo, value: teamStats.slimLosses }); // Corrected teamInfo.slimLosses to teamStats.slimLosses
+                    if (typeof teamStats.slimLosses === 'number') updateRecord(mostSlimLossesSeason, teamStats.slimLosses, { ...teamInfo, value: teamStats.slimLosses });
                     if (typeof teamStats.pointsFor === 'number') {
                         updateRecord(mostPointsSeason, teamStats.pointsFor, { ...teamInfo, value: teamStats.pointsFor });
                         updateRecord(fewestPointsSeason, teamStats.pointsFor, { ...teamInfo, value: teamStats.pointsFor }, true);
@@ -252,17 +255,12 @@ const SeasonRecords = () => {
                 console.warn(`SeasonRecords: Skipping undefined entry in record.entries for key '${record.key}'. Index: ${index}`);
                 return null; // Return null for undefined entries to prevent errors
             }
-            // FIXED: Corrected 'team' to 'entry' inside this block
+            // The teamName in entry should now already be the year-specific name
+            // from the `teamInfo` object created in the useEffect.
             let currentTeamDisplayName = entry.teamName;
-            // The logic below is a fallback, but ideally entry.teamName should already be correct.
-            // If getTeamName is returning "Unknown Team (ID: X)", it means the lookup failed.
-            // We need to investigate why getTeamName is failing for those specific IDs.
-            if (currentTeamDisplayName.startsWith('Unknown Team (ID:')) {
-                // If the name is still generic, try to re-resolve using getTeamName from context
-                // This might be redundant if the initial teamInfo construction worked, but safe for debugging.
-                currentTeamDisplayName = getTeamName(entry.rosterId || entry.ownerId, entry.year);
-            }
-            // Final fallback if getTeamName also returned a generic ID string
+
+            // This fallback is a last resort, if the name is still generic.
+            // Ideally, the `teamName` in `entry` should be resolved correctly by now.
             if (currentTeamDisplayName.startsWith('Unknown Team (ID:')) {
                 currentTeamDisplayName = "Unknown Team";
             }
