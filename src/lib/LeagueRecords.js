@@ -11,7 +11,7 @@ import { formatNumber } from '../utils/formatUtils';
 const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics }) => {
     const [allTimeRecords, setAllTimeRecords] = useState({});
     const [expandedRecords, setExpandedRecords] = useState({});
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoading, setIsLoading] = true;
 
     // Configuration for number formatting per stat
     const formatConfig = {
@@ -19,8 +19,8 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
         lowestDPR: { decimals: 3, type: 'decimal' },  // Changed to 3 decimals
         mostWins: { decimals: 0, type: 'count' },
         mostLosses: { decimals: 0, type: 'count' },
-        bestWinPct: { decimals: 3, type: 'percentage' }, // Already 3 decimals, correct for X.XXX%
-        bestAllPlayWinPct: { decimals: 3, type: 'percentage' }, // Already 3 decimals, correct for X.XXX%
+        bestWinPct: { decimals: 3, type: 'percentage' }, // Decimals setting is now for the raw decimal, not multiplied %
+        bestAllPlayWinPct: { decimals: 3, type: 'percentage' }, // Decimals setting is now for the raw decimal, not multiplied %
         mostWeeklyHighScores: { decimals: 0, type: 'count' },
         mostWeeklyTop2Scores: { decimals: 0, type: 'count' },
         mostWinningSeasons: { decimals: 0, type: 'count' },
@@ -29,8 +29,8 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
         mostBlowoutLosses: { decimals: 0, type: 'count' },
         mostSlimWins: { decimals: 0, type: 'count' },
         mostSlimLosses: { decimals: 0, type: 'count' },
-        mostTotalPoints: { decimals: 2, type: 'points' }, // Ensure formatUtils handles commas
-        mostPointsAgainst: { decimals: 2, type: 'points' }, // Ensure formatUtils handles commas
+        mostTotalPoints: { decimals: 2, type: 'points' },
+        mostPointsAgainst: { decimals: 2, type: 'points' },
     };
 
 
@@ -224,10 +224,11 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
 
         let displayValue;
         if (config.type === 'percentage') {
-            // For percentage, multiply by 100 before formatting to get "X.XXX%"
-            displayValue = formatNumber(primaryTeam.value * 100, config.decimals, config.type) + '%';
+            // Apply the new specific formatting: .XXX%
+            // Use 'decimal' type from formatNumber to get fixed decimals, then prepend '.' and append '%'
+            displayValue = '.' + formatNumber(primaryTeam.value, config.decimals, 'decimal') + '%';
         } else {
-            // For other types (decimal, points, count), just format the raw value
+            // Keep existing logic for other types (DPR, points, count)
             displayValue = formatNumber(primaryTeam.value, config.decimals, config.type);
         }
 
@@ -264,7 +265,7 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
                             {record.teams.slice(1).map((team, index) => {
                                 let tiedDisplayValue;
                                 if (config.type === 'percentage') {
-                                    tiedDisplayValue = formatNumber(team.value * 100, config.decimals, config.type) + '%';
+                                    tiedDisplayValue = '.' + formatNumber(team.value, config.decimals, 'decimal') + '%';
                                 } else {
                                     tiedDisplayValue = formatNumber(team.value, config.decimals, config.type);
                                 }
