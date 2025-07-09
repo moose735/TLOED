@@ -1,5 +1,4 @@
-
-// App.js
+// src/App.js
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     // GOOGLE_SHEET_POWER_RANKINGS_API_URL, // Keep if other GAS APIs are still in use elsewhere
@@ -17,13 +16,12 @@ import Head2HeadGrid from './lib/Head2HeadGrid';
 import FinancialTracker from './components/FinancialTracker';
 import Dashboard from './components/Dashboard';
 import MatchupHistory from './components/MatchupHistory';
+import TeamsOverviewPage from './lib/TeamsOverviewPage'; // Import the new TeamsOverviewPage
 
 // Import the custom hook from your SleeperDataContext
 import { SleeperDataProvider, useSleeperData } from './contexts/SleeperDataContext';
 
 // Define the available tabs and their categories
-// NOTE: NAV_CATEGORIES should ideally be defined outside the component
-// or memoized if it changes based on props, but for now, we'll modify it directly.
 const NAV_CATEGORIES = {
     HOME: { label: 'Dashboard', tab: 'dashboard' },
     POWER_RANKINGS: { label: 'Power Rankings', tab: 'powerRankings' },
@@ -38,9 +36,10 @@ const NAV_CATEGORIES = {
             { label: 'Matchup History', tab: 'matchupHistory' },
         ]
     },
+    // Modified TEAMS category to point directly to TeamsOverviewPage
     TEAMS: {
         label: 'Teams',
-        subTabs: [], // This will be populated dynamically from Sleeper data later
+        tab: 'teamsOverview', // This tab will render TeamsOverviewPage
     },
     FINANCIALS: { label: 'Financials', tab: 'financials' },
 };
@@ -54,74 +53,42 @@ const TABS = {
     HEAD_TO_HEAD: 'headToHead',
     DPR_ANALYSIS: 'dprAnalysis',
     LUCK_RATING: 'luckRating',
-    TEAM_DETAIL: 'teamDetail',
+    TEAM_DETAIL: 'teamDetail', // Still used by TeamDetailPage internally, but not directly navigated to from main nav
     FINANCIALS: 'financials',
     MATCHUP_HISTORY: 'matchupHistory',
+    TEAMS_OVERVIEW: 'teamsOverview', // New tab for the TeamsOverviewPage
 };
 
 
 const AppContent = () => {
     // Consume data from SleeperDataContext
-    // Destructure directly from the context value, not from a 'state' object
     const {
         loading,
         error,
         historicalData, // Now an object containing matchups and champions
-        rostersBySeason, // Now directly rostersWithDetails from context
-        getTeamName, // The Sleeper-aware version of getMappedTeamName
         usersData // Also useful for team names
-    } = useSleeperData();
+    } = useSleeperData(); // Removed rostersBySeason and getTeamName as they are not directly used here anymore
 
     const [activeTab, setActiveTab] = useState(TABS.DASHBOARD);
-    const [selectedTeam, setSelectedTeam] = useState(null);
+    // selectedTeam state is no longer needed here as TeamsOverviewPage manages it
+    // const [selectedTeam, setSelectedTeam] = useState(null);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [openSubMenu, setOpenSubMenu] = useState(null);
 
-    // Effect to dynamically populate team sub-tabs when rostersBySeason is available
-    useEffect(() => {
-        // Ensure both rostersBySeason and usersData are available before proceeding
-        if (rostersBySeason && usersData) {
-            const allTeamNames = new Set();
-            // rostersBySeason is an object where keys are seasons and values are arrays of rosters
-            // Iterate over each season's rosters
-            Object.values(rostersBySeason).forEach(seasonRosters => {
-                if (Array.isArray(seasonRosters)) { // Ensure it's an array of rosters for the season
-                    seasonRosters.forEach(roster => {
-                        // Use getTeamName to get the display name for the user (owner_id)
-                        // This function is provided by the SleeperDataContext
-                        const teamDisplayName = getTeamName(roster.owner_id);
-                        // Add to set if a valid name is returned
-                        if (teamDisplayName && teamDisplayName !== 'Loading Team...') {
-                            allTeamNames.add(teamDisplayName);
-                        }
-                    });
-                }
-            });
-            const uniqueTeams = Array.from(allTeamNames).sort();
-
-            // Update NAV_CATEGORIES.TEAMS.subTabs directly.
-            // In a larger application, you might manage NAV_CATEGORIES as component state
-            // to ensure React reactivity, but for this progressive update, direct modification
-            // of the global object is sufficient as the menu re-renders on state changes.
-            NAV_CATEGORIES.TEAMS.subTabs = uniqueTeams.map(team => ({
-                label: team,
-                tab: TABS.TEAM_DETAIL,
-                teamName: team, // Pass teamName for the TeamDetailPage
-            }));
-        }
-    }, [rostersBySeason, usersData, getTeamName]); // Dependencies for this effect
+    // Removed the useEffect that dynamically populated team sub-tabs.
+    // This logic is now handled within TeamsOverviewPage.
 
     // Placeholder functions for UI interactions
     const handleTabClick = (tab) => {
         setActiveTab(tab);
-        setSelectedTeam(null); // Clear selected team when switching main tabs
+        // setSelectedTeam(null); // No longer needed
         setIsMobileMenuOpen(false); // Close mobile menu on tab click
         setOpenSubMenu(null); // Close any open sub-menus
     };
 
-    const handleSubTabClick = (tab, teamName = null) => {
+    // Simplified handleSubTabClick - teamName is no longer passed from main nav
+    const handleSubTabClick = (tab) => {
         setActiveTab(tab);
-        setSelectedTeam(teamName);
         setIsMobileMenuOpen(false); // Close mobile menu on sub-tab click
         setOpenSubMenu(null); // Close any open sub-menus
     };
@@ -152,7 +119,7 @@ const AppContent = () => {
                 <div className="flex items-center justify-center min-h-screen bg-gray-100 font-inter">
                     <div className="text-center p-6 bg-red-100 border border-red-400 text-red-700 rounded-lg shadow-md">
                         <p className="font-bold text-xl mb-2">Error Loading Data</p>
-                        <p className="text-base">Failed to load historical data: {error}</p>
+                        <p className="text-base">Failed to load historical data: {error.message || String(error)}</p>
                         <p className="text-sm mt-2">Please check your internet connection or the Sleeper API configuration in `config.js` and `sleeperApi.js`.</p>
                     </div>
                 </div>
@@ -173,12 +140,12 @@ const AppContent = () => {
             case TABS.HEAD_TO_HEAD:
                 return <Head2HeadGrid />; // Head2HeadGrid also consumes historicalData from context
             case TABS.DPR_ANALYSIS:
-                return <DPRAnalysis historicalMatchups={historicalData.matchupsBySeason} />; // Pass matchupsBySeason
+                // DPRAnalysis now directly consumes historicalData from context, no props needed here
+                return <DPRAnalysis />;
             case TABS.LUCK_RATING:
                 return <LuckRatingAnalysis historicalMatchups={historicalData.matchupsBySeason} />; // Pass matchupsBySeason
-            case TABS.TEAM_DETAIL:
-                // TeamDetailPage will now internally use useSleeperData for its data needs
-                return <TeamDetailPage teamName={selectedTeam} />;
+            case TABS.TEAMS_OVERVIEW: // New case for the TeamsOverviewPage
+                return <TeamsOverviewPage />; // TeamsOverviewPage handles its own team selection
             case TABS.FINANCIALS:
                 return <FinancialTracker />;
             case TABS.MATCHUP_HISTORY:
@@ -232,20 +199,10 @@ const AppContent = () => {
                             </ul>
                         )}
                     </li>
-                    {/* Teams Submenu (Dynamically populated) */}
-                    <li className="relative px-4 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 my-0.5 md:my-0"
-                        onClick={() => toggleSubMenu('teams')}>
-                        {NAV_CATEGORIES.TEAMS.label} <span className="ml-1">▼</span>
-                        {openSubMenu === 'teams' && (
-                            <ul className="absolute md:top-full md:left-0 bg-gray-700 shadow-lg rounded-md mt-2 w-48 z-10 max-h-60 overflow-y-auto">
-                                {NAV_CATEGORIES.TEAMS.subTabs.map(subTab => (
-                                    <li key={subTab.label} className="px-4 py-2 hover:bg-gray-600 cursor-pointer rounded-md"
-                                        onClick={(e) => { e.stopPropagation(); handleSubTabClick(subTab.tab, subTab.teamName); }}>
-                                        {subTab.label}
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
+                    {/* Teams Tab (now a direct link to TeamsOverviewPage) */}
+                    <li className="px-4 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 my-0.5 md:my-0"
+                        onClick={() => handleTabClick(NAV_CATEGORIES.TEAMS.tab)}>
+                        {NAV_CATEGORIES.TEAMS.label}
                     </li>
                     {/* Financials Tab */}
                     <li className="px-4 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 my-0.5 md:my-0"
