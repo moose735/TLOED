@@ -36,61 +36,94 @@ export const SleeperDataProvider = ({ children }) => {
     const [error, setError] = useState(null);
 
     // Memoize the getTeamName function so it's stable across renders
-    // This needs to be defined BEFORE the useEffect that calls calculateAllLeagueMetrics
-    // because calculateAllLeagueMetrics depends on getTeamName.
+    // This function now performs year-specific lookups.
     const getTeamName = useMemo(() => {
-        // Create a comprehensive map for user_id to display name/team name across ALL historical seasons
-        const allUserMap = new Map();
-        if (historicalMatchups?.usersBySeason) {
-            Object.values(historicalMatchups.usersBySeason).forEach(seasonUsers => {
-                if (Array.isArray(seasonUsers)) {
-                    seasonUsers.forEach(user => {
-                        allUserMap.set(user.user_id, user);
-                    });
-                }
-            });
-        }
-        // Also add users from the current league's usersData, if it's different or more up-to-date
-        if (usersData) {
-            usersData.forEach(user => {
-                allUserMap.set(user.user_id, user);
-            });
-        }
+        // We'll create maps that are keyed by year for year-specific lookups
+        const yearSpecificRosterToOwnerMap = new Map(); // Map: year -> (roster_id -> owner_id)
+        const yearSpecificUserMap = new Map();       // Map: year -> (user_id -> user_object)
 
-        // Create a comprehensive map for roster_id to owner_id across ALL historical seasons
-        const allRosterToOwnerMap = new Map();
         if (historicalMatchups?.rostersBySeason) {
-            Object.values(historicalMatchups.rostersBySeason).forEach(seasonRosters => {
+            Object.entries(historicalMatchups.rostersBySeason).forEach(([year, seasonRosters]) => {
+                const rosterMapForYear = new Map();
                 if (Array.isArray(seasonRosters)) {
                     seasonRosters.forEach(roster => {
-                        allRosterToOwnerMap.set(roster.roster_id, roster.owner_id);
+                        rosterMapForYear.set(roster.roster_id, roster.owner_id);
                     });
                 }
-            });
-        }
-        // Also add current league's rosters to the map
-        if (rostersWithDetails) {
-            rostersWithDetails.forEach(roster => {
-                allRosterToOwnerMap.set(roster.roster_id, roster.owner_id);
+                yearSpecificRosterToOwnerMap.set(year, rosterMapForYear);
             });
         }
 
-        return (id) => {
-            // 1. Check if the ID is a user_id directly
-            const user = allUserMap.get(id);
+        if (historicalMatchups?.usersBySeason) {
+            Object.entries(historicalMatchups.usersBySeason).forEach(([year, seasonUsers]) => {
+                const userMapForYear = new Map();
+                if (Array.isArray(seasonUsers)) {
+                    seasonUsers.forEach(user => {
+                        userMapForYear.set(user.user_id, user);
+                    });
+                }
+                yearSpecificUserMap.set(year, userMapForYear);
+            });
+        }
+
+        // Add current league's users and rosters, but without a specific year context for now
+        // This is a fallback if year-specific data isn't found, or for current year lookups
+        const currentLeagueUserMap = new Map();
+        if (usersData) {
+            usersData.forEach(user => {
+                currentLeagueUserMap.set(user.user_id, user);
+            });
+        }
+        const currentLeagueRosterToOwnerMap = new Map();
+        if (rostersWithDetails) {
+            rostersWithDetails.forEach(roster => {
+                currentLeagueRosterToOwnerMap.set(roster.roster_id, roster.owner_id);
+            });
+        }
+
+
+        // The returned function now explicitly uses the 'year' parameter for lookups
+        return (id, year = null) => {
+            let user = null;
+            let ownerId = null;
+
+            if (year && yearSpecificRosterToOwnerMap.has(year) && yearSpecificUserMap.has(year)) {
+                // Try year-specific lookup first
+                const rosterMapForYear = yearSpecificRosterToOwnerMap.get(year);
+                const userMapForYear = yearSpecificUserMap.get(year);
+
+                ownerId = rosterMapForYear.get(id); // Check if ID is a roster_id for that year
+                if (ownerId) {
+                    user = userMapForYear.get(ownerId); // Get user for that year's owner_id
+                    if (user) {
+                        return user.metadata?.team_name || user.display_name || `User ${user.user_id} (${year})`;
+                    }
+                }
+
+                // If ID is a user_id directly for that year
+                user = userMapForYear.get(id);
+                if (user) {
+                    return user.metadata?.team_name || user.display_name || `User ${id} (${year})`;
+                }
+            }
+
+            // Fallback to current league data if year-specific lookup failed or no year provided
+            // This prioritizes current league users/rosters if they exist
+            user = currentLeagueUserMap.get(id);
             if (user) {
                 return user.metadata?.team_name || user.display_name || `User ${id}`;
             }
 
-            // 2. If not a user_id, check if it's a roster_id (from any season) and find its owner
-            const ownerId = allRosterToOwnerMap.get(id);
+            ownerId = currentLeagueRosterToOwnerMap.get(id);
             if (ownerId) {
-                const ownerUser = allUserMap.get(ownerId);
-                if (ownerUser) {
-                    return ownerUser.metadata?.team_name || ownerUser.display_name || `Roster Owner ${ownerId}`;
+                user = currentLeagueUserMap.get(ownerId);
+                if (user) {
+                    return user.metadata?.team_name || user.display_name || `Roster Owner ${ownerId}`;
                 }
             }
-            return `Unknown Team (ID: ${id})`; // Fallback if no name found
+
+            // Final fallback
+            return `Unknown Team (ID: ${id})`;
         };
     }, [usersData, rostersWithDetails, historicalMatchups]); // Re-memoize if dependencies change
 
@@ -125,12 +158,12 @@ export const SleeperDataProvider = ({ children }) => {
                 setNflPlayers(players);
                 setNflState(state);
                 setHistoricalMatchups(matchups);
-                setAllDraftHistory(draftHistory);
 
                 // IMPORTANT: Calculate processedSeasonalRecords AFTER historicalMatchups is set
                 // and getTeamName is ready (which it should be, as its dependencies are set above).
                 if (matchups && Object.keys(matchups).length > 0) {
                     // calculateAllLeagueMetrics returns an object with seasonalMetrics and careerDPRData
+                    // Ensure getTeamName is passed correctly here, as it's a dependency for the calculation
                     const { seasonalMetrics } = calculateAllLeagueMetrics(matchups, getTeamName);
                     console.log("SleeperDataContext: Calculated seasonalMetrics:", seasonalMetrics); // Debugging log
                     setProcessedSeasonalRecords(seasonalMetrics);
@@ -139,6 +172,7 @@ export const SleeperDataProvider = ({ children }) => {
                     setProcessedSeasonalRecords({}); // Ensure it's an empty object if no data
                 }
 
+                setAllDraftHistory(draftHistory); // Set draft history after other data
                 setLoading(false); // Set loading to false ONLY after all data and calculations are done
             } catch (err) {
                 console.error("Failed to load initial Sleeper data:", err);
@@ -148,8 +182,10 @@ export const SleeperDataProvider = ({ children }) => {
         };
 
         loadAllSleeperData();
-    }, []); // FIXED: Removed getTeamName from dependencies to prevent loading loop.
-    // This effect now runs only once on mount (or if CURRENT_LEAGUE_ID were to change).
+    }, [getTeamName]); // Keep getTeamName as a dependency to ensure recalculation if its underlying maps change.
+                       // This is a trade-off: it ensures data consistency, but if getTeamName's dependencies
+                       // (historicalMatchups, usersData, rostersWithDetails) are changing on every render,
+                       // it could still cause issues. However, they should only change once after initial fetch.
 
 
     // 4. Memoize the context value to prevent unnecessary re-renders of consumers
