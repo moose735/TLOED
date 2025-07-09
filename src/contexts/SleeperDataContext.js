@@ -107,23 +107,19 @@ export const SleeperDataProvider = ({ children }) => {
                     }
                 }
 
-                // Fallback for historical lookups if specific year data is missing,
-                // still try to find *any* historical name (from most recent to oldest)
-                const sortedYearsDesc = Array.from(yearSpecificUserMap.keys()).sort((a, b) => parseInt(b) - parseInt(a));
-                for (const historicalYear of sortedYearsDesc) {
-                    const userMapInHistoricalYear = yearSpecificUserMap.get(historicalYear);
-                    const userInHistoricalYear = userMapInHistoricalYear.get(ownerId);
-                    if (userInHistoricalYear) {
-                        if (userInHistoricalYear.metadata?.team_name) {
-                            return userInHistoricalYear.metadata.team_name;
-                        }
-                        if (userInHistoricalYear.display_name) {
-                            return userInHistoricalYear.display_name;
-                        }
+                // Fallback for historical lookups if specific year data is missing in that year,
+                // try to get the *current* name from usersData before resorting to general historical or generic
+                const currentUser = currentLeagueUserMap.get(ownerId);
+                if (currentUser) {
+                    if (currentUser.metadata?.team_name) {
+                        return currentUser.metadata.team_name;
+                    }
+                    if (currentUser.display_name) {
+                        return currentUser.display_name;
                     }
                 }
-                
-                // Fallback to careerDPRData if historical year-specific or general historical names not found
+
+                // Fallback to careerDPRData if historical year-specific or current names not found
                 const careerTeam = careerDPRData?.find(team => team.ownerId === ownerId);
                 if (careerTeam && careerTeam.teamName && careerTeam.teamName !== `Unknown Team (ID: ${ownerId})`) {
                     return careerTeam.teamName;
