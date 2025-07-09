@@ -1,22 +1,20 @@
 // src/contexts/SleeperDataContext.js
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { fetchAllHistoricalMatchups } from '../utils/sleeperApi';
-import { calculateAllTimeRecords, calculateSeasonalMetrics } from '../utils/calculations';
+import { fetchAllHistoricalMatchups } from '../utils/sleeperApi'; // Corrected path from previous step
+import { calculateAllLeagueMetrics } from '../utils/calculations'; // <--- CHANGE IS HERE
 
 const SleeperData = createContext();
 
 export const SleeperDataProvider = ({ children }) => {
     const [allTimeRecords, setAllTimeRecords] = useState([]);
     const [processedSeasonalRecords, setProcessedSeasonalRecords] = useState({});
-    const [allTeams, setAllTeams] = useState(new Map()); // Map of roster_id to team details (e.g., name, owner)
-    const [allLeagueUsers, setAllLeagueUsers] = useState(new Map()); // Map of user_id to user details
+    const [allTeams, setAllTeams] = useState(new Map());
+    const [allLeagueUsers, setAllLeagueUsers] = useState(new Map());
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    // Ref to hold the raw historical data, accessible within memoized functions
     const allHistoricalDataRef = React.useRef(null);
 
-    // Memoized getTeamName and getOwnerName functions (from previous discussion)
     const getTeamName = useMemo(() => (rosterId, season = null) => {
         const rostersForSeason = allTeams.get(String(season));
         if (rostersForSeason) {
@@ -56,22 +54,20 @@ export const SleeperDataProvider = ({ children }) => {
         const fetchData = async () => {
             setLoading(true);
             setError(null);
-            console.log("SleeperDataProvider: Starting data fetch..."); // NEW LOG
+            console.log("SleeperDataProvider: Starting data fetch...");
             try {
                 const historicalData = await fetchAllHistoricalMatchups();
-                allHistoricalDataRef.current = historicalData; // Store in ref
+                allHistoricalDataRef.current = historicalData;
 
-                console.log("SleeperDataProvider: Raw historicalData fetched:", historicalData); // NEW LOG
+                console.log("SleeperDataProvider: Raw historicalData fetched:", historicalData);
 
-                // Check if key data parts are missing
                 if (!historicalData || !historicalData.matchupsBySeason || Object.keys(historicalData.matchupsBySeason).length === 0) {
-                    console.error("SleeperDataProvider: No valid matchupsBySeason found in historical data."); // NEW LOG
+                    console.error("SleeperDataProvider: No valid matchupsBySeason found in historical data.");
                     throw new Error("No historical matchup data found.");
                 }
 
-                // Populate allTeams and allLeagueUsers maps
-                const tempAllTeams = new Map(); // Map<season, Map<rosterId, details>>
-                const tempAllLeagueUsers = new Map(); // Map<season, Map<userId, details>>
+                const tempAllTeams = new Map();
+                const tempAllLeagueUsers = new Map();
 
                 Object.keys(historicalData.rostersBySeason).forEach(season => {
                     const rostersMapForSeason = new Map();
@@ -89,47 +85,37 @@ export const SleeperDataProvider = ({ children }) => {
                 setAllTeams(tempAllTeams);
                 setAllLeagueUsers(tempAllLeagueUsers);
 
-                console.log("SleeperDataProvider: Populated team/user maps."); // NEW LOG
+                console.log("SleeperDataProvider: Populated team/user maps.");
 
-                // Calculate all-time and seasonal records
-                const calculatedAllTimeRecords = calculateAllTimeRecords(
-                    historicalData.matchupsBySeason,
-                    historicalData.rostersBySeason,
-                    historicalData.winnersBracketBySeason,
-                    historicalData.losersBracketBySeason,
-                    historicalData.leaguesMetadataBySeason,
-                    historicalData.usersBySeason
+                // <--- CHANGES START HERE
+                const { seasonalMetrics, careerDPRData } = calculateAllLeagueMetrics(
+                    historicalData,
+                    getTeamName // Pass the getTeamName function as required by calculateAllLeagueMetrics
                 );
 
-                const calculatedSeasonalMetrics = calculateSeasonalMetrics(
-                    historicalData.matchupsBySeason,
-                    historicalData.rostersBySeason,
-                    historicalData.winnersBracketBySeason,
-                    historicalData.losersBracketBySeason,
-                    historicalData.leaguesMetadataBySeason,
-                    historicalData.usersBySeason
-                );
+                setAllTimeRecords(careerDPRData); // Set careerDPRData to allTimeRecords
+                setProcessedSeasonalRecords(seasonalMetrics); // Set seasonalMetrics to processedSeasonalRecords
+                // <--- CHANGES END HERE
 
-                setAllTimeRecords(calculatedAllTimeRecords);
-                setProcessedSeasonalRecords(calculatedSeasonalMetrics);
-                console.log("SleeperDataProvider: Records calculated and set."); // NEW LOG
+                console.log("SleeperDataProvider: Records calculated and set.");
 
             } catch (err) {
-                console.error("SleeperDataProvider: Failed to fetch or process historical data:", err); // UPDATED LOG
+                console.error("SleeperDataProvider: Failed to fetch or process historical data:", err);
                 setError(err);
-                // Clear any partially loaded data
                 setAllTimeRecords([]);
                 setProcessedSeasonalRecords({});
                 setAllTeams(new Map());
                 setAllLeagueUsers(new Map());
             } finally {
                 setLoading(false);
-                console.log("SleeperDataProvider: Data fetch process completed. Loading set to false."); // NEW LOG
+                console.log("SleeperDataProvider: Data fetch process completed. Loading set to false.");
             }
         };
 
         fetchData();
-    }, []); // Empty dependency array means this runs once on mount
+    }, [getTeamName]); // <--- IMPORTANT: Add getTeamName to dependencies because it's used inside useEffect
+                       //     (even though it's memoized, its dependencies might change or it might be recreated)
+
 
     const contextValue = useMemo(() => ({
         allTimeRecords,
