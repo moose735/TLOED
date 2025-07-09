@@ -10,17 +10,18 @@ import { formatNumber } from '../utils/formatUtils';
  */
 const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics }) => {
     const [allTimeRecords, setAllTimeRecords] = useState({});
-    const [expandedRecords, setExpandedRecords] = useState({});
+    // Removed expandedRecords state as it's no longer needed for this display logic
+    // const [expandedRecords, setExpandedRecords] = useState({});
     const [isLoading, setIsLoading] = useState(true);
 
     // Configuration for number formatting per stat
     const formatConfig = {
-        highestDPR: { decimals: 3, type: 'decimal' }, // Changed to 3 decimals
-        lowestDPR: { decimals: 3, type: 'decimal' },  // Changed to 3 decimals
+        highestDPR: { decimals: 3, type: 'decimal' },
+        lowestDPR: { decimals: 3, type: 'decimal' },
         mostWins: { decimals: 0, type: 'count' },
         mostLosses: { decimals: 0, type: 'count' },
-        bestWinPct: { decimals: 3, type: 'percentage' }, // Decimals setting is now for the raw decimal, not multiplied %
-        bestAllPlayWinPct: { decimals: 3, type: 'percentage' }, // Decimals setting is now for the raw decimal, not multiplied %
+        bestWinPct: { decimals: 3, type: 'percentage' },
+        bestAllPlayWinPct: { decimals: 3, type: 'percentage' },
         mostWeeklyHighScores: { decimals: 0, type: 'count' },
         mostWeeklyTop2Scores: { decimals: 0, type: 'count' },
         mostWinningSeasons: { decimals: 0, type: 'count' },
@@ -34,12 +35,13 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
     };
 
 
-    const toggleExpand = useCallback((recordKey) => {
-        setExpandedRecords(prev => ({
-            ...prev,
-            [recordKey]: !prev[recordKey]
-        }));
-    }, []);
+    // Removed toggleExpand as it's no longer needed for this display logic
+    // const toggleExpand = useCallback((recordKey) => {
+    //     setExpandedRecords(prev => ({
+    //         ...prev,
+    //         [recordKey]: !prev[recordKey]
+    //     }));
+    // }, []);
 
     useEffect(() => {
         console.log("LeagueRecords: useEffect triggered for calculation.");
@@ -220,28 +222,29 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
             );
         }
 
-        const primaryTeam = record.teams[0];
-
-    let displayValue;
+        // Determine the display value based on config type
+        let displayValue;
         if (config.type === 'percentage') {
-            // Corrected: Remove the extra '.' prepend. formatNumber('decimal') already gives '0.XXX'
-            displayValue = formatNumber(primaryTeam.value, config.decimals, 'decimal') + '%';
+            displayValue = formatNumber(record.teams[0].value, config.decimals, 'decimal') + '%';
         } else {
-            // Keep existing logic for other types (DPR, points, count)
-            displayValue = formatNumber(primaryTeam.value, config.decimals, config.type);
+            displayValue = formatNumber(record.teams[0].value, config.decimals, config.type);
         }
 
-        let teamDisplayName = primaryTeam.name;
-        if (teamDisplayName.startsWith('Unknown Team (ID:')) {
-            if (primaryTeam.ownerId) {
-                teamDisplayName = getTeamName(primaryTeam.ownerId, null);
-            } else if (primaryTeam.rosterId && primaryTeam.year) {
-                teamDisplayName = getTeamName(primaryTeam.rosterId, primaryTeam.year);
+        // --- NEW LOGIC FOR DISPLAYING ALL TIED TEAMS ---
+        const allTiedTeamsDisplay = record.teams.map(team => {
+            let currentTeamDisplayName = team.name;
+            if (currentTeamDisplayName.startsWith('Unknown Team (ID:')) {
+                if (team.ownerId) {
+                    currentTeamDisplayName = getTeamName(team.ownerId, null);
+                } else if (team.rosterId && team.year) {
+                    currentTeamDisplayName = getTeamName(team.rosterId, team.year);
+                }
             }
-        }
-        if (teamDisplayName.startsWith('Unknown Team (ID:')) {
-            teamDisplayName = "Unknown Team";
-        }
+            if (currentTeamDisplayName.startsWith('Unknown Team (ID:')) {
+                currentTeamDisplayName = "Unknown Team";
+            }
+            return `${currentTeamDisplayName}${team.year ? ` (${team.year})` : ''}`;
+        }).join(' + '); // Join with " + "
 
         return (
             <>
@@ -250,46 +253,7 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
                 </td>
                 <td className="py-2 px-4 text-center font-semibold text-lg">{displayValue}</td>
                 <td className="py-2 px-4 text-right text-gray-700">
-                    {teamDisplayName} {primaryTeam.year ? `(${primaryTeam.year})` : ''}
-                    {record.teams.length > 1 && (
-                        <button
-                            onClick={() => toggleExpand(record.key)}
-                            className="text-blue-500 hover:text-blue-700 text-sm ml-2"
-                        >
-                            {expandedRecords[record.key] ? 'Show Less' : `+${record.teams.length - 1} more`}
-                        </button>
-                    )}
-                    {expandedRecords[record.key] && record.teams.length > 1 && (
-                        <ul className="list-disc pl-5 mt-2 text-sm text-gray-600">
-                            {record.teams.slice(1).map((team, index) => {
-                                let tiedDisplayValue;
-                                if (config.type === 'percentage') {
-                                    // Corrected: Remove the extra '.' prepend.
-                                    tiedDisplayValue = formatNumber(team.value, config.decimals, 'decimal') + '%';
-                                } else {
-                                    tiedDisplayValue = formatNumber(team.value, config.decimals, config.type);
-                                }
-
-                                let tiedTeamDisplayName = team.name;
-                                if (tiedTeamDisplayName.startsWith('Unknown Team (ID:')) {
-                                    if (team.ownerId) {
-                                        tiedTeamDisplayName = getTeamName(team.ownerId, null);
-                                    } else if (team.rosterId && team.year) {
-                                        tiedTeamDisplayName = getTeamName(team.rosterId, team.year);
-                                    }
-                                }
-                                if (tiedTeamDisplayName.startsWith('Unknown Team (ID:')) {
-                                    tiedTeamDisplayName = "Unknown Team";
-                                }
-
-                                return (
-                                    <li key={index}>
-                                        {tiedDisplayValue} - {tiedTeamDisplayName} {team.year ? `(${team.year})` : ''}
-                                    </li>
-                                );
-                            })}
-                        </ul>
-                    )}
+                    {allTiedTeamsDisplay}
                 </td>
             </>
         );
