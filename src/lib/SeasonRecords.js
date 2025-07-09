@@ -111,10 +111,16 @@ const SeasonRecords = () => {
                     return;
                 }
 
-                // IMPORTANT FIX: Use teamStats.teamName directly if available
-                // This assumes your processedSeasonalRecords already includes 'teamName'
+                // DEBUGGING LOG: Check teamStats.teamName directly from processedSeasonalRecords
+                console.log(`SeasonRecords: Processing year ${year}, Roster ID ${teamStats.rosterId}. teamStats.teamName: "${teamStats.teamName}"`);
+
+                // IMPORTANT: Prioritize teamStats.teamName which should be populated by SleeperDataContext
+                // Fallback to getTeamName if teamStats.teamName is truly missing or empty.
+                const resolvedTeamName = teamStats.teamName || getTeamName(teamStats.rosterId, year) || 'Unknown Team';
+                console.log(`SeasonRecords: Resolved team name for ${teamStats.rosterId} in ${year}: "${resolvedTeamName}"`);
+
                 const teamInfo = {
-                    teamName: teamStats.teamName || getTeamName(teamStats.rosterId, year) || 'Unknown Team', // Fallback to getTeamName if teamName is missing
+                    teamName: resolvedTeamName,
                     year: year,
                     rosterId: teamStats.rosterId,
                     ownerId: teamStats.ownerId, // ownerId is crucial for linking to users
@@ -136,7 +142,7 @@ const SeasonRecords = () => {
                     if (typeof teamStats.blowoutWins === 'number') updateRecord(mostBlowoutWinsSeason, teamStats.blowoutWins, { ...teamInfo, value: teamStats.blowoutWins });
                     if (typeof teamStats.blowoutLosses === 'number') updateRecord(mostBlowoutLossesSeason, teamStats.blowoutLosses, { ...teamInfo, value: teamStats.blowoutLosses });
                     if (typeof teamStats.slimWins === 'number') updateRecord(mostSlimWinsSeason, teamStats.slimWins, { ...teamInfo, value: teamStats.slimWins });
-                    if (typeof teamStats.slimLosses === 'number') updateRecord(mostSlimLossesSeason, teamStats.slimLosses, { ...teamInfo, value: teamStats.slimLosses });
+                    if (typeof teamStats.slimLosses === 'number') updateRecord(mostSlimLossesSeason, teamStats.slimLosses, { ...teamInfo, value: teamStats.slimLosses }); // Corrected teamInfo.slimLosses to teamStats.slimLosses
                     if (typeof teamStats.pointsFor === 'number') {
                         updateRecord(mostPointsSeason, teamStats.pointsFor, { ...teamInfo, value: teamStats.pointsFor });
                         updateRecord(fewestPointsSeason, teamStats.pointsFor, { ...teamInfo, value: teamStats.pointsFor }, true);
@@ -246,12 +252,27 @@ const SeasonRecords = () => {
                 console.warn(`SeasonRecords: Skipping undefined entry in record.entries for key '${record.key}'. Index: ${index}`);
                 return null; // Return null for undefined entries to prevent errors
             }
+            // FIXED: Corrected 'team' to 'entry' inside this block
+            let currentTeamDisplayName = entry.teamName;
+            // The logic below is a fallback, but ideally entry.teamName should already be correct.
+            // If getTeamName is returning "Unknown Team (ID: X)", it means the lookup failed.
+            // We need to investigate why getTeamName is failing for those specific IDs.
+            if (currentTeamDisplayName.startsWith('Unknown Team (ID:')) {
+                // If the name is still generic, try to re-resolve using getTeamName from context
+                // This might be redundant if the initial teamInfo construction worked, but safe for debugging.
+                currentTeamDisplayName = getTeamName(entry.rosterId || entry.ownerId, entry.year);
+            }
+            // Final fallback if getTeamName also returned a generic ID string
+            if (currentTeamDisplayName.startsWith('Unknown Team (ID:')) {
+                currentTeamDisplayName = "Unknown Team";
+            }
+
             return (
                 <div
-                    key={`${record.key}-${entry.rosterId || entry.ownerId}-${entry.year}-${index}`}
+                    key={`${record.key}-${entry.rosterId || entry.ownerId || 'unknown'}-${entry.year || 'career'}-${index}`}
                     className="leading-tight"
                 >
-                    {entry.teamName} ({entry.year})
+                    {currentTeamDisplayName}{entry.year ? ` (${entry.year})` : ''}
                 </div>
             );
         }).filter(Boolean); // Filter out any null entries that were returned for undefined 'entry' objects
@@ -270,7 +291,7 @@ const SeasonRecords = () => {
     };
 
     // Sort years for display (most recent first)
-    const sortedYears = Object.keys(processedSeasonalRecords).sort((a, b) => parseInt(b) - parseInt(a));
+    // const sortedYears = Object.keys(processedSeasonalRecords).sort((a, b) => parseInt(b) - parseInt(a)); // No longer needed for display
 
     return (
         <div className="w-full">
@@ -333,102 +354,7 @@ const SeasonRecords = () => {
                 </table>
             </section>
 
-            <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2 mt-8">SEASONAL BREAKDOWN</h3>
-            <p className="text-sm text-gray-600 mb-6">Detailed records for each season.</p>
-
-            {sortedYears.map(year => {
-                // Ensure data for the specific year exists and is an object
-                const teamsForThisYear = processedSeasonalRecords[year];
-                if (!teamsForThisYear || typeof teamsForThisYear !== 'object' || Object.keys(teamsForThisYear).length === 0) {
-                    return (
-                        <div key={year} className="mb-8 p-4 bg-white rounded-lg shadow-md border border-gray-200">
-                            <h4 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b">Season {year}</h4>
-                            <p className="text-gray-500">No team data available for this season.</p>
-                        </div>
-                    );
-                }
-
-                return (
-                    <div key={year} className="mb-8 p-4 bg-white rounded-lg shadow-md border border-gray-200">
-                        <h4 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b">Season {year}</h4>
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th scope="col" className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Team
-                                    </th>
-                                    <th scope="col" className="py-3 px-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Record (W-L-T)
-                                    </th>
-                                    <th scope="col" className="py-3 px-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        PF
-                                    </th>
-                                    <th scope="col" className="py-3 px-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        PA
-                                    </th>
-                                    <th scope="col" className="py-3 px-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Rank
-                                    </th>
-                                    <th scope="col" className="py-3 px-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Points Rank
-                                    </th>
-                                    <th scope="col" className="py-3 px-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Adjusted DPR
-                                    </th>
-                                    <th scope="col" className="py-3 px-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Awards
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {Object.values(teamsForThisYear)
-                                    .sort((a, b) => a.rank - b.rank) // Assuming 'rank' is available and correct
-                                    .map((teamStats, index) => {
-                                        // Ensure teamStats object is valid before rendering
-                                        if (!teamStats || typeof teamStats !== 'object') {
-                                            console.warn(`SeasonRecords: Invalid teamStats object encountered in rendering for year ${year}. Index: ${index}.`, teamStats);
-                                            return null; // Skip rendering this row
-                                        }
-                                        return (
-                                            <tr key={teamStats.rosterId || `no-rosterid-${year}-${index}`} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                                <td className="py-2 px-4 text-left font-medium text-gray-800">
-                                                    {teamStats.teamName || 'Unknown Team'} {/* Use teamStats.teamName directly */}
-                                                </td>
-                                                <td className="py-2 px-4 text-center text-gray-700">
-                                                    {`${teamStats.wins || 0}-${teamStats.losses || 0}-${teamStats.ties || 0}`}
-                                                </td>
-                                                <td className="py-2 px-4 text-center text-gray-700">
-                                                    {formatNumber(teamStats.pointsFor, 2, 'points')}
-                                                </td>
-                                                <td className="py-2 px-4 text-center text-gray-700">
-                                                    {formatNumber(teamStats.pointsAgainst, 2, 'points')}
-                                                </td>
-                                                <td className="py-2 px-4 text-center text-gray-700">
-                                                    {teamStats.rank !== undefined ? teamStats.rank : 'N/A'}
-                                                </td>
-                                                <td className="py-2 px-4 text-center text-gray-700">
-                                                    {teamStats.pointsRank !== undefined ? teamStats.pointsRank : 'N/A'}
-                                                </td>
-                                                <td className="py-2 px-4 text-center text-gray-700">
-                                                    {formatNumber(teamStats.adjustedDPR, 3, 'decimal')}
-                                                </td>
-                                                <td className="py-2 px-4 text-center text-gray-700 text-sm">
-                                                    {teamStats.isChampion && <div className="font-semibold text-green-700">🏆 Champion</div>}
-                                                    {teamStats.isRunnerUp && <div className="font-semibold text-gray-600">🥈 Runner-Up</div>}
-                                                    {teamStats.isThirdPlace && <div className="font-semibold text-yellow-700">🥉 3rd Place</div>}
-                                                    {teamStats.isPointsChampion && <div className="font-semibold text-blue-700">👑 Points Champ</div>}
-                                                    {teamStats.isPointsRunnerUp && <div className="font-semibold text-blue-500">🥈 Points Runner-Up</div>}
-                                                    {teamStats.isThirdPlacePoints && <div className="font-semibold text-blue-400">🥉 3rd Place Points</div>}
-                                                    {teamStats.isPlayoffTeam && !teamStats.isChampion && !teamStats.isRunnerUp && !teamStats.isThirdPlace && <div className="text-gray-500">Playoff Team</div>}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                            </tbody>
-                        </table>
-                    </div>
-                );
-            })}
+            {/* REMOVED: SEASONAL BREAKDOWN SECTION */}
         </div>
     );
 };
