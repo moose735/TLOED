@@ -1,16 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSleeperData } from '../contexts/SleeperDataContext'; // Import useSleeperData
 import { formatNumber } from '../utils/formatUtils';
 
 /**
  * Calculates and displays all-time league records based on historical data.
- * @param {Object} props - The component props.
- * @param {Object} props.historicalData - The full historical data object from SleeperDataContext.
- * @param {Function} props.getTeamName - A function to get the team's display name.
- * @param {Function} props.calculateAllLeagueMetrics - The function to calculate all league metrics.
  */
-const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics }) => {
-    const [allTimeRecords, setAllTimeRecords] = useState({});
-    // Corrected: Initialize useState hook properly
+const LeagueRecords = () => {
+    // Consume processed data and functions from SleeperDataContext
+    const { loading, error, allTimeRecords, processedSeasonalRecords, getTeamName, getOwnerName } = useSleeperData();
+
+    const [displayedAllTimeRecords, setDisplayedAllTimeRecords] = useState({});
     const [isLoading, setIsLoading] = useState(true);
 
     // Configuration for number formatting per stat
@@ -33,23 +32,19 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
         mostPointsAgainst: { decimals: 2, type: 'points' },
     };
 
-    // toggleExpand and expandedRecords state removed as they are no longer needed for direct tie display
-
     useEffect(() => {
         console.log("LeagueRecords: useEffect triggered for calculation.");
         setIsLoading(true);
 
-        if (!historicalData || !historicalData.matchupsBySeason || Object.keys(historicalData.matchupsBySeason).length === 0) {
-            console.log("LeagueRecords: No historicalData or matchups. Setting records to empty and isLoading false.");
-            setAllTimeRecords({});
+        if (loading || error || !allTimeRecords || allTimeRecords.length === 0) {
+            console.log("LeagueRecords: No allTimeRecords or still loading/error. Setting records to empty and isLoading false.");
+            setDisplayedAllTimeRecords({});
             setIsLoading(false);
             return;
         }
 
         try {
-            const { seasonalMetrics, careerDPRData: calculatedCareerDPRs } = calculateAllLeagueMetrics(historicalData, getTeamName);
-            console.log("LeagueRecords: Raw seasonalMetrics from calculations.js:", seasonalMetrics);
-            console.log("LeagueRecords: Raw careerDPRData from calculations.js (enhanced):", calculatedCareerDPRs);
+            const calculatedCareerDPRs = allTimeRecords; // allTimeRecords from context is already the careerDPRData
 
             // --- Initialize All-Time Records with default values ---
             let highestDPR = { value: -Infinity, teams: [], key: 'highestDPR' };
@@ -72,15 +67,6 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
 
             // Helper to update records (handles ties)
             const updateRecord = (currentRecord, newValue, teamInfo) => {
-                // Ensure teamInfo has ownerId for lookup later
-                if (!teamInfo.ownerId && teamInfo.rosterId && historicalData.rostersBySeason) {
-                    // Try to derive ownerId from rosterId if not directly provided
-                    const rosterMap = Object.values(historicalData.rostersBySeason).flat().find(r => r.roster_id === teamInfo.rosterId);
-                    if (rosterMap) {
-                        teamInfo.ownerId = rosterMap.owner_id;
-                    }
-                }
-
                 if (newValue > currentRecord.value) {
                     currentRecord.value = newValue;
                     currentRecord.teams = [teamInfo];
@@ -93,14 +79,6 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
             };
 
             const updateLowestRecord = (currentRecord, newValue, teamInfo) => {
-                // Ensure teamInfo has ownerId for lookup later
-                if (!teamInfo.ownerId && teamInfo.rosterId && historicalData.rostersBySeason) {
-                    const rosterMap = Object.values(historicalData.rostersBySeason).flat().find(r => r.roster_id === teamInfo.rosterId);
-                    if (rosterMap) {
-                        teamInfo.ownerId = rosterMap.owner_id;
-                    }
-                }
-
                 if (newValue < currentRecord.value) {
                     currentRecord.value = newValue;
                     currentRecord.teams = [teamInfo];
@@ -112,9 +90,8 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
             };
 
             // --- Process Career DPR Data for All-Time Records ---
-            // This is where you should primarily get your career totals
             calculatedCareerDPRs.forEach(careerStats => {
-                const teamName = careerStats.teamName;
+                const teamName = getTeamName(careerStats.ownerId, null); // Get team name from context
                 const ownerId = careerStats.ownerId;
 
                 if (careerStats.dpr !== 0) { // Exclude teams with 0 games/0 DPR
@@ -129,7 +106,6 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
                     updateRecord(mostTotalPoints, careerStats.pointsFor, { name: teamName, value: careerStats.pointsFor, ownerId: ownerId });
                     updateRecord(mostPointsAgainst, careerStats.pointsAgainst, { name: teamName, value: careerStats.pointsAgainst, ownerId: ownerId });
 
-                    // Use the already calculated career totals for these stats!
                     updateRecord(mostBlowoutWins, careerStats.blowoutWins, { name: teamName, value: careerStats.blowoutWins, ownerId: ownerId });
                     updateRecord(mostBlowoutLosses, careerStats.blowoutLosses, { name: teamName, value: careerStats.blowoutLosses, ownerId: ownerId });
                     updateRecord(mostSlimWins, careerStats.slimWins, { name: teamName, value: careerStats.slimWins, ownerId: ownerId });
@@ -137,19 +113,18 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
                     updateRecord(mostWeeklyTop2Scores, careerStats.weeklyTop2ScoresCount, { name: teamName, value: careerStats.weeklyTop2ScoresCount, ownerId: ownerId });
                     updateRecord(mostWeeklyHighScores, careerStats.topScoreWeeksCount, { name: teamName, value: careerStats.topScoreWeeksCount, ownerId: ownerId });
 
-                    // All Play Win Percentage is also a career stat now
                     updateRecord(bestAllPlayWinPct, careerStats.allPlayWinPercentage, { name: teamName, value: careerStats.allPlayWinPercentage, ownerId: ownerId });
                 }
 
-                // Aggregate winning/losing seasons (this logic is fine here as it aggregates seasonal data)
+                // Aggregate winning/losing seasons
                 let winningSeasonsCount = 0;
                 let losingSeasonsCount = 0;
 
-                Object.keys(seasonalMetrics).forEach(year => {
-                    const teamsInSeason = Object.values(seasonalMetrics[year]);
+                Object.keys(processedSeasonalRecords).forEach(year => {
+                    // processedSeasonalRecords[year] is an object, so convert its values to an array
+                    const teamsInSeason = Object.values(processedSeasonalRecords[year]);
                     const currentOwnerTeamInSeason = teamsInSeason.find(t => t.ownerId === ownerId);
                     if (currentOwnerTeamInSeason && currentOwnerTeamInSeason.totalGames > 0) {
-                        // Assuming a winning season is > 0.5 win percentage, losing < 0.5. Ties (0.5) are neither.
                         if (currentOwnerTeamInSeason.winPercentage > 0.5) {
                             winningSeasonsCount++;
                         } else if (currentOwnerTeamInSeason.winPercentage < 0.5) {
@@ -162,7 +137,7 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
             });
 
             // Set all records
-            setAllTimeRecords({
+            setDisplayedAllTimeRecords({
                 highestDPR,
                 lowestDPR,
                 mostWins,
@@ -181,20 +156,24 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
                 mostPointsAgainst,
             });
 
-        } catch (error) {
-            console.error("Error calculating league records:", error);
-            setAllTimeRecords({}); // Reset on error
+        } catch (err) {
+            console.error("Error calculating league records:", err);
+            setDisplayedAllTimeRecords({}); // Reset on error
         } finally {
             setIsLoading(false);
         }
-    }, [historicalData, getTeamName, calculateAllLeagueMetrics]);
+    }, [loading, error, allTimeRecords, processedSeasonalRecords, getTeamName, getOwnerName]);
 
 
     if (isLoading) {
         return <div className="text-center py-8">Loading all-time league records...</div>;
     }
 
-    if (Object.keys(allTimeRecords).length === 0 || allTimeRecords.highestDPR?.value === -Infinity) {
+    if (error) {
+        return <div className="text-center py-8 text-red-600">Error loading all-time records: {error.message}</div>;
+    }
+
+    if (Object.keys(displayedAllTimeRecords).length === 0 || displayedAllTimeRecords.highestDPR?.value === -Infinity) {
         return <div className="text-center py-8">No historical data available to calculate all-time records.</div>;
     }
 
@@ -217,10 +196,8 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
         // Determine the display value based on config type
         let displayValue;
         if (config.type === 'percentage') {
-            // Corrected: formatNumber gives "0.XXX", no extra dot needed
             displayValue = formatNumber(record.teams[0].value, config.decimals, 'decimal') + '%';
         } else {
-            // Keep existing logic for other types (DPR, points, count)
             displayValue = formatNumber(record.teams[0].value, config.decimals, config.type);
         }
 
@@ -235,12 +212,12 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
                 }
             }
             if (currentTeamDisplayName.startsWith('Unknown Team (ID:')) {
-                currentTeamDisplayName = "Unknown Team";
+                currentTeamDisplayName = getOwnerName(team.ownerId) || "Unknown Team"; // Fallback to getOwnerName if available
             }
             return (
                 <div
                     key={`${record.key}-${team.ownerId || team.rosterId || 'unknown'}-${team.year || 'career'}-${index}`}
-                    className="leading-tight" // This class helps stack lines closely
+                    className="leading-tight"
                 >
                     {currentTeamDisplayName}{team.year ? ` (${team.year})` : ''}
                 </div>
@@ -254,7 +231,6 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
                 </td>
                 <td className="py-2 px-4 text-center font-semibold text-lg">{displayValue}</td>
                 <td className="py-2 px-4 text-right text-gray-700">
-                    {/* Render the array of div elements, which will stack vertically */}
                     {allTiedTeamsDisplay}
                 </td>
             </>
@@ -282,7 +258,7 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                        {Object.entries(allTimeRecords).map(([key, record]) => (
+                        {Object.entries(displayedAllTimeRecords).map(([key, record]) => (
                             <tr key={key}>
                                 {renderRecordEntry({ ...record, key: key })}
                             </tr>
