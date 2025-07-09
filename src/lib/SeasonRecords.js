@@ -63,20 +63,19 @@ const SeasonRecords = () => {
             if (isMin) {
                 if (newValue < currentRecord.value) {
                     currentRecord.value = newValue;
-                    currentRecord.entries = [teamInfo]; // Here, teamInfo is added
+                    currentRecord.entries = [teamInfo];
                 } else if (newValue === currentRecord.value) {
-                    // Prevent duplicate entries for ties if team/year combination is already present
                     if (!currentRecord.entries.some(e => e.rosterId === teamInfo.rosterId && e.year === teamInfo.year)) {
-                        currentRecord.entries.push(teamInfo); // Here, teamInfo is pushed
+                        currentRecord.entries.push(teamInfo);
                     }
                 }
             } else { // Max
                 if (newValue > currentRecord.value) {
                     currentRecord.value = newValue;
-                    currentRecord.entries = [teamInfo]; // Here, teamInfo is added
+                    currentRecord.entries = [teamInfo];
                 } else if (newValue === currentRecord.value) {
                     if (!currentRecord.entries.some(e => e.rosterId === teamInfo.rosterId && e.year === teamInfo.year)) {
-                        currentRecord.entries.push(teamInfo); // Here, teamInfo is pushed
+                        currentRecord.entries.push(teamInfo);
                     }
                 }
             }
@@ -90,28 +89,28 @@ const SeasonRecords = () => {
                 console.warn(`SeasonRecords: Skipping invalid processedSeasonalRecords[${year}] entry.`);
                 return;
             }
-            const teamsInSeason = Object.values(teamsInSeasonObject); // This converts the object to an array of values
+            const teamsInSeason = Object.values(teamsInSeasonObject);
             
             teamsInSeason.forEach(teamStats => {
                 // Ensure teamStats is a valid object before proceeding
                 if (!teamStats || typeof teamStats !== 'object' || !teamStats.rosterId) {
                     console.warn(`SeasonRecords: Skipping invalid or incomplete teamStats for year ${year}. TeamStats:`, teamStats);
-                    return; // Skip if teamStats is not a valid object or missing rosterId
+                    return;
                 }
                 
                 const teamInfo = {
-                    teamName: getTeamName(teamStats.rosterId, year), // Get team name from context using rosterId and year
-                    year: year, // Use the actual year from the loop
+                    teamName: getTeamName(teamStats.rosterId, year),
+                    year: year,
                     rosterId: teamStats.rosterId,
                     ownerId: teamStats.ownerId,
                 };
 
                 // Update highlights based on seasonal team stats
-                if (teamStats.adjustedDPR !== 0) { // Exclude 0 DPR entries
+                if (teamStats.adjustedDPR !== 0) {
                     updateRecord(highestDPRSeason, teamStats.adjustedDPR, { ...teamInfo, value: teamStats.adjustedDPR });
                     updateRecord(lowestDPRSeason, teamStats.adjustedDPR, { ...teamInfo, value: teamStats.adjustedDPR }, true);
                 }
-                if (teamStats.totalGames > 0) { // Only consider teams that played games
+                if (teamStats.totalGames > 0) {
                     updateRecord(mostWinsSeason, teamStats.wins, { ...teamInfo, value: teamStats.wins });
                     updateRecord(mostLossesSeason, teamStats.losses, { ...teamInfo, value: teamStats.losses });
                     updateRecord(bestWinPctSeason, teamStats.winPercentage, { ...teamInfo, value: teamStats.winPercentage });
@@ -177,7 +176,7 @@ const SeasonRecords = () => {
             lowestLuckRatingSeason,
         });
 
-    }, [processedSeasonalRecords, getTeamName, getOwnerName, loading, error]); // Depend on processed data and getTeamName
+    }, [processedSeasonalRecords, getTeamName, getOwnerName, loading, error]);
 
 
     if (loading) {
@@ -215,14 +214,21 @@ const SeasonRecords = () => {
             displayValue = formatNumber(record.value, config.decimals, config.type);
         }
 
-        const allTiedTeamsDisplay = record.entries.map((entry, index) => (
-            <div
-                key={`${record.key}-${entry.rosterId || entry.ownerId}-${entry.year}-${index}`}
-                className="leading-tight"
-            >
-                {entry.teamName} ({entry.year})
-            </div>
-        ));
+        const allTiedTeamsDisplay = record.entries.map((entry, index) => {
+            // Defensive check: if entry is undefined, return null to filter it out later
+            if (!entry) {
+                console.warn(`SeasonRecords: Skipping undefined entry in record.entries for key '${record.key}'. Index: ${index}`);
+                return null;
+            }
+            return (
+                <div
+                    key={`${record.key}-${entry.rosterId || entry.ownerId}-${entry.year}-${index}`}
+                    className="leading-tight"
+                >
+                    {entry.teamName} ({entry.year})
+                </div>
+            );
+        }).filter(Boolean); // Filter out any null entries that were returned for undefined 'entry' objects
 
         return (
             <>
@@ -337,8 +343,8 @@ const SeasonRecords = () => {
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                            {Object.values(processedSeasonalRecords[year]) // CRITICAL FIX: Use Object.values here
-                                .sort((a, b) => a.rank - b.rank) // Sort by regular season rank from calculations.js
+                            {Object.values(processedSeasonalRecords[year])
+                                .sort((a, b) => a.rank - b.rank)
                                 .map((teamStats, index) => (
                                     <tr key={teamStats.rosterId} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                                         <td className="py-2 px-4 text-left font-medium text-gray-800">
