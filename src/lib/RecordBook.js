@@ -43,9 +43,11 @@ const RecordBook = () => {
         return <div className="text-center py-8 text-gray-600">No league data available. Please ensure your league ID is correct and data has been fetched.</div>;
     }
 
-    // NEW: Flatten historicalMatchupsBySeason into a single array for StreaksRecords
+    // FIXED: Correctly flatten historicalMatchupsBySeason into a single array for StreaksRecords
     const allHistoricalMatchupsFlat = historicalData?.matchupsBySeason
-        ? Object.values(historicalData.matchupsBySeason).flat()
+        ? Object.values(historicalData.matchupsBySeason).flatMap(yearMatchups =>
+              Object.values(yearMatchups).flat()
+          )
         : [];
 
     return (
@@ -125,8 +127,8 @@ const RecordBook = () => {
                 {activeTab === 'streaks' && (
                     hasStreaksData ? (
                         <StreaksRecords
-                            historicalMatchups={allHistoricalMatchupsFlat} // Pass the flattened array
-                            getDisplayTeamName={getTeamName} // Pass the getTeamName function
+                            historicalMatchups={allHistoricalMatchupsFlat} // Pass the correctly flattened array
+                            // getDisplayTeamName is no longer needed as a prop since StreaksRecords uses useSleeperData
                         />
                     ) : (
                         <div className="text-center py-8 text-gray-600">No historical matchup data available to calculate streaks.</div>
