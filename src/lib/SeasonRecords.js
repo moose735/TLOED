@@ -63,21 +63,20 @@ const SeasonRecords = () => {
             if (isMin) {
                 if (newValue < currentRecord.value) {
                     currentRecord.value = newValue;
-                    currentRecord.entries = [teamInfo];
+                    currentRecord.entries = [teamInfo]; // Here, teamInfo is added
                 } else if (newValue === currentRecord.value) {
                     // Prevent duplicate entries for ties if team/year combination is already present
                     if (!currentRecord.entries.some(e => e.rosterId === teamInfo.rosterId && e.year === teamInfo.year)) {
-                        currentRecord.entries.push(teamInfo);
+                        currentRecord.entries.push(teamInfo); // Here, teamInfo is pushed
                     }
                 }
-            } else {
+            } else { // Max
                 if (newValue > currentRecord.value) {
                     currentRecord.value = newValue;
-                    currentRecord.entries = [teamInfo];
+                    currentRecord.entries = [teamInfo]; // Here, teamInfo is added
                 } else if (newValue === currentRecord.value) {
-                    // Prevent duplicate entries for ties if team/year combination is already present
                     if (!currentRecord.entries.some(e => e.rosterId === teamInfo.rosterId && e.year === teamInfo.year)) {
-                        currentRecord.entries.push(teamInfo);
+                        currentRecord.entries.push(teamInfo); // Here, teamInfo is pushed
                     }
                 }
             }
@@ -85,9 +84,21 @@ const SeasonRecords = () => {
 
         // Iterate through each season and each team's processed stats
         Object.keys(processedSeasonalRecords).forEach(year => {
-            // CRITICAL FIX: Convert the object of teams to an array of teamStats values
-            const teamsInSeason = Object.values(processedSeasonalRecords[year]);
+            const teamsInSeasonObject = processedSeasonalRecords[year];
+            // Ensure teamsInSeasonObject is valid before getting its values
+            if (!teamsInSeasonObject || typeof teamsInSeasonObject !== 'object') {
+                console.warn(`SeasonRecords: Skipping invalid processedSeasonalRecords[${year}] entry.`);
+                return;
+            }
+            const teamsInSeason = Object.values(teamsInSeasonObject); // This converts the object to an array of values
+            
             teamsInSeason.forEach(teamStats => {
+                // Ensure teamStats is a valid object before proceeding
+                if (!teamStats || typeof teamStats !== 'object' || !teamStats.rosterId) {
+                    console.warn(`SeasonRecords: Skipping invalid or incomplete teamStats for year ${year}. TeamStats:`, teamStats);
+                    return; // Skip if teamStats is not a valid object or missing rosterId
+                }
+                
                 const teamInfo = {
                     teamName: getTeamName(teamStats.rosterId, year), // Get team name from context using rosterId and year
                     year: year, // Use the actual year from the loop
