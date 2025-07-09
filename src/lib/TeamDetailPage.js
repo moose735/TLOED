@@ -244,8 +244,9 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
         : a[sortBy];
       const valB = sortBy === 'record'
         ? (b.wins + 0.5 * b.ties) / (b.wins + b.losses + b.ties)
-        ? parseRank(b[sortBy])
-        : b[sortBy];
+        : (sortBy === 'finish' || sortBy === 'pointsFinish' // FIXED: Added parentheses for correct ternary nesting
+          ? parseRank(b[sortBy])
+          : b[sortBy]);
       return (valA < valB ? -1 : valA > valB ? 1 : 0) * (sortOrder === 'asc' ? 1 : -1);
     });
   }, [teamSeasonHistory, sortBy, sortOrder]);
