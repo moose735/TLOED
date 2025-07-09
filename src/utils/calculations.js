@@ -19,10 +19,11 @@ export const calculateRawDPR = (averageScore, teamHighScore, teamLowScore, teamW
 /**
  * Calculates comprehensive league metrics for each season and aggregated career metrics.
  * @param {Object} historicalData - The full historical data object (matchups, rosters, users, leaguesMetadata).
- * @param {Function} getTeamName - A function (from context) to get the display name of a team given ownerId and/or rosterId/year.
+ * @param {Object} draftHistory - The draft history data. (NEW: Added as explicit argument)
+ * @param {Function} getTeamName - A function (from context) to get the display name of a team given ownerId and/or rosterId/year. (NEW: Explicitly defined)
  * @returns {Object} An object containing seasonalMetrics and careerDPRData.
  */
-export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
+export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamName) => { // FIXED: Added draftHistory and getTeamName to signature
     console.log("--- Starting calculateAllLeagueMetrics ---");
     console.log("Initial historicalData received:", historicalData ? `Keys: ${Object.keys(historicalData).join(', ')}` : 'null/undefined');
 
@@ -68,7 +69,8 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
         const yearStatsRaw = {};
         rosters.forEach(roster => {
             const ownerId = roster.owner_id;
-            const teamName = getTeamName(roster.roster_id, year);
+            // FIXED: Ensure getTeamName is called with ownerId and year
+            const teamName = getTeamName(ownerId, year);
 
             if (!ownerId) {
                 console.warn(`  Roster ${roster.roster_id} in year ${year} has no owner_id. Skipping initialization for this roster.`);
@@ -106,7 +108,7 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
             // This ensures career stats are only initialized once per owner across all years
             if (!careerTeamStatsRaw[ownerId]) {
                 careerTeamStatsRaw[ownerId] = {
-                    teamName: getTeamName(ownerId, null), // Career team name
+                    teamName: getTeamName(ownerId, null), // Career team name (using null for year to get overall name)
                     ownerId: ownerId,
                     wins: 0,
                     losses: 0,
@@ -163,7 +165,7 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
                             processedRosterIdsInWeek.add(rosterId1);
                         }
                     } else {
-                           // console.warn(`      Matchup V1: Invalid team1_score for roster ${m.team1_roster_id} in week ${week}, year ${year}. Matchup ID: ${m.matchup_id}`);
+                            // console.warn(`      Matchup V1: Invalid team1_score for roster ${m.team1_roster_id} in week ${week}, year ${year}. Matchup ID: ${m.matchup_id}`);
                     }
 
                     // Team 2
@@ -175,7 +177,7 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
                             processedRosterIdsInWeek.add(rosterId2);
                         }
                     } else {
-                           // console.warn(`      Matchup V1: Invalid team2_score for roster ${m.team2_roster_id} in week ${week}, year ${year}. Matchup ID: ${m.matchup_id}`);
+                            // console.warn(`      Matchup V1: Invalid team2_score for roster ${m.team2_roster_id} in week ${week}, year ${year}. Matchup ID: ${m.matchup_id}`);
                     }
                 }
                 // Fallback to Sleeper V2 style if the above V1 style is not present
@@ -360,9 +362,9 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
                     }
 
                 } else if (isRegularSeasonMatch && (!foundMatchup || typeof opponentScore !== 'number' || isNaN(opponentScore))) {
-                       // Log if a regular season matchup was expected but opponent score was invalid
-                       // This could indicate a bye week that still contributes to totalGames but not to opponent stats
-                       // console.warn(`      Roster ID ${rosterId} in week ${week}, year ${year}: Regular season match expected but opponent score invalid.`);
+                            // Log if a regular season matchup was expected but opponent score was invalid
+                            // This could indicate a bye week that still contributes to totalGames but not to opponent stats
+                            // console.warn(`      Roster ID ${rosterId} in week ${week}, year ${year}: Regular season match expected but opponent score invalid.`);
                 }
             });
         }); // End of sortedWeeks.forEach
