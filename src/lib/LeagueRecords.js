@@ -10,8 +10,7 @@ import { formatNumber } from '../utils/formatUtils';
  */
 const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics }) => {
     const [allTimeRecords, setAllTimeRecords] = useState({});
-    // Removed expandedRecords state as it's no longer needed for this display logic
-    // const [expandedRecords, setExpandedRecords] = useState({});
+    // Corrected: Initialize useState hook properly
     const [isLoading, setIsLoading] = useState(true);
 
     // Configuration for number formatting per stat
@@ -34,14 +33,7 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
         mostPointsAgainst: { decimals: 2, type: 'points' },
     };
 
-
-    // Removed toggleExpand as it's no longer needed for this display logic
-    // const toggleExpand = useCallback((recordKey) => {
-    //     setExpandedRecords(prev => ({
-    //         ...prev,
-    //         [recordKey]: !prev[recordKey]
-    //     }));
-    // }, []);
+    // toggleExpand and expandedRecords state removed as they are no longer needed for direct tie display
 
     useEffect(() => {
         console.log("LeagueRecords: useEffect triggered for calculation.");
@@ -195,7 +187,7 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
         } finally {
             setIsLoading(false);
         }
-    }, [historicalData, getTeamName, calculateAllLeagueMetrics]); // Dependency array is correct
+    }, [historicalData, getTeamName, calculateAllLeagueMetrics]);
 
 
     if (isLoading) {
@@ -225,13 +217,15 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
         // Determine the display value based on config type
         let displayValue;
         if (config.type === 'percentage') {
+            // Corrected: formatNumber gives "0.XXX", no extra dot needed
             displayValue = formatNumber(record.teams[0].value, config.decimals, 'decimal') + '%';
         } else {
+            // Keep existing logic for other types (DPR, points, count)
             displayValue = formatNumber(record.teams[0].value, config.decimals, config.type);
         }
 
-        // --- NEW LOGIC FOR DISPLAYING ALL TIED TEAMS ---
-        const allTiedTeamsDisplay = record.teams.map(team => {
+        // Logic for displaying all tied teams vertically
+        const allTiedTeamsDisplay = record.teams.map((team, index) => {
             let currentTeamDisplayName = team.name;
             if (currentTeamDisplayName.startsWith('Unknown Team (ID:')) {
                 if (team.ownerId) {
@@ -243,8 +237,15 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
             if (currentTeamDisplayName.startsWith('Unknown Team (ID:')) {
                 currentTeamDisplayName = "Unknown Team";
             }
-            return `${currentTeamDisplayName}${team.year ? ` (${team.year})` : ''}`;
-        }).join(' + '); // Join with " + "
+            return (
+                <div
+                    key={`${record.key}-${team.ownerId || team.rosterId || 'unknown'}-${team.year || 'career'}-${index}`}
+                    className="leading-tight" // This class helps stack lines closely
+                >
+                    {currentTeamDisplayName}{team.year ? ` (${team.year})` : ''}
+                </div>
+            );
+        });
 
         return (
             <>
@@ -253,6 +254,7 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
                 </td>
                 <td className="py-2 px-4 text-center font-semibold text-lg">{displayValue}</td>
                 <td className="py-2 px-4 text-right text-gray-700">
+                    {/* Render the array of div elements, which will stack vertically */}
                     {allTiedTeamsDisplay}
                 </td>
             </>
