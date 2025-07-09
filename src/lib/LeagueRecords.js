@@ -242,10 +242,11 @@ const LeagueRecords = () => {
 
         // Logic for displaying all tied teams vertically
         const allTiedTeamsDisplay = record.teams.map((team, index) => {
-            let currentTeamDisplayName = team.name;
-            // To get the current team name, always pass null for the year to getTeamName
+            let currentTeamDisplayName = "Unknown Team"; // Default fallback
+
             if (team.ownerId) {
-                currentTeamDisplayName = getTeamName(team.ownerId, null); // Pass null to get the current name
+                // Always get the current team name by passing null for the year
+                currentTeamDisplayName = getTeamName(team.ownerId, null);
             } else if (team.rosterId && team.year) {
                 // If only rosterId and year are available, try to get ownerId from historicalData
                 const rosterForYear = historicalData.rostersBySeason?.[team.year]?.find(r => String(r.roster_id) === String(team.rosterId));
