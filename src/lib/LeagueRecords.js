@@ -1,4 +1,3 @@
-// src/lib/LeagueRecords.js
 import React, { useState, useEffect, useCallback } from 'react';
 import { formatNumber } from '../utils/formatUtils';
 
@@ -16,12 +15,12 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
 
     // Configuration for number formatting per stat
     const formatConfig = {
-        highestDPR: { decimals: 2, type: 'decimal' },
-        lowestDPR: { decimals: 2, type: 'decimal' },
+        highestDPR: { decimals: 3, type: 'decimal' }, // Changed to 3 decimals
+        lowestDPR: { decimals: 3, type: 'decimal' },  // Changed to 3 decimals
         mostWins: { decimals: 0, type: 'count' },
         mostLosses: { decimals: 0, type: 'count' },
-        bestWinPct: { decimals: 3, type: 'percentage' },
-        bestAllPlayWinPct: { decimals: 3, type: 'percentage' },
+        bestWinPct: { decimals: 3, type: 'percentage' }, // Already 3 decimals, correct for X.XXX%
+        bestAllPlayWinPct: { decimals: 3, type: 'percentage' }, // Already 3 decimals, correct for X.XXX%
         mostWeeklyHighScores: { decimals: 0, type: 'count' },
         mostWeeklyTop2Scores: { decimals: 0, type: 'count' },
         mostWinningSeasons: { decimals: 0, type: 'count' },
@@ -30,8 +29,8 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
         mostBlowoutLosses: { decimals: 0, type: 'count' },
         mostSlimWins: { decimals: 0, type: 'count' },
         mostSlimLosses: { decimals: 0, type: 'count' },
-        mostTotalPoints: { decimals: 2, type: 'points' },
-        mostPointsAgainst: { decimals: 2, type: 'points' },
+        mostTotalPoints: { decimals: 2, type: 'points' }, // Ensure formatUtils handles commas
+        mostPointsAgainst: { decimals: 2, type: 'points' }, // Ensure formatUtils handles commas
     };
 
 
@@ -156,6 +155,7 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
                     const teamsInSeason = Object.values(seasonalMetrics[year]);
                     const currentOwnerTeamInSeason = teamsInSeason.find(t => t.ownerId === ownerId);
                     if (currentOwnerTeamInSeason && currentOwnerTeamInSeason.totalGames > 0) {
+                        // Assuming a winning season is > 0.5 win percentage, losing < 0.5. Ties (0.5) are neither.
                         if (currentOwnerTeamInSeason.winPercentage > 0.5) {
                             winningSeasonsCount++;
                         } else if (currentOwnerTeamInSeason.winPercentage < 0.5) {
@@ -204,7 +204,7 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
         return <div className="text-center py-8">No historical data available to calculate all-time records.</div>;
     }
 
-    // Helper to render a record entry (rest of this function remains the same, it's correct)
+    // Helper to render a record entry
     const renderRecordEntry = (record) => {
         const config = formatConfig[record.key] || { decimals: 2, type: 'default' };
 
@@ -224,9 +224,11 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
 
         let displayValue;
         if (config.type === 'percentage') {
-            displayValue = formatNumber(primaryTeam.value * 100, config.decimals) + '%';
+            // For percentage, multiply by 100 before formatting to get "X.XXX%"
+            displayValue = formatNumber(primaryTeam.value * 100, config.decimals, config.type) + '%';
         } else {
-            displayValue = formatNumber(primaryTeam.value, config.decimals);
+            // For other types (decimal, points, count), just format the raw value
+            displayValue = formatNumber(primaryTeam.value, config.decimals, config.type);
         }
 
         let teamDisplayName = primaryTeam.name;
@@ -262,9 +264,9 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
                             {record.teams.slice(1).map((team, index) => {
                                 let tiedDisplayValue;
                                 if (config.type === 'percentage') {
-                                    tiedDisplayValue = formatNumber(team.value * 100, config.decimals) + '%';
+                                    tiedDisplayValue = formatNumber(team.value * 100, config.decimals, config.type) + '%';
                                 } else {
-                                    tiedDisplayValue = formatNumber(team.value, config.decimals);
+                                    tiedDisplayValue = formatNumber(team.value, config.decimals, config.type);
                                 }
 
                                 let tiedTeamDisplayName = team.name;
