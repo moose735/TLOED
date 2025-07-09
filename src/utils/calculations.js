@@ -247,11 +247,14 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
                         // allPlayOpponentsCount++; // debug
                         if (currentTeamScoreInWeek > otherTeamScore.score) {
                             currentTeamStats.allPlayWins++;
+                            if (careerTeamStatsRaw[ownerId]) careerTeamStatsRaw[ownerId].allPlayWins++; // Aggregate to career
                             weeklyExpectedWins++;
                         } else if (currentTeamScoreInWeek < otherTeamScore.score) {
                             currentTeamStats.allPlayLosses++;
+                            if (careerTeamStatsRaw[ownerId]) careerTeamStatsRaw[ownerId].allPlayLosses++; // Aggregate to career
                         } else {
                             currentTeamStats.allPlayTies++;
+                            if (careerTeamStatsRaw[ownerId]) careerTeamStatsRaw[ownerId].allPlayTies++; // Aggregate to career
                             weeklyExpectedWins += 0.5; // Tie counts as 0.5 expected win for all-play
                         }
                     }
