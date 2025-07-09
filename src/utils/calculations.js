@@ -23,23 +23,22 @@ export const calculateRawDPR = (averageScore, teamHighScore, teamLowScore, teamW
  * @returns {Object} An object containing seasonalMetrics and careerDPRData.
  */
 export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
-    console.log("[Calculations] --- Starting calculateAllLeagueMetrics ---");
-    console.log("[Calculations] Initial historicalData received:", historicalData ? `Keys: ${Object.keys(historicalData).join(', ')}` : 'null/undefined');
+    console.log("--- Starting calculateAllLeagueMetrics ---");
+    console.log("Initial historicalData received:", historicalData ? `Keys: ${Object.keys(historicalData).join(', ')}` : 'null/undefined');
 
     const seasonalMetrics = {}; // Final structured data for each season
     const careerTeamStatsRaw = {}; // Aggregated raw career stats, keyed by ownerId
 
     if (!historicalData || Object.keys(historicalData).length === 0) {
-        console.error("[Calculations] No historical data provided or it's empty. Returning empty metrics.");
+        console.error("calculateAllLeagueMetrics: No historical data provided or it's empty. Returning empty metrics.");
         return { seasonalMetrics: {}, careerDPRData: [] };
     }
 
-    // Ensure historicalData.matchupsBySeason exists and is iterable
     const allYears = Object.keys(historicalData.matchupsBySeason || {}).sort();
-    console.log("[Calculations] Years found in historicalData.matchupsBySeason:", allYears);
+    console.log("Years found in historicalData.matchupsBySeason:", allYears);
 
     if (allYears.length === 0) {
-        console.warn("[Calculations] No years found in historicalData.matchupsBySeason. Returning empty metrics.");
+        console.warn("calculateAllLeagueMetrics: No years found in historicalData.matchupsBySeason. Returning empty metrics.");
         return { seasonalMetrics: {}, careerDPRData: [] };
     }
 
@@ -49,21 +48,21 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
         const rosters = historicalData.rostersBySeason[year];
         const users = historicalData.usersBySeason[year];
 
-        console.log(`[Calculations] Processing year: ${year}`);
-        console.log(`[Calculations]   Matchups for ${year} present: ${!!matchups} (Count: ${matchups ? Object.keys(matchups).length : 0})`);
-        console.log(`[Calculations]   League Metadata for ${year} present: ${!!leagueMetadata}`);
-        console.log(`[Calculations]   Rosters for ${year} present: ${!!rosters} (Count: ${rosters ? rosters.length : 0})`);
-        console.log(`[Calculations]   Users for ${year} present: ${!!users} (Count: ${users ? users.length : 0})`);
+        console.log(`Processing year: ${year}`);
+        console.log(`  Matchups for ${year} present: ${!!matchups} (Count: ${matchups ? Object.keys(matchups).length : 0})`);
+        console.log(`  League Metadata for ${year} present: ${!!leagueMetadata}`);
+        console.log(`  Rosters for ${year} present: ${!!rosters} (Count: ${rosters ? rosters.length : 0})`);
+        console.log(`  Users for ${year} present: ${!!users} (Count: ${users ? users.length : 0})`);
 
 
         if (!matchups || !leagueMetadata || !rosters || !users) {
-            console.error(`[Calculations] Missing critical data for year ${year}. Skipping this year.`);
+            console.error(`calculateAllLeagueMetrics: Missing critical data for year ${year}. Skipping this year.`);
             return; // Skip this year if data is incomplete
         }
 
         // Use parseInt with a fallback if playoff_start_week is missing or invalid
-        const playoffStartWeek = parseInt(leagueMetadata.settings?.playoff_week_start) || 99; // Default to a high number if not found
-        console.log(`[Calculations]   Playoff start week for ${year}: ${playoffStartWeek}`);
+        const playoffStartWeek = parseInt(leagueMetadata.settings?.playoff_start_week) || 99; // Default to a high number if not found
+        console.log(`  Playoff start week for ${year}: ${playoffStartWeek}`);
 
         // Initialize seasonal stats for each roster in the current year
         const yearStatsRaw = {};
@@ -72,7 +71,7 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
             const teamName = getTeamName(roster.roster_id, year);
 
             if (!ownerId) {
-                console.warn(`[Calculations]   Roster ${roster.roster_id} in year ${year} has no owner_id. Skipping initialization for this roster.`);
+                console.warn(`  Roster ${roster.roster_id} in year ${year} has no owner_id. Skipping initialization for this roster.`);
                 return; // Skip this roster if no owner_id
             }
 
@@ -130,12 +129,12 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
                 };
             }
         });
-        console.log(`[Calculations]   Initialized ${Object.keys(yearStatsRaw).length} rosters for year ${year}`);
+        console.log(`  Initialized ${Object.keys(yearStatsRaw).length} rosters for year ${year}`);
 
 
         // Iterate through each week's matchups in the current year
         const sortedWeeks = Object.keys(matchups).sort((a, b) => parseInt(a) - parseInt(b));
-        console.log(`[Calculations]   Starting weekly matchup processing for ${year}. Total weeks: ${sortedWeeks.length}`);
+        console.log(`  Starting weekly matchup processing for ${year}. Total weeks: ${sortedWeeks.length}`);
 
         sortedWeeks.forEach(weekStr => {
             const week = parseInt(weekStr);
@@ -164,7 +163,7 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
                             processedRosterIdsInWeek.add(rosterId1);
                         }
                     } else {
-                            // console.warn(`     Matchup V1: Invalid team1_score for roster ${m.team1_roster_id} in week ${week}, year ${year}. Matchup ID: ${m.matchup_id}`);
+                           // console.warn(`      Matchup V1: Invalid team1_score for roster ${m.team1_roster_id} in week ${week}, year ${year}. Matchup ID: ${m.matchup_id}`);
                     }
 
                     // Team 2
@@ -176,7 +175,7 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
                             processedRosterIdsInWeek.add(rosterId2);
                         }
                     } else {
-                            // console.warn(`     Matchup V1: Invalid team2_score for roster ${m.team2_roster_id} in week ${week}, year ${year}. Matchup ID: ${m.matchup_id}`);
+                           // console.warn(`      Matchup V1: Invalid team2_score for roster ${m.team2_roster_id} in week ${week}, year ${year}. Matchup ID: ${m.matchup_id}`);
                     }
                 }
                 // Fallback to Sleeper V2 style if the above V1 style is not present
@@ -188,12 +187,12 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
                         processedRosterIdsInWeek.add(rosterId);
                     }
                 } else {
-                    // console.warn(`     Unknown or incomplete matchup structure in week ${week}, year ${year}:`, m);
+                    // console.warn(`      Unknown or incomplete matchup structure in week ${week}, year ${year}:`, m);
                 }
             });
 
             if (weekScoresForAllTeams.length === 0) {
-                // console.warn(`   Week ${week} in ${year}: No valid scores collected for any team. Skipping weekly calculations.`);
+                // console.warn(`    Week ${week} in ${year}: No valid scores collected for any team. Skipping weekly calculations.`);
                 return;
             }
 
@@ -206,6 +205,7 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
 
             // --- Step 2: Process each roster's performance in the current week ---
             // Iterate over ALL rosters for this year, not just those in `weekScoresForAllTeams`
+            // This ensures we can still check `isPlayoffTeam` if a team had a bye in regular season but appears in playoffs
             Object.keys(yearStatsRaw).forEach(rosterId => {
                 const currentTeamStats = yearStatsRaw[rosterId];
                 const ownerId = currentTeamStats.ownerId;
@@ -224,7 +224,7 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
 
                 if (!hasValidWeeklyScore) {
                     // This team did not play a valid scoring game this week, or their score was invalid.
-                    // console.warn(`     Roster ID ${rosterId} in week ${week}, year ${year} has no valid score. Skipping detailed weekly stats for this team.`);
+                    // console.warn(`      Roster ID ${rosterId} in week ${week}, year ${year} has no valid score. Skipping detailed weekly stats for this team.`);
                     return; // Skip to next roster if no valid score for this week
                 }
 
@@ -240,9 +240,11 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
 
                 // All-Play calculations for the week
                 let weeklyExpectedWins = 0;
+                // let allPlayOpponentsCount = 0; // Not strictly needed for calculation, just for debug
 
                 weekScoresForAllTeams.forEach(otherTeamScore => {
                     if (String(otherTeamScore.roster_id) !== String(rosterId)) { // Don't compare a team to itself
+                        // allPlayOpponentsCount++; // debug
                         if (currentTeamScoreInWeek > otherTeamScore.score) {
                             currentTeamStats.allPlayWins++;
                             if (careerTeamStatsRaw[ownerId]) careerTeamStatsRaw[ownerId].allPlayWins++; // Aggregate to career
@@ -346,6 +348,7 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
                     }
                     // --- END NEW BLOWOUT/SLIM LOGIC ---
 
+
                     // Aggregate regular season stats to career (already done in weekly loop for points, wins, losses, ties, games)
                     if (careerTeamStatsRaw[ownerId]) {
                         careerTeamStatsRaw[ownerId].pointsFor += currentTeamScoreInWeek;
@@ -357,20 +360,20 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
                     }
 
                 } else if (isRegularSeasonMatch && (!foundMatchup || typeof opponentScore !== 'number' || isNaN(opponentScore))) {
-                        // Log if a regular season matchup was expected but opponent score was invalid
-                        // This could indicate a bye week that still contributes to totalGames but not to opponent stats
-                        // console.warn(`     Roster ID ${rosterId} in week ${week}, year ${year}: Regular season match expected but opponent score invalid.`);
+                       // Log if a regular season matchup was expected but opponent score was invalid
+                       // This could indicate a bye week that still contributes to totalGames but not to opponent stats
+                       // console.warn(`      Roster ID ${rosterId} in week ${week}, year ${year}: Regular season match expected but opponent score invalid.`);
                 }
             });
         }); // End of sortedWeeks.forEach
 
-        console.log(`[Calculations]   Finished weekly matchup processing for ${year}.`);
+        console.log(`  Finished weekly matchup processing for ${year}.`);
 
 
         // --- Phase 3: Post-process year stats for calculations and final structure ---
         seasonalMetrics[year] = {};
         const rosterIdsInSeason = Object.keys(yearStatsRaw);
-        console.log(`[Calculations]   Starting seasonal post-processing for ${year}. Teams: ${rosterIdsInSeason.length}`);
+        console.log(`  Starting seasonal post-processing for ${year}. Teams: ${rosterIdsInSeason.length}`);
 
 
         rosterIdsInSeason.forEach(rosterId => {
@@ -497,7 +500,7 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
     }); // End of allYears.forEach loop
 
     // --- Phase 4: Finalize career stats and calculate overall percentages/DPR ---
-    console.log("[Calculations] --- Starting career data finalization ---");
+    console.log("--- Starting career data finalization ---");
     const finalCareerDPRData = [];
     const allCareerRawDPRs = [];
 
@@ -585,11 +588,11 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
 
     finalCareerDPRData.sort((a, b) => b.dpr - a.dpr);
 
-    console.log("[Calculations] --- Finished calculateAllLeagueMetrics ---");
-    console.log("[Calculations] Final seasonalMetrics keys:", Object.keys(seasonalMetrics));
-    console.log("[Calculations] Final careerDPRData count:", finalCareerDPRData.length);
+    console.log("--- Finished calculateAllLeagueMetrics ---");
+    console.log("Final seasonalMetrics keys:", Object.keys(seasonalMetrics));
+    console.log("Final careerDPRData count:", finalCareerDPRData.length);
     if (finalCareerDPRData.length > 0) {
-        console.log("[Calculations] Sample careerDPRData entry (after adjustment):", finalCareerDPRData[0]);
+        console.log("Sample careerDPRData entry (after adjustment):", finalCareerDPRData[0]);
     }
 
 
