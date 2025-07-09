@@ -30,7 +30,6 @@ export const SleeperDataProvider = ({ children }) => {
 
     // NEW STATE FOR PROCESSED SEASONAL RECORDS
     const [processedSeasonalRecords, setProcessedSeasonalRecords] = useState({});
-    // FIXED: Declare careerDPRData state variable
     const [careerDPRData, setCareerDPRData] = useState(null);
 
     // State for loading and error handling
@@ -38,13 +37,8 @@ export const SleeperDataProvider = ({ children }) => {
     const [error, setError] = useState(null);
 
     // Memoize the getTeamName function so it's stable across renders
-    // This function now performs year-specific lookups.
     const getTeamName = useMemo(() => {
-        // We'll create maps that are keyed by year for year-specific lookups
-        // Note: yearSpecificRosterToOwnerMap is not directly used in the returned function,
-        // as getTeamName is called with ownerId (user_id) directly.
-        const yearSpecificUserMap = new Map();        // Map: year -> (user_id -> user_object)
-
+        const yearSpecificUserMap = new Map();
         if (historicalMatchups?.usersBySeason) {
             Object.entries(historicalMatchups.usersBySeason).forEach(([year, seasonUsers]) => {
                 const userMapForYear = new Map();
@@ -57,77 +51,93 @@ export const SleeperDataProvider = ({ children }) => {
             });
         }
 
-        // Add current league's users for fallback, without a specific year context
         const currentLeagueUserMap = new Map();
-        if (usersData) {
+        if (usersData) { // usersData holds the current league's user information
             usersData.forEach(user => {
                 currentLeagueUserMap.set(user.user_id, user);
             });
         }
 
-        // The returned function now explicitly uses the 'year' parameter for lookups
-        // The 'id' parameter here is expected to be an ownerId (user_id)
         return (ownerId, year = null) => {
-            // 1. Try to find team_name for the specific year provided
-            if (year && yearSpecificUserMap.has(String(year))) { // Ensure year is a string key
-                const userMapForYear = yearSpecificUserMap.get(String(year));
-                const userInSpecificYear = userMapForYear.get(ownerId);
-                if (userInSpecificYear && userInSpecificYear.metadata?.team_name) {
-                    return userInSpecificYear.metadata.team_name;
+            // If year is null, we want the MOST CURRENT team name
+            if (year === null) {
+                // 1. Try to get name from current league's usersData first (most current)
+                const currentUser = currentLeagueUserMap.get(ownerId);
+                if (currentUser) {
+                    if (currentUser.metadata?.team_name) {
+                        return currentUser.metadata.team_name;
+                    }
+                    if (currentUser.display_name) {
+                        return currentUser.display_name;
+                    }
                 }
-            }
 
-            // 2. If year-specific team_name not found, search for team_name across ALL historical years
-            // Sort years to ensure consistent lookup order if multiple years have a team_name
-            const sortedYears = Array.from(yearSpecificUserMap.keys()).sort((a,b) => parseInt(a) - parseInt(b));
-            for (const historicalYear of sortedYears) {
-                const userMapInHistoricalYear = yearSpecificUserMap.get(historicalYear);
-                const userInAnyHistoricalYear = userMapInHistoricalYear.get(ownerId);
-                if (userInAnyHistoricalYear && userInAnyHistoricalYear.metadata?.team_name) {
-                    return userInAnyHistoricalYear.metadata.team_name; // Return the first team name found
+                // 2. If not found in current data, search historical data from most recent year backwards
+                const sortedYearsDesc = Array.from(yearSpecificUserMap.keys()).sort((a, b) => parseInt(b) - parseInt(a));
+                for (const historicalYear of sortedYearsDesc) {
+                    const userMapInHistoricalYear = yearSpecificUserMap.get(historicalYear);
+                    const userInHistoricalYear = userMapInHistoricalYear.get(ownerId);
+                    if (userInHistoricalYear) {
+                        if (userInHistoricalYear.metadata?.team_name) {
+                            return userInHistoricalYear.metadata.team_name;
+                        }
+                        if (userInHistoricalYear.display_name) {
+                            return userInHistoricalYear.display_name;
+                        }
+                    }
                 }
-            }
 
-            // 3. Fallback to display_name for the specific year (if available)
-            if (year && yearSpecificUserMap.has(String(year))) {
-                const userMapForYear = yearSpecificUserMap.get(String(year));
-                const userInSpecificYear = userMapForYear.get(ownerId);
-                if (userInSpecificYear && userInSpecificYear.display_name) {
-                    return userInSpecificYear.display_name;
+                // 3. Fallback to careerDPRData's teamName if available and not generic
+                const careerTeam = careerDPRData?.find(team => team.ownerId === ownerId);
+                if (careerTeam && careerTeam.teamName && careerTeam.teamName !== `Unknown Team (ID: ${ownerId})`) {
+                    return careerTeam.teamName;
                 }
-            }
-
-            // 4. Fallback to display_name from any historical year
-            for (const historicalYear of sortedYears) {
-                const userMapInHistoricalYear = yearSpecificUserMap.get(historicalYear);
-                const userInAnyHistoricalYear = userMapInHistoricalYear.get(ownerId);
-                if (userInAnyHistoricalYear && userInAnyHistoricalYear.display_name) {
-                    return userInAnyHistoricalYear.display_name; // Return the first display_name found
+            } else {
+                // If a specific year is provided, prioritize that year's name
+                if (yearSpecificUserMap.has(String(year))) {
+                    const userMapForYear = yearSpecificUserMap.get(String(year));
+                    const userInSpecificYear = userMapForYear.get(ownerId);
+                    if (userInSpecificYear) {
+                        if (userInSpecificYear.metadata?.team_name) {
+                            return userInSpecificYear.metadata.team_name;
+                        }
+                        if (userInSpecificYear.display_name) {
+                            return userInSpecificYear.display_name;
+                        }
+                    }
                 }
-            }
 
-            // 5. Fallback to current league data (if ownerId is found in current users)
-            const currentUser = currentLeagueUserMap.get(ownerId);
-            if (currentUser) {
-                return currentUser.metadata?.team_name || currentUser.display_name || `User ${ownerId}`;
-            }
-
-            // 6. Fallback to careerDPRData's teamName (if it's not the default "Unknown Team")
-            // This assumes careerDPRData has been calculated and contains a more permanent team name.
-            const careerTeam = careerDPRData?.find(team => team.ownerId === ownerId);
-            if (careerTeam && careerTeam.teamName && careerTeam.teamName !== `Unknown Team (ID: ${ownerId})`) {
-                return careerTeam.teamName;
+                // Fallback for historical lookups if specific year data is missing,
+                // still try to find *any* historical name (from most recent to oldest)
+                const sortedYearsDesc = Array.from(yearSpecificUserMap.keys()).sort((a, b) => parseInt(b) - parseInt(a));
+                for (const historicalYear of sortedYearsDesc) {
+                    const userMapInHistoricalYear = yearSpecificUserMap.get(historicalYear);
+                    const userInHistoricalYear = userMapInHistoricalYear.get(ownerId);
+                    if (userInHistoricalYear) {
+                        if (userInHistoricalYear.metadata?.team_name) {
+                            return userInHistoricalYear.metadata.team_name;
+                        }
+                        if (userInHistoricalYear.display_name) {
+                            return userInHistoricalYear.display_name;
+                        }
+                    }
+                }
+                
+                // Fallback to careerDPRData if historical year-specific or general historical names not found
+                const careerTeam = careerDPRData?.find(team => team.ownerId === ownerId);
+                if (careerTeam && careerTeam.teamName && careerTeam.teamName !== `Unknown Team (ID: ${ownerId})`) {
+                    return careerTeam.teamName;
+                }
             }
 
             // Final fallback if no specific name is found
             return `Unknown Team (ID: ${ownerId})`;
         };
-    }, [usersData, historicalMatchups, processedSeasonalRecords, careerDPRData]); // Depend on careerDPRData now that it's state
+    }, [usersData, historicalMatchups, careerDPRData]); // Depend on careerDPRData now that it's state
 
-    // 3. Fetch data and perform calculations on component mount
     useEffect(() => {
         const loadAllSleeperData = async () => {
-            setLoading(true); // Start loading
+            setLoading(true);
             setError(null);
             try {
                 const [
@@ -148,32 +158,26 @@ export const SleeperDataProvider = ({ children }) => {
                     fetchAllDraftHistory(),
                 ]);
 
-                // Update state with fetched data
                 setLeagueData(leagues);
                 setUsersData(users);
                 setRostersWithDetails(rosters);
                 setNflPlayers(players);
                 setNflState(state);
                 setHistoricalMatchups(matchups);
-                setAllDraftHistory(draftHistory); // Set draft history here
+                setAllDraftHistory(draftHistory);
 
-                // IMPORTANT: Calculate processedSeasonalRecords AFTER historicalMatchups is set
-                // and getTeamName is ready (which it should be, as its dependencies are set above).
                 if (matchups && Object.keys(matchups).length > 0) {
-                    // calculateAllLeagueMetrics returns an object with seasonalMetrics and careerDPRData
-                    // Ensure getTeamName is passed correctly here, as it's a dependency for the calculation
                     const { seasonalMetrics, careerDPRData: calculatedCareerDPRData } = calculateAllLeagueMetrics(matchups, draftHistory, getTeamName);
-                    console.log("SleeperDataContext: Calculated seasonalMetrics:", seasonalMetrics); // Debugging log
+                    console.log("SleeperDataContext: Calculated seasonalMetrics:", seasonalMetrics);
                     setProcessedSeasonalRecords(seasonalMetrics);
-                    // Also set careerDPRData here, as it's used by getTeamName
                     setCareerDPRData(calculatedCareerDPRData);
                 } else {
                     console.warn("SleeperDataContext: historicalMatchups is empty or null, cannot calculate seasonal metrics.");
-                    setProcessedSeasonalRecords({}); // Ensure it's an empty object if no data
-                    setCareerDPRData(null); // Ensure careerDPRData is reset too
+                    setProcessedSeasonalRecords({});
+                    setCareerDPRData(null);
                 }
                 
-                setLoading(false); // Set loading to false ONLY after all data and calculations are done
+                setLoading(false);
             } catch (err) {
                 console.error("Failed to load initial Sleeper data:", err);
                 setError(err);
@@ -181,26 +185,23 @@ export const SleeperDataProvider = ({ children }) => {
             }
         };
 
-        // FIXED: Removed getTeamName from dependencies to prevent loading loop.
-        // This effect now runs only once on mount (or if CURRENT_LEAGUE_ID were to change).
         loadAllSleeperData();
-    }, []);
+    }, []); // This effect now runs only once on mount (or if CURRENT_LEAGUE_ID were to change).
 
 
-    // 4. Memoize the context value to prevent unnecessary re-renders of consumers
     const contextValue = useMemo(() => ({
         leagueData,
         usersData,
         rostersWithDetails,
         nflPlayers,
         nflState,
-        historicalData: historicalMatchups, // Renamed for clarity in context
+        historicalData: historicalMatchups,
         allDraftHistory,
-        processedSeasonalRecords, // NEW: Include processed seasonal records
-        careerDPRData, // Ensure careerDPRData is exposed via context
+        processedSeasonalRecords,
+        careerDPRData,
         loading,
         error,
-        getTeamName, // Include the memoized getTeamName function
+        getTeamName,
     }), [
         leagueData,
         usersData,
@@ -209,8 +210,8 @@ export const SleeperDataProvider = ({ children }) => {
         nflState,
         historicalMatchups,
         allDraftHistory,
-        processedSeasonalRecords, // NEW: Add as dependency
-        careerDPRData, // Add as dependency
+        processedSeasonalRecords,
+        careerDPRData,
         loading,
         error,
         getTeamName,
