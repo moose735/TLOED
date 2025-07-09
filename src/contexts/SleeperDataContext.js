@@ -1,6 +1,6 @@
 // src/contexts/SleeperDataContext.js
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { fetchAllHistoricalMatchups } from '../api/sleeperApi';
+import { fetchAllHistoricalMatchups } from '../utils/sleeperApi';
 import { calculateAllTimeRecords, calculateSeasonalMetrics } from '../utils/calculations';
 
 const SleeperData = createContext();
