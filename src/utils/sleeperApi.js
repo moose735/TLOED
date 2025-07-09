@@ -196,12 +196,15 @@ export async function fetchRostersWithDetails(leagueId) {
 }
 
 /**
- * Processes raw matchup data to combine team 1 and team 2 into single matchup objects.
+ * Processes raw matchup data to combine team 1 and team 2 into single matchup objects,
+ * and attaches season and week information.
  * @param {Array<Object>} rawMatchups An array of raw matchup objects from the Sleeper API.
  * @param {Map<string, Object>} rosterIdToDetailsMap A map for roster_id to enriched roster details.
+ * @param {string} season The season (year) for these matchups.
+ * @param {number} week The week number for these matchups.
  * @returns {Array<Object>} An array of processed matchup objects.
  */
-function processRawMatchups(rawMatchups, rosterIdToDetailsMap) {
+function processRawMatchups(rawMatchups, rosterIdToDetailsMap, season, week) { // ADDED season and week parameters
     const matchupsMap = new Map();
 
     if (!rawMatchups) {
@@ -214,7 +217,8 @@ function processRawMatchups(rawMatchups, rosterIdToDetailsMap) {
             // First team in the matchup
             matchupsMap.set(matchupId, {
                 matchup_id: matchupId,
-                week: teamMatchup.week,
+                season: season, // ADDED season
+                week: week,     // ADDED week
                 team1_roster_id: teamMatchup.roster_id,
                 team1_score: teamMatchup.points,
                 team1_details: rosterIdToDetailsMap.get(String(teamMatchup.roster_id)), // Ensure string key
@@ -258,9 +262,10 @@ function processRawMatchups(rawMatchups, rosterIdToDetailsMap) {
  * Fetches and processes matchups for a specific league and range of weeks.
  * @param {string} leagueId The ID of the Sleeper league.
  * @param {number | number[]} weeks The week number(s) to fetch matchups for. Can be a single number or an array.
+ * @param {string} season The season (year) for these matchups. // ADDED season parameter
  * @returns {Promise<Object>} A promise that resolves to an object where keys are week numbers and values are arrays of processed matchup data.
  */
-export async function fetchMatchupsForLeague(leagueId, weeks) {
+export async function fetchMatchupsForLeague(leagueId, weeks, season) { // ADDED season parameter
     let weeksToFetch = [];
     if (typeof weeks === 'number') {
         weeksToFetch = [weeks];
@@ -283,7 +288,8 @@ export async function fetchMatchupsForLeague(leagueId, weeks) {
                 0.5 // Cache matchups for 30 mins, as scores update frequently during game days
             );
             if (rawMatchups) {
-                allMatchupsByWeek[week] = processRawMatchups(rawMatchups, rosterIdToDetailsMap);
+                // PASSED season and week to processRawMatchups
+                allMatchupsByWeek[week] = processRawMatchups(rawMatchups, rosterIdToDetailsMap, season, week);
             }
         } catch (error) {
             console.error(`Error fetching matchups for league ${leagueId}, week ${week}:`, error);
@@ -337,7 +343,6 @@ function enrichBracketWithScores(bracketData, allWeeklyScoresForSeason, rosterId
     if (!bracketData || bracketData.length === 0 || !allWeeklyScoresForSeason || !rosterIdToDetailsMap) {
         return bracketData;
     }
-
     const enrichedBracket = bracketData.map(bracketMatch => {
         const enrichedMatch = { ...bracketMatch };
 
@@ -582,7 +587,8 @@ export async function fetchAllHistoricalMatchups() {
             if (parseInt(season) <= parseInt(currentNFLSeason)) {
                 console.log(`Fetching regular season matchups for season ${season} (${leagueId}) up to week ${regularSeasonWeeksEnd}...`);
                 const weeksToFetchRegular = Array.from({ length: regularSeasonWeeksEnd }, (_, i) => i + 1); // Weeks 1 to regularSeasonWeeksEnd
-                const regularMatchupsByWeek = await fetchMatchupsForLeague(leagueId, weeksToFetchRegular);
+                // PASSED season to fetchMatchupsForLeague
+                const regularMatchupsByWeek = await fetchMatchupsForLeague(leagueId, weeksToFetchRegular, season);
                 Object.assign(seasonMatchupsData, regularMatchupsByWeek); // Merge into seasonMatchupsData
 
                 if (Object.keys(regularMatchupsByWeek).length === 0 && parseInt(season) === parseInt(currentNFLSeason)) {
@@ -610,7 +616,8 @@ export async function fetchAllHistoricalMatchups() {
                 if (maxPlayoffRound > 0) {
                     console.log(`Fetching playoff matchup scores for season ${season} (from week ${playoffStartWeek} to ${playoffStartWeek + maxPlayoffRound - 1})...`);
                     const playoffWeeksToFetch = Array.from({ length: maxPlayoffRound}, (_, i) => playoffStartWeek + i);
-                    const playoffMatchupsByWeek = await fetchMatchupsForLeague(leagueId, playoffWeeksToFetch);
+                    // PASSED season to fetchMatchupsForLeague
+                    const playoffMatchupsByWeek = await fetchMatchupsForLeague(leagueId, playoffWeeksToFetch, season);
                     Object.assign(seasonMatchupsData, playoffMatchupsByWeek); // Merge playoff week data
                 } else {
                     console.log(`No playoff bracket data (or max round 0) for season ${season} (${leagueId}).`);
