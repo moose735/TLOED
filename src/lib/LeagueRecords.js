@@ -243,15 +243,14 @@ const LeagueRecords = () => {
         // Logic for displaying all tied teams vertically
         const allTiedTeamsDisplay = record.teams.map((team, index) => {
             let currentTeamDisplayName = team.name;
-            // The getTeamName function in context should handle the ownerId/year lookup
-            // We pass the ownerId and year (if available) to get the most accurate name.
+            // To get the current team name, always pass null for the year to getTeamName
             if (team.ownerId) {
-                currentTeamDisplayName = getTeamName(team.ownerId, team.year || null);
+                currentTeamDisplayName = getTeamName(team.ownerId, null); // Pass null to get the current name
             } else if (team.rosterId && team.year) {
                 // If only rosterId and year are available, try to get ownerId from historicalData
                 const rosterForYear = historicalData.rostersBySeason?.[team.year]?.find(r => String(r.roster_id) === String(team.rosterId));
                 if (rosterForYear?.owner_id) {
-                    currentTeamDisplayName = getTeamName(rosterForYear.owner_id, team.year);
+                    currentTeamDisplayName = getTeamName(rosterForYear.owner_id, null); // Pass null to get the current name
                 } else {
                     currentTeamDisplayName = `Unknown Team (Roster: ${team.rosterId})`;
                 }
@@ -267,7 +266,7 @@ const LeagueRecords = () => {
                     key={`${record.key}-${team.ownerId || team.rosterId || 'unknown'}-${team.year || 'career'}-${index}`}
                     className="leading-tight" // This class helps stack lines closely
                 >
-                    {currentTeamDisplayName}{team.year ? ` (${team.year})` : ''}
+                    {currentTeamDisplayName}
                 </div>
             );
         });
