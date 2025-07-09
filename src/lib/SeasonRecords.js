@@ -218,7 +218,7 @@ const SeasonRecords = () => {
             // Defensive check: if entry is undefined, return null to filter it out later
             if (!entry) {
                 console.warn(`SeasonRecords: Skipping undefined entry in record.entries for key '${record.key}'. Index: ${index}`);
-                return null;
+                return null; // Return null for undefined entries to prevent errors
             }
             return (
                 <div
