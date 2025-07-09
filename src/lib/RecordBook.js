@@ -1,11 +1,13 @@
 // src/components/RecordBook.js
 import React from 'react';
-// THIS IS THE LINE TO FIX:
 import { useSleeperData } from '../contexts/SleeperDataContext'; // Corrected path to 'contexts'
 import LeagueRecords from '../lib/LeagueRecords';
+import SeasonRecords from '../lib/SeasonRecords'; // <--- NEW IMPORT
 import { calculateAllLeagueMetrics } from '../utils/calculations'; // Import the calculation function
 
 const RecordBook = () => {
+    // You no longer need to pass calculateAllLeagueMetrics to LeagueRecords directly
+    // since it's used internally by SleeperDataContext to populate historicalData.seasonalMetrics
     const { historicalData, getTeamName, isLoading: dataIsLoading, error: dataError } = useSleeperData();
 
     if (dataIsLoading) {
@@ -29,7 +31,13 @@ const RecordBook = () => {
             <LeagueRecords
                 historicalData={historicalData}
                 getTeamName={getTeamName}
-                calculateAllLeagueMetrics={calculateAllLeagueMetrics} // Pass the function directly
+                // calculateAllLeagueMetrics={calculateAllLeagueMetrics} // Not needed here anymore, as it's used internally by useSleeperData
+            />
+
+            {/* NEW: Render the SeasonRecords component */}
+            <SeasonRecords
+                historicalData={historicalData}
+                getTeamName={getTeamName}
             />
 
             {/* You can add other record book sections here, e.g., Player Records, Draft Records */}
