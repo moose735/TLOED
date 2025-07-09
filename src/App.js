@@ -8,7 +8,7 @@ import {
 // Import all your components
 import PowerRankings from './lib/PowerRankings';
 import LeagueHistory from './lib/LeagueHistory';
-import RecordBook from './lib/RecordBook';
+import RecordBook from './components/RecordBook'; // Updated path to components
 import DPRAnalysis from './lib/DPRAnalysis';
 import LuckRatingAnalysis from './lib/LuckRatingAnalysis';
 import TeamDetailPage from './lib/TeamDetailPage';
@@ -61,14 +61,15 @@ const TABS = {
 
 const AppContent = () => {
     // Consume data from SleeperDataContext
-    // Destructure directly from the context value, not from a 'state' object
     const {
         loading,
         error,
-        historicalData, // Now an object containing matchups and champions
-        rostersBySeason, // Now directly rostersWithDetails from context
-        getTeamName, // The Sleeper-aware version of getMappedTeamName
-        usersData // Also useful for team names
+        processedSeasonalRecords, // Now available from context
+        allTimeRecords,           // Now available from context
+        getTeamName,              // Still available from context
+        // historicalData, // REMOVED: No longer directly provided by context
+        // rostersBySeason, // REMOVED: No longer directly provided by context
+        // usersData // REMOVED: No longer directly provided by context
     } = useSleeperData();
 
     const [activeTab, setActiveTab] = useState(TABS.DASHBOARD);
@@ -76,53 +77,47 @@ const AppContent = () => {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [openSubMenu, setOpenSubMenu] = useState(null);
 
-    // Effect to dynamically populate team sub-tabs when rostersBySeason is available
+    // Effect to dynamically populate team sub-tabs when processed data is available
     useEffect(() => {
-        // Ensure both rostersBySeason and usersData are available before proceeding
-        if (rostersBySeason && usersData) {
+        // We now rely on processedSeasonalRecords which contains teamName and ownerId
+        // and getTeamName from context which uses the internal maps.
+        if (processedSeasonalRecords && Object.keys(processedSeasonalRecords).length > 0 && getTeamName) {
             const allTeamNames = new Set();
-            // rostersBySeason is an object where keys are seasons and values are arrays of rosters
-            // Iterate over each season's rosters
-            Object.values(rostersBySeason).forEach(seasonRosters => {
-                if (Array.isArray(seasonRosters)) { // Ensure it's an array of rosters for the season
-                    seasonRosters.forEach(roster => {
-                        // Use getTeamName to get the display name for the user (owner_id)
-                        // This function is provided by the SleeperDataContext
-                        const teamDisplayName = getTeamName(roster.owner_id);
-                        // Add to set if a valid name is returned
-                        if (teamDisplayName && teamDisplayName !== 'Loading Team...') {
+            Object.values(processedSeasonalRecords).forEach(seasonTeams => {
+                if (Array.isArray(seasonTeams)) {
+                    seasonTeams.forEach(teamStats => {
+                        // Use the teamName directly from processedSeasonalRecords
+                        // or fall back to getTeamName if needed (though teamName should be present)
+                        const teamDisplayName = teamStats.teamName || getTeamName(teamStats.rosterId, teamStats.year);
+                        if (teamDisplayName && teamDisplayName !== 'Loading Team...' && !teamDisplayName.startsWith('Team ')) {
                             allTeamNames.add(teamDisplayName);
                         }
                     });
                 }
             });
+
             const uniqueTeams = Array.from(allTeamNames).sort();
 
-            // Update NAV_CATEGORIES.TEAMS.subTabs directly.
-            // In a larger application, you might manage NAV_CATEGORIES as component state
-            // to ensure React reactivity, but for this progressive update, direct modification
-            // of the global object is sufficient as the menu re-renders on state changes.
             NAV_CATEGORIES.TEAMS.subTabs = uniqueTeams.map(team => ({
                 label: team,
                 tab: TABS.TEAM_DETAIL,
                 teamName: team, // Pass teamName for the TeamDetailPage
             }));
         }
-    }, [rostersBySeason, usersData, getTeamName]); // Dependencies for this effect
+    }, [processedSeasonalRecords, getTeamName]); // Dependencies for this effect: processed data and getTeamName
 
-    // Placeholder functions for UI interactions
     const handleTabClick = (tab) => {
         setActiveTab(tab);
-        setSelectedTeam(null); // Clear selected team when switching main tabs
-        setIsMobileMenuOpen(false); // Close mobile menu on tab click
-        setOpenSubMenu(null); // Close any open sub-menus
+        setSelectedTeam(null);
+        setIsMobileMenuOpen(false);
+        setOpenSubMenu(null);
     };
 
     const handleSubTabClick = (tab, teamName = null) => {
         setActiveTab(tab);
         setSelectedTeam(teamName);
-        setIsMobileMenuOpen(false); // Close mobile menu on sub-tab click
-        setOpenSubMenu(null); // Close any open sub-menus
+        setIsMobileMenuOpen(false);
+        setOpenSubMenu(null);
     };
 
     const toggleMobileMenu = () => {
@@ -134,7 +129,6 @@ const AppContent = () => {
     };
 
     const renderContent = () => {
-        // Use the loading and error states from SleeperDataContext
         if (loading) {
             return (
                 <div className="flex items-center justify-center min-h-screen bg-gray-100 font-inter">
@@ -151,7 +145,7 @@ const AppContent = () => {
                 <div className="flex items-center justify-center min-h-screen bg-gray-100 font-inter">
                     <div className="text-center p-6 bg-red-100 border border-red-400 text-red-700 rounded-lg shadow-md">
                         <p className="font-bold text-xl mb-2">Error Loading Data</p>
-                        <p className="text-base">Failed to load historical data: {error}</p>
+                        <p className="text-base">Failed to load historical data: {error.message}</p> {/* Use error.message */}
                         <p className="text-sm mt-2">Please check your internet connection or the Sleeper API configuration in `config.js` and `sleeperApi.js`.</p>
                     </div>
                 </div>
@@ -161,22 +155,21 @@ const AppContent = () => {
         // Render components based on activeTab, passing necessary data from context
         switch (activeTab) {
             case TABS.DASHBOARD:
-                return <Dashboard />; // This will eventually use Sleeper Context internally
+                return <Dashboard />;
             case TABS.POWER_RANKINGS:
-                return <PowerRankings />; // This will need Sleeper Context internally
+                return <PowerRankings />;
             case TABS.LEAGUE_HISTORY:
-                // LeagueHistory now directly consumes historicalData from context, no props needed here
                 return <LeagueHistory />;
             case TABS.RECORD_BOOK:
-                return <RecordBook historicalMatchups={historicalData.matchupsBySeason} />; // Pass matchupsBySeason
+                // RecordBook now gets data internally via useSleeperData
+                return <RecordBook />;
             case TABS.HEAD_TO_HEAD:
-                return <Head2HeadGrid />; // Head2HeadGrid also consumes historicalData from context
+                return <Head2HeadGrid />;
             case TABS.DPR_ANALYSIS:
-                return <DPRAnalysis historicalMatchups={historicalData.matchupsBySeason} />; // Pass matchupsBySeason
+                return <DPRAnalysis />; // DPRAnalysis will need to use useSleeperData internally
             case TABS.LUCK_RATING:
-                return <LuckRatingAnalysis historicalMatchups={historicalData.matchupsBySeason} />; // Pass matchupsBySeason
+                return <LuckRatingAnalysis />; // LuckRatingAnalysis will need to use useSleeperData internally
             case TABS.TEAM_DETAIL:
-                // TeamDetailPage will now internally use useSleeperData for its data needs
                 return <TeamDetailPage teamName={selectedTeam} />;
             case TABS.FINANCIALS:
                 return <FinancialTracker />;
