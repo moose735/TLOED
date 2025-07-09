@@ -52,6 +52,9 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
   const [sortOrder, setSortOrder] = useState('desc');
 
   useEffect(() => {
+    // Ensure teamName is always treated as a string for consistency
+    const currentTeamName = String(teamName || '');
+
     if (contextLoading || contextError || !historicalData || !historicalData.matchupsBySeason || Object.keys(historicalData.matchupsBySeason).length === 0) {
       setLoadingStats(false);
       return;
@@ -71,13 +74,13 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
 
     // Find the ownerId for the current teamName
     let currentTeamOwnerId = null;
-    const teamCareerStats = calculatedCareerDPRs.find(dpr => getTeamNameFromContext(dpr.ownerId, null) === teamName);
+    const teamCareerStats = calculatedCareerDPRs.find(dpr => getTeamNameFromContext(dpr.ownerId, null) === currentTeamName);
     if (teamCareerStats) {
       currentTeamOwnerId = teamCareerStats.ownerId;
     }
 
     if (!currentTeamOwnerId) {
-      console.warn(`TeamDetailPage: Could not find ownerId for teamName: ${teamName}. Displaying no data.`);
+      console.warn(`TeamDetailPage: Could not find ownerId for teamName: ${currentTeamName}. Displaying no data.`);
       setLoadingStats(false);
       setTeamOverallStats(null);
       setTeamSeasonHistory([]);
@@ -150,7 +153,7 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
     });
 
     // Now, populate overallStats for the specific `teamName`
-    const currentTeamAggregatedStats = allTeamsAggregatedStats[teamName];
+    const currentTeamAggregatedStats = allTeamsAggregatedStats[currentTeamName];
 
     if (currentTeamAggregatedStats) {
       Object.assign(overallStats, {
