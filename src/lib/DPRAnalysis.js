@@ -6,8 +6,9 @@ import { useSleeperData } from '../contexts/SleeperDataContext'; // Import the c
 const DPRAnalysis = () => { // Removed props as data will come from context
   const {
     loading: contextLoading, // Rename to avoid conflict with local loading state
-    error: contextError,     // Rename to avoid conflict with local error state
+    error: contextError,      // Rename to avoid conflict with local error state
     historicalData,
+    allDraftHistory, // FIXED: Import allDraftHistory from context
     getTeamName
   } = useSleeperData();
 
@@ -40,8 +41,9 @@ const DPRAnalysis = () => { // Removed props as data will come from context
     setLoading(true);
 
     // Use the centralized calculation logic to get seasonal and career metrics
-    // Pass historicalData and the getTeamName function from context
-    const { seasonalMetrics, careerDPRData: calculatedCareerDPRs } = calculateAllLeagueMetrics(historicalData, getTeamName);
+    // Pass historicalData, allDraftHistory, and the getTeamName function from context
+    // FIXED: Pass allDraftHistory as the second argument
+    const { seasonalMetrics, careerDPRData: calculatedCareerDPRs } = calculateAllLeagueMetrics(historicalData, allDraftHistory, getTeamName);
 
     // Enhance careerDPRData with additional metrics
     const enhancedCareerDPRs = calculatedCareerDPRs.map(teamData => {
@@ -55,13 +57,20 @@ const DPRAnalysis = () => { // Removed props as data will come from context
 
         // Iterate through seasonal metrics to find highest and lowest seasonal points average for this team
         // Use teamData.rosterId to correctly access seasonalMetrics
+        // Note: teamData.rosterId here refers to the last known rosterId for the owner in calculations.js
+        // For seasonalMetrics lookup, it's better to use teamData.ownerId and iterate through all rosters for that owner.
+        // However, given the structure, we'll try to use ownerId for lookup where possible.
         Object.keys(seasonalMetrics).forEach(year => {
-            if (seasonalMetrics[year][teamData.rosterId]) {
-                const seasonalStats = seasonalMetrics[year][teamData.rosterId];
-                const seasonalGames = seasonalStats.totalGames;
+            // Find the team's seasonal stats using ownerId
+            const teamSeasonalStats = Object.values(seasonalMetrics[year]).find(
+                (seasonalTeam) => seasonalTeam.ownerId === teamData.ownerId
+            );
+
+            if (teamSeasonalStats) {
+                const seasonalGames = teamSeasonalStats.totalGames;
 
                 if (seasonalGames > 0) {
-                    const seasonalAvg = seasonalStats.pointsFor / seasonalGames;
+                    const seasonalAvg = teamSeasonalStats.pointsFor / seasonalGames;
                     if (seasonalAvg > highestSeasonalPointsAvg) {
                         highestSeasonalPointsAvg = seasonalAvg;
                     }
@@ -79,7 +88,7 @@ const DPRAnalysis = () => { // Removed props as data will come from context
         }
 
         return {
-            ...teamData, // This already includes teamName and rosterId
+            ...teamData, // This already includes teamName and ownerId
             winPercentage: winPercentage,
             pointsPerGame: pointsPerGame,
             highestSeasonalPointsAvg: highestSeasonalPointsAvg,
@@ -93,20 +102,22 @@ const DPRAnalysis = () => { // Removed props as data will come from context
       Object.keys(seasonalMetrics[year]).forEach(rosterId => { // Use rosterId as key
         const teamSeasonalData = seasonalMetrics[year][rosterId];
 
-        // All these metrics are already calculated and available in teamSeasonalData
-        allSeasonalDPRs.push({
-          year: parseInt(year),
-          team: teamSeasonalData.teamName, // Use the teamName already resolved by calculations.js
-          rosterId: rosterId, // Keep rosterId for potential future use
-          dpr: teamSeasonalData.adjustedDPR,
-          wins: teamSeasonalData.wins,
-          losses: teamSeasonalData.losses,
-          ties: teamSeasonalData.ties,
-          winPercentage: teamSeasonalData.winPercentage,
-          pointsPerGame: teamSeasonalData.averageScore, // 'averageScore' in seasonalMetrics is points per game
-          highestPointsGame: teamSeasonalData.highScore, // Use highScore from seasonalMetrics
-          lowestPointsGame: teamSeasonalData.lowScore // Use lowScore from seasonalMetrics
-        });
+        // Ensure teamSeasonalData exists and has totalGames > 0 to avoid irrelevant entries
+        if (teamSeasonalData && teamSeasonalData.totalGames > 0) {
+            allSeasonalDPRs.push({
+              year: parseInt(year),
+              team: getTeamName(teamSeasonalData.ownerId, year), // FIXED: Use getTeamName for seasonal team names with year
+              rosterId: rosterId, // Keep rosterId for potential future use
+              dpr: teamSeasonalData.adjustedDPR,
+              wins: teamSeasonalData.wins,
+              losses: teamSeasonalData.losses,
+              ties: teamSeasonalData.ties,
+              winPercentage: teamSeasonalData.winPercentage,
+              pointsPerGame: teamSeasonalData.averageScore, // 'averageScore' in seasonalMetrics is points per game
+              highestPointsGame: teamSeasonalData.highScore, // Use highScore from seasonalMetrics
+              lowestPointsGame: teamSeasonalData.lowScore // Use lowScore from seasonalMetrics
+            });
+        }
       });
     });
 
@@ -142,7 +153,7 @@ const DPRAnalysis = () => { // Removed props as data will come from context
     setSeasonalDPRData(allSeasonalDPRs);
     setLoading(false);
 
-  }, [historicalData, getTeamName, contextLoading, contextError]); // Dependencies updated
+  }, [historicalData, allDraftHistory, getTeamName, contextLoading, contextError]); // Dependencies updated
 
   // Formatter for win percentage (consistent with LeagueHistory)
   const formatPercentage = (value) => {
@@ -226,9 +237,9 @@ const DPRAnalysis = () => { // Removed props as data will come from context
                   </thead>
                   <tbody>
                     {careerDPRData.map((data, index) => (
-                      <tr key={data.rosterId || data.teamName} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                      <tr key={data.ownerId} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}> {/* FIXED: Use ownerId for key */}
                         <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{index + 1}</td>
-                        <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.teamName}</td> {/* Use data.teamName */}
+                        <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{getTeamName(data.ownerId, null)}</td> {/* FIXED: Use getTeamName with ownerId and null for current name */}
                         <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatDPR(data.dpr)}</td>
                         <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPercentage(data.winPercentage)}</td>
                         <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{renderRecord(data.wins, data.losses, data.ties)}</td>
@@ -281,7 +292,7 @@ const DPRAnalysis = () => { // Removed props as data will come from context
                           ) : (
                             <>
                               <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{actualRank}</td>
-                              <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.team}</td> {/* Use data.team (which is teamName) */}
+                              <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{getTeamName(data.ownerId, data.year)}</td> {/* FIXED: Use getTeamName with ownerId and year */}
                               <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.year}</td>
                               <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatDPR(data.dpr)}</td>
                               <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPercentage(data.winPercentage)}</td>
