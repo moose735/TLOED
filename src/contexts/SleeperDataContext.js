@@ -182,10 +182,8 @@ export const SleeperDataProvider = ({ children }) => {
         };
 
         loadAllSleeperData();
-    }, [getTeamName]); // Keep getTeamName as a dependency to ensure recalculation if its underlying maps change.
-                       // This is a trade-off: it ensures data consistency, but if getTeamName's dependencies
-                       // (historicalMatchups, usersData, rostersWithDetails) are changing on every render,
-                       // it could still cause issues. However, they should only change once after initial fetch.
+    }, []); // FIXED: Removed getTeamName from dependencies to prevent loading loop.
+           // This effect now runs only once on mount (or if CURRENT_LEAGUE_ID were to change).
 
 
     // 4. Memoize the context value to prevent unnecessary re-renders of consumers
