@@ -59,17 +59,24 @@ export const SleeperDataProvider = ({ children }) => {
         }
 
         return (ownerId, year = null) => {
+            // Helper to find name from a user object
+            const getNameFromUser = (user) => {
+                if (user?.metadata?.team_name) {
+                    return user.metadata.team_name;
+                }
+                if (user?.display_name) {
+                    return user.display_name;
+                }
+                return null; // No name found in this user object
+            };
+
             // If year is null, we want the MOST CURRENT team name
             if (year === null) {
                 // 1. Try to get name from current league's usersData first (most current)
                 const currentUser = currentLeagueUserMap.get(ownerId);
-                if (currentUser) {
-                    if (currentUser.metadata?.team_name) {
-                        return currentUser.metadata.team_name;
-                    }
-                    if (currentUser.display_name) {
-                        return currentUser.display_name;
-                    }
+                const currentName = getNameFromUser(currentUser);
+                if (currentName) {
+                    return currentName;
                 }
 
                 // 2. If not found in current data, search historical data from most recent year backwards
@@ -77,19 +84,15 @@ export const SleeperDataProvider = ({ children }) => {
                 for (const historicalYear of sortedYearsDesc) {
                     const userMapInHistoricalYear = yearSpecificUserMap.get(historicalYear);
                     const userInHistoricalYear = userMapInHistoricalYear.get(ownerId);
-                    if (userInHistoricalYear) {
-                        if (userInHistoricalYear.metadata?.team_name) {
-                            return userInHistoricalYear.metadata.team_name;
-                        }
-                        if (userInHistoricalYear.display_name) {
-                            return userInHistoricalYear.display_name;
-                        }
+                    const historicalName = getNameFromUser(userInHistoricalYear);
+                    if (historicalName) {
+                        return historicalName;
                     }
                 }
 
                 // 3. Fallback to careerDPRData's teamName if available and not generic
                 const careerTeam = careerDPRData?.find(team => team.ownerId === ownerId);
-                if (careerTeam && careerTeam.teamName && careerTeam.teamName !== `Unknown Team (ID: ${ownerId})`) {
+                if (careerTeam && careerTeam.teamName && !careerTeam.teamName.startsWith('Unknown Team (ID:')) {
                     return careerTeam.teamName;
                 }
             } else {
@@ -97,31 +100,34 @@ export const SleeperDataProvider = ({ children }) => {
                 if (yearSpecificUserMap.has(String(year))) {
                     const userMapForYear = yearSpecificUserMap.get(String(year));
                     const userInSpecificYear = userMapForYear.get(ownerId);
-                    if (userInSpecificYear) {
-                        if (userInSpecificYear.metadata?.team_name) {
-                            return userInSpecificYear.metadata.team_name;
-                        }
-                        if (userInSpecificYear.display_name) {
-                            return userInSpecificYear.display_name;
-                        }
+                    const specificYearName = getNameFromUser(userInSpecificYear);
+                    if (specificYearName) {
+                        return specificYearName;
                     }
                 }
 
                 // Fallback for historical lookups if specific year data is missing in that year,
-                // try to get the *current* name from usersData before resorting to general historical or generic
+                // try to get a name from ANY historical year (most recent first)
+                const sortedYearsDesc = Array.from(yearSpecificUserMap.keys()).sort((a, b) => parseInt(b) - parseInt(a));
+                for (const historicalYear of sortedYearsDesc) {
+                    const userMapInHistoricalYear = yearSpecificUserMap.get(historicalYear);
+                    const userInHistoricalYear = userMapInHistoricalYear.get(ownerId);
+                    const historicalName = getNameFromUser(userInHistoricalYear);
+                    if (historicalName) {
+                        return historicalName;
+                    }
+                }
+
+                // Fallback to current league data if no historical name is found
                 const currentUser = currentLeagueUserMap.get(ownerId);
-                if (currentUser) {
-                    if (currentUser.metadata?.team_name) {
-                        return currentUser.metadata.team_name;
-                    }
-                    if (currentUser.display_name) {
-                        return currentUser.display_name;
-                    }
+                const currentName = getNameFromUser(currentUser);
+                if (currentName) {
+                    return currentName;
                 }
 
                 // Fallback to careerDPRData if historical year-specific or current names not found
                 const careerTeam = careerDPRData?.find(team => team.ownerId === ownerId);
-                if (careerTeam && careerTeam.teamName && careerTeam.teamName !== `Unknown Team (ID: ${ownerId})`) {
+                if (careerTeam && careerTeam.teamName && !careerTeam.teamName.startsWith('Unknown Team (ID:')) {
                     return careerTeam.teamName;
                 }
             }
