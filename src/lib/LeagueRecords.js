@@ -1,16 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { formatNumber } from '../utils/formatUtils';
+import { useSleeperData } from '../contexts/SleeperDataContext'; // Import useSleeperData hook
+import { calculateAllLeagueMetrics } from '../utils/calculations'; // Import directly
 
 /**
  * Calculates and displays all-time league records based on historical data.
  * @param {Object} props - The component props.
  * @param {Object} props.historicalData - The full historical data object from SleeperDataContext.
  * @param {Function} props.getTeamName - A function to get the team's display name.
- * @param {Function} props.calculateAllLeagueMetrics - The function to calculate all league metrics.
  */
-const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics }) => {
+// Removed calculateAllLeagueMetrics from props as it's now imported directly
+const LeagueRecords = () => {
+    // Consume necessary data from context
+    const { historicalData, allDraftHistory, getTeamName, loading, error } = useSleeperData();
+
     const [allTimeRecords, setAllTimeRecords] = useState({});
-    // Corrected: Initialize useState hook properly
     const [isLoading, setIsLoading] = useState(true);
 
     // Configuration for number formatting per stat
@@ -33,11 +37,22 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
         mostPointsAgainst: { decimals: 2, type: 'points' },
     };
 
-    // toggleExpand and expandedRecords state removed as they are no longer needed for direct tie display
-
     useEffect(() => {
         console.log("LeagueRecords: useEffect triggered for calculation.");
         setIsLoading(true);
+
+        // Check for overall loading state from context
+        if (loading) {
+            console.log("LeagueRecords: Context is still loading. Waiting for data.");
+            return;
+        }
+
+        if (error) {
+            console.error("LeagueRecords: Error from context:", error);
+            setAllTimeRecords({});
+            setIsLoading(false);
+            return;
+        }
 
         if (!historicalData || !historicalData.matchupsBySeason || Object.keys(historicalData.matchupsBySeason).length === 0) {
             console.log("LeagueRecords: No historicalData or matchups. Setting records to empty and isLoading false.");
@@ -47,7 +62,8 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
         }
 
         try {
-            const { seasonalMetrics, careerDPRData: calculatedCareerDPRs } = calculateAllLeagueMetrics(historicalData, getTeamName);
+            // FIXED: Pass all three required arguments to calculateAllLeagueMetrics
+            const { seasonalMetrics, careerDPRData: calculatedCareerDPRs } = calculateAllLeagueMetrics(historicalData, allDraftHistory, getTeamName);
             console.log("LeagueRecords: Raw seasonalMetrics from calculations.js:", seasonalMetrics);
             console.log("LeagueRecords: Raw careerDPRData from calculations.js (enhanced):", calculatedCareerDPRs);
 
@@ -187,7 +203,7 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
         } finally {
             setIsLoading(false);
         }
-    }, [historicalData, getTeamName, calculateAllLeagueMetrics]);
+    }, [historicalData, allDraftHistory, getTeamName, loading, error]); // Add allDraftHistory, loading, error to dependencies
 
 
     if (isLoading) {
@@ -227,16 +243,25 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
         // Logic for displaying all tied teams vertically
         const allTiedTeamsDisplay = record.teams.map((team, index) => {
             let currentTeamDisplayName = team.name;
-            if (currentTeamDisplayName.startsWith('Unknown Team (ID:')) {
-                if (team.ownerId) {
-                    currentTeamDisplayName = getTeamName(team.ownerId, null);
-                } else if (team.rosterId && team.year) {
-                    currentTeamDisplayName = getTeamName(team.rosterId, team.year);
+            // The getTeamName function in context should handle the ownerId/year lookup
+            // We pass the ownerId and year (if available) to get the most accurate name.
+            if (team.ownerId) {
+                currentTeamDisplayName = getTeamName(team.ownerId, team.year || null);
+            } else if (team.rosterId && team.year) {
+                // If only rosterId and year are available, try to get ownerId from historicalData
+                const rosterForYear = historicalData.rostersBySeason?.[team.year]?.find(r => String(r.roster_id) === String(team.rosterId));
+                if (rosterForYear?.owner_id) {
+                    currentTeamDisplayName = getTeamName(rosterForYear.owner_id, team.year);
+                } else {
+                    currentTeamDisplayName = `Unknown Team (Roster: ${team.rosterId})`;
                 }
             }
+
+            // Fallback for any remaining "Unknown Team (ID:..." if getTeamName couldn't resolve
             if (currentTeamDisplayName.startsWith('Unknown Team (ID:')) {
                 currentTeamDisplayName = "Unknown Team";
             }
+
             return (
                 <div
                     key={`${record.key}-${team.ownerId || team.rosterId || 'unknown'}-${team.year || 'career'}-${index}`}
