@@ -32,8 +32,18 @@ const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is no
         allHistoricalMatchupsFlat.forEach(match => {
             // Ensure match has necessary properties (season and week are now expected to be on the object)
             // FIXED: Use team1_ and team2_ properties from the already processed matchup object
-            if (!match || !match.matchup_id || !match.team1_roster_id || !match.team1_score || !match.team2_roster_id || !match.team2_score || match.season === undefined || match.week === undefined) {
-                console.warn("StreaksRecords: Skipping invalid or incomplete matchup:", match);
+            if (!match || !match.matchup_id || !match.team1_roster_id || match.team1_score === undefined || !match.team2_roster_id || match.team2_score === undefined || match.season === undefined || match.week === undefined) {
+                // ENHANCED LOGGING: Show which specific properties are missing or undefined
+                console.warn("StreaksRecords: Skipping invalid or incomplete matchup. Missing data:", {
+                    matchup_id: match?.matchup_id,
+                    team1_roster_id: match?.team1_roster_id,
+                    team1_score: match?.team1_score, // Check for undefined, not just falsy
+                    team2_roster_id: match?.team2_roster_id,
+                    team2_score: match?.team2_score, // Check for undefined, not just falsy
+                    season: match?.season,
+                    week: match?.week,
+                    fullMatch: match // Log the entire match object for full context
+                });
                 return;
             }
 
@@ -60,7 +70,8 @@ const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is no
                 return;
             }
 
-            // Skip if it's a future season with no actual games played (points are 0)
+            // Skip if it's a future season with no actual games played (points are 0 for both teams)
+            // This prevents processing placeholder matchups for future weeks
             if (team1Score === 0 && team2Score === 0 && year >= new Date().getFullYear()) {
                  console.log(`StreaksRecords: Skipping future season matchup with 0 scores for year ${year}.`);
                  return;
@@ -101,6 +112,10 @@ const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is no
             weeklyScoresAcrossLeague[year][week].push({ rosterId: team1RosterId, score: team1Score });
             weeklyScoresAcrossLeague[year][week].push({ rosterId: team2RosterId, score: team2Score });
         });
+
+        // NEW LOG: Check the populated teamGameLogs
+        console.log("StreaksRecords: Populated teamGameLogs:", teamGameLogs);
+
 
         // Sort game logs for each team chronologically
         Object.keys(teamGameLogs).forEach(ownerId => {
@@ -180,36 +195,43 @@ const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is no
                         winStreakStartWeek = game.week;
                     }
                     currentWinStreak++;
-                    currentLossStreak = 0; // Reset loss streak
+                    // Reset loss streak if a win occurs
+                    if (currentLossStreak > 0) {
+                        updateStreakRecord(newAggregatedStreaks.longestLosingStreak, currentLossStreak, { team: teamNameForOwner, streak: currentLossStreak, startYear: lossStreakStartYear, startWeek: lossStreakStartWeek, endYear: games[i-1] ? games[i-1].year : lossStreakStartYear, endWeek: games[i-1] ? games[i-1].week : lossStreakStartWeek });
+                    }
+                    currentLossStreak = 0;
                     lossStreakStartYear = null;
                     lossStreakStartWeek = null;
-                } else {
-                    // Record longest win streak found so far
+                } else if (game.isLoss) { // Only increment loss streak if it's an actual loss
+                    if (currentLossStreak === 0) {
+                        lossStreakStartYear = game.year;
+                        lossStreakStartWeek = game.week;
+                    }
+                    currentLossStreak++;
+                    // Reset win streak if a loss occurs
                     if (currentWinStreak > 0) {
                         updateStreakRecord(newAggregatedStreaks.longestWinStreak, currentWinStreak, { team: teamNameForOwner, streak: currentWinStreak, startYear: winStreakStartYear, startWeek: winStreakStartWeek, endYear: games[i-1] ? games[i-1].year : winStreakStartYear, endWeek: games[i-1] ? games[i-1].week : winStreakStartWeek });
                     }
-                    currentWinStreak = 0; // Reset win streak
+                    currentWinStreak = 0;
+                    winStreakStartYear = null;
+                    winStreakStartWeek = null;
+                } else if (game.isTie) { // If it's a tie, reset both streaks
+                    if (currentWinStreak > 0) {
+                        updateStreakRecord(newAggregatedStreaks.longestWinStreak, currentWinStreak, { team: teamNameForOwner, streak: currentWinStreak, startYear: winStreakStartYear, startWeek: winStreakStartWeek, endYear: games[i-1] ? games[i-1].year : winStreakStartYear, endWeek: games[i-1] ? games[i-1].week : winStreakStartWeek });
+                    }
+                    currentWinStreak = 0;
                     winStreakStartYear = null;
                     winStreakStartWeek = null;
 
-                    // Loss Streak Logic
-                    if (game.isLoss) {
-                        if (currentLossStreak === 0) {
-                            lossStreakStartYear = game.year;
-                            lossStreakStartWeek = game.week;
-                        }
-                        currentLossStreak++;
-                    } else { // Tie or win (should have been handled by isWin)
-                        if (currentLossStreak > 0) {
-                            updateStreakRecord(newAggregatedStreaks.longestLosingStreak, currentLossStreak, { team: teamNameForOwner, streak: currentLossStreak, startYear: lossStreakStartYear, startWeek: lossStreakStartWeek, endYear: games[i-1] ? games[i-1].year : lossStreakStartYear, endWeek: games[i-1] ? games[i-1].week : lossStreakStartWeek });
-                        }
-                        currentLossStreak = 0;
-                        lossStreakStartYear = null;
-                        lossStreakStartWeek = null;
+                    if (currentLossStreak > 0) {
+                        updateStreakRecord(newAggregatedStreaks.longestLosingStreak, currentLossStreak, { team: teamNameForOwner, streak: currentLossStreak, startYear: lossStreakStartYear, startWeek: lossStreakStartWeek, endYear: games[i-1] ? games[i-1].year : lossStreakStartYear, endWeek: games[i-1] ? games[i-1].week : lossStreakStartWeek });
                     }
+                    currentLossStreak = 0;
+                    lossStreakStartYear = null;
+                    lossStreakStartWeek = null;
                 }
             }
-            // After loop, check for any active streaks
+            // After loop, check for any active streaks that extend to the end of the season
             if (currentWinStreak > 0) {
                 updateStreakRecord(newAggregatedStreaks.longestWinStreak, currentWinStreak, { team: teamNameForOwner, streak: currentWinStreak, startYear: winStreakStartYear, startWeek: winStreakStartWeek, endYear: games[games.length - 1].year, endWeek: games[games.length - 1].week });
             }
@@ -313,7 +335,7 @@ const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is no
                 }
             }
 
-            // Check after loop for any ending streaks
+            // After loop, check for any ending streaks
             if (currentHighestScoreStreak > 0) {
                 updateStreakRecord(newAggregatedStreaks.longestConsecutiveHighestScoreWeeks, currentHighestScoreStreak, { team: teamNameForOwner, streak: currentHighestScoreStreak, startYear: highestScoreStreakStartYear, startWeek: highestScoreStreakStartWeek, endYear: games[games.length - 1].year, endWeek: games[games.length - 1].week });
             }
