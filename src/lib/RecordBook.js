@@ -1,57 +1,40 @@
-import React, { useState } from 'react';
-import LeagueRecords from './LeagueRecords';
-import SeasonRecords from '../lib/SeasonRecords'; // Correct path to SeasonRecords
+// src/components/RecordBook.js
+import React from 'react';
+// THIS IS THE LINE TO FIX:
+import { useSleeperData } from '../contexts/SleeperDataContext'; // Corrected path to 'contexts'
+import LeagueRecords from '../lib/LeagueRecords';
+import { calculateAllLeagueMetrics } from '../utils/calculations'; // Import the calculation function
 
-/**
- * Main component for displaying various league records.
- * Acts as a container for LeagueRecords and potentially other record types.
- */
 const RecordBook = () => {
-    const [activeTab, setActiveTab] = useState('league'); // State to control which tab is active
+    const { historicalData, getTeamName, isLoading: dataIsLoading, error: dataError } = useSleeperData();
 
-    const handleTabChange = (tab) => {
-        setActiveTab(tab);
-    };
+    if (dataIsLoading) {
+        return <div className="text-center py-8 text-xl font-semibold">Loading league data...</div>;
+    }
+
+    if (dataError) {
+        return <div className="text-center py-8 text-red-600">Error loading data: {dataError.message}</div>;
+    }
+
+    // You might want to add a check for historicalData being empty here too
+    if (!historicalData || Object.keys(historicalData).length === 0 || !historicalData.matchupsBySeason || Object.keys(historicalData.matchupsBySeason).length === 0) {
+        return <div className="text-center py-8 text-gray-600">No historical data available. Please ensure your league ID is correct and data has been fetched.</div>;
+    }
 
     return (
-        <div className="record-book-container bg-white shadow-lg rounded-lg p-6">
-            <h2 className="text-3xl font-bold text-gray-800 mb-6 border-b pb-4">League Record Book</h2>
+        <div className="container mx-auto px-4 py-8">
+            <h1 className="text-4xl font-extrabold text-gray-900 mb-10 text-center">League Record Book</h1>
 
-            {/* Tab Navigation */}
-            <div className="mb-6 border-b border-gray-200">
-                <nav className="-mb-px flex space-x-8" aria-label="Tabs">
-                    <button
-                        onClick={() => handleTabChange('league')}
-                        className={`
-                            ${activeTab === 'league'
-                                ? 'border-indigo-500 text-indigo-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                            }
-                            whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm
-                        `}
-                    >
-                        All-Time Records
-                    </button>
-                    <button
-                        onClick={() => handleTabChange('season')} // New tab for Seasonal Records
-                        className={`
-                            ${activeTab === 'season'
-                                ? 'border-indigo-500 text-indigo-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                            }
-                            whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm
-                        `}
-                    >
-                        Seasonal Records
-                    </button>
-                </nav>
-            </div>
+            {/* Pass the full historicalData object and the calculation function */}
+            <LeagueRecords
+                historicalData={historicalData}
+                getTeamName={getTeamName}
+                calculateAllLeagueMetrics={calculateAllLeagueMetrics} // Pass the function directly
+            />
 
-            {/* Content based on active tab */}
-            <div>
-                {activeTab === 'league' && <LeagueRecords />}
-                {activeTab === 'season' && <SeasonRecords />} {/* Render SeasonRecords when 'season' tab is active */}
-            </div>
+            {/* You can add other record book sections here, e.g., Player Records, Draft Records */}
+            {/* <PlayerRecords /> */}
+            {/* <DraftRecords /> */}
         </div>
     );
 };
