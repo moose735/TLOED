@@ -2,30 +2,28 @@
 import React, { useState, useEffect } from 'react';
 import { useSleeperData } from '../contexts/SleeperDataContext'; // Import useSleeperData context hook
 
-const StreaksRecords = () => {
+const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is now the primary data source
     // Consume historicalData, getTeamName, loading, and error from the context
     const { historicalData, getTeamName, loading, error } = useSleeperData();
     const [aggregatedStreaks, setAggregatedStreaks] = useState({});
 
     useEffect(() => {
-        console.log("StreaksRecords useEffect: historicalData:", historicalData);
+        // Log the historicalMatchups prop received by StreaksRecords
+        console.log("StreaksRecords useEffect: historicalMatchups prop received:", historicalMatchups);
+        console.log("StreaksRecords useEffect: First 5 elements of historicalMatchups prop:", historicalMatchups.slice(0, 5));
+        if (historicalMatchups.length > 0) {
+            console.log("StreaksRecords useEffect: Structure of first element in historicalMatchups prop:", historicalMatchups[0]);
+        }
 
         // Check for loading, error, or missing historical data
-        if (loading || error || !historicalData || !historicalData.matchupsBySeason || Object.keys(historicalData.matchupsBySeason).length === 0) {
+        if (loading || error || !historicalMatchups || historicalMatchups.length === 0) {
             setAggregatedStreaks({});
             console.log("StreaksRecords useEffect: Data not ready or empty. Resetting streaks.");
             return;
         }
 
-        // Flatten historical matchups from the context
-        // historicalData.matchupsBySeason is an object keyed by year, with arrays of matchups as values.
-        const allHistoricalMatchupsFlat = Object.values(historicalData.matchupsBySeason).flat();
-
-        if (allHistoricalMatchupsFlat.length === 0) {
-            setAggregatedStreaks({});
-            console.log("StreaksRecords useEffect: Flattened historical matchups are empty. Resetting streaks.");
-            return;
-        }
+        // --- Removed internal flattening logic, now directly use historicalMatchups prop ---
+        const allHistoricalMatchupsFlat = historicalMatchups; // Use the prop directly
 
         // Helper to store chronological game data for each team
         // We'll use ownerId as the primary key for teamGameLogs to ensure consistency across seasons
@@ -33,8 +31,8 @@ const StreaksRecords = () => {
         const weeklyScoresAcrossLeague = {}; // { year: { week: [{ rosterId, score }] } }
 
         allHistoricalMatchupsFlat.forEach(match => {
-            // Ensure match has necessary properties and is not for future seasons (e.g., 2025 with no scores)
-            if (!match || !match.matchup_id || !match.roster_id || !match.points || !match.opponent_roster_id || !match.opponent_points) {
+            // Ensure match has necessary properties (season and week are now expected to be on the object)
+            if (!match || !match.matchup_id || !match.roster_id || !match.points || !match.opponent_roster_id || !match.opponent_points || match.season === undefined || match.week === undefined) {
                 console.warn("StreaksRecords: Skipping invalid or incomplete matchup:", match);
                 return;
             }
@@ -53,6 +51,7 @@ const StreaksRecords = () => {
             }
 
             // Get owner IDs for consistent tracking across seasons
+            // Use historicalData from context for rostersBySeason lookup
             const team1OwnerId = historicalData.rostersBySeason?.[year]?.find(r => r.roster_id === team1RosterId)?.owner_id;
             const team2OwnerId = historicalData.rostersBySeason?.[year]?.find(r => r.roster_id === team2RosterId)?.owner_id;
 
@@ -67,11 +66,10 @@ const StreaksRecords = () => {
                  return;
             }
 
-
             const isTie = team1Score === team2Score;
             const team1Won = team1Score > team2Score;
 
-            // Populate teamGameLogs using ownerId as key
+            // Populate teamGameLogs using ownerId
             if (!teamGameLogs[team1OwnerId]) teamGameLogs[team1OwnerId] = [];
             if (!teamGameLogs[team2OwnerId]) teamGameLogs[team2OwnerId] = [];
 
@@ -325,15 +323,15 @@ const StreaksRecords = () => {
 
         setAggregatedStreaks(newAggregatedStreaks);
 
-    }, [historicalData, getTeamName, loading, error]); // Add loading and error to dependencies
+    }, [historicalMatchups, historicalData, getTeamName, loading, error]); // Add historicalMatchups to dependencies
 
 
     const recordsToDisplay = [
-        { key: 'longestWinStreak', label: 'Longest Win Streak' },
-        { key: 'longestLosingStreak', label: 'Longest Losing Streak' },
-        { key: 'longestConsecutiveHighestScoreWeeks', label: 'Longest Consecutive Weeks Highest Score' },
-        { key: 'longestConsecutiveLowestScoreWeeks', label: 'Longest Consecutive Weeks Lowest Score' },
-        { key: 'longestConsecutiveTop3Weeks', label: 'Longest Consecutive Weeks in Top 3' },
+        { key: 'longestWinStreak', label: 'Win Streak' },
+        { key: 'longestLosingStreak', label: 'Losing Streak' },
+        { key: 'longestConsecutiveHighestScoreWeeks', label: 'High Score Streak' },
+        // Removed 'longestConsecutiveLowestScoreWeeks'
+        { key: 'longestConsecutiveTop3Weeks', label: 'Top 3 Score Streak' },
     ];
 
     if (loading) {
