@@ -8,7 +8,7 @@ import {
 // Import all your components
 import PowerRankings from './lib/PowerRankings';
 import LeagueHistory from './lib/LeagueHistory';
-import RecordBook from './components/RecordBook'; // Updated path to components
+import RecordBook from './lib/RecordBook'; // CORRECTED: Reverted to './lib/RecordBook'
 import DPRAnalysis from './lib/DPRAnalysis';
 import LuckRatingAnalysis from './lib/LuckRatingAnalysis';
 import TeamDetailPage from './lib/TeamDetailPage';
@@ -67,9 +67,7 @@ const AppContent = () => {
         processedSeasonalRecords, // Now available from context
         allTimeRecords,           // Now available from context
         getTeamName,              // Still available from context
-        // historicalData, // REMOVED: No longer directly provided by context
-        // rostersBySeason, // REMOVED: No longer directly provided by context
-        // usersData // REMOVED: No longer directly provided by context
+        getOwnerName,             // Added back getOwnerName as it's needed for NAV_CATEGORIES.TEAMS
     } = useSleeperData();
 
     const [activeTab, setActiveTab] = useState(TABS.DASHBOARD);
@@ -79,17 +77,15 @@ const AppContent = () => {
 
     // Effect to dynamically populate team sub-tabs when processed data is available
     useEffect(() => {
-        // We now rely on processedSeasonalRecords which contains teamName and ownerId
-        // and getTeamName from context which uses the internal maps.
         if (processedSeasonalRecords && Object.keys(processedSeasonalRecords).length > 0 && getTeamName) {
             const allTeamNames = new Set();
             Object.values(processedSeasonalRecords).forEach(seasonTeams => {
                 if (Array.isArray(seasonTeams)) {
                     seasonTeams.forEach(teamStats => {
                         // Use the teamName directly from processedSeasonalRecords
-                        // or fall back to getTeamName if needed (though teamName should be present)
-                        const teamDisplayName = teamStats.teamName || getTeamName(teamStats.rosterId, teamStats.year);
-                        if (teamDisplayName && teamDisplayName !== 'Loading Team...' && !teamDisplayName.startsWith('Team ')) {
+                        // This teamName should already be resolved from getTeamName within the provider
+                        const teamDisplayName = teamStats.teamName;
+                        if (teamDisplayName && !teamDisplayName.startsWith('Team ')) { // Filter out default "Team X" names
                             allTeamNames.add(teamDisplayName);
                         }
                     });
@@ -104,7 +100,7 @@ const AppContent = () => {
                 teamName: team, // Pass teamName for the TeamDetailPage
             }));
         }
-    }, [processedSeasonalRecords, getTeamName]); // Dependencies for this effect: processed data and getTeamName
+    }, [processedSeasonalRecords, getTeamName]); // getTeamName is a dependency for memoization, not for direct use here in this effect
 
     const handleTabClick = (tab) => {
         setActiveTab(tab);
@@ -145,14 +141,13 @@ const AppContent = () => {
                 <div className="flex items-center justify-center min-h-screen bg-gray-100 font-inter">
                     <div className="text-center p-6 bg-red-100 border border-red-400 text-red-700 rounded-lg shadow-md">
                         <p className="font-bold text-xl mb-2">Error Loading Data</p>
-                        <p className="text-base">Failed to load historical data: {error.message}</p> {/* Use error.message */}
+                        <p className="text-base">Failed to load historical data: {error.message}</p>
                         <p className="text-sm mt-2">Please check your internet connection or the Sleeper API configuration in `config.js` and `sleeperApi.js`.</p>
                     </div>
                 </div>
             );
         }
 
-        // Render components based on activeTab, passing necessary data from context
         switch (activeTab) {
             case TABS.DASHBOARD:
                 return <Dashboard />;
@@ -161,14 +156,13 @@ const AppContent = () => {
             case TABS.LEAGUE_HISTORY:
                 return <LeagueHistory />;
             case TABS.RECORD_BOOK:
-                // RecordBook now gets data internally via useSleeperData
-                return <RecordBook />;
+                return <RecordBook />; // Prop removed as it should use context internally
             case TABS.HEAD_TO_HEAD:
                 return <Head2HeadGrid />;
             case TABS.DPR_ANALYSIS:
-                return <DPRAnalysis />; // DPRAnalysis will need to use useSleeperData internally
+                return <DPRAnalysis />; // Prop removed as it should use context internally
             case TABS.LUCK_RATING:
-                return <LuckRatingAnalysis />; // LuckRatingAnalysis will need to use useSleeperData internally
+                return <LuckRatingAnalysis />; // Prop removed as it should use context internally
             case TABS.TEAM_DETAIL:
                 return <TeamDetailPage teamName={selectedTeam} />;
             case TABS.FINANCIALS:
