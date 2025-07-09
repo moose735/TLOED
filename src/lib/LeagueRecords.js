@@ -11,7 +11,7 @@ import { formatNumber } from '../utils/formatUtils';
 const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics }) => {
     const [allTimeRecords, setAllTimeRecords] = useState({});
     const [expandedRecords, setExpandedRecords] = useState({});
-    const [isLoading, setIsLoading] = true;
+    const [isLoading, setIsLoading] = useState(true);
 
     // Configuration for number formatting per stat
     const formatConfig = {
