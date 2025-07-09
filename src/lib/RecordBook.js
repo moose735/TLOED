@@ -1,5 +1,5 @@
 // src/components/RecordBook.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react'; // Added useEffect for logging
 import { useSleeperData } from '../contexts/SleeperDataContext';
 import LeagueRecords from '../lib/LeagueRecords'; // Your existing component for Overall League Records
 import SeasonRecords from '../lib/SeasonRecords'; // The component for Seasonal Records
@@ -59,6 +59,16 @@ const RecordBook = () => {
             }
         }
     }
+
+    // NEW: Log the flattened array before passing it to StreaksRecords
+    useEffect(() => {
+        console.log("RecordBook: allHistoricalMatchupsFlat for StreaksRecords:", allHistoricalMatchupsFlat);
+        console.log("RecordBook: First 5 elements of allHistoricalMatchupsFlat:", allHistoricalMatchupsFlat.slice(0, 5));
+        if (allHistoricalMatchupsFlat.length > 0) {
+            console.log("RecordBook: Structure of first element in allHistoricalMatchupsFlat:", allHistoricalMatchupsFlat[0]);
+        }
+    }, [allHistoricalMatchupsFlat]);
+
 
     return (
         <div className="container mx-auto px-4 py-8">
