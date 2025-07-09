@@ -162,7 +162,6 @@ export const SleeperDataProvider = ({ children }) => {
                 if (matchups && Object.keys(matchups).length > 0) {
                     // calculateAllLeagueMetrics returns an object with seasonalMetrics and careerDPRData
                     // Ensure getTeamName is passed correctly here, as it's a dependency for the calculation
-                    // FIXED: Pass getTeamName as the third argument to calculateAllLeagueMetrics
                     const { seasonalMetrics, careerDPRData: calculatedCareerDPRData } = calculateAllLeagueMetrics(matchups, draftHistory, getTeamName);
                     console.log("SleeperDataContext: Calculated seasonalMetrics:", seasonalMetrics); // Debugging log
                     setProcessedSeasonalRecords(seasonalMetrics);
@@ -182,8 +181,10 @@ export const SleeperDataProvider = ({ children }) => {
             }
         };
 
+        // FIXED: Removed getTeamName from dependencies to prevent loading loop.
+        // This effect now runs only once on mount (or if CURRENT_LEAGUE_ID were to change).
         loadAllSleeperData();
-    }, [getTeamName]); // Added getTeamName to dependencies to ensure it's stable when passed to calculateAllLeagueMetrics
+    }, []);
 
 
     // 4. Memoize the context value to prevent unnecessary re-renders of consumers
