@@ -43,6 +43,11 @@ const RecordBook = () => {
         return <div className="text-center py-8 text-gray-600">No league data available. Please ensure your league ID is correct and data has been fetched.</div>;
     }
 
+    // NEW: Flatten historicalMatchupsBySeason into a single array for StreaksRecords
+    const allHistoricalMatchupsFlat = historicalData?.matchupsBySeason
+        ? Object.values(historicalData.matchupsBySeason).flat()
+        : [];
+
     return (
         <div className="container mx-auto px-4 py-8">
             <h1 className="text-4xl font-extrabold text-gray-900 mb-6 text-center">League Record Book</h1>
@@ -120,7 +125,7 @@ const RecordBook = () => {
                 {activeTab === 'streaks' && (
                     hasStreaksData ? (
                         <StreaksRecords
-                            historicalMatchups={historicalData.matchupsBySeason} // Pass the raw matchups by season
+                            historicalMatchups={allHistoricalMatchupsFlat} // Pass the flattened array
                             getDisplayTeamName={getTeamName} // Pass the getTeamName function
                         />
                     ) : (
