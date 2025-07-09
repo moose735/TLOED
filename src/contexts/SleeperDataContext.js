@@ -148,9 +148,8 @@ export const SleeperDataProvider = ({ children }) => {
         };
 
         loadAllSleeperData();
-    }, [getTeamName]); // Add getTeamName as a dependency to ensure it's stable when calculateAllLeagueMetrics is called.
-    // getTeamName itself depends on historicalMatchups, usersData, rostersWithDetails.
-    // This ensures that when the underlying data for getTeamName changes, this effect re-runs.
+    }, []); // FIXED: Removed getTeamName from dependencies to prevent loading loop.
+    // This effect now runs only once on mount (or if CURRENT_LEAGUE_ID were to change).
 
 
     // 4. Memoize the context value to prevent unnecessary re-renders of consumers
