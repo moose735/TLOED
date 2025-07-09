@@ -163,7 +163,7 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
                             processedRosterIdsInWeek.add(rosterId1);
                         }
                     } else {
-                         // console.warn(`      Matchup V1: Invalid team1_score for roster ${m.team1_roster_id} in week ${week}, year ${year}. Matchup ID: ${m.matchup_id}`);
+                           // console.warn(`      Matchup V1: Invalid team1_score for roster ${m.team1_roster_id} in week ${week}, year ${year}. Matchup ID: ${m.matchup_id}`);
                     }
 
                     // Team 2
@@ -175,7 +175,7 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
                             processedRosterIdsInWeek.add(rosterId2);
                         }
                     } else {
-                         // console.warn(`      Matchup V1: Invalid team2_score for roster ${m.team2_roster_id} in week ${week}, year ${year}. Matchup ID: ${m.matchup_id}`);
+                           // console.warn(`      Matchup V1: Invalid team2_score for roster ${m.team2_roster_id} in week ${week}, year ${year}. Matchup ID: ${m.matchup_id}`);
                     }
                 }
                 // Fallback to Sleeper V2 style if the above V1 style is not present
@@ -320,21 +320,31 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
                         currentTeamStats.ties++;
                     }
 
-                    // Blowout/Slim Win/Loss
-                    const scoreDifference = currentTeamScoreInWeek - opponentScore;
-                    if (scoreDifference >= 30) {
-                        currentTeamStats.blowoutWins++;
-                        if (careerTeamStatsRaw[ownerId]) careerTeamStatsRaw[ownerId].blowoutWins++;
-                    } else if (scoreDifference <= -30) {
-                        currentTeamStats.blowoutLosses++;
-                        if (careerTeamStatsRaw[ownerId]) careerTeamStatsRaw[ownerId].blowoutLosses++;
-                    } else if (scoreDifference > 0 && scoreDifference <= 5) {
-                        currentTeamStats.slimWins++;
-                        if (careerTeamStatsRaw[ownerId]) careerTeamStatsRaw[ownerId].slimWins++;
-                    } else if (scoreDifference < 0 && scoreDifference >= -5) {
-                        currentTeamStats.slimLosses++;
-                        if (careerTeamStatsRaw[ownerId]) careerTeamStatsRaw[ownerId].slimLosses++;
+                    // --- NEW BLOWOUT/SLIM WIN/LOSS LOGIC ---
+                    if (opponentScore > 0) { // Only apply percentage-based rules if opponentScore is positive
+                        // Most Blowout Wins: win by more than 40% opponent score
+                        if (currentTeamScoreInWeek > (opponentScore * 1.40)) {
+                            currentTeamStats.blowoutWins++;
+                            if (careerTeamStatsRaw[ownerId]) careerTeamStatsRaw[ownerId].blowoutWins++;
+                        }
+                        // Most Blowout Losses: loss by more than 40% opponent score
+                        else if (currentTeamScoreInWeek < (opponentScore * 0.60)) {
+                            currentTeamStats.blowoutLosses++;
+                            if (careerTeamStatsRaw[ownerId]) careerTeamStatsRaw[ownerId].blowoutLosses++;
+                        }
+                        // Most Slim Wins: win by less than 2.5% opponent score
+                        else if (currentTeamScoreInWeek > opponentScore && (currentTeamScoreInWeek - opponentScore) < (opponentScore * 0.025)) {
+                            currentTeamStats.slimWins++;
+                            if (careerTeamStatsRaw[ownerId]) careerTeamStatsRaw[ownerId].slimWins++;
+                        }
+                        // Most Slim Losses: loss by less than 2.5% opponent score
+                        else if (currentTeamScoreInWeek < opponentScore && (opponentScore - currentTeamScoreInWeek) < (opponentScore * 0.025)) {
+                            currentTeamStats.slimLosses++;
+                            if (careerTeamStatsRaw[ownerId]) careerTeamStatsRaw[ownerId].slimLosses++;
+                        }
                     }
+                    // --- END NEW BLOWOUT/SLIM LOGIC ---
+
 
                     // Aggregate regular season stats to career (already done in weekly loop for points, wins, losses, ties, games)
                     if (careerTeamStatsRaw[ownerId]) {
@@ -347,9 +357,9 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
                     }
 
                 } else if (isRegularSeasonMatch && (!foundMatchup || typeof opponentScore !== 'number' || isNaN(opponentScore))) {
-                     // Log if a regular season matchup was expected but opponent score was invalid
-                     // This could indicate a bye week that still contributes to totalGames but not to opponent stats
-                     // console.warn(`      Roster ID ${rosterId} in week ${week}, year ${year}: Regular season match expected but opponent score invalid.`);
+                       // Log if a regular season matchup was expected but opponent score was invalid
+                       // This could indicate a bye week that still contributes to totalGames but not to opponent stats
+                       // console.warn(`      Roster ID ${rosterId} in week ${week}, year ${year}: Regular season match expected but opponent score invalid.`);
                 }
             });
         }); // End of sortedWeeks.forEach
