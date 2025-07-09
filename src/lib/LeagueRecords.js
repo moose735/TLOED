@@ -222,11 +222,10 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
 
         const primaryTeam = record.teams[0];
 
-        let displayValue;
+    let displayValue;
         if (config.type === 'percentage') {
-            // Apply the new specific formatting: .XXX%
-            // Use 'decimal' type from formatNumber to get fixed decimals, then prepend '.' and append '%'
-            displayValue = '.' + formatNumber(primaryTeam.value, config.decimals, 'decimal') + '%';
+            // Corrected: Remove the extra '.' prepend. formatNumber('decimal') already gives '0.XXX'
+            displayValue = formatNumber(primaryTeam.value, config.decimals, 'decimal') + '%';
         } else {
             // Keep existing logic for other types (DPR, points, count)
             displayValue = formatNumber(primaryTeam.value, config.decimals, config.type);
@@ -265,7 +264,8 @@ const LeagueRecords = ({ historicalData, getTeamName, calculateAllLeagueMetrics 
                             {record.teams.slice(1).map((team, index) => {
                                 let tiedDisplayValue;
                                 if (config.type === 'percentage') {
-                                    tiedDisplayValue = '.' + formatNumber(team.value, config.decimals, 'decimal') + '%';
+                                    // Corrected: Remove the extra '.' prepend.
+                                    tiedDisplayValue = formatNumber(team.value, config.decimals, 'decimal') + '%';
                                 } else {
                                     tiedDisplayValue = formatNumber(team.value, config.decimals, config.type);
                                 }
