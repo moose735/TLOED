@@ -1,39 +1,38 @@
 // src/components/RecordBook.js
 import React, { useState } from 'react';
 import { useSleeperData } from '../contexts/SleeperDataContext';
-import LeagueRecords from '../lib/LeagueRecords'; // This component will display 'Overall League Records'
-import SeasonRecords from '../lib/SeasonRecords'; // This component will display 'Seasonal Records'
-
-// Import the calculation function if it's used directly in RecordBook,
-// though typically it's handled within the context or sub-components.
-// import { calculateAllLeagueMetrics } from '../utils/calculations';
+import LeagueRecords from '../lib/LeagueRecords'; // This is your existing component for Overall League Records
+import SeasonRecords from '../lib/SeasonRecords'; // This is the component for Seasonal Records
 
 const RecordBook = () => {
     // State to manage which tab is active: 'overall' or 'seasonal'
     const [activeTab, setActiveTab] = useState('overall'); // Default to 'overall'
 
+    // Destructure all necessary data from the context
     const {
         historicalData,
-        processedSeasonalRecords, // We need this for the SeasonRecords component
+        processedSeasonalRecords, // Needed for SeasonRecords
         getTeamName,
         isLoading: dataIsLoading,
         error: dataError
     } = useSleeperData();
 
+    // Handle loading state
     if (dataIsLoading) {
         return <div className="text-center py-8 text-xl font-semibold">Loading league data...</div>;
     }
 
+    // Handle error state
     if (dataError) {
         return <div className="text-center py-8 text-red-600">Error loading data: {dataError.message}</div>;
     }
 
-    // Comprehensive check for essential data before rendering content
-    const noOverallData = !historicalData || Object.keys(historicalData).length === 0 || !historicalData.matchupsBySeason || Object.keys(historicalData.matchupsBySeason).length === 0;
-    const noSeasonalData = !processedSeasonalRecords || Object.keys(processedSeasonalRecords).length === 0;
+    // Define flags for data availability for each tab
+    const hasOverallData = historicalData && Object.keys(historicalData).length > 0 && historicalData.matchupsBySeason && Object.keys(historicalData.matchupsBySeason).length > 0;
+    const hasSeasonalData = processedSeasonalRecords && Object.keys(processedSeasonalRecords).length > 0;
 
-    // Display a general message if no data is available for either tab
-    if (noOverallData && noSeasonalData) {
+    // Display a general message if no data is available for *any* tab
+    if (!hasOverallData && !hasSeasonalData) {
         return <div className="text-center py-8 text-gray-600">No league data available. Please ensure your league ID is correct and data has been fetched.</div>;
     }
 
@@ -70,39 +69,34 @@ const RecordBook = () => {
                             Seasonal Records
                         </button>
                     </li>
-                    {/* Add more tabs here if needed for Player Records, Draft Records, etc. */}
+                    {/* Add more tabs here if needed */}
                 </ul>
             </nav>
 
             {/* Conditional Rendering of Tab Content */}
             <div className="tab-content">
                 {activeTab === 'overall' && (
-                    noOverallData ? (
-                        <div className="text-center py-8 text-gray-600">No overall league data available.</div>
-                    ) : (
+                    hasOverallData ? (
                         <LeagueRecords
                             historicalData={historicalData}
                             getTeamName={getTeamName}
-                            // calculateAllLeagueMetrics is likely used within LeagueRecords,
-                            // ensure it's imported there if needed or passed if it's a prop it expects
-                            // calculateAllLeagueMetrics={calculateAllLeagueMetrics} // Uncomment if LeagueRecords needs it as a prop
+                            // Assuming calculateAllLeagueMetrics is consumed within LeagueRecords if needed
+                            // calculateAllLeagueMetrics={calculateAllLeagueMetrics} // Uncomment if LeagueRecords explicitly needs this as a prop
                         />
+                    ) : (
+                        <div className="text-center py-8 text-gray-600">No overall league data available.</div>
                     )
                 )}
 
                 {activeTab === 'seasonal' && (
-                    noSeasonalData ? (
-                        <div className="text-center py-8 text-gray-600">No seasonal data available for display.</div>
-                    ) : (
-                        // SeasonRecords component already consumes processedSeasonalRecords from context
+                    hasSeasonalData ? (
+                        // SeasonRecords component uses useSleeperData internally, so no props needed here
                         <SeasonRecords />
+                    ) : (
+                        <div className="text-center py-8 text-gray-600">No seasonal data available for display.</div>
                     )
                 )}
             </div>
-
-            {/* You can add other record book sections here, e.g., Player Records, Draft Records */}
-            {/* <PlayerRecords /> */}
-            {/* <DraftRecords /> */}
         </div>
     );
 };
