@@ -44,11 +44,21 @@ const RecordBook = () => {
     }
 
     // FIXED: Correctly flatten historicalMatchupsBySeason into a single array for StreaksRecords
-    const allHistoricalMatchupsFlat = historicalData?.matchupsBySeason
-        ? Object.values(historicalData.matchupsBySeason).flatMap(yearMatchups =>
-              Object.values(yearMatchups).flat()
-          )
-        : [];
+    // The structure is historicalData.matchupsBySeason[year][week] = [matchup objects]
+    const allHistoricalMatchupsFlat = [];
+    if (historicalData?.matchupsBySeason) {
+        for (const year in historicalData.matchupsBySeason) {
+            const yearMatchups = historicalData.matchupsBySeason[year];
+            if (yearMatchups) {
+                for (const week in yearMatchups) {
+                    const weekMatchups = yearMatchups[week];
+                    if (Array.isArray(weekMatchups)) {
+                        allHistoricalMatchupsFlat.push(...weekMatchups);
+                    }
+                }
+            }
+        }
+    }
 
     return (
         <div className="container mx-auto px-4 py-8">
