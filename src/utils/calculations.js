@@ -155,27 +155,27 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
                 // Prioritize V1 style as confirmed by MatchupHistory.js
                 if (m.team1_roster_id && m.team2_roster_id) { // This looks like a V1 style matchup object
                     // Team 1
-                    if (typeof m.team1_points === 'number' && !isNaN(m.team1_points)) {
+                    if (typeof m.team1_score === 'number' && !isNaN(m.team1_score)) {
                         const rosterId1 = String(m.team1_roster_id);
-                        const points1 = m.team1_points;
+                        const points1 = m.team1_score;
                         if (!processedRosterIdsInWeek.has(rosterId1) && yearStatsRaw[rosterId1]) {
                             weekScoresForAllTeams.push({ roster_id: rosterId1, score: points1 });
                             processedRosterIdsInWeek.add(rosterId1);
                         }
                     } else {
-                         // console.warn(`      Matchup V1: Invalid team1_points for roster ${m.team1_roster_id} in week ${week}, year ${year}. Matchup ID: ${m.matchup_id}`);
+                         // console.warn(`      Matchup V1: Invalid team1_score for roster ${m.team1_roster_id} in week ${week}, year ${year}. Matchup ID: ${m.matchup_id}`);
                     }
 
                     // Team 2
-                    if (typeof m.team2_points === 'number' && !isNaN(m.team2_points)) {
+                    if (typeof m.team2_score === 'number' && !isNaN(m.team2_score)) {
                         const rosterId2 = String(m.team2_roster_id);
-                        const points2 = m.team2_points;
+                        const points2 = m.team2_score;
                         if (!processedRosterIdsInWeek.has(rosterId2) && yearStatsRaw[rosterId2]) {
                             weekScoresForAllTeams.push({ roster_id: rosterId2, score: points2 });
                             processedRosterIdsInWeek.add(rosterId2);
                         }
                     } else {
-                         // console.warn(`      Matchup V1: Invalid team2_points for roster ${m.team2_roster_id} in week ${week}, year ${year}. Matchup ID: ${m.matchup_id}`);
+                         // console.warn(`      Matchup V1: Invalid team2_score for roster ${m.team2_roster_id} in week ${week}, year ${year}. Matchup ID: ${m.matchup_id}`);
                     }
                 }
                 // Fallback to Sleeper V2 style if the above V1 style is not present
@@ -299,9 +299,9 @@ export const calculateAllLeagueMetrics = (historicalData, getTeamName) => {
                         const opponent = weeklyMatchups.find(m => m.matchup_id === foundMatchup.matchup_id && String(m.roster_id) !== String(rosterId));
                         if (opponent && typeof opponent.points === 'number' && !isNaN(opponent.points)) opponentScore = opponent.points;
                     } else if (foundMatchup.team1_roster_id && String(foundMatchup.team1_roster_id) === String(rosterId)) { // V1 style (current roster is team1)
-                        if (typeof foundMatchup.team2_points === 'number' && !isNaN(foundMatchup.team2_points)) opponentScore = foundMatchup.team2_points;
+                        if (typeof foundMatchup.team2_score === 'number' && !isNaN(foundMatchup.team2_score)) opponentScore = foundMatchup.team2_score;
                     } else if (foundMatchup.team2_roster_id && String(foundMatchup.team2_roster_id) === String(rosterId)) { // V1 style (current roster is team2)
-                        if (typeof foundMatchup.team1_points === 'number' && !isNaN(foundMatchup.team1_points)) opponentScore = foundMatchup.team1_points;
+                        if (typeof foundMatchup.team1_score === 'number' && !isNaN(foundMatchup.team1_score)) opponentScore = foundMatchup.team1_score;
                     }
                 }
 
