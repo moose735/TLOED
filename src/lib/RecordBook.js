@@ -1,11 +1,10 @@
 // src/components/RecordBook.js
 import React, { useState } from 'react';
 import { useSleeperData } from '../contexts/SleeperDataContext';
-import LeagueRecords from '../lib/LeagueRecords'; // This is your existing component for Overall League Records
-import SeasonRecords from '../lib/SeasonRecords'; // This is the component for Seasonal Records
+import LeagueRecords from '../lib/LeagueRecords'; // Your existing component for Overall League Records
+import SeasonRecords from '../lib/SeasonRecords'; // The component for Seasonal Records
 
-// IMPORTANT: This import is crucial if LeagueRecords expects it as a prop.
-// Based on your initial code, it does!
+// IMPORTANT: This import is absolutely crucial for calculateAllLeagueMetrics to be defined.
 import { calculateAllLeagueMetrics } from '../utils/calculations';
 
 const RecordBook = () => {
@@ -84,7 +83,7 @@ const RecordBook = () => {
                         <LeagueRecords
                             historicalData={historicalData}
                             getTeamName={getTeamName}
-                            // THIS IS THE CRUCIAL LINE RE-ADDED:
+                            // THIS IS THE CRUCIAL LINE: Passing the function as a prop to LeagueRecords
                             calculateAllLeagueMetrics={calculateAllLeagueMetrics}
                         />
                     ) : (
