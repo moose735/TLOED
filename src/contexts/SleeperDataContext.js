@@ -19,16 +19,17 @@ export const SleeperDataProvider = ({ children }) => {
     const [rostersWithDetails, setRostersWithDetails] = useState(null);
     const [nflPlayers, setNflPlayers] = useState(null);
     const [nflState, setNflState] = useState(null);
-    // FIX: Initialize historicalMatchups to an empty object instead of null
+    // Initialize historicalMatchups to an empty object to prevent TypeError on initial render
     const [historicalMatchups, setHistoricalMatchups] = useState({});
     const [allDraftHistory, setAllDraftHistory] = useState(null);
 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    // getTeamName is memoized and depends on historicalMatchups, usersData, rostersWithDetails.
+    // Its re-creation is correctly handled by useMemo when its *internal* dependencies change.
     const getTeamName = useMemo(() => {
         const allUserMap = new Map();
-        // Safely access properties on historicalMatchups, which is now guaranteed to be an object
         if (historicalMatchups?.usersBySeason) {
             Object.values(historicalMatchups.usersBySeason).forEach(seasonUsers => {
                 if (Array.isArray(seasonUsers)) {
@@ -45,7 +46,6 @@ export const SleeperDataProvider = ({ children }) => {
         }
 
         const allRosterToOwnerMap = new Map();
-        // Safely access properties on historicalMatchups, which is now guaranteed to be an object
         if (historicalMatchups?.rostersBySeason) {
             Object.values(historicalMatchups.rostersBySeason).forEach(seasonRosters => {
                 if (Array.isArray(seasonRosters)) {
@@ -75,7 +75,7 @@ export const SleeperDataProvider = ({ children }) => {
             }
             return `Unknown Team (ID: ${id})`;
         };
-    }, [usersData, rostersWithDetails, historicalMatchups]); // historicalMatchups is a dependency
+    }, [usersData, rostersWithDetails, historicalMatchups]);
 
     useEffect(() => {
         const loadAllSleeperData = async () => {
@@ -111,11 +111,11 @@ export const SleeperDataProvider = ({ children }) => {
                 setRostersWithDetails(rosters);
                 setNflPlayers(players);
                 setNflState(state);
-                setHistoricalMatchups(fetchedHistoricalData); // Set the comprehensive data here
+                setHistoricalMatchups(fetchedHistoricalData); // This state update triggers re-render
 
                 setAllDraftHistory(draftHistory);
 
-                setLoading(false);
+                setLoading(false); // Set loading to false after all data is set
                 console.log("[SleeperDataContext] Data loading complete. historicalMatchups state updated.");
             } catch (err) {
                 console.error("[SleeperDataContext] Failed to load initial Sleeper data:", err);
@@ -124,8 +124,10 @@ export const SleeperDataProvider = ({ children }) => {
             }
         };
 
+        // FIX: Remove getTeamName from dependency array to prevent infinite loop.
+        // The effect should only run once on mount to initiate the fetch.
         loadAllSleeperData();
-    }, [getTeamName]); // getTeamName is a dependency because it's used in the memoized getTeamName function
+    }, []); // Empty dependency array means this effect runs once on mount
 
     const contextValue = useMemo(() => ({
         leagueData,
@@ -133,7 +135,7 @@ export const SleeperDataProvider = ({ children }) => {
         rostersWithDetails,
         nflPlayers,
         nflState,
-        historicalMatchups, // This is the state variable passed to context
+        historicalMatchups,
         allDraftHistory,
         loading,
         error,
@@ -144,7 +146,7 @@ export const SleeperDataProvider = ({ children }) => {
         rostersWithDetails,
         nflPlayers,
         nflState,
-        historicalMatchups, // Dependency for the context value
+        historicalMatchups,
         allDraftHistory,
         loading,
         error,
