@@ -16,6 +16,7 @@ import Head2HeadGrid from './lib/Head2HeadGrid';
 import FinancialTracker from './components/FinancialTracker';
 import Dashboard from './components/Dashboard';
 import MatchupHistory from './components/MatchupHistory';
+import SeasonRecords from './lib/SeasonRecords'; // Import SeasonRecords
 
 // Import the custom hook from your SleeperDataContext
 import { SleeperDataProvider, useSleeperData } from './contexts/SleeperDataContext';
@@ -61,13 +62,12 @@ const TABS = {
 
 const AppContent = () => {
     // Consume data from SleeperDataContext
-    // Destructure directly from the context value, not from a 'state' object
     const {
         loading,
         error,
-        historicalData, // Now an object containing matchups and champions
-        rostersBySeason, // Now directly rostersWithDetails from context
-        getTeamName, // The Sleeper-aware version of getMappedTeamName
+        historicalMatchups, // Corrected: Use historicalMatchups as provided by context
+        rostersWithDetails, // Corrected: Use rostersWithDetails as provided by context
+        getTeamName,
         usersData // Also useful for team names
     } = useSleeperData();
 
@@ -76,39 +76,36 @@ const AppContent = () => {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [openSubMenu, setOpenSubMenu] = useState(null);
 
-    // Effect to dynamically populate team sub-tabs when rostersBySeason is available
+    // Effect to dynamically populate team sub-tabs when rostersWithDetails is available
     useEffect(() => {
-        // Ensure both rostersBySeason and usersData are available before proceeding
-        if (rostersBySeason && usersData) {
+        // Ensure both rostersWithDetails and usersData are available before proceeding
+        if (rostersWithDetails && usersData) {
             const allTeamNames = new Set();
-            // rostersBySeason is an object where keys are seasons and values are arrays of rosters
-            // Iterate over each season's rosters
-            Object.values(rostersBySeason).forEach(seasonRosters => {
-                if (Array.isArray(seasonRosters)) { // Ensure it's an array of rosters for the season
-                    seasonRosters.forEach(roster => {
-                        // Use getTeamName to get the display name for the user (owner_id)
-                        // This function is provided by the SleeperDataContext
-                        const teamDisplayName = getTeamName(roster.owner_id);
-                        // Add to set if a valid name is returned
-                        if (teamDisplayName && teamDisplayName !== 'Loading Team...') {
-                            allTeamNames.add(teamDisplayName);
-                        }
-                    });
-                }
-            });
+            // rostersWithDetails is an array of rosters for the CURRENT league,
+            // historicalMatchups.rostersBySeason is an object of arrays for ALL historical seasons.
+            // We need to iterate over all historical rosters to get all unique team names.
+            if (historicalMatchups?.rostersBySeason) {
+                Object.values(historicalMatchups.rostersBySeason).forEach(seasonRosters => {
+                    if (Array.isArray(seasonRosters)) {
+                        seasonRosters.forEach(roster => {
+                            const teamDisplayName = getTeamName(roster.owner_id);
+                            if (teamDisplayName && !teamDisplayName.startsWith('Unknown Team (ID:')) {
+                                allTeamNames.add(teamDisplayName);
+                            }
+                        });
+                    }
+                });
+            }
+
             const uniqueTeams = Array.from(allTeamNames).sort();
 
-            // Update NAV_CATEGORIES.TEAMS.subTabs directly.
-            // In a larger application, you might manage NAV_CATEGORIES as component state
-            // to ensure React reactivity, but for this progressive update, direct modification
-            // of the global object is sufficient as the menu re-renders on state changes.
             NAV_CATEGORIES.TEAMS.subTabs = uniqueTeams.map(team => ({
                 label: team,
                 tab: TABS.TEAM_DETAIL,
                 teamName: team, // Pass teamName for the TeamDetailPage
             }));
         }
-    }, [rostersBySeason, usersData, getTeamName]); // Dependencies for this effect
+    }, [historicalMatchups, usersData, getTeamName]); // Dependencies for this effect
 
     // Placeholder functions for UI interactions
     const handleTabClick = (tab) => {
@@ -151,11 +148,17 @@ const AppContent = () => {
                 <div className="flex items-center justify-center min-h-screen bg-gray-100 font-inter">
                     <div className="text-center p-6 bg-red-100 border border-red-400 text-red-700 rounded-lg shadow-md">
                         <p className="font-bold text-xl mb-2">Error Loading Data</p>
-                        <p className="text-base">Failed to load historical data: {error}</p>
+                        <p className="text-base">Failed to load historical data: {error.message}</p> {/* Use error.message */}
                         <p className="text-sm mt-2">Please check your internet connection or the Sleeper API configuration in `config.js` and `sleeperApi.js`.</p>
                     </div>
                 </div>
             );
+        }
+
+        // Add a check for historicalMatchups being empty or incomplete after loading
+        // This is crucial to prevent errors if the API returns no data or malformed data
+        if (!historicalMatchups || Object.keys(historicalMatchups).length === 0 || !historicalMatchups.matchupsBySeason || Object.keys(historicalMatchups.matchupsBySeason).length === 0) {
+            return <div className="text-center py-8 text-gray-600">No historical data available. Please ensure your league ID is correct and data has been fetched.</div>;
         }
 
         // Render components based on activeTab, passing necessary data from context
@@ -168,13 +171,14 @@ const AppContent = () => {
                 // LeagueHistory now directly consumes historicalData from context, no props needed here
                 return <LeagueHistory />;
             case TABS.RECORD_BOOK:
-                return <RecordBook historicalMatchups={historicalData.matchupsBySeason} />; // Pass matchupsBySeason
+                // RecordBook now consumes historicalMatchups directly from context, no props needed here
+                return <RecordBook />;
             case TABS.HEAD_TO_HEAD:
                 return <Head2HeadGrid />; // Head2HeadGrid also consumes historicalData from context
             case TABS.DPR_ANALYSIS:
-                return <DPRAnalysis historicalMatchups={historicalData.matchupsBySeason} />; // Pass matchupsBySeason
+                return <DPRAnalysis historicalMatchups={historicalMatchups} />; // Pass the full historicalMatchups object
             case TABS.LUCK_RATING:
-                return <LuckRatingAnalysis historicalMatchups={historicalData.matchupsBySeason} />; // Pass matchupsBySeason
+                return <LuckRatingAnalysis historicalMatchups={historicalMatchups} />; // Pass the full historicalMatchups object
             case TABS.TEAM_DETAIL:
                 // TeamDetailPage will now internally use useSleeperData for its data needs
                 return <TeamDetailPage teamName={selectedTeam} />;
