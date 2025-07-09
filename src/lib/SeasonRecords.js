@@ -22,8 +22,8 @@ const SeasonRecords = () => {
         pointsFor: { decimals: 2, type: 'points' },
         pointsAgainst: { decimals: 2, type: 'points' },
         averageScore: { decimals: 2, type: 'points' },
-        winPercentage: { decimals: 3, type: 'percentage' },
-        allPlayWinPercentage: { decimals: 3, type: 'percentage' },
+        winPercentage: { decimals: 3, type: 'percentage' }, // Type 'percentage' for specific formatting
+        allPlayWinPercentage: { decimals: 3, type: 'percentage' }, // Type 'percentage' for specific formatting
         topScoreWeeksCount: { decimals: 0, type: 'count' },
         blowoutWins: { decimals: 0, type: 'count' },
         blowoutLosses: { decimals: 0, type: 'count' },
@@ -34,7 +34,6 @@ const SeasonRecords = () => {
     };
 
     useEffect(() => {
-        // Log the received processedSeasonalRecords for debugging
         console.log("SeasonRecords useEffect: processedSeasonalRecords:", processedSeasonalRecords);
 
         if (loading || error || !processedSeasonalRecords || Object.keys(processedSeasonalRecords).length === 0) {
@@ -74,7 +73,6 @@ const SeasonRecords = () => {
                     currentRecord.value = newValue;
                     currentRecord.entries = [teamInfo];
                 } else if (newValue === currentRecord.value) {
-                    // Check if the exact entry (rosterId + year) already exists to prevent duplicates
                     if (!currentRecord.entries.some(e => e.rosterId === teamInfo.rosterId && e.year === teamInfo.year)) {
                         currentRecord.entries.push(teamInfo);
                     }
@@ -84,7 +82,6 @@ const SeasonRecords = () => {
                     currentRecord.value = newValue;
                     currentRecord.entries = [teamInfo];
                 } else if (newValue === currentRecord.value) {
-                    // Check if the exact entry (rosterId + year) already exists to prevent duplicates
                     if (!currentRecord.entries.some(e => e.rosterId === teamInfo.rosterId && e.year === teamInfo.year)) {
                         currentRecord.entries.push(teamInfo);
                     }
@@ -101,7 +98,6 @@ const SeasonRecords = () => {
                 return;
             }
 
-            // Object.values returns an array of the team stat objects for the current year
             const teamsInSeason = Object.values(teamsInSeasonObject);
 
             teamsInSeason.forEach(teamStats => {
@@ -111,31 +107,33 @@ const SeasonRecords = () => {
                     return;
                 }
 
-                // DEBUGGING LOG: Check teamStats.teamName directly from processedSeasonalRecords
-                console.log(`SeasonRecords: Processing year ${year}, Roster ID ${teamStats.rosterId}. teamStats.teamName: "${teamStats.teamName}"`);
+                // FIXED: Skip teams/seasons with 0 total games to avoid 0.000 DPR for future seasons
+                if (teamStats.totalGames === 0) {
+                    console.log(`SeasonRecords: Skipping team ${teamStats.teamName} (${year}) due to 0 total games.`);
+                    return;
+                }
 
-                // FIXED: Explicitly use getTeamName with the year for the team name
                 let resolvedTeamName = getTeamName(teamStats.rosterId, year);
-                // Fallback to teamStats.teamName if getTeamName returns a generic ID string
                 if (resolvedTeamName.startsWith('Unknown Team (ID:')) {
                     resolvedTeamName = teamStats.teamName || 'Unknown Team';
                 }
-                console.log(`SeasonRecords: Resolved team name for ${teamStats.rosterId} in ${year}: "${resolvedTeamName}"`);
 
                 const teamInfo = {
-                    teamName: resolvedTeamName, // Use the resolved year-specific name
+                    teamName: resolvedTeamName,
                     year: year,
                     rosterId: teamStats.rosterId,
-                    ownerId: teamStats.ownerId, // ownerId is crucial for linking to users
+                    ownerId: teamStats.ownerId,
                 };
 
                 // Update highlights based on seasonal team stats
-                // Add checks for data existence before updating records to prevent NaN issues
                 if (typeof teamStats.adjustedDPR === 'number') {
                     updateRecord(highestDPRSeason, teamStats.adjustedDPR, { ...teamInfo, value: teamStats.adjustedDPR });
-                    updateRecord(lowestDPRSeason, teamStats.adjustedDPR, { ...teamInfo, value: teamStats.adjustedDPR }, true);
+                    // Only update lowest DPR if it's not 0, to avoid future/empty season issues
+                    if (teamStats.adjustedDPR > 0) {
+                        updateRecord(lowestDPRSeason, teamStats.adjustedDPR, { ...teamInfo, value: teamStats.adjustedDPR }, true);
+                    }
                 }
-                if (teamStats.totalGames > 0) { // Only consider teams that played games
+                if (teamStats.totalGames > 0) {
                     if (typeof teamStats.wins === 'number') updateRecord(mostWinsSeason, teamStats.wins, { ...teamInfo, value: teamStats.wins });
                     if (typeof teamStats.losses === 'number') updateRecord(mostLossesSeason, teamStats.losses, { ...teamInfo, value: teamStats.losses });
                     if (typeof teamStats.winPercentage === 'number') updateRecord(bestWinPctSeason, teamStats.winPercentage, { ...teamInfo, value: teamStats.winPercentage });
@@ -158,11 +156,10 @@ const SeasonRecords = () => {
             });
         });
 
-        // Sort entries for ties consistently (by year, then team name)
         const sortRecordEntries = (record) => {
             if (record && record.entries.length > 1) {
                 record.entries.sort((a, b) => {
-                    if (a.year !== b.year) return parseInt(a.year) - parseInt(b.year); // Ensure year is treated as number for sorting
+                    if (a.year !== b.year) return parseInt(a.year) - parseInt(b.year);
                     return (a.teamName || '').localeCompare(b.teamName || '');
                 });
             }
@@ -222,10 +219,9 @@ const SeasonRecords = () => {
 
     // Helper to render a single highlight record entry
     const renderHighlightRecordEntry = (record) => {
-        // FIXED: Check if record is defined BEFORE accessing its properties
         if (!record) {
             console.warn("renderHighlightRecordEntry: 'record' is undefined. Skipping render.");
-            return null; // Return null if record is undefined to prevent errors
+            return null;
         }
 
         const config = formatConfig[record.key] || { decimals: 2, type: 'default' };
@@ -243,24 +239,19 @@ const SeasonRecords = () => {
         }
 
         let displayValue;
+        // FIXED: Format win percentages as ".xxx%"
         if (config.type === 'percentage') {
-            displayValue = formatNumber(record.value * 100, config.decimals, 'decimal') + '%';
+            displayValue = formatNumber(record.value, config.decimals, 'decimal') + '%';
         } else {
             displayValue = formatNumber(record.value, config.decimals, config.type);
         }
 
         const allTiedTeamsDisplay = record.entries.map((entry, index) => {
-            // Defensive check: if entry is undefined, return null to filter it out later
             if (!entry) {
                 console.warn(`SeasonRecords: Skipping undefined entry in record.entries for key '${record.key}'. Index: ${index}`);
-                return null; // Return null for undefined entries to prevent errors
+                return null;
             }
-            // The teamName in entry should now already be the year-specific name
-            // from the `teamInfo` object created in the useEffect.
             let currentTeamDisplayName = entry.teamName;
-
-            // This fallback is a last resort, if the name is still generic.
-            // Ideally, the `teamName` in `entry` should be resolved correctly by now.
             if (currentTeamDisplayName.startsWith('Unknown Team (ID:')) {
                 currentTeamDisplayName = "Unknown Team";
             }
@@ -273,7 +264,7 @@ const SeasonRecords = () => {
                     {currentTeamDisplayName}{entry.year ? ` (${entry.year})` : ''}
                 </div>
             );
-        }).filter(Boolean); // Filter out any null entries that were returned for undefined 'entry' objects
+        }).filter(Boolean);
 
         return (
             <>
@@ -287,9 +278,6 @@ const SeasonRecords = () => {
             </>
         );
     };
-
-    // Sort years for display (most recent first)
-    // const sortedYears = Object.keys(processedSeasonalRecords).sort((a, b) => parseInt(b) - parseInt(a)); // No longer needed for display
 
     return (
         <div className="w-full">
@@ -351,8 +339,6 @@ const SeasonRecords = () => {
                     </tbody>
                 </table>
             </section>
-
-            {/* REMOVED: SEASONAL BREAKDOWN SECTION */}
         </div>
     );
 };
