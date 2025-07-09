@@ -114,7 +114,7 @@ export const SleeperDataProvider = ({ children }) => {
 
             // 6. Fallback to careerDPRData's teamName (if it's not the default "Unknown Team")
             // This assumes careerDPRData has been calculated and contains a more permanent team name.
-            const careerTeam = processedSeasonalRecords?.careerDPRData?.find(team => team.ownerId === ownerId);
+            const careerTeam = careerDPRData?.find(team => team.ownerId === ownerId);
             if (careerTeam && careerTeam.teamName && careerTeam.teamName !== `Unknown Team (ID: ${ownerId})`) {
                 return careerTeam.teamName;
             }
@@ -162,7 +162,8 @@ export const SleeperDataProvider = ({ children }) => {
                 if (matchups && Object.keys(matchups).length > 0) {
                     // calculateAllLeagueMetrics returns an object with seasonalMetrics and careerDPRData
                     // Ensure getTeamName is passed correctly here, as it's a dependency for the calculation
-                    const { seasonalMetrics, careerDPRData: calculatedCareerDPRData } = calculateAllLeagueMetrics(matchups, draftHistory); // Pass draftHistory here
+                    // FIXED: Pass getTeamName as the third argument to calculateAllLeagueMetrics
+                    const { seasonalMetrics, careerDPRData: calculatedCareerDPRData } = calculateAllLeagueMetrics(matchups, draftHistory, getTeamName);
                     console.log("SleeperDataContext: Calculated seasonalMetrics:", seasonalMetrics); // Debugging log
                     setProcessedSeasonalRecords(seasonalMetrics);
                     // Also set careerDPRData here, as it's used by getTeamName
@@ -182,7 +183,7 @@ export const SleeperDataProvider = ({ children }) => {
         };
 
         loadAllSleeperData();
-    }, []); // This effect now runs only once on mount (or if CURRENT_LEAGUE_ID were to change).
+    }, [getTeamName]); // Added getTeamName to dependencies to ensure it's stable when passed to calculateAllLeagueMetrics
 
 
     // 4. Memoize the context value to prevent unnecessary re-renders of consumers
