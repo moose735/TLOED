@@ -30,6 +30,8 @@ export const SleeperDataProvider = ({ children }) => {
 
     // NEW STATE FOR PROCESSED SEASONAL RECORDS
     const [processedSeasonalRecords, setProcessedSeasonalRecords] = useState({});
+    // FIXED: Declare careerDPRData state variable
+    const [careerDPRData, setCareerDPRData] = useState(null);
 
     // State for loading and error handling
     const [loading, setLoading] = useState(true);
@@ -120,7 +122,7 @@ export const SleeperDataProvider = ({ children }) => {
             // Final fallback if no specific name is found
             return `Unknown Team (ID: ${ownerId})`;
         };
-    }, [usersData, historicalMatchups, processedSeasonalRecords]); // Depend on processedSeasonalRecords for careerDPRData
+    }, [usersData, historicalMatchups, processedSeasonalRecords, careerDPRData]); // Depend on careerDPRData now that it's state
 
     // 3. Fetch data and perform calculations on component mount
     useEffect(() => {
@@ -164,8 +166,6 @@ export const SleeperDataProvider = ({ children }) => {
                     console.log("SleeperDataContext: Calculated seasonalMetrics:", seasonalMetrics); // Debugging log
                     setProcessedSeasonalRecords(seasonalMetrics);
                     // Also set careerDPRData here, as it's used by getTeamName
-                    // Note: The previous code was missing setting careerDPRData here.
-                    // This is crucial for the getTeamName fallback.
                     setCareerDPRData(calculatedCareerDPRData);
                 } else {
                     console.warn("SleeperDataContext: historicalMatchups is empty or null, cannot calculate seasonal metrics.");
