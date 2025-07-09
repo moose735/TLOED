@@ -16,14 +16,14 @@ import Head2HeadGrid from './lib/Head2HeadGrid';
 import FinancialTracker from './components/FinancialTracker';
 import Dashboard from './components/Dashboard';
 import MatchupHistory from './components/MatchupHistory';
-import SeasonRecords from './lib/SeasonRecords'; // Import SeasonRecords
-import { calculateAllLeagueMetrics } from './utils/calculations'; // Import calculation function
 
 // Import the custom hook from your SleeperDataContext
 import { SleeperDataProvider, useSleeperData } from './contexts/SleeperDataContext';
 
-// Define the initial structure of navigation categories (this should not be mutated directly)
-const INITIAL_NAV_CATEGORIES = {
+// Define the available tabs and their categories
+// NOTE: NAV_CATEGORIES should ideally be defined outside the component
+// or memoized if it changes based on props, but for now, we'll modify it directly.
+const NAV_CATEGORIES = {
     HOME: { label: 'Dashboard', tab: 'dashboard' },
     POWER_RANKINGS: { label: 'Power Rankings', tab: 'powerRankings' },
     LEAGUE_DATA: {
@@ -39,7 +39,7 @@ const INITIAL_NAV_CATEGORIES = {
     },
     TEAMS: {
         label: 'Teams',
-        subTabs: [], // This will be populated dynamically
+        subTabs: [], // This will be populated dynamically from Sleeper data later
     },
     FINANCIALS: { label: 'Financials', tab: 'financials' },
 };
@@ -56,18 +56,18 @@ const TABS = {
     TEAM_DETAIL: 'teamDetail',
     FINANCIALS: 'financials',
     MATCHUP_HISTORY: 'matchupHistory',
-    SEASON_RECORDS: 'seasonRecords', // Added this for the new tab
 };
 
 
 const AppContent = () => {
     // Consume data from SleeperDataContext
+    // Destructure directly from the context value, not from a 'state' object
     const {
         loading,
         error,
-        historicalMatchups, // CORRECTED: Destructure as historicalMatchups
-        rostersWithDetails, // This is the current league's rosters
-        getTeamName,
+        historicalData, // Now an object containing matchups and champions
+        rostersBySeason, // Now directly rostersWithDetails from context
+        getTeamName, // The Sleeper-aware version of getMappedTeamName
         usersData // Also useful for team names
     } = useSleeperData();
 
@@ -76,42 +76,39 @@ const AppContent = () => {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [openSubMenu, setOpenSubMenu] = useState(null);
 
-    // Use state for navigation categories to ensure reactivity and prevent direct mutation of global object
-    const [navCategories, setNavCategories] = useState(INITIAL_NAV_CATEGORIES);
-
-    // Effect to dynamically populate team sub-tabs when historical data is available
+    // Effect to dynamically populate team sub-tabs when rostersBySeason is available
     useEffect(() => {
-        // Only update if historicalMatchups has loaded and contains data, and usersData is available
-        if (historicalMatchups && Object.keys(historicalMatchups).length > 0 && historicalMatchups.rostersBySeason && usersData) {
+        // Ensure both rostersBySeason and usersData are available before proceeding
+        if (rostersBySeason && usersData) {
             const allTeamNames = new Set();
-            // Iterate over all historical rosters to get all unique team names.
-            Object.values(historicalMatchups.rostersBySeason).forEach(seasonRosters => {
-                if (Array.isArray(seasonRosters)) {
+            // rostersBySeason is an object where keys are seasons and values are arrays of rosters
+            // Iterate over each season's rosters
+            Object.values(rostersBySeason).forEach(seasonRosters => {
+                if (Array.isArray(seasonRosters)) { // Ensure it's an array of rosters for the season
                     seasonRosters.forEach(roster => {
+                        // Use getTeamName to get the display name for the user (owner_id)
+                        // This function is provided by the SleeperDataContext
                         const teamDisplayName = getTeamName(roster.owner_id);
-                        if (teamDisplayName && !teamDisplayName.startsWith('Unknown Team (ID:')) {
+                        // Add to set if a valid name is returned
+                        if (teamDisplayName && teamDisplayName !== 'Loading Team...') {
                             allTeamNames.add(teamDisplayName);
                         }
                     });
                 }
             });
-
             const uniqueTeams = Array.from(allTeamNames).sort();
 
-            // Update the navCategories state with the new team sub-tabs
-            setNavCategories(prevCategories => ({
-                ...prevCategories,
-                TEAMS: {
-                    ...prevCategories.TEAMS,
-                    subTabs: uniqueTeams.map(team => ({
-                        label: team,
-                        tab: TABS.TEAM_DETAIL,
-                        teamName: team, // Pass teamName for the TeamDetailPage
-                    })),
-                },
+            // Update NAV_CATEGORIES.TEAMS.subTabs directly.
+            // In a larger application, you might manage NAV_CATEGORIES as component state
+            // to ensure React reactivity, but for this progressive update, direct modification
+            // of the global object is sufficient as the menu re-renders on state changes.
+            NAV_CATEGORIES.TEAMS.subTabs = uniqueTeams.map(team => ({
+                label: team,
+                tab: TABS.TEAM_DETAIL,
+                teamName: team, // Pass teamName for the TeamDetailPage
             }));
         }
-    }, [historicalMatchups, usersData, getTeamName]); // Dependencies for this effect
+    }, [rostersBySeason, usersData, getTeamName]); // Dependencies for this effect
 
     // Placeholder functions for UI interactions
     const handleTabClick = (tab) => {
@@ -154,17 +151,11 @@ const AppContent = () => {
                 <div className="flex items-center justify-center min-h-screen bg-gray-100 font-inter">
                     <div className="text-center p-6 bg-red-100 border border-red-400 text-red-700 rounded-lg shadow-md">
                         <p className="font-bold text-xl mb-2">Error Loading Data</p>
-                        <p className="text-base">Failed to load historical data: {error.message}</p> {/* Use error.message */}
+                        <p className="text-base">Failed to load historical data: {error}</p>
                         <p className="text-sm mt-2">Please check your internet connection or the Sleeper API configuration in `config.js` and `sleeperApi.js`.</p>
                     </div>
                 </div>
             );
-        }
-
-        // Add a check for historicalMatchups being empty or incomplete after loading
-        // This is crucial to prevent errors if the API returns no data or malformed data
-        if (!historicalMatchups || Object.keys(historicalMatchups).length === 0 || !historicalMatchups.matchupsBySeason || Object.keys(historicalMatchups.matchupsBySeason).length === 0) {
-            return <div className="text-center py-8 text-gray-600">No historical data available. Please ensure your league ID is correct and data has been fetched.</div>;
         }
 
         // Render components based on activeTab, passing necessary data from context
@@ -177,14 +168,13 @@ const AppContent = () => {
                 // LeagueHistory now directly consumes historicalData from context, no props needed here
                 return <LeagueHistory />;
             case TABS.RECORD_BOOK:
-                // RecordBook now consumes historicalMatchups directly from context, no props needed here
-                return <RecordBook />;
+                return <RecordBook historicalMatchups={historicalData.matchupsBySeason} />; // Pass matchupsBySeason
             case TABS.HEAD_TO_HEAD:
                 return <Head2HeadGrid />; // Head2HeadGrid also consumes historicalData from context
             case TABS.DPR_ANALYSIS:
-                return <DPRAnalysis historicalMatchups={historicalMatchups} />; // Pass the full historicalMatchups object
+                return <DPRAnalysis historicalMatchups={historicalData.matchupsBySeason} />; // Pass matchupsBySeason
             case TABS.LUCK_RATING:
-                return <LuckRatingAnalysis historicalMatchups={historicalMatchups} />; // Pass the full historicalMatchups object
+                return <LuckRatingAnalysis historicalMatchups={historicalData.matchupsBySeason} />; // Pass matchupsBySeason
             case TABS.TEAM_DETAIL:
                 // TeamDetailPage will now internally use useSleeperData for its data needs
                 return <TeamDetailPage teamName={selectedTeam} />;
@@ -192,8 +182,6 @@ const AppContent = () => {
                 return <FinancialTracker />;
             case TABS.MATCHUP_HISTORY:
                 return <MatchupHistory />;
-            case TABS.SEASON_RECORDS: // Assuming you'll add a new tab for SeasonRecords
-                return <SeasonRecords historicalMatchups={historicalMatchups} getTeamName={getTeamName} />;
             default:
                 return <Dashboard />;
         }
@@ -220,21 +208,21 @@ const AppContent = () => {
                 <ul className="flex flex-col md:flex-row md:justify-center py-2">
                     {/* Home Tab */}
                     <li className="px-4 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 my-0.5 md:my-0"
-                        onClick={() => handleTabClick(navCategories.HOME.tab)}>
-                        {navCategories.HOME.label}
+                        onClick={() => handleTabClick(NAV_CATEGORIES.HOME.tab)}>
+                        {NAV_CATEGORIES.HOME.label}
                     </li>
                     {/* Power Rankings Tab */}
                     <li className="px-4 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 my-0.5 md:my-0"
-                        onClick={() => handleTabClick(navCategories.POWER_RANKINGS.tab)}>
-                        {navCategories.POWER_RANKINGS.label}
+                        onClick={() => handleTabClick(NAV_CATEGORIES.POWER_RANKINGS.tab)}>
+                        {NAV_CATEGORIES.POWER_RANKINGS.label}
                     </li>
                     {/* League Data Submenu */}
                     <li className="relative px-4 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 my-0.5 md:my-0"
                         onClick={() => toggleSubMenu('leagueData')}>
-                        {navCategories.LEAGUE_DATA.label} <span className="ml-1">▼</span>
+                        {NAV_CATEGORIES.LEAGUE_DATA.label} <span className="ml-1">▼</span>
                         {openSubMenu === 'leagueData' && (
                             <ul className="absolute md:top-full md:left-0 bg-gray-700 shadow-lg rounded-md mt-2 w-48 z-10">
-                                {navCategories.LEAGUE_DATA.subTabs.map(subTab => (
+                                {NAV_CATEGORIES.LEAGUE_DATA.subTabs.map(subTab => (
                                     <li key={subTab.tab} className="px-4 py-2 hover:bg-gray-600 cursor-pointer rounded-md"
                                         onClick={(e) => { e.stopPropagation(); handleSubTabClick(subTab.tab); }}>
                                         {subTab.label}
@@ -246,10 +234,10 @@ const AppContent = () => {
                     {/* Teams Submenu (Dynamically populated) */}
                     <li className="relative px-4 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 my-0.5 md:my-0"
                         onClick={() => toggleSubMenu('teams')}>
-                        {navCategories.TEAMS.label} <span className="ml-1">▼</span>
+                        {NAV_CATEGORIES.TEAMS.label} <span className="ml-1">▼</span>
                         {openSubMenu === 'teams' && (
                             <ul className="absolute md:top-full md:left-0 bg-gray-700 shadow-lg rounded-md mt-2 w-48 z-10 max-h-60 overflow-y-auto">
-                                {navCategories.TEAMS.subTabs.map(subTab => (
+                                {NAV_CATEGORIES.TEAMS.subTabs.map(subTab => (
                                     <li key={subTab.label} className="px-4 py-2 hover:bg-gray-600 cursor-pointer rounded-md"
                                         onClick={(e) => { e.stopPropagation(); handleSubTabClick(subTab.tab, subTab.teamName); }}>
                                         {subTab.label}
@@ -260,13 +248,8 @@ const AppContent = () => {
                     </li>
                     {/* Financials Tab */}
                     <li className="px-4 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 my-0.5 md:my-0"
-                        onClick={() => handleTabClick(navCategories.FINANCIALS.tab)}>
-                        {navCategories.FINANCIALS.label}
-                    </li>
-                    {/* NEW: Season Records Tab */}
-                    <li className="px-4 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 my-0.5 md:my-0"
-                        onClick={() => handleTabClick(TABS.SEASON_RECORDS)}>
-                        Season Records
+                        onClick={() => handleTabClick(NAV_CATEGORIES.FINANCIALS.tab)}>
+                        {NAV_CATEGORIES.FINANCIALS.label}
                     </li>
                 </ul>
             </nav>
