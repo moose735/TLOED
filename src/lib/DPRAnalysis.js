@@ -38,6 +38,17 @@ const DPRAnalysis = () => { // Removed props as data will come from context
       return;
     }
 
+    // FIXED: Add a defensive check to ensure getTeamName is a function
+    if (typeof getTeamName !== 'function') {
+        console.error("DPRAnalysis: getTeamName is not a function from SleeperDataContext. Cannot perform calculations.");
+        setLoading(false);
+        setCareerDPRData([]);
+        setSeasonalDPRData([]);
+        // Optionally, display an error message to the user
+        // setError(new Error("Team name resolution function is unavailable."));
+        return;
+    }
+
     setLoading(true);
 
     // Use the centralized calculation logic to get seasonal and career metrics
@@ -106,7 +117,8 @@ const DPRAnalysis = () => { // Removed props as data will come from context
         if (teamSeasonalData && teamSeasonalData.totalGames > 0) {
             allSeasonalDPRs.push({
               year: parseInt(year),
-              team: getTeamName(teamSeasonalData.ownerId, year), // FIXED: Use getTeamName for seasonal team names with year
+              // FIXED: Ensure ownerId is passed to getTeamName for seasonal data
+              team: getTeamName(teamSeasonalData.ownerId, year),
               rosterId: rosterId, // Keep rosterId for potential future use
               dpr: teamSeasonalData.adjustedDPR,
               wins: teamSeasonalData.wins,
