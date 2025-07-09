@@ -19,7 +19,8 @@ export const SleeperDataProvider = ({ children }) => {
     const [rostersWithDetails, setRostersWithDetails] = useState(null);
     const [nflPlayers, setNflPlayers] = useState(null);
     const [nflState, setNflState] = useState(null);
-    const [historicalMatchups, setHistoricalMatchups] = useState(null);
+    // FIX: Initialize historicalMatchups to an empty object instead of null
+    const [historicalMatchups, setHistoricalMatchups] = useState({});
     const [allDraftHistory, setAllDraftHistory] = useState(null);
 
     const [loading, setLoading] = useState(true);
@@ -27,6 +28,7 @@ export const SleeperDataProvider = ({ children }) => {
 
     const getTeamName = useMemo(() => {
         const allUserMap = new Map();
+        // Safely access properties on historicalMatchups, which is now guaranteed to be an object
         if (historicalMatchups?.usersBySeason) {
             Object.values(historicalMatchups.usersBySeason).forEach(seasonUsers => {
                 if (Array.isArray(seasonUsers)) {
@@ -43,6 +45,7 @@ export const SleeperDataProvider = ({ children }) => {
         }
 
         const allRosterToOwnerMap = new Map();
+        // Safely access properties on historicalMatchups, which is now guaranteed to be an object
         if (historicalMatchups?.rostersBySeason) {
             Object.values(historicalMatchups.rostersBySeason).forEach(seasonRosters => {
                 if (Array.isArray(seasonRosters)) {
@@ -72,7 +75,7 @@ export const SleeperDataProvider = ({ children }) => {
             }
             return `Unknown Team (ID: ${id})`;
         };
-    }, [usersData, rostersWithDetails, historicalMatchups]);
+    }, [usersData, rostersWithDetails, historicalMatchups]); // historicalMatchups is a dependency
 
     useEffect(() => {
         const loadAllSleeperData = async () => {
@@ -87,7 +90,7 @@ export const SleeperDataProvider = ({ children }) => {
                     rosters,
                     players,
                     state,
-                    fetchedHistoricalData, // This will hold the result of fetchAllHistoricalMatchups
+                    fetchedHistoricalData,
                     draftHistory
                 ] = await Promise.all([
                     fetchLeagueData(CURRENT_LEAGUE_ID),
@@ -95,7 +98,7 @@ export const SleeperDataProvider = ({ children }) => {
                     fetchRostersWithDetails(CURRENT_LEAGUE_ID),
                     fetchNFLPlayers(),
                     fetchNFLState(),
-                    fetchAllHistoricalMatchups(CURRENT_LEAGUE_ID), // Call with CURRENT_LEAGUE_ID
+                    fetchAllHistoricalMatchups(CURRENT_LEAGUE_ID),
                     fetchAllDraftHistory(),
                 ]);
 
@@ -141,7 +144,7 @@ export const SleeperDataProvider = ({ children }) => {
         rostersWithDetails,
         nflPlayers,
         nflState,
-        historicalMatchups,
+        historicalMatchups, // Dependency for the context value
         allDraftHistory,
         loading,
         error,
