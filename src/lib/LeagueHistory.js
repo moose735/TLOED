@@ -35,7 +35,8 @@ const LeagueHistory = () => {
     const {
         loading: contextLoading,
         error: contextError,
-        historicalData, // Contains matchupsBySeason, winnersBracketBySeason, losersBracketBySeason, rostersBySeason, leaguesMetadataBySeason
+        historicalData, // Contains matchupsBySeason, winnersBracketBySeason, losersBracketBySeason, rostersBySeason, leaguesMetadataBySeason, usersBySeason
+        allDraftHistory, // Added allDraftHistory from context
         getTeamName: getDisplayTeamNameFromContext // Renamed to avoid conflict with prop name
     } = useSleeperData();
 
@@ -52,7 +53,7 @@ const LeagueHistory = () => {
     ];
 
     useEffect(() => {
-        if (contextLoading || contextError || !historicalData || Object.keys(historicalData.matchupsBySeason || {}).length === 0) {
+        if (contextLoading || contextError || !historicalData || !historicalData.matchupsBySeason || Object.keys(historicalData.matchupsBySeason).length === 0) {
             setAllTimeStandings([]);
             setSeasonalDPRChartData([]);
             setUniqueTeamsForChart([]);
@@ -61,194 +62,99 @@ const LeagueHistory = () => {
             return;
         }
 
-        const allMatchupsFlat = [];
-        const completedSeasons = new Set();
+        // Ensure getDisplayTeamNameFromContext is a function
+        if (typeof getDisplayTeamNameFromContext !== 'function') {
+            console.error("LeagueHistory: getDisplayTeamNameFromContext is not a function. Cannot process data.");
+            setAllTimeStandings([]);
+            setSeasonalDPRChartData([]);
+            setUniqueTeamsForChart([]);
+            setSeasonAwardsSummary({});
+            setSortedYearsForAwards([]);
+            return;
+        }
+
+        // Use calculateAllLeagueMetrics directly with historicalData
+        const { seasonalMetrics, careerDPRData: calculatedCareerDPRs } = calculateAllLeagueMetrics(historicalData, allDraftHistory, getDisplayTeamNameFromContext);
+
         const allYears = Object.keys(historicalData.matchupsBySeason).map(Number).sort((a, b) => a - b);
+        const completedSeasons = new Set();
 
-        // A temporary set to track processed unique games (using sorted roster IDs)
-        const processedGameKeys = new Set();
-
+        // Determine completed seasons based on championship match winner
         allYears.forEach(year => {
-            const weeklyMatchupsForYear = historicalData.matchupsBySeason[year] || {};
-            const leagueMetadataForYear = historicalData.leaguesMetadataBySeason[year];
             const winnersBracketForYear = historicalData.winnersBracketBySeason[year] || [];
-            const losersBracketForYear = historicalData.losersBracketBySeason?.[year] || [];
-            const championshipWeek = leagueMetadataForYear?.settings?.championship_week ? parseInt(leagueMetadataForYear.settings.championship_week) : null;
-
-            // Determine if the season is completed by checking if a championship match has a winner
             const championshipMatch = winnersBracketForYear.find(bm => bm.r === winnersBracketForYear.length && bm.w);
             if (championshipMatch) {
                 completedSeasons.add(year);
             }
-
-            // Create a map for quick lookup of bracket matches by their actual match_id from bracket data
-            const bracketMatchIdMap = new Map();
-            [...winnersBracketForYear, ...losersBracketForYear].forEach(bMatch => {
-                bracketMatchIdMap.set(String(bMatch.match_id), bMatch);
-            });
-
-            Object.keys(weeklyMatchupsForYear).forEach(weekStr => {
-                const week = parseInt(weekStr);
-                weeklyMatchupsForYear[weekStr].forEach(matchup => {
-                    const rosterId1 = String(matchup.roster_id);
-                    const rosterId2 = String(matchup.opponent_roster_id);
-
-                    // Create a canonical game key using sorted roster IDs to identify unique games
-                    const gameKey = [rosterId1, rosterId2].sort().join('-');
-
-                    // Use a combined key (year-week-gameKey) to ensure uniqueness for each actual game instance
-                    const uniqueGameInstanceKey = `${year}-${week}-${gameKey}`;
-
-                    if (processedGameKeys.has(uniqueGameInstanceKey)) {
-                        return; // This unique game instance has already been processed
-                    }
-                    processedGameKeys.add(uniqueGameInstanceKey);
-
-                    const team1Roster = historicalData.rostersBySeason[year]?.find(r => String(r.roster_id) === rosterId1);
-                    const team2Roster = historicalData.rostersBySeason[year]?.find(r => String(r.roster_id) === rosterId2);
-
-                    const team1OwnerId = team1Roster?.owner_id;
-                    const team2OwnerId = team2Roster?.owner_id;
-
-                    if (!team1OwnerId || !team2OwnerId) {
-                        console.warn(`Skipping matchup (week ${week}, year ${year}, rosters ${rosterId1}, ${rosterId2}) due to unresolved owner IDs.`);
-                        return;
-                    }
-
-                    let matchType = 'Reg. Season';
-
-                    // Check if this weekly matchup's matchup_id corresponds to a bracket match_id
-                    // Note: Sleeper's weekly matchup objects have a 'matchup_id' field.
-                    // Sleeper's bracket objects have a 'match_id' field.
-                    // These are often the same value for playoff games, but the structure is different.
-                    // We need to check if the 'matchup_id' from the weekly matchup exists in the list of 'match_id's from the brackets.
-                    const bracketMatch = bracketMatchIdMap.get(String(matchup.matchup_id)); // Use matchup.matchup_id from weekly matchup
-
-                    if (bracketMatch) {
-                        // If it's found in a bracket match, determine its type
-                        const isWinnerBracketMatch = winnersBracketForYear.some(b => String(b.match_id) === String(matchup.matchup_id));
-                        const isLoserBracketMatch = losersBracketForYear.some(b => String(b.match_id) === String(matchup.matchup_id));
-
-                        if (isWinnerBracketMatch) {
-                            if (championshipWeek && week === championshipWeek) {
-                                matchType = 'Championship';
-                            } else {
-                                matchType = 'Playoffs';
-                            }
-                        } else if (isLoserBracketMatch) {
-                            matchType = 'Consolation';
-                        }
-                    } else if (matchup.playoff) { // Fallback if playoff flag is true but not found in explicit brackets
-                        matchType = 'Playoffs (Uncategorized)';
-                    }
-
-
-                    allMatchupsFlat.push({
-                        year: year,
-                        week: week,
-                        // Use the matchup_id from the weekly matchup, as it's what links to the bracket match_id
-                        match_id: String(matchup.matchup_id),
-                        team1: team1OwnerId,
-                        team2: team2OwnerId,
-                        team1_score: parseFloat(matchup.points),
-                        team2_score: parseFloat(matchup.opponent_points),
-                        matchType: matchType,
-                        // finalSeedingGame is not directly available on Sleeper matchup objects,
-                        // it's derived from playoff brackets. We'll handle awards separately.
-                    });
-                });
-            });
         });
 
-        // Now use allMatchupsFlat for calculateAllLeagueMetrics
-        const { seasonalMetrics, careerDPRData } = calculateAllLeagueMetrics(allMatchupsFlat, getDisplayTeamNameFromContext);
-
+        // Initialize teamOverallStats using careerDPRData
         const teamOverallStats = {};
-        const yearlyPointsLeaders = {};
+        calculatedCareerDPRs.forEach(careerStats => {
+            const ownerId = careerStats.ownerId;
+            const teamName = getDisplayTeamNameFromContext(ownerId, null); // Get current team name for overall stats
+
+            if (!teamName || teamName.startsWith('Unknown Team (ID:')) {
+                console.warn(`LeagueHistory: Skipping career stats for ownerId ${ownerId} due to unresolved team name.`);
+                return;
+            }
+
+            teamOverallStats[teamName] = {
+                totalWins: careerStats.wins,
+                totalLosses: careerStats.losses,
+                totalTies: careerStats.ties,
+                totalPointsFor: careerStats.pointsFor,
+                totalGames: careerStats.totalGames,
+                careerDPR: careerStats.dpr,
+                seasonsPlayed: new Set(),
+                awards: { championships: 0, runnerUps: 0, thirdPlace: 0, firstPoints: 0, secondPoints: 0, thirdPoints: 0 },
+                ownerId: ownerId // Keep ownerId for awards lookup
+            };
+        });
+
+        // Populate seasonsPlayed for each team from historicalData.rostersBySeason
+        Object.keys(historicalData.rostersBySeason).forEach(year => {
+            const rostersForYear = historicalData.rostersBySeason[year];
+            if (rostersForYear) {
+                rostersForYear.forEach(roster => {
+                    const ownerId = roster.owner_id;
+                    const teamName = getDisplayTeamNameFromContext(ownerId, null); // Get current team name
+                    if (teamOverallStats[teamName]) {
+                        teamOverallStats[teamName].seasonsPlayed.add(parseInt(year));
+                    }
+                });
+            }
+        });
+
         const newSeasonAwardsSummary = {};
 
-        // First pass: Aggregate basic stats and identify yearly points leaders
-        allMatchupsFlat.forEach(match => {
-            const team1OwnerId = match.team1;
-            const team2OwnerId = match.team2;
-            const year = match.year;
-            const team1Score = parseFloat(match.team1_score);
-            const team2Score = parseFloat(match.team2_score);
-
-            const team1DisplayName = getDisplayTeamNameFromContext(team1OwnerId, year);
-            const team2DisplayName = getDisplayTeamNameFromContext(team2OwnerId, year);
-
-            if (!team1DisplayName || team1DisplayName === '' || !team2DisplayName || team2DisplayName === '' || isNaN(year) || isNaN(team1Score) || isNaN(team2Score)) {
-                return;
-            }
-
-            [team1DisplayName, team2DisplayName].forEach(team => {
-                if (!teamOverallStats[team]) {
-                    teamOverallStats[team] = {
-                        totalWins: 0, totalLosses: 0, totalTies: 0, totalPointsFor: 0, totalGames: 0,
-                        seasonsPlayed: new Set(),
-                        awards: { championships: 0, runnerUps: 0, thirdPlace: 0, firstPoints: 0, secondPoints: 0, thirdPoints: 0 },
-                    };
-                }
-                teamOverallStats[team].seasonsPlayed.add(year);
-            });
-
-            // Aggregate overall wins, losses, ties, and points
-            const isTie = team1Score === team2Score;
-            const team1Won = team1Score > team2Score;
-
-            if (isTie) {
-                teamOverallStats[team1DisplayName].totalTies++;
-                teamOverallStats[team2DisplayName].totalTies++;
-            } else if (team1Won) {
-                teamOverallStats[team1DisplayName].totalWins++;
-                teamOverallStats[team2DisplayName].totalLosses++;
-            } else { // team2Won
-                teamOverallStats[team2DisplayName].totalWins++;
-                teamOverallStats[team1DisplayName].totalLosses++;
-            }
-            teamOverallStats[team1DisplayName].totalGames++;
-            teamOverallStats[team2DisplayName].totalGames++;
-
-            teamOverallStats[team1DisplayName].totalPointsFor += team1Score;
-            teamOverallStats[team2DisplayName].totalPointsFor += team2Score;
-        });
-
-        // Populate yearlyPointsLeaders using seasonalMetrics
-        Object.keys(seasonalMetrics).forEach(year => {
-            if (!completedSeasons.has(parseInt(year))) {
-                return;
-            }
-
-            const teamsInSeason = Object.keys(seasonalMetrics[year]);
-            const yearPointsData = teamsInSeason.map(team => ({
-                team,
-                points: seasonalMetrics[year][team].pointsFor
-            })).sort((a, b) => b.points - a.points);
-
-            yearlyPointsLeaders[year] = yearPointsData;
-        });
-
-        // Process championship and consolation games for overall finish awards (Trophies)
         allYears.forEach(year => {
             if (!completedSeasons.has(year)) {
                 return; // Only process completed seasons for awards
             }
 
+            const seasonalStatsForYear = seasonalMetrics[year];
+            if (!seasonalStatsForYear) return;
+
+            const teamsInSeason = Object.values(seasonalStatsForYear);
+
+            // Points Leaders for the year
+            const yearPointsData = teamsInSeason.map(teamStats => ({
+                ownerId: teamStats.ownerId,
+                points: teamStats.pointsFor
+            })).sort((a, b) => b.points - a.points);
+
+            // Playoff Finishes for the year
             const winnersBracketForYear = historicalData.winnersBracketBySeason[year] || [];
             const losersBracketForYear = historicalData.losersBracketBySeason?.[year] || [];
             const rostersForYear = historicalData.rostersBySeason[year] || [];
-
-            // Map roster_id to owner_id for playoff rankings
             const rosterIdToOwnerIdMap = new Map(rostersForYear.map(r => [String(r.roster_id), String(r.owner_id)]));
 
-            // Use the playoffRankings logic to determine finishes
             const playoffFinishes = calculatePlayoffFinishes({
                 winnersBracket: winnersBracketForYear,
                 losersBracket: losersBracketForYear
-            }, rosterIdToOwnerIdMap, getDisplayTeamNameFromContext, year); // Pass year to getTeamName
+            }, rosterIdToOwnerIdMap, getDisplayTeamNameFromContext, year);
 
-            // Populate newSeasonAwardsSummary based on playoffFinishes
             newSeasonAwardsSummary[year] = {
                 champion: 'N/A',
                 secondPlace: 'N/A',
@@ -260,7 +166,7 @@ const LeagueHistory = () => {
 
             playoffFinishes.forEach(finish => {
                 const teamDisplayName = getDisplayTeamNameFromContext(finish.owner_id, year);
-                if (teamOverallStats[teamDisplayName]) { // Ensure team exists in overall stats
+                if (teamOverallStats[teamDisplayName]) {
                     if (finish.playoffFinish === '1st Place') {
                         newSeasonAwardsSummary[year].champion = teamDisplayName;
                         teamOverallStats[teamDisplayName].awards.championships++;
@@ -275,24 +181,26 @@ const LeagueHistory = () => {
             });
 
             // Assign Points Champions for the year
-            const leaders = yearlyPointsLeaders[year];
+            const leaders = yearPointsData;
             if (leaders && leaders.length > 0) {
-                newSeasonAwardsSummary[year].pointsChamp = leaders[0].team;
-                if (teamOverallStats[leaders[0].team]) {
-                    teamOverallStats[leaders[0].team].awards.firstPoints++;
+                const pointsChampTeamName = getDisplayTeamNameFromContext(leaders[0].ownerId, year);
+                newSeasonAwardsSummary[year].pointsChamp = pointsChampTeamName;
+                if (teamOverallStats[pointsChampTeamName]) {
+                    teamOverallStats[pointsChampTeamName].awards.firstPoints++;
                 }
 
                 if (leaders.length > 1 && leaders[1].points < leaders[0].points) {
-                    newSeasonAwardsSummary[year].pointsSecond = leaders[1].team;
-                    if (teamOverallStats[leaders[1].team]) {
-                        teamOverallStats[leaders[1].team].awards.secondPoints++;
+                    const pointsSecondTeamName = getDisplayTeamNameFromContext(leaders[1].ownerId, year);
+                    newSeasonAwardsSummary[year].pointsSecond = pointsSecondTeamName;
+                    if (teamOverallStats[pointsSecondTeamName]) {
+                        teamOverallStats[pointsSecondTeamName].awards.secondPoints++;
                     }
                 }
-                // Corrected condition: only check against the second place score, as it's already sorted
                 if (leaders.length > 2 && leaders[2].points < leaders[1].points) {
-                    newSeasonAwardsSummary[year].pointsThird = leaders[2].team;
-                    if (teamOverallStats[leaders[2].team]) {
-                        teamOverallStats[leaders[2].team].awards.thirdPoints++;
+                    const pointsThirdTeamName = getDisplayTeamNameFromContext(leaders[2].ownerId, year);
+                    newSeasonAwardsSummary[year].pointsThird = pointsThirdTeamName;
+                    if (teamOverallStats[pointsThirdTeamName]) {
+                        teamOverallStats[pointsThirdTeamName].awards.thirdPoints++;
                     }
                 }
             }
@@ -303,7 +211,6 @@ const LeagueHistory = () => {
             const stats = teamOverallStats[teamName];
             if (stats.seasonsPlayed.size === 0) return null;
 
-            const careerDPR = careerDPRData.find(dpr => dpr.team === teamName)?.dpr || 0;
             const totalGames = stats.totalWins + stats.totalLosses + stats.totalTies;
             const winPercentage = totalGames > 0 ? ((stats.totalWins + (0.5 * stats.totalTies)) / totalGames) : 0;
 
@@ -327,7 +234,7 @@ const LeagueHistory = () => {
             return {
                 team: teamName,
                 seasons: seasonsDisplay,
-                totalDPR: careerDPR,
+                totalDPR: stats.careerDPR,
                 record: `${stats.totalWins}-${stats.totalLosses}-${stats.totalTies}`,
                 totalWins: stats.totalWins,
                 winPercentage: winPercentage,
@@ -339,32 +246,57 @@ const LeagueHistory = () => {
 
         // Prepare data for the total DPR progression line graph
         const chartData = [];
-        // Ensure allYears is derived from historicalData.matchupsBySeason keys
         const allYearsForChart = Object.keys(historicalData.matchupsBySeason).map(Number).filter(y => !isNaN(y)).sort((a, b) => a - b);
-        const uniqueTeams = Array.from(new Set(
-            allMatchupsFlat.flatMap(m => [getDisplayTeamNameFromContext(m.team1, m.year), getDisplayTeamNameFromContext(m.team2, m.year)])
-            .filter(name => name !== null && name !== '')
-        )).sort();
 
-        setUniqueTeamsForChart(uniqueTeams);
+        // Get unique owner IDs from calculatedCareerDPRs to represent unique teams for the chart
+        const uniqueOwnerIdsForChart = Array.from(new Set(calculatedCareerDPRs.map(dpr => dpr.ownerId)));
+        // Map these ownerIds to their current team names for chart legend and data keys
+        const uniqueTeamsForChartDisplayNames = uniqueOwnerIdsForChart.map(ownerId => getDisplayTeamNameFromContext(ownerId, null)).sort();
 
-        const cumulativeTeamDPRs = {};
+        setUniqueTeamsForChart(uniqueTeamsForChartDisplayNames);
+
+        const cumulativeTeamDPRs = {}; // Stores DPR by ownerId
 
         allYearsForChart.forEach(currentYear => {
-            const matchesUpToCurrentYear = allMatchupsFlat.filter(match => parseInt(match.year) <= currentYear);
-            const { careerDPRData: cumulativeCareerDPRData } = calculateAllLeagueMetrics(matchesUpToCurrentYear, getDisplayTeamNameFromContext);
+            // Recalculate metrics up to the current year
+            const tempHistoricalDataForYear = {
+                matchupsBySeason: {},
+                rostersBySeason: {},
+                leaguesMetadataBySeason: {},
+                winnersBracketBySeason: {},
+                losersBracketBySeason: {},
+                usersBySeason: {}
+            };
 
-            uniqueTeams.forEach(team => {
-                const teamDPR = cumulativeCareerDPRData.find(dpr => dpr.team === team)?.dpr;
+            // Populate tempHistoricalDataForYear with data up to currentYear
+            Object.keys(historicalData.matchupsBySeason).forEach(yearKey => {
+                const yearNum = parseInt(yearKey);
+                if (yearNum <= currentYear) {
+                    tempHistoricalDataForYear.matchupsBySeason[yearKey] = historicalData.matchupsBySeason[yearKey];
+                    tempHistoricalDataForYear.rostersBySeason[yearKey] = historicalData.rostersBySeason[yearKey];
+                    tempHistoricalDataForYear.leaguesMetadataBySeason[yearKey] = historicalData.leaguesMetadataBySeason[yearKey];
+                    tempHistoricalDataForYear.winnersBracketBySeason[yearKey] = historicalData.winnersBracketBySeason[yearKey];
+                    tempHistoricalDataForYear.losersBracketBySeason[yearKey] = historicalData.losersBracketBySeason[yearKey];
+                    tempHistoricalDataForYear.usersBySeason[yearKey] = historicalData.usersBySeason[yearKey];
+                }
+            });
+
+            const { careerDPRData: cumulativeCareerDPRDataForYear } = calculateAllLeagueMetrics(tempHistoricalDataForYear, allDraftHistory, getDisplayTeamNameFromContext);
+
+            uniqueOwnerIdsForChart.forEach(ownerId => {
+                const teamDPR = cumulativeCareerDPRDataForYear.find(dpr => dpr.ownerId === ownerId)?.dpr;
                 if (teamDPR !== undefined) {
-                    cumulativeTeamDPRs[team] = teamDPR;
+                    cumulativeTeamDPRs[ownerId] = teamDPR;
+                } else {
+                    // If a team didn't exist in this year's data, carry over its last known DPR or default to 0
+                    cumulativeTeamDPRs[ownerId] = cumulativeTeamDPRs[ownerId] || 0;
                 }
             });
 
             const yearDataPoint = { year: currentYear };
-            const teamsWithDPRForRanking = uniqueTeams.map(team => ({
-                team: team,
-                dpr: cumulativeTeamDPRs[team] || 0
+            const teamsWithDPRForRanking = uniqueOwnerIdsForChart.map(ownerId => ({
+                ownerId: ownerId,
+                dpr: cumulativeTeamDPRs[ownerId] || 0
             }));
 
             teamsWithDPRForRanking.sort((a, b) => b.dpr - a.dpr);
@@ -374,8 +306,9 @@ const LeagueHistory = () => {
                 if (i > 0 && teamsWithDPRForRanking[i].dpr < teamsWithDPRForRanking[i - 1].dpr) {
                     currentRank = i + 1;
                 }
-                yearDataPoint[teamsWithDPRForRanking[i].team] = currentRank;
-                yearDataPoint[`${teamsWithDPRForRanking[i].team}_DPR`] = teamsWithDPRForRanking[i].dpr;
+                const teamDisplayName = getDisplayTeamNameFromContext(teamsWithDPRForRanking[i].ownerId, null); // Get current name for chart key
+                yearDataPoint[teamDisplayName] = currentRank;
+                yearDataPoint[`${teamDisplayName}_DPR`] = teamsWithDPRForRanking[i].dpr;
             }
 
             chartData.push(yearDataPoint);
@@ -385,7 +318,7 @@ const LeagueHistory = () => {
         // Set the season awards summary and sorted years
         setSeasonAwardsSummary(newSeasonAwardsSummary);
         setSortedYearsForAwards(Object.keys(newSeasonAwardsSummary).map(Number).sort((a, b) => b - a)); // Sort descending
-    }, [historicalData, getDisplayTeamNameFromContext, contextLoading, contextError]); // Dependencies
+    }, [historicalData, allDraftHistory, getDisplayTeamNameFromContext, contextLoading, contextError]); // Dependencies
 
     // Formatters
     const formatPercentage = (value) => {
