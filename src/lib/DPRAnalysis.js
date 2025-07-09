@@ -115,11 +115,25 @@ const DPRAnalysis = () => { // Removed props as data will come from context
 
         // Ensure teamSeasonalData exists and has totalGames > 0 to avoid irrelevant entries
         if (teamSeasonalData && teamSeasonalData.totalGames > 0) {
+            // FIXED: Determine the ownerId for this seasonal entry
+            let currentOwnerId = teamSeasonalData.ownerId; // Try to get it directly from seasonalMetrics first
+
+            // If ownerId is missing in seasonalMetrics, try to find it from historicalData.rostersBySeason
+            if (!currentOwnerId && historicalData?.rostersBySeason?.[year]) {
+                const rosterInHistoricalData = historicalData.rostersBySeason[year].find(
+                    (r) => String(r.roster_id) === String(rosterId)
+                );
+                if (rosterInHistoricalData) {
+                    currentOwnerId = rosterInHistoricalData.owner_id;
+                }
+            }
+
             allSeasonalDPRs.push({
               year: parseInt(year),
-              // FIXED: Ensure ownerId is passed to getTeamName for seasonal data
-              team: getTeamName(teamSeasonalData.ownerId, year),
+              // Use the resolved ownerId for getTeamName
+              team: getTeamName(currentOwnerId, year),
               rosterId: rosterId, // Keep rosterId for potential future use
+              ownerId: currentOwnerId, // Add ownerId to the seasonal data for consistency
               dpr: teamSeasonalData.adjustedDPR,
               wins: teamSeasonalData.wins,
               losses: teamSeasonalData.losses,
