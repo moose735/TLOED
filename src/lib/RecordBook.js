@@ -4,6 +4,10 @@ import { useSleeperData } from '../contexts/SleeperDataContext';
 import LeagueRecords from '../lib/LeagueRecords'; // This is your existing component for Overall League Records
 import SeasonRecords from '../lib/SeasonRecords'; // This is the component for Seasonal Records
 
+// IMPORTANT: This import is crucial if LeagueRecords expects it as a prop.
+// Based on your initial code, it does!
+import { calculateAllLeagueMetrics } from '../utils/calculations';
+
 const RecordBook = () => {
     // State to manage which tab is active: 'overall' or 'seasonal'
     const [activeTab, setActiveTab] = useState('overall'); // Default to 'overall'
@@ -11,7 +15,7 @@ const RecordBook = () => {
     // Destructure all necessary data from the context
     const {
         historicalData,
-        processedSeasonalRecords, // Needed for SeasonRecords
+        processedSeasonalRecords, // Needed for SeasonRecords (if it uses context directly)
         getTeamName,
         isLoading: dataIsLoading,
         error: dataError
@@ -80,8 +84,8 @@ const RecordBook = () => {
                         <LeagueRecords
                             historicalData={historicalData}
                             getTeamName={getTeamName}
-                            // Assuming calculateAllLeagueMetrics is consumed within LeagueRecords if needed
-                            // calculateAllLeagueMetrics={calculateAllLeagueMetrics} // Uncomment if LeagueRecords explicitly needs this as a prop
+                            // THIS IS THE CRUCIAL LINE RE-ADDED:
+                            calculateAllLeagueMetrics={calculateAllLeagueMetrics}
                         />
                     ) : (
                         <div className="text-center py-8 text-gray-600">No overall league data available.</div>
@@ -90,7 +94,9 @@ const RecordBook = () => {
 
                 {activeTab === 'seasonal' && (
                     hasSeasonalData ? (
-                        // SeasonRecords component uses useSleeperData internally, so no props needed here
+                        // SeasonRecords component should consume processedSeasonalRecords from context
+                        // if it needs it, or receive it as a prop if designed that way.
+                        // Assuming it uses context directly for processedSeasonalRecords.
                         <SeasonRecords />
                     ) : (
                         <div className="text-center py-8 text-gray-600">No seasonal data available for display.</div>
