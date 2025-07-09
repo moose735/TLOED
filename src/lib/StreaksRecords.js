@@ -22,7 +22,6 @@ const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is no
             return;
         }
 
-        // --- Removed internal flattening logic, now directly use historicalMatchups prop ---
         const allHistoricalMatchupsFlat = historicalMatchups; // Use the prop directly
 
         // Helper to store chronological game data for each team
@@ -32,17 +31,18 @@ const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is no
 
         allHistoricalMatchupsFlat.forEach(match => {
             // Ensure match has necessary properties (season and week are now expected to be on the object)
-            if (!match || !match.matchup_id || !match.roster_id || !match.points || !match.opponent_roster_id || !match.opponent_points || match.season === undefined || match.week === undefined) {
+            // FIXED: Use team1_ and team2_ properties from the already processed matchup object
+            if (!match || !match.matchup_id || !match.team1_roster_id || !match.team1_score || !match.team2_roster_id || !match.team2_score || match.season === undefined || match.week === undefined) {
                 console.warn("StreaksRecords: Skipping invalid or incomplete matchup:", match);
                 return;
             }
 
             const year = parseInt(match.season); // Assuming 'season' is the year property
             const week = parseInt(match.week);
-            const team1RosterId = String(match.roster_id);
-            const team2RosterId = String(match.opponent_roster_id);
-            const team1Score = parseFloat(match.points);
-            const team2Score = parseFloat(match.opponent_points);
+            const team1RosterId = String(match.team1_roster_id); // FIXED: Use team1_roster_id
+            const team2RosterId = String(match.team2_roster_id); // FIXED: Use team2_roster_id
+            const team1Score = parseFloat(match.team1_score);   // FIXED: Use team1_score
+            const team2Score = parseFloat(match.team2_score);   // FIXED: Use team2_score
 
             // Skip if data is not valid numbers
             if (isNaN(year) || isNaN(week) || isNaN(team1Score) || isNaN(team2Score)) {
@@ -52,8 +52,8 @@ const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is no
 
             // Get owner IDs for consistent tracking across seasons
             // Use historicalData from context for rostersBySeason lookup
-            const team1OwnerId = historicalData.rostersBySeason?.[year]?.find(r => r.roster_id === team1RosterId)?.owner_id;
-            const team2OwnerId = historicalData.rostersBySeason?.[year]?.find(r => r.roster_id === team2RosterId)?.owner_id;
+            const team1OwnerId = historicalData.rostersBySeason?.[year]?.find(r => String(r.roster_id) === team1RosterId)?.owner_id;
+            const team2OwnerId = historicalData.rostersBySeason?.[year]?.find(r => String(r.roster_id) === team2RosterId)?.owner_id;
 
             if (!team1OwnerId || !team2OwnerId) {
                 console.warn(`StreaksRecords: Skipping matchup due to missing owner ID for year ${year}. Team1Roster: ${team1RosterId}, Team2Roster: ${team2RosterId}`);
@@ -67,14 +67,32 @@ const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is no
             }
 
             const isTie = team1Score === team2Score;
-            const team1Won = team1Score > team2Score;
 
-            // Populate teamGameLogs using ownerId
+            // Populate teamGameLogs for both teams
             if (!teamGameLogs[team1OwnerId]) teamGameLogs[team1OwnerId] = [];
             if (!teamGameLogs[team2OwnerId]) teamGameLogs[team2OwnerId] = [];
 
-            teamGameLogs[team1OwnerId].push({ year, week, isWin: team1Won, isLoss: !team1Won && !isTie, isTie: isTie, score: team1Score, opponentScore: team2Score, rosterId: team1RosterId });
-            teamGameLogs[team2OwnerId].push({ year, week, isWin: !team1Won, isLoss: team1Won && !isTie, isTie: isTie, score: team2Score, opponentScore: team1Score, rosterId: team2RosterId });
+            teamGameLogs[team1OwnerId].push({
+                year,
+                week,
+                isWin: team1Score > team2Score,
+                isLoss: team1Score < team2Score,
+                isTie: isTie,
+                score: team1Score,
+                opponentScore: team2Score,
+                rosterId: team1RosterId // Store rosterId for weeklyScoresAcrossLeague lookup
+            });
+
+            teamGameLogs[team2OwnerId].push({
+                year,
+                week,
+                isWin: team2Score > team1Score,
+                isLoss: team2Score < team1Score,
+                isTie: isTie,
+                score: team2Score,
+                opponentScore: team1Score,
+                rosterId: team2RosterId // Store rosterId for weeklyScoresAcrossLeague lookup
+            });
 
             // Populate weeklyScoresAcrossLeague for score-based streaks
             if (!weeklyScoresAcrossLeague[year]) weeklyScoresAcrossLeague[year] = {};
