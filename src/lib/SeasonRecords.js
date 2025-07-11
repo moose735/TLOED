@@ -52,8 +52,6 @@ const SeasonRecords = () => {
     };
 
     useEffect(() => {
-        console.log("SeasonRecords useEffect: processedSeasonalRecords:", processedSeasonalRecords);
-
         if (loading || error || !processedSeasonalRecords || Object.keys(processedSeasonalRecords).length === 0) {
             // FIXED: Reset to initial state structure, not just empty object
             setSeasonalHighlights({
@@ -74,7 +72,6 @@ const SeasonRecords = () => {
                 highestLuckRatingSeason: { value: -Infinity, entries: [], key: 'luckRating' },
                 lowestLuckRatingSeason: { value: Infinity, entries: [], key: 'luckRating' },
             });
-            console.log("SeasonRecords useEffect: Data not ready or empty. Resetting highlights.");
             return;
         }
 
@@ -145,7 +142,6 @@ const SeasonRecords = () => {
 
                 // FIXED: Skip teams/seasons with 0 total games to avoid 0.000 DPR for future seasons
                 if (teamStats.totalGames === 0) {
-                    console.log(`SeasonRecords: Skipping team ${teamStats.teamName} (${year}) due to 0 total games.`);
                     return;
                 }
 
@@ -260,7 +256,6 @@ const SeasonRecords = () => {
         // FIXED: Added a robust check for 'record' and its 'entries' property
         if (!record || !Array.isArray(record.entries) || record.entries.length === 0 ||
             (typeof record.value === 'number' && (record.value === -Infinity || record.value === Infinity))) {
-            // console.warn("renderHighlightRecordEntry: Skipping render due to invalid record or empty entries.", record);
             return (
                 <>
                     <td className="py-2 px-4 text-left font-medium text-gray-700 capitalize">

@@ -1,158 +1,124 @@
 // src/lib/LuckRatingAnalysis.js
 import React, { useState, useEffect } from 'react';
 import { calculateAllLeagueMetrics } from '../utils/calculations'; // Import the new utility
+import { useSleeperData } from '../contexts/SleeperDataContext'; // Import the custom hook
 
-const LuckRatingAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
-  const [luckRatingData, setLuckRatingData] = useState([]);
+const LuckRatingAnalysis = () => {
+  // Consume necessary data from context
+  const {
+    loading: contextLoading, // Rename to avoid conflict with local loading state
+    error: contextError,    // Rename to avoid conflict with local error state
+    historicalData,
+    allDraftHistory, // Get allDraftHistory from context
+    getTeamName,
+    nflState // Get nflState from context
+  } = useSleeperData();
+
+  const [careerLuckData, setCareerLuckData] = useState([]); // New state for career luck data
+  const [seasonalLuckData, setSeasonalLuckData] = useState([]); // New state for seasonal luck data
   const [loading, setLoading] = useState(true);
+  const [showAllSeasonal, setShowAllSeasonal] = useState(false); // State for "Show More" seasonal data
 
   useEffect(() => {
-    if (!historicalMatchups || historicalMatchups.length === 0) {
-      setLuckRatingData([]);
+    // If context is still loading or has an error, set local loading/error states accordingly
+    if (contextLoading) {
+      setLoading(true);
+      return;
+    }
+    if (contextError) {
+      setLoading(false);
+      // You might want to display contextError message in the UI here as well
+      return;
+    }
+
+    // Check if historicalData is available and has any matchup data
+    if (!historicalData || Object.keys(historicalData.matchupsBySeason || {}).length === 0) {
+      setCareerLuckData([]);
+      setSeasonalLuckData([]);
       setLoading(false);
       return;
     }
 
+    // Add a defensive check to ensure getTeamName is a function
+    if (typeof getTeamName !== 'function') {
+        console.error("LuckRatingAnalysis: getTeamName is not a function from SleeperDataContext. Cannot perform calculations.");
+        setLoading(false);
+        setCareerLuckData([]);
+        setSeasonalLuckData([]);
+        return;
+    }
+
     setLoading(true);
 
-    // Use the centralized calculation logic
-    const { seasonalMetrics } = calculateAllLeagueMetrics(historicalMatchups, getDisplayTeamName);
+    // Use the centralized calculation logic to get seasonal and career metrics
+    // Pass historicalData, allDraftHistory, getTeamName, and nflState
+    const { seasonalMetrics, careerDPRData: calculatedCareerDPRs } = calculateAllLeagueMetrics(historicalData, allDraftHistory, getTeamName, nflState);
 
-    const allLuckRatings = [];
-    Object.keys(seasonalMetrics).forEach(year => {
-      Object.keys(seasonalMetrics[year]).forEach(team => {
-        // Ensure that the luckRating is populated for the team in this year
-        const teamData = seasonalMetrics[year][team];
-        if (typeof teamData.luckRating === 'number' && !isNaN(teamData.luckRating)) {
-          // We need projectedWins from the luck calculation, which is not directly returned by seasonalMetrics
-          // For now, we will re-calculate projected wins here if it's strictly needed for display.
-          // Or, better, enhance calculateAllLeagueMetrics to return projected wins per season per team.
-          // For simplicity and direct use of the centralized function, we rely on `luckRating` here.
-          // If the original component showed projectedWins, we need to adapt this or adjust `calculations.js` output.
-          // Assuming `LuckRatingAnalysis` primarily needs `luckRating` and `actualWins`.
-          let actualWins = 0;
-          historicalMatchups.forEach(match => {
-            if (!(match?.regSeason === true || match?.regSeason === 'true') || parseInt(match?.year || '0') !== parseInt(year)) return;
-            const displayTeam1 = getDisplayTeamName(String(match?.team1 || '').trim());
-            const displayTeam2 = getDisplayTeamName(String(match?.team2 || '').trim());
-            if (displayTeam1 === team) {
-                if (parseFloat(match?.team1Score || '0') > parseFloat(match?.team2Score || '0')) actualWins++;
-            } else if (displayTeam2 === team) {
-                if (parseFloat(match?.team2Score || '0') > parseFloat(match?.team1Score || '0')) actualWins++;
-            }
-          });
+    const allSeasonalLuckRatings = [];
+    const currentNFLSeason = nflState?.season ? parseInt(nflState.season) : new Date().getFullYear();
 
-          // To get projectedWins, we would need to pass weeklyGameScoresByYearAndWeek to calculateLuckRating
-          // and have calculateLuckRating return both luckRating and projectedWins.
-          // For now, if the original component showed it, we will put a placeholder or add it if `calculations.js` is updated.
-          // Let's assume for this fix, we only show `luckRating` as the primary metric, and `actualWins`.
-          // To get projected wins, the calculations.js would need to expose it or be modified.
+    Object.keys(seasonalMetrics).forEach(yearStr => {
+      const year = parseInt(yearStr);
 
-          // REVISIT: The current `calculateLuckRating` only returns the difference.
-          // To show projected wins, we need to extract `totalWeeklyLuckScoreSum` from `calculateLuckRating`.
-          // For now, I'll calculate it inline *again* or simplify the table display if not directly available.
+      // Skip current NFL season if Week 1 data is not yet available
+      // This prevents displaying incomplete current season data as 0s or N/As
+      if (year === currentNFLSeason) {
+        const week1Matchups = historicalData.matchupsBySeason?.[year]?.['1'];
+        if (!week1Matchups || week1Matchups.length === 0) {
+          console.log(`LuckRatingAnalysis: Skipping year ${year} (current season) as Week 1 data is not available.`);
+          return; // Skip this year
+        }
+      }
 
-          // To avoid redundant calculation and keep components lean:
-          // Modify `calculateAllLeagueMetrics` in `calculations.js` to return `projectedWins` per team per season.
-          // This will require an update to `calculations.js` structure.
+      Object.keys(seasonalMetrics[year]).forEach(rosterId => { // Iterate over rosterIds
+        const teamData = seasonalMetrics[year][rosterId]; // Access team data by rosterId
 
-          // For this immediate fix, let's include a temporary re-calculation of projected wins for display only.
-          // This is not ideal, but necessary if calculations.js doesn't expose it.
-          // Better: update calculations.js.
-
-          // Recalculating projectedWins here for display consistency:
-          let totalWeeklyLuckScoreSumForDisplay = 0;
-          const weeklyGameScoresByYearAndWeekForLuck = {}; // Rebuild for this specific need
-
-          historicalMatchups.forEach(m => {
-            const t1 = getDisplayTeamName(String(m?.team1 || '').trim());
-            const t2 = getDisplayTeamName(String(m?.team2 || '').trim());
-            const y = parseInt(m?.year || '0');
-            const w = parseInt(m?.week || '0');
-            const s1 = parseFloat(m?.team1Score || '0');
-            const s2 = parseFloat(m?.team2Score || '0');
-            if (isNaN(y) || isNaN(w) || isNaN(s1) || isNaN(s2) || !(m?.regSeason === true || m?.regSeason === 'true')) return;
-
-            if (!weeklyGameScoresByYearAndWeekForLuck[y]) weeklyGameScoresByYearAndWeekForLuck[y] = {};
-            if (!weeklyGameScoresByYearAndWeekForLuck[y][w]) weeklyGameScoresByYearAndWeekForLuck[y][w] = [];
-            weeklyGameScoresByYearAndWeekForLuck[y][w].push({ team: t1, score: s1 });
-            weeklyGameScoresByYearAndWeekForLuck[y][w].push({ team: t2, score: s2 });
-          });
-
-
-          if (weeklyGameScoresByYearAndWeekForLuck[year]) {
-              Object.keys(weeklyGameScoresByYearAndWeekForLuck[year]).forEach(week => {
-                  const allScoresInCurrentWeek = weeklyGameScoresByYearAndWeekForLuck[year][week];
-                  const uniqueTeamsWithScores = new Set(allScoresInCurrentWeek
-                      .filter(entry => typeof entry.score === 'number' && !isNaN(entry.score))
-                      .map(entry => entry.team)
-                  );
-                  if (!uniqueTeamsWithScores.has(team)) return; // Use 'team' (current team in loop)
-
-                  const relevantMatchupsForWeek = historicalMatchups.filter(m =>
-                      parseInt(m?.year || '0') === parseInt(year) &&
-                      parseInt(m?.week || '0') === parseInt(week) &&
-                      (m?.regSeason === true || m?.regSeason === 'true')
-                  );
-                  if (relevantMatchupsForWeek.length === 0) return;
-
-                  const currentTeamMatchEntry = relevantMatchupsForWeek.find(match => {
-                      const matchTeam1 = getDisplayTeamName(String(match?.team1 || '').trim());
-                      const matchTeam2 = getDisplayTeamName(String(match?.team2 || '').trim());
-                      return matchTeam1 === team || matchTeam2 === team; // Use 'team' (current team in loop)
-                  });
-                  if (!currentTeamMatchEntry) return;
-
-                  let currentTeamScoreForWeek;
-                  const mappedTeam1 = getDisplayTeamName(String(currentTeamMatchEntry?.team1 || '').trim());
-                  const mappedTeam2 = getDisplayTeamName(String(currentTeamMatchEntry?.team2 || '').trim());
-
-                  if (mappedTeam1 === team) { // Use 'team'
-                      currentTeamScoreForWeek = parseFloat(currentTeamMatchEntry?.team1Score || '0');
-                  } else if (mappedTeam2 === team) { // Use 'team'
-                      currentTeamScoreForWeek = parseFloat(currentTeamMatchEntry?.team2Score || '0');
-                  } else { return; }
-
-                  if (isNaN(currentTeamScoreForWeek)) return;
-
-                  let outscoredCount = 0;
-                  let oneLessCount = 0;
-
-                  allScoresInCurrentWeek.forEach(otherTeamEntry => {
-                      if (otherTeamEntry.team !== team) { // Use 'team'
-                          if (currentTeamScoreForWeek > otherTeamEntry.score) {
-                              outscoredCount++;
-                          }
-                          if (currentTeamScoreForWeek - 1 === otherTeamEntry.score) {
-                              oneLessCount++;
-                          }
-                      }
-                  });
-
-                  const denominatorX = 11;
-                  const denominatorY = 22;
-                  const weeklyProjectedWinComponentX = denominatorX > 0 ? (outscoredCount / denominatorX) : 0;
-                  const weeklyLuckScorePartY = denominatorY > 0 ? (oneLessCount / denominatorY) : 0;
-                  totalWeeklyLuckScoreSumForDisplay += (weeklyProjectedWinComponentX + weeklyLuckScorePartY);
-              });
-          }
-
-          allLuckRatings.push({
+        // Ensure that the luckRating, actualWinsRecord, and seasonalExpectedWinsSum are populated for the team in this year
+        if (
+            teamData &&
+            typeof teamData.luckRating === 'number' && !isNaN(teamData.luckRating) &&
+            typeof teamData.actualWinsRecord === 'number' && !isNaN(teamData.actualWinsRecord) &&
+            typeof teamData.seasonalExpectedWinsSum === 'number' && !isNaN(teamData.seasonalExpectedWinsSum)
+        ) {
+          allSeasonalLuckRatings.push({
             year: parseInt(year),
-            team: team,
+            team: getTeamName(teamData.ownerId, year), // Use getTeamName with ownerId and year
             luckRating: teamData.luckRating,
-            actualWins: actualWins,
-            projectedWins: totalWeeklyLuckScoreSumForDisplay // This is a temporary re-calculation for display
+            actualWins: teamData.actualWinsRecord, // Directly use actualWinsRecord
+            projectedWins: teamData.seasonalExpectedWinsSum // Directly use seasonalExpectedWinsSum
           });
         }
       });
     });
 
-    allLuckRatings.sort((a, b) => b.luckRating - a.luckRating); // Sort by luck rating descending
-    setLuckRatingData(allLuckRatings);
+    // Sort seasonal luck ratings by luckRating (descending, as higher is better for "luckiest")
+    allSeasonalLuckRatings.sort((a, b) => b.luckRating - a.luckRating);
+    setSeasonalLuckData(allSeasonalLuckRatings);
+
+    const allCareerLuckRatings = [];
+    calculatedCareerDPRs.forEach(careerStats => {
+        if (
+            careerStats &&
+            typeof careerStats.totalLuckRating === 'number' && !isNaN(careerStats.totalLuckRating) &&
+            typeof careerStats.actualCareerWinsRecord === 'number' && !isNaN(careerStats.actualCareerWinsRecord) &&
+            typeof careerStats.careerExpectedWinsSum === 'number' && !isNaN(careerStats.careerExpectedWinsSum)
+        ) {
+            allCareerLuckRatings.push({
+                team: getTeamName(careerStats.ownerId, null), // Get current display name for career
+                luckRating: careerStats.totalLuckRating,
+                actualWins: careerStats.actualCareerWinsRecord,
+                projectedWins: careerStats.careerExpectedWinsSum
+            });
+        }
+    });
+
+    // Sort career luck ratings by luckRating (descending, as higher is better for "luckiest")
+    allCareerLuckRatings.sort((a, b) => b.luckRating - a.luckRating);
+    setCareerLuckData(allCareerLuckRatings);
+
     setLoading(false);
 
-  }, [historicalMatchups, getDisplayTeamName]);
+  }, [historicalData, allDraftHistory, getTeamName, nflState, contextLoading, contextError]); // Dependencies updated
 
   const formatLuckRating = (value) => {
     if (typeof value === 'number' && !isNaN(value)) {
@@ -160,6 +126,8 @@ const LuckRatingAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
     }
     return 'N/A';
   };
+
+  const displayedSeasonalLuckData = showAllSeasonal ? seasonalLuckData : seasonalLuckData.slice(0, 20);
 
   return (
     <div className="w-full">
@@ -170,39 +138,92 @@ const LuckRatingAnalysis = ({ historicalMatchups, getDisplayTeamName }) => {
         This analysis indicates how much "luckier" or "unluckier" a team was
         compared to their projected wins if every possible matchup against other teams
         in their league week-by-week were played. A positive score means luckier, negative means unluckier.
+        Calculation includes regular season games only.
       </p>
 
       {loading ? (
         <p className="text-center text-gray-600">Calculating luck ratings...</p>
-      ) : luckRatingData.length > 0 ? (
-        <div className="overflow-x-auto">
-          <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
-            <thead className="bg-yellow-100">
-              <tr>
-                <th className="py-2 px-3 text-left text-xs font-semibold text-yellow-700 uppercase tracking-wider border-b border-gray-200">Rank</th>
-                <th className="py-2 px-3 text-left text-xs font-semibold text-yellow-700 uppercase tracking-wider border-b border-gray-200">Season</th>
-                <th className="py-2 px-3 text-left text-xs font-semibold text-yellow-700 uppercase tracking-wider border-b border-gray-200">Team</th>
-                <th className="py-2 px-3 text-left text-xs font-semibold text-yellow-700 uppercase tracking-wider border-b border-gray-200">Luck Rating</th>
-                <th className="py-2 px-3 text-left text-xs font-semibold text-yellow-700 uppercase tracking-wider border-b border-gray-200">Actual Wins</th>
-                <th className="py-2 px-3 text-left text-xs font-semibold text-yellow-700 uppercase tracking-wider border-b border-gray-200">Projected Wins</th>
-              </tr>
-            </thead>
-            <tbody>
-              {luckRatingData.map((data, index) => (
-                <tr key={`${data.team}-${data.year}`} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                  <td className="py-2 px-3 text-sm text-gray-800">{index + 1}</td>
-                  <td className="py-2 px-3 text-sm text-gray-800">{data.year}</td>
-                  <td className="py-2 px-3 text-sm text-gray-800">{data.team}</td>
-                  <td className="py-2 px-3 text-sm text-gray-700">{formatLuckRating(data.luckRating)}</td>
-                  <td className="py-2 px-3 text-sm text-gray-700">{data.actualWins}</td>
-                  <td className="py-2 px-3 text-sm text-gray-700">{formatLuckRating(data.projectedWins)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       ) : (
-        <p className="text-center text-gray-600">No luck rating data found.</p>
+        <>
+          {/* Career Luck Rankings */}
+          <section className="mb-8">
+            <h3 className="text-xl font-bold text-blue-800 mb-4 border-b pb-2">Career Luck Rankings</h3>
+            {careerLuckData.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
+                  <thead className="bg-blue-100">
+                    <tr>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Rank</th>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Career Luck Rating</th>
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Actual Wins</th>
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Projected Wins</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {careerLuckData.map((data, index) => (
+                      <tr key={data.team} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                        <td className="py-2 px-3 text-sm text-gray-800">{index + 1}</td>
+                        <td className="py-2 px-3 text-sm text-gray-800">{data.team}</td>
+                        <td className="py-2 px-3 text-sm text-gray-700 text-center">{formatLuckRating(data.luckRating)}</td>
+                        <td className="py-2 px-3 text-sm text-gray-700 text-center">{data.actualWins}</td>
+                        <td className="py-2 px-3 text-sm text-gray-700 text-center">{formatLuckRating(data.projectedWins)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-center text-gray-600">No career luck data available.</p>
+            )}
+          </section>
+
+          {/* Seasonal Luck Rankings */}
+          <section className="mb-8">
+            <h3 className="text-xl font-bold text-green-800 mb-4 border-b pb-2">Seasonal Luck Rankings</h3>
+            {seasonalLuckData.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
+                  <thead className="bg-green-100">
+                    <tr>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Rank</th>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Season</th>
+                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Team</th>
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Luck Rating</th>
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Actual Wins</th>
+                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Projected Wins</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayedSeasonalLuckData.map((data, index) => (
+                      <tr key={`${data.team}-${data.year}`} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                        <td className="py-2 px-3 text-sm text-gray-800">{index + 1}</td>
+                        <td className="py-2 px-3 text-sm text-gray-800">{data.year}</td>
+                        <td className="py-2 px-3 text-sm text-gray-800">{data.team}</td>
+                        <td className="py-2 px-3 text-sm text-gray-700 text-center">{formatLuckRating(data.luckRating)}</td>
+                        <td className="py-2 px-3 text-sm text-gray-700 text-center">{data.actualWins}</td>
+                        <td className="py-2 px-3 text-sm text-gray-700 text-center">{formatLuckRating(data.projectedWins)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-center text-gray-600">No seasonal luck data available.</p>
+            )}
+
+            {seasonalLuckData.length > 20 && (
+              <div className="text-center mt-4">
+                <button
+                  onClick={() => setShowAllSeasonal(!showAllSeasonal)}
+                  className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                >
+                  {showAllSeasonal ? 'Show Less' : 'Show All Seasons'}
+                </button>
+              </div>
+            )}
+          </section>
+        </>
       )}
     </div>
   );

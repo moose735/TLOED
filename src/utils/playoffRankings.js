@@ -1,97 +1,178 @@
 // src/utils/playoffRankings.js
 
 /**
- * Calculates the final playoff finish (1st, 2nd, ..., 12th) for each team
- * based on the structured playoff bracket data and known outcomes,
- * following the specific ranking rules provided for your league.
+ * Calculates playoff finishes (ranks) for each team based on winners and losers bracket data.
+ * It determines 1st, 2nd, 3rd place, and then ranks teams in the losers bracket.
  *
- * @param {object} playoffData - Object containing winnersBracket and losersBracket arrays,
- * enriched with matchup results (w, l - winner/loser roster_id).
- * Example structure for playoffData: { winnersBracket: [...], losersBracket: [...] }
- * @param {Map<string, object>} rostersById - A map of roster_id (string) to full roster details
- * (e.g., { roster_id: '...', ownerDisplayName: '...', ownerTeamName: '...' }).
- * @returns {Array<object>} An array of team objects with their final 'playoffFinish' property,
- * sorted by rank.
+ * @param {Object} bracketData - An object containing winnersBracket and losersBracket arrays.
+ * @param {Map<string, string>} rosterIdToOwnerIdMap - A map from roster_id to owner_id.
+ * @param {Function} getTeamName - A function to get the display name of a team.
+ * @param {number} currentYear - The year for which playoffs are being calculated.
+ * @param {Object} seasonalStatsForYear - Raw seasonal stats for all teams in the current year (from calculations.js's yearStatsRaw).
+ * @returns {Array<Object>} An array of objects, each with roster_id and playoffFinish (rank).
  */
-export function calculatePlayoffFinishes(playoffData, rostersById) {
-    const { winnersBracket, losersBracket } = playoffData;
-    const finalRankings = new Map(); // Map to store roster_id -> final rank
+export const calculatePlayoffFinishes = (bracketData, rosterIdToOwnerIdMap, getTeamName, currentYear, seasonalStatsForYear) => {
+    const { winnersBracket, losersBracket } = bracketData;
+    const finalRanks = new Map(); // Map to store final ranks: roster_id -> rank
 
-    // --- Winners Bracket Logic (1st - 6th) ---
-    // These matches directly determine the top 6 positions.
+    // Helper to get team details (for logging purposes)
+    const getTeamDetails = (rosterId) => {
+        const ownerId = rosterIdToOwnerIdMap.get(String(roosterId));
+        return {
+            roster_id: rosterId,
+            owner_id: ownerId,
+            teamName: getTeamName(ownerId, currentYear)
+        };
+    };
 
-    // 1st & 2nd Place: Championship Match (Round 3, Match 6)
-    const championshipMatch = winnersBracket.find(m => m.r === 3 && m.m === 6);
-    if (championshipMatch && championshipMatch.w && championshipMatch.l) {
-        finalRankings.set(championshipMatch.w, 1); // Champion
-        finalRankings.set(championshipMatch.l, 2); // Runner-Up
-    } else {
-        console.warn("Championship match (W:R3:M6) not found or not played yet. 1st/2nd place cannot be determined.");
-    }
+    // --- Process Winners Bracket for Championship, 3rd, 5th place ---
+    // Sort winnersBracket by round (desc) and then match_id (desc) to ensure final matches are processed first
+    const sortedWinnersBracket = [...winnersBracket].sort((a, b) => {
+        if (b.r !== a.r) return b.r - a.r;
+        return b.m - a.m;
+    });
 
-    // 3rd & 4th Place: 3rd Place Match (Round 3, Match 7)
-    const thirdPlaceMatch = winnersBracket.find(m => m.r === 3 && m.m === 7);
-    if (thirdPlaceMatch && thirdPlaceMatch.w && thirdPlaceMatch.l) {
-        finalRankings.set(thirdPlaceMatch.w, 3); // 3rd Place
-        finalRankings.set(thirdPlaceMatch.l, 4); // 4th Place
-    } else {
-        console.warn("3rd Place match (W:R3:M7) not found or not played yet. 3rd/4th place cannot be determined.");
-    }
+    sortedWinnersBracket.forEach(match => {
+        if (match.w && match.l && typeof match.p === 'number') { // Only process if winner and loser are determined AND 'p' is present
+            const winnerId = String(match.w);
+            const loserId = String(match.l);
 
-    // 5th & 6th Place: This is the winner/loser of a specific consolation match within the winners bracket.
-    // Based on your provided data, this is Round 2, Match 5 in the Winners Bracket.
-    const fifthSixthPlaceMatch = winnersBracket.find(m => m.r === 2 && m.m === 5);
-    if (fifthSixthPlaceMatch && fifthSixthPlaceMatch.w && fifthSixthPlaceMatch.l) {
-        finalRankings.set(fifthSixthPlaceMatch.w, 5); // 5th Place (Winner of this match)
-        finalRankings.set(fifthSixthPlaceMatch.l, 6); // 6th Place (Loser of this match)
-    } else {
-        console.warn("5th Place match (W:R2:M5) not found or not played yet. 5th/6th place cannot be determined.");
-    }
+            let rankWinner = null;
+            let rankLoser = null;
 
-    // --- Losers Bracket Logic (7th - 12th) ---
-    // These matches directly determine the 7th through 12th positions.
+            if (match.p === 1) { // Championship Game
+                rankWinner = 1;
+                rankLoser = 2;
+            } else if (match.p === 3) { // 3rd Place Game
+                rankWinner = 3;
+                rankLoser = 4;
+            } else if (match.p === 5) { // 5th Place Game
+                rankWinner = 5;
+                rankLoser = 6;
+            }
 
-    // 7th & 8th Place: Consolation Championship (Round 3, Match 6 in your Losers Bracket)
-    const consolationChampionshipMatch = losersBracket.find(m => m.r === 3 && m.m === 6);
-    if (consolationChampionshipMatch && consolationChampionshipMatch.w && consolationChampionshipMatch.l) {
-        finalRankings.set(consolationChampionshipMatch.w, 7); // 7th Place
-        finalRankings.set(consolationChampionshipMatch.l, 8); // 8th Place
-    } else {
-        console.warn("Consolation Championship match (L:R3:M6) not found or not played yet. 7th/8th place cannot be determined.");
-    }
-
-    // 9th & 10th Place: Consolation 9th Place Match (Round 3, Match 7 in your Losers Bracket)
-    const ninthTenthPlaceMatch = losersBracket.find(m => m.r === 3 && m.m === 7);
-    if (ninthTenthPlaceMatch && ninthTenthPlaceMatch.w && ninthTenthPlaceMatch.l) {
-        finalRankings.set(ninthTenthPlaceMatch.w, 9); // 9th Place
-        finalRankings.set(ninthTenthPlaceMatch.l, 10); // 10th Place
-    } else {
-        console.warn("9th Place match (L:R3:M7) not found or not played yet. 9th/10th place cannot be determined.");
-    }
-
-    // 11th & 12th Place: Consolation 11th Place Match (Round 2, Match 5 in your Losers Bracket)
-    const eleventhTwelfthPlaceMatch = losersBracket.find(m => m.r === 2 && m.m === 5);
-    if (eleventhTwelfthPlaceMatch && eleventhTwelfthPlaceMatch.w && eleventhTwelfthPlaceMatch.l) {
-        finalRankings.set(eleventhTwelfthPlaceMatch.w, 11); // 11th Place
-        finalRankings.set(eleventhTwelfthPlaceMatch.l, 12); // 12th Place (Last Place)
-    } else {
-        console.warn("11th Place match (L:R2:M5) not found or not played yet. 11th/12th place cannot be determined.");
-    }
-
-    // --- Compile and Return Results ---
-    const teamsWithPlayoffFinishes = [];
-    rostersById.forEach(roster => {
-        const finish = finalRankings.get(roster.roster_id);
-        if (finish) { // Only include teams that have a determined playoff finish
-            teamsWithPlayoffFinishes.push({
-                roster_id: roster.roster_id,
-                ownerDisplayName: roster.ownerDisplayName,
-                ownerTeamName: roster.ownerTeamName,
-                playoffFinish: finish
-            });
+            if (rankWinner !== null) {
+                // Assign ranks if not already assigned (e.g., if a team won multiple consolation games, only their highest rank counts)
+                if (!finalRanks.has(winnerId)) {
+                    finalRanks.set(winnerId, rankWinner);
+                }
+                if (!finalRanks.has(loserId)) {
+                    finalRanks.set(loserId, rankLoser);
+                }
+            }
         }
     });
 
-    // Sort by playoff finish numerically
-    return teamsWithPlayoffFinishes.sort((a, b) => a.playoffFinish - b.playoffFinish);
-}
+    // --- Process Losers Bracket for 7th, 9th, 11th place ---
+    const sortedLosersBracket = [...losersBracket].sort((a, b) => {
+        if (b.r !== a.r) return b.r - a.r;
+        return b.m - a.m;
+    });
+
+    sortedLosersBracket.forEach(match => {
+        if (match.w && match.l && typeof match.p === 'number') { // Only process if winner and loser are determined AND 'p' is present
+            const winnerId = String(match.w);
+            const loserId = String(match.l);
+
+            // The 'p' value in losersBracket directly corresponds to the winner's rank
+            const rankWinner = match.p;
+            const rankLoser = match.p + 1; // Loser gets the next rank
+
+            if (rankWinner !== null) {
+                // Assign ranks, but only if the team hasn't already been assigned a higher (better) rank
+                if (!finalRanks.has(winnerId) || finalRanks.get(winnerId) > rankWinner) {
+                    finalRanks.set(winnerId, rankWinner);
+                }
+                if (!finalRanks.has(loserId) || finalRanks.get(loserId) > rankLoser) {
+                    finalRanks.set(loserId, rankLoser);
+                }
+            }
+        }
+    });
+
+
+    // --- Assign ranks to all remaining unranked teams based on regular season performance ---
+    const allLeagueRosterIds = Array.from(rosterIdToOwnerIdMap.keys());
+    const totalTeamsInLeague = allLeagueRosterIds.length;
+
+    // Get all roster IDs that are still unranked
+    let unrankedRosterIds = allLeagueRosterIds.filter(rosterId => !finalRanks.has(rosterId));
+
+    // Sort unranked teams by regular season performance:
+    // 1. Win Percentage (descending)
+    // 2. Points For (descending)
+    // 3. Roster ID (ascending, as a tie-breaker for consistency)
+    unrankedRosterIds.sort((a, b) => {
+        const statsA = seasonalStatsForYear[a];
+        const statsB = seasonalStatsForYear[b];
+
+        // Handle cases where stats might be missing
+        if (!statsA && !statsB) return 0;
+        if (!statsA) return 1; // Push missing stats to the end
+        if (!statsB) return -1; // Pull valid stats forward
+
+        const winPctA = statsA.totalGames > 0 ? (statsA.wins + 0.5 * statsA.ties) / statsA.totalGames : 0;
+        const winPctB = statsB.totalGames > 0 ? (statsB.wins + 0.5 * statsB.ties) / statsB.totalGames : 0;
+
+        if (winPctB !== winPctA) {
+            return winPctB - winPctA; // Higher win percentage first
+        }
+
+        if (statsB.pointsFor !== statsA.pointsFor) {
+            return statsB.pointsFor - statsA.pointsFor; // Higher points for first
+        }
+
+        return parseInt(a) - parseInt(b); // Fallback to roster ID
+    });
+
+
+    // Assign ranks to the remaining unranked teams, filling sequentially from the next available rank
+    let nextAvailableRank = 1;
+    // Find the highest rank already assigned to ensure we start from the next available integer rank
+    for (const rank of finalRanks.values()) {
+        if (typeof rank === 'number') {
+            nextAvailableRank = Math.max(nextAvailableRank, rank + 1);
+        }
+    }
+    // Ensure nextAvailableRank is at least 1
+    nextAvailableRank = Math.max(1, nextAvailableRank);
+
+    for (const rosterId of unrankedRosterIds) {
+        if (!finalRanks.has(rosterId)) { // Double check in case it was assigned by a previous heuristic
+            finalRanks.set(rosterId, nextAvailableRank);
+            nextAvailableRank++;
+        }
+    }
+
+    // Final safety net: Ensure all teams have a rank from 1 to totalTeamsInLeague
+    // This handles any teams that might have been missed entirely (e.g., didn't play in playoffs, or data issues)
+    allLeagueRosterIds.forEach(rosterId => {
+        if (!finalRanks.has(rosterId)) {
+            finalRanks.set(rosterId, nextAvailableRank);
+            nextAvailableRank++;
+        }
+    });
+
+
+    const result = Array.from(finalRanks.entries()).map(([roster_id, rank]) => ({
+        roster_id,
+        playoffFinish: rank
+    }));
+
+    // Sort the results by rank
+    result.sort((a, b) => {
+        const rankA = typeof a.playoffFinish === 'number' ? a.playoffFinish : Infinity;
+        const rankB = typeof b.playoffFinish === 'number' ? b.playoffFinish : Infinity;
+        return rankA - rankB;
+    });
+
+    return result;
+};
+
+// Helper function to get ordinal suffix (1st, 2nd, 3rd, 4th, etc.) - duplicated for self-containment
+const getOrdinalSuffix = (n) => {
+    if (typeof n !== 'number' || isNaN(n)) return '';
+    const s = ["th", "st", "nd", "rd"];
+    const v = n % 100;
+    return (s[v - 20] || s[v] || s[0]);
+};

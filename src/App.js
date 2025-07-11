@@ -17,6 +17,7 @@ import FinancialTracker from './components/FinancialTracker';
 import Dashboard from './components/Dashboard';
 import MatchupHistory from './components/MatchupHistory';
 import TeamsOverviewPage from './lib/TeamsOverviewPage'; // Import the new TeamsOverviewPage
+// import YahooDataLoader from './components/YahooDataLoader'; // Removed as it's no longer needed
 
 // Import the custom hook from your SleeperDataContext
 import { SleeperDataProvider, useSleeperData } from './contexts/SleeperDataContext';
@@ -42,6 +43,7 @@ const NAV_CATEGORIES = {
         tab: 'teamsOverview', // This tab will render TeamsOverviewPage
     },
     FINANCIALS: { label: 'Financials', tab: 'financials' },
+    // Removed DATA_TOOLS category as it's no longer needed
 };
 
 // Flattened list of all possible tabs
@@ -57,6 +59,7 @@ const TABS = {
     FINANCIALS: 'financials',
     MATCHUP_HISTORY: 'matchupHistory',
     TEAMS_OVERVIEW: 'teamsOverview', // New tab for the TeamsOverviewPage
+    // Removed IMPORT_YAHOO_DATA as it's no longer needed
 };
 
 
@@ -143,13 +146,15 @@ const AppContent = () => {
                 // DPRAnalysis now directly consumes historicalData from context, no props needed here
                 return <DPRAnalysis />;
             case TABS.LUCK_RATING:
-                return <LuckRatingAnalysis historicalMatchups={historicalData.matchupsBySeason} />; // Pass matchupsBySeason
+                // REMOVED historicalMatchups prop. LuckRatingAnalysis now gets data from context.
+                return <LuckRatingAnalysis />;
             case TABS.TEAMS_OVERVIEW: // New case for the TeamsOverviewPage
                 return <TeamsOverviewPage />; // TeamsOverviewPage handles its own team selection
             case TABS.FINANCIALS:
                 return <FinancialTracker />;
             case TABS.MATCHUP_HISTORY:
                 return <MatchupHistory />;
+            // Removed case for TABS.IMPORT_YAHOO_DATA
             default:
                 return <Dashboard />;
         }
@@ -209,6 +214,7 @@ const AppContent = () => {
                         onClick={() => handleTabClick(NAV_CATEGORIES.FINANCIALS.tab)}>
                         {NAV_CATEGORIES.FINANCIALS.label}
                     </li>
+                    {/* Removed Data Tools Submenu */}
                 </ul>
             </nav>
 
