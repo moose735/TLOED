@@ -268,7 +268,7 @@ function processRawMatchups(rawMatchups, rosterIdToDetailsMap, season, week) {
                     processedMatchupKeys.add(uniqueMatchupKey); // Mark this matchup as processed
                 } else {
                     // This case means a matchup_id was present, but no opponent was found.
-                    // This could be an incomplete matchup or an edge case where a team is effectively on a bye
+                    // This could be an an incomplete matchup or an edge case where a team is effectively on a bye
                     // but still assigned a matchup_id. Treat it as a bye to ensure score is counted.
                     console.warn(`[processRawMatchups] Matchup ID ${matchupId} for roster ${rosterId} in week ${week} has no apparent opponent. Treating as a bye.`);
                     processedMatchups.push({
@@ -284,7 +284,7 @@ function processRawMatchups(rawMatchups, rosterIdToDetailsMap, season, week) {
                         winner_roster_id: points > 0 ? rosterId : null, // If score > 0, they "win" the bye
                         loser_roster_id: points <= 0 ? rosterId : null, // If score <= 0, they "lose" the bye (or tie)
                     });
-                     processedMatchupKeys.add(`${rosterId}_${week}_bye`); // Ensure unique key for this bye
+                    processedMatchupKeys.add(`${rosterId}_${week}_bye`); // Ensure unique key for this bye
                 }
             }
         } else {
@@ -389,20 +389,25 @@ export async function fetchLosersBracket(leagueId) {
 /**
  * Enriches bracket matchups with scores from the corresponding weekly matchup data and identifies bye weeks.
  * @param {Array<Object>} rawBracketData The raw bracket array (winners_bracket or losers_bracket).
- * @param {Object} allWeeklyScoresForSeason An object where keys are week numbers and values are arrays of processed matchup data for that week.
+ * @param {Object} allWeeklyScoresForSeason An object where keys are week numbers and values are arrays of processed matchup data.
  * @param {Map<string, Object>} rosterIdToDetailsMap A map for roster_id to enriched roster details.
  * @param {number} playoffStartWeek The week number when playoffs begin for this league.
+ * @param {string} bracketType - 'winners' or 'losers' for logging clarity.
+ * @param {string} season - The current season being processed. // NEW: Added season parameter
  * @returns {Array<Object>} The bracket data with added score information and bye teams.
  */
-function enrichBracketWithScores(rawBracketData, allWeeklyScoresForSeason, rosterIdToDetailsMap, playoffStartWeek) {
+function enrichBracketWithScores(rawBracketData, allWeeklyScoresForSeason, rosterIdToDetailsMap, playoffStartWeek, bracketType, season) { // NEW: Added season parameter
+    console.log(`[enrichBracketWithScores] Starting for ${bracketType} bracket, season: ${season}, raw data count: ${rawBracketData.length}`);
     if (!rawBracketData || rawBracketData.length === 0 || !allWeeklyScoresForSeason || !rosterIdToDetailsMap) {
+        console.warn(`[enrichBracketWithScores] Returning empty array due to missing input data for ${bracketType} bracket, season ${season}.`);
         return []; // Return empty array if no data
     }
 
     // Sort raw bracket data by round and then match_id to ensure dependencies are processed first
     const sortedRawBracketData = [...rawBracketData].sort((a, b) => {
-        if (a.r !== b.r) return b.r - a.r;
-        return b.m - a.m;
+        // Process lower rounds first (e.g., Round 1 before Round 2)
+        if (a.r !== b.r) return a.r - b.r;
+        return a.m - b.m; // Then by match ID
     });
 
     const processedMatchesMap = new Map(); // Stores enriched matches keyed by their match_id (m)
@@ -415,14 +420,10 @@ function enrichBracketWithScores(rawBracketData, allWeeklyScoresForSeason, roste
         if (typeof ref === 'object' && ref !== null) {
             if (ref.w) {
                 const prevMatch = processedMatchesMap.get(String(ref.w));
-                // Recursively resolve the winner of the previous match
-                // MODIFIED: Ensure prevMatch.w is used, and if not available, return null
                 return prevMatch ? (String(prevMatch.w) || null) : null;
             }
             if (ref.l) {
                 const prevMatch = processedMatchesMap.get(String(ref.l));
-                // Recursively resolve the loser of the previous match
-                // MODIFIED: Ensure prevMatch.l is used, and if not available, return null
                 return prevMatch ? (String(prevMatch.l) || null) : null;
             }
         }
@@ -430,14 +431,14 @@ function enrichBracketWithScores(rawBracketData, allWeeklyScoresForSeason, roste
     };
 
     sortedRawBracketData.forEach(bracketMatch => {
+        const matchId = String(bracketMatch.m);
+        console.log(`[enrichBracketWithScores] Processing ${bracketType} match M${matchId} R${bracketMatch.r}, Season ${season}:`, bracketMatch);
+
         const enrichedMatch = { ...bracketMatch };
         const correspondingPlayoffWeek = playoffStartWeek + (bracketMatch.r - 1);
 
-        // NEW: Add the correct week to the enriched match
         enrichedMatch.week = correspondingPlayoffWeek;
-
-        const weekMatchups = allWeeklyScoresForSeason[correspondingPlayoffWeek];
-
+        enrichedMatch.playoffs = true; // Mark as playoff match
 
         // Resolve t1 and t2 to actual roster IDs using the helper
         const resolvedT1 = resolveTeamFromRef(bracketMatch.t1 || bracketMatch.t1_from);
@@ -448,44 +449,57 @@ function enrichBracketWithScores(rawBracketData, allWeeklyScoresForSeason, roste
         enrichedMatch.team1_details = rosterIdToDetailsMap.get(resolvedT1);
         enrichedMatch.team2_details = rosterIdToDetailsMap.get(resolvedT2);
 
-        // NEW: Add playoff flag to all bracket matches
-        enrichedMatch.playoffs = true;
-
-        // NEW: Add finalSeedingGame for championship and 3rd place matches
+        // Add finalSeedingGame for championship and 3rd place matches
         if (bracketMatch.p === 1) { // Championship match
             enrichedMatch.finalSeedingGame = 1;
         } else if (bracketMatch.p === 3) { // 3rd place match
             enrichedMatch.finalSeedingGame = 3;
         }
 
-        // MODIFIED: Initialize w and l from bracketMatch's own w and l
+        // Initialize w and l from bracketMatch's own w and l (if provided by Sleeper API directly)
         enrichedMatch.w = bracketMatch.w ? String(bracketMatch.w) : null;
         enrichedMatch.l = bracketMatch.l ? String(bracketMatch.l) : null;
 
-
         let matchupFound = null;
+        const weekMatchups = allWeeklyScoresForSeason[correspondingPlayoffWeek];
+        console.log(`[enrichBracketWithScores] Looking for matchups in week ${correspondingPlayoffWeek} for season ${season}. Found ${weekMatchups ? weekMatchups.length : 0} matchups.`);
 
-        // Primary method: Find the weekly matchup that involves these two resolved roster IDs
-        if (weekMatchups && resolvedT1 && resolvedT2) {
-            matchupFound = weekMatchups.find(m =>
-                (String(m.team1_roster_id) === resolvedT1 && String(m.team2_roster_id) === resolvedT2) ||
-                (String(m.team1_roster_id) === resolvedT2 && String(m.team2_roster_id) === resolvedT1)
-            );
-        }
 
-        // Fallback: If not found by roster IDs, try by matchup_id (for round 1 or if IDs are not guaranteed to match)
-        // This fallback might be problematic if matchup_id is null for byes in raw data.
-        // The `processRawMatchups` should now handle byes by setting `team2_roster_id` to null.
-        // So, we should *not* rely on `matchup_id` for finding bye-week entries here.
-        // Instead, we should check if one of the resolved teams is null (indicating a bye).
-        if (!matchupFound && weekMatchups && (resolvedT1 === null || resolvedT2 === null)) {
-            // If one team is null, it's a bye. Find the entry for the non-null team.
-            const nonNullRosterId = resolvedT1 || resolvedT2;
-            matchupFound = weekMatchups.find(m =>
-                String(m.team1_roster_id) === nonNullRosterId && m.team2_roster_id === null
-            );
-        } else if (!matchupFound && weekMatchups && bracketMatch.m) {
-             matchupFound = weekMatchups.find(m => String(m.matchup_id) === String(bracketMatch.m));
+        if (weekMatchups && weekMatchups.length > 0) {
+            // Try to find by both resolved roster IDs
+            if (resolvedT1 && resolvedT2) {
+                matchupFound = weekMatchups.find(m =>
+                    (String(m.team1_roster_id) === resolvedT1 && String(m.team2_roster_id) === resolvedT2) ||
+                    (String(m.team1_roster_id) === resolvedT2 && String(m.team2_roster_id) === resolvedT1)
+                );
+                if (matchupFound) {
+                    console.log(`[enrichBracketWithScores] Found matchup by resolved T1/T2 for M${matchId} R${bracketMatch.r}.`);
+                }
+            }
+
+            // If not found by both, and one of the teams is null (indicating a bye in the bracket structure)
+            if (!matchupFound && (resolvedT1 === null || resolvedT2 === null)) {
+                const nonNullRosterId = resolvedT1 || resolvedT2;
+                if (nonNullRosterId) {
+                    matchupFound = weekMatchups.find(m =>
+                        String(m.team1_roster_id) === nonNullRosterId && m.team2_roster_id === null
+                    );
+                    if (matchupFound) {
+                        console.log(`[enrichBracketWithScores] Found bye matchup for ${nonNullRosterId} for M${matchId} R${bracketMatch.r}.`);
+                    }
+                }
+            }
+
+            // Fallback: Try to find by matchup_id if it's explicitly provided in the bracketMatch
+            // This is less reliable if matchup_id is not consistent across regular and playoff matchups.
+            if (!matchupFound && bracketMatch.m) {
+                matchupFound = weekMatchups.find(m => String(m.matchup_id) === String(bracketMatch.m));
+                if (matchupFound) {
+                    console.log(`[enrichBracketWithScores] Found matchup by matchup_id for M${matchId} R${bracketMatch.r}.`);
+                }
+            }
+        } else {
+            console.warn(`[enrichBracketWithScores] No weekly scores data found for playoff week ${correspondingPlayoffWeek} in season ${season}.`);
         }
 
 
@@ -506,22 +520,23 @@ function enrichBracketWithScores(rawBracketData, allWeeklyScoresForSeason, roste
                 enrichedMatch.t2_score = matchupFound.team2_score;
             }
 
-            // MODIFIED: Only override w/l if matchupFound has valid winner/loser IDs
+            // Only override w/l if matchupFound has valid winner/loser IDs
             if (matchupFound.winner_roster_id) {
                 enrichedMatch.w = String(matchupFound.winner_roster_id);
             }
             if (matchupFound.loser_roster_id) {
                 enrichedMatch.l = String(matchupFound.loser_roster_id);
             }
+            console.log(`[enrichBracketWithScores] Scores and W/L assigned for M${matchId} R${bracketMatch.r}, Season ${season}. Winner: ${enrichedMatch.w}, Loser: ${enrichedMatch.l}, T1 Score: ${enrichedMatch.t1_score}, T2 Score: ${enrichedMatch.t2_score}`);
 
         } else {
             // If no matchup found, scores remain null, but w/l from bracketMatch are preserved
             enrichedMatch.t1_score = null;
             enrichedMatch.t2_score = null;
-            console.warn(`  WARNING: No weekly matchup found for bracket match M${bracketMatch.m} (R${bracketMatch.r}) with resolved teams T1:${resolvedT1}, T2:${resolvedT2}. Scores will be null.`);
+            console.warn(`[enrichBracketWithScores] WARNING: No weekly matchup found for bracket match M${matchId} (R${bracketMatch.r}), Season ${season} with resolved teams T1:${resolvedT1}, T2:${resolvedT2}. Scores will be null.`);
         }
 
-        processedMatchesMap.set(String(bracketMatch.m), enrichedMatch); // Store the processed match
+        processedMatchesMap.set(matchId, enrichedMatch); // Store the processed match
     });
 
     // Return the array of enriched matches, sorted by round and match ID
@@ -578,6 +593,7 @@ export async function fetchAllHistoricalMatchups() {
         for (const league of leagues) {
             const leagueId = league.league_id;
             const season = league.season;
+            console.log(`[fetchAllHistoricalMatchups] Processing league ${leagueId} for season ${season}.`);
 
 
             allHistoricalData.leaguesMetadataBySeason[season] = league;
@@ -586,9 +602,21 @@ export async function fetchAllHistoricalMatchups() {
             const users = await fetchUsersData(leagueId);
             allHistoricalData.usersBySeason[season] = users; // Store users for this season
 
-            const rosters = await fetchRostersWithDetails(leagueId);
-            allHistoricalData.rostersBySeason[season] = rosters;
-            const rosterIdToDetailsMap = new Map(rosters.map(r => [String(r.roster_id), r])); // Ensure key is string here
+            const rosters = await fetchRosterData(leagueId); // Fetch raw rosters first
+            // Manually enrich rosters with user data for this specific season
+            const userMapForSeason = new Map(users.map(user => [user.user_id, user]));
+            const enrichedRostersForSeason = rosters.map(roster => {
+                const user = userMapForSeason.get(roster.owner_id);
+                return {
+                    ...roster,
+                    ownerDisplayName: user ? (user.display_name || 'Unknown User') : 'Unknown User',
+                    ownerTeamName: user ? (user.metadata?.team_name || user.display_name) : 'Unknown Team',
+                    ownerAvatar: user ? user.avatar : null
+                };
+            });
+            allHistoricalData.rostersBySeason[season] = enrichedRostersForSeason;
+            const rosterIdToDetailsMap = new Map(enrichedRostersForSeason.map(r => [String(r.roster_id), r])); // Ensure key is string here
+
 
             // Determine regular season weeks and playoff start week
             let playoffStartWeek = league.settings?.playoff_start_week;
@@ -604,13 +632,15 @@ export async function fetchAllHistoricalMatchups() {
             // Fetch regular season matchups only for past/current seasons
             if (parseInt(season) <= parseInt(currentNFLSeason)) {
                 const weeksToFetchRegular = Array.from({ length: regularSeasonWeeksEnd }, (_, i) => i + 1); // Weeks 1 to regularSeasonWeeksEnd
-                // PASSED season to fetchMatchupsForLeague
+                console.log(`[fetchAllHistoricalMatchups] Fetching regular season matchups for ${season}, weeks: ${weeksToFetchRegular.join(', ')}`);
                 const regularMatchupsByWeek = await fetchMatchupsForLeague(leagueId, weeksToFetchRegular, season);
                 Object.assign(seasonMatchupsData, regularMatchupsByWeek); // Merge into seasonMatchupsData
 
                 if (Object.keys(regularMatchupsByWeek).length === 0 && parseInt(season) === parseInt(currentNFLSeason)) {
+                    console.warn(`[fetchAllHistoricalMatchups] No regular season matchups found for current season ${season}.`);
                 }
             } else {
+                console.log(`[fetchAllHistoricalMatchups] Skipping regular season matchup fetch for future season ${season}.`);
             }
 
             // Fetch playoff bracket data
@@ -626,25 +656,32 @@ export async function fetchAllHistoricalMatchups() {
                 const maxWinnersRound = winnersBracketRaw.reduce((max, match) => Math.max(max, match.r || 0), 0);
                 const maxLosersRound = losersBracketRaw.reduce((max, match) => Math.max(max, match.r || 0), 0);
                 const maxPlayoffRound = Math.max(maxWinnersRound, maxLosersRound);
+                console.log(`[fetchAllHistoricalMatchups] Season ${season}: Max playoff round: ${maxPlayoffRound}, Playoff start week: ${playoffStartWeek}`);
+
 
                 if (maxPlayoffRound > 0) {
                     const playoffWeeksToFetch = Array.from({ length: maxPlayoffRound}, (_, i) => playoffStartWeek + i);
-                    // PASSED season to fetchMatchupsForLeague
+                    console.log(`[fetchAllHistoricalMatchups] Fetching playoff matchups for ${season}, weeks: ${playoffWeeksToFetch.join(', ')}`);
                     const playoffMatchupsByWeek = await fetchMatchupsForLeague(leagueId, playoffWeeksToFetch, season);
                     Object.assign(seasonMatchupsData, playoffMatchupsByWeek); // Merge playoff week data
+                    console.log(`[fetchAllHistoricalMatchups] Season ${season}: Playoff matchups fetched. Total weeks in seasonMatchupsData: ${Object.keys(seasonMatchupsData).length}`);
                 } else {
+                    console.log(`[fetchAllHistoricalMatchups] No playoff rounds found for season ${season}.`);
                 }
 
                 // Now, enrich the bracket data with scores from `seasonMatchupsData`
                 // Pass rosterIdToDetailsMap for bye week detection and to ensure team details are present
-                allHistoricalData.winnersBracketBySeason[season] = enrichBracketWithScores(winnersBracketRaw, seasonMatchupsData, rosterIdToDetailsMap, playoffStartWeek);
-                allHistoricalData.losersBracketBySeason[season] = enrichBracketWithScores(losersBracketRaw, seasonMatchupsData, rosterIdToDetailsMap, playoffStartWeek);
+                // NEW: Pass season to enrichBracketWithScores
+                allHistoricalData.winnersBracketBySeason[season] = enrichBracketWithScores(winnersBracketRaw, seasonMatchupsData, rosterIdToDetailsMap, playoffStartWeek, 'winners', season);
+                allHistoricalData.losersBracketBySeason[season] = enrichBracketWithScores(losersBracketRaw, seasonMatchupsData, rosterIdToDetailsMap, playoffStartWeek, 'losers', season);
 
             } else {
+                console.log(`[fetchAllHistoricalMatchups] Skipping playoff bracket fetch for future season ${season}.`);
                 allHistoricalData.winnersBracketBySeason[season] = [];
                 allHistoricalData.losersBracketBySeason[season] = [];
             }
             allHistoricalData.matchupsBySeason[season] = seasonMatchupsData; // Store all matchups for the season
+            console.log(`[fetchAllHistoricalMatchups] Final seasonMatchupsData for season ${season}:`, seasonMatchupsData);
         }
 
         inMemoryCache.set(CACHE_KEY, { data: allHistoricalData, timestamp: now, expirationHours: 24 });
@@ -697,7 +734,7 @@ export async function fetchDraftPicks(draftId) {
 
 /**
  * Fetches all traded picks for a specific league.
- * @param {string} leagueId The ID of the league.
+ * @param {string} leagueId The ID of the Sleeper league.
  * @returns {Promise<Array<Object>>} A promise that resolves to an array of traded pick objects.
  */
 export async function fetchTradedPicks(leagueId) {

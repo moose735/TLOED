@@ -78,6 +78,8 @@ const LeagueHistory = () => {
         // NEW: Pass nflState to calculateAllLeagueMetrics
         const { seasonalMetrics, careerDPRData: calculatedCareerDPRs } = calculateAllLeagueMetrics(historicalData, allDraftHistory, getDisplayTeamNameFromContext, nflState);
 
+        console.log("LeagueHistory: calculatedCareerDPRs after initial calculation:", calculatedCareerDPRs); // NEW LOG
+
         const allYears = Object.keys(historicalData.matchupsBySeason).map(Number).sort((a, b) => a - b);
 
         // Initialize teamOverallStats using careerDPRData
@@ -111,6 +113,8 @@ const LeagueHistory = () => {
                 ownerId: ownerId // Keep ownerId for awards lookup
             };
         });
+        console.log("LeagueHistory: teamOverallStats after population:", teamOverallStats); // NEW LOG
+
 
         // Populate seasonsPlayed for each team from historicalData.rostersBySeason
         Object.keys(historicalData.rostersBySeason).forEach(year => {
@@ -257,6 +261,7 @@ const LeagueHistory = () => {
                 totalWins: stats.totalWins,
                 winPercentage: winPercentage,
                 awards: awardsToDisplay, // Add awards to all-time standings
+                ownerId: stats.ownerId // Ensure ownerId is passed here for logging
             };
         }).filter(Boolean).sort((a, b) => b.winPercentage - a.winPercentage);
 
@@ -313,22 +318,10 @@ const LeagueHistory = () => {
             });
 
             const yearDataPoint = { year: currentYear };
-            const teamsWithDPRForRanking = uniqueOwnerIdsForChart.map(ownerId => ({
-                ownerId: ownerId,
-                dpr: cumulativeTeamDPRs[ownerId] || 0
-            }));
-
-            teamsWithDPRForRanking.sort((a, b) => b.dpr - a.dpr);
-
-            let currentRank = 1;
-            for (let i = 0; i < teamsWithDPRForRanking.length; i++) {
-                if (i > 0 && teamsWithDPRForRanking[i].dpr < teamsWithDPRForRanking[i - 1].dpr) {
-                    currentRank = i + 1;
-                }
-                const teamDisplayName = getDisplayTeamNameFromContext(teamsWithDPRForRanking[i].ownerId, null); // Get current name for chart key
-                yearDataPoint[teamDisplayName] = currentRank;
-                yearDataPoint[`${teamDisplayName}_DPR`] = teamsWithDPRForRanking[i].dpr;
-            }
+            uniqueOwnerIdsForChart.forEach(ownerId => {
+                const teamDisplayName = getDisplayTeamNameFromContext(ownerId, null); // Get current name for chart key
+                yearDataPoint[teamDisplayName] = cumulativeTeamDPRs[ownerId]; // Store the actual DPR value
+            });
 
             chartData.push(yearDataPoint);
         });
@@ -340,7 +333,7 @@ const LeagueHistory = () => {
     }, [historicalData, allDraftHistory, nflState, getDisplayTeamNameFromContext, contextLoading, contextError]); // Dependencies updated with nflState
 
 
-    // Formatters
+    // Formatter
     const formatPercentage = (value) => {
         if (typeof value === 'number' && !isNaN(value)) {
             // Format as decimal with 3 places, then remove leading '0.' if present
@@ -365,18 +358,17 @@ const LeagueHistory = () => {
     // Custom Tooltip component for Recharts
     const CustomTooltip = ({ active, payload, label }) => {
         if (active && payload && payload.length) {
-            // Sort the payload by rank (value) in ascending order (lower rank is better)
-            const sortedPayload = [...payload].sort((a, b) => a.value - b.value);
+            // Sort the payload by DPR value in descending order (higher DPR is better)
+            const sortedPayload = [...payload].sort((a, b) => b.value - a.value);
 
             return (
                 <div className="bg-white p-3 border border-gray-300 rounded-md shadow-lg text-sm">
                     <p className="font-bold text-gray-800 mb-1">{`Year: ${label}`}</p>
                     {sortedPayload.map((entry, index) => {
-                        const teamDPR = entry.payload[`${entry.dataKey}_DPR`]; // Access the stored DPR value
                         return (
                             <p key={`item-${index}`} style={{ color: entry.color }}>
                                 {/* Display team name and their DPR value */}
-                                {`${entry.name}: ${formatDPR(teamDPR)} DPR`}
+                                {`${entry.name}: ${formatDPR(entry.value)} DPR`}
                             </p>
                         );
                     })}
@@ -386,8 +378,8 @@ const LeagueHistory = () => {
         return null;
     };
 
-    // Generate ticks for Y-axis (ranks from 1 to uniqueTeamsForChart.length)
-    const yAxisTicks = Array.from({length: uniqueTeamsForChart.length}, (_, i) => i + 1);
+    // Generate ticks for Y-axis (appropriate for DPR values)
+    const yAxisTicks = [0.5, 0.75, 1.0, 1.25, 1.5];
 
 
     return (
@@ -421,7 +413,7 @@ const LeagueHistory = () => {
                                 </thead>
                                 <tbody>
                                     {allTimeStandings.map((team, index) => {
-                                        console.log(`LeagueHistory: Rendering All-Time Standings for team ${team.team}. Awards:`, team.awards); // ADDED LOG
+                                        console.log(`LeagueHistory: All-Time Standings - Team: ${team.team}, OwnerId: ${team.ownerId}, Resolved Name: ${getDisplayTeamNameFromContext(team.ownerId, null)}`); // NEW LOG
                                         return (
                                             <tr key={team.team} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                                                 <td className="py-2 px-3 text-sm text-gray-800 text-center font-semibold whitespace-nowrap">{index + 1}</td>
@@ -511,15 +503,16 @@ const LeagueHistory = () => {
                                     <tbody>
                                         {sortedYearsForAwards.map((year, index) => {
                                             const awards = seasonAwardsSummary[year];
+                                            console.log(`LeagueHistory: Season Awards - Year: ${year}, Champion: ${awards.champion}, PointsChamp: ${awards.pointsChamp}`); // NEW LOG
                                             return (
                                                 <tr key={year} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                                                     <td className="py-2 px-3 text-sm text-gray-800 font-semibold text-center whitespace-nowrap">{year}</td>
                                                     <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{awards.champion}</td>
                                                     <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{awards.secondPlace}</td>
                                                     <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{awards.thirdPlace}</td>
-                                                    <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{awards.pointsChamp}</td>
-                                                    <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{awards.pointsSecond}</td>
-                                                    <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{awards.pointsThird}</td>
+                                                    <td className="py-2 px-3 text-sm text-gray-700 text-center">{awards.pointsChamp}</td>
+                                                    <td className="py-2 px-3 text-sm text-gray-700 text-center">{awards.pointsSecond}</td>
+                                                    <td className="py-2 px-3 text-sm text-gray-700 text-center">{awards.pointsThird}</td>
                                                 </tr>
                                             );
                                         })}
@@ -543,13 +536,10 @@ const LeagueHistory = () => {
                                     <CartesianGrid strokeDasharray="3 3" />
                                     <XAxis dataKey="year" label={{ value: "Season", position: "insideBottom", offset: 0 }} />
                                     <YAxis
-                                        label={{ value: "Rank", angle: -90, position: "insideLeft", offset: 0 }}
-                                        domain={[1, uniqueTeamsForChart.length]}
-                                        reversed={true}
-                                        tickFormatter={value => value}
+                                        label={{ value: "Adjusted DPR", angle: -90, position: "insideLeft", offset: 0 }}
+                                        domain={[0.5, 1.5]} // Set a fixed domain for DPR values
+                                        tickFormatter={value => value.toFixed(2)}
                                         ticks={yAxisTicks}
-                                        tickCount={uniqueTeamsForChart.length} // Ensure all ticks are attempted to be shown
-                                        interval={0} // Prevents skipping ticks
                                     />
                                     <Tooltip content={<CustomTooltip />} />
                                     <Legend />
@@ -557,7 +547,7 @@ const LeagueHistory = () => {
                                         <Line
                                             key={team}
                                             type="monotone"
-                                            dataKey={team}
+                                            dataKey={team} // Now directly uses the team name which holds the DPR value
                                             stroke={teamColors[index % teamColors.length]}
                                             activeDot={{ r: 8 }}
                                             dot={{ r: 4 }}

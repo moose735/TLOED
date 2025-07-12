@@ -3,7 +3,7 @@ import React, { createContext, useState, useEffect, useContext, useMemo } from '
 import {
     fetchLeagueData,
     fetchUsersData,
-    fetchRostersWithDetails,
+    fetchRosterData, // Changed from fetchRostersWithDetails to fetchRosterData
     fetchNFLPlayers,
     fetchNFLState,
     fetchAllHistoricalMatchups,
@@ -185,19 +185,19 @@ export const SleeperDataProvider = ({ children }) => {
                 // Week 17 / Championship
                 { "m": 5, "r": 3, "p": 1, "w": "1", "l": "5", "t1": "5", "t2": "1", "t1_score": 96.58, "t2_score": 134.51, "week": 17, "playoffs": true },
                 // Week 17 / 3rd Place Game (Added)
-                { "m": 6, "r": 3, "p": 3, "w": "3", "l": "8", "t1": "8", "t2": "3", "t1_score": 159.89, "t2_score": 163.10, "week": 17, "playoffs": true }
+                { "m": 6, "r": 3, "p": 3, "w": "3", "l": "8", "t1": "8", "t2": "3", "t1_score": 159.89, "t2_score": 163.10, "week": 17, "playoffs": true },
+                // Week 16 / 5th Place Game - MOVED FROM LOSERS BRACKET
+                { "m": 7, "r": 2, "p": 5, "w": "2", "l": "9", "t1": "9", "t2": "2", "t1_score": 113.09, "t2_score": 143.89, "week": 16, "playoffs": true }
             ],
             "losersBracketBySeason": [
-                // Week 16 / 5th Place Game (already there)
-                { "m": 1, "r": 1, "p": 5, "w": "2", "l": "9", "t1": "9", "t2": "2", "t1_score": 113.09, "t2_score": 143.89, "week": 16, "playoffs": true },
-                // New Week 15 matches (Round 1 of losers bracket)
+                // Week 15 matches (Round 1 of losers bracket)
                 { "m": 2, "r": 1, "w": "11", "l": "4", "t1": "11", "t2": "4", "t1_score": 97.93, "t2_score": 86.30, "week": 15, "playoffs": true }, // Schmitt vs Boilard
                 { "m": 3, "r": 1, "w": "6", "l": "7", "t1": "7", "t2": "6", "t1_score": 76.62, "t2_score": 81.32, "week": 15, "playoffs": true }, // Meer vs Irwin
-                // New Week 16 matches (Round 2 of losers bracket)
+                // Week 16 matches (Round 2 of losers bracket)
                 { "m": 4, "r": 2, "w": "10", "l": "11", "t1": "10", "t2": "11", "t1_score": 83.46, "t2_score": 26.22, "week": 16, "playoffs": true }, // Randall vs Schmitt
                 { "m": 5, "r": 2, "w": "12", "l": "6", "t1": "6", "t2": "12", "t1_score": 37.26, "t2_score": 49.31, "week": 16, "playoffs": true }, // Irwin vs Tomczak
                 { "m": 6, "r": 2, "p": 11, "w": "7", "l": "4", "t1": "7", "t2": "4", "t1_score": 111.27, "t2_score": 102.74, "week": 16, "playoffs": true }, // 11th place game: Meer vs Boilard
-                // New Week 17 matches (Round 3 of losers bracket)
+                // Week 17 matches (Round 3 of losers bracket)
                 { "m": 7, "r": 3, "p": 7, "w": "12", "l": "10", "t1": "10", "t2": "12", "t1_score": 13.66, "t2_score": 47.98, "week": 17, "playoffs": true }, // 7th place game: Randall vs Tomczak
                 { "m": 8, "r": 3, "p": 9, "w": "6", "l": "11", "t1": "11", "t2": "6", "t1_score": 9.40, "t2_score": 51.56, "week": 17, "playoffs": true } // 9th place game: Schmitt vs Irwin
             ]
@@ -208,11 +208,18 @@ export const SleeperDataProvider = ({ children }) => {
     // Memoize the getTeamName function so it's stable across renders
     const getTeamName = useMemo(() => {
         const yearSpecificUserMap = new Map();
+        const yearSpecificRosterMap = new Map(); // New map for roster details per year
+
         // Ensure historicalMatchups?.usersBySeason defaults to an empty object if undefined
         const allHistoricalUsers = {
             ...(historicalMatchups?.usersBySeason || {}),
             "2021": hardcodedYahooData["2021"]?.usersBySeason || [] // Ensure 2021 Yahoo users are considered
         };
+        const allHistoricalRosters = {
+            ...(historicalMatchups?.rostersBySeason || {}),
+            "2021": hardcodedYahooData["2021"]?.rostersBySeason || [] // Ensure 2021 Yahoo rosters are considered
+        };
+
 
         if (allHistoricalUsers) {
             Object.entries(allHistoricalUsers).forEach(([year, seasonUsers]) => {
@@ -226,6 +233,19 @@ export const SleeperDataProvider = ({ children }) => {
             });
         }
 
+        if (allHistoricalRosters) {
+            Object.entries(allHistoricalRosters).forEach(([year, seasonRosters]) => {
+                const rosterMapForYear = new Map();
+                if (Array.isArray(seasonRosters)) {
+                    seasonRosters.forEach(roster => {
+                        rosterMapForYear.set(roster.roster_id, roster);
+                    });
+                }
+                yearSpecificRosterMap.set(year, rosterMapForYear);
+            });
+        }
+
+
         const currentLeagueUserMap = new Map();
         if (usersData) { // usersData holds the current league's user information
             usersData.forEach(user => {
@@ -234,6 +254,7 @@ export const SleeperDataProvider = ({ children }) => {
         }
 
         return (ownerId, year = null) => {
+            // console.log(`[getTeamName] Resolving name for ownerId: ${ownerId}, year: ${year}`); // Removed excessive log
             // Helper to find name from a user object
             const getNameFromUser = (user) => {
                 if (user?.metadata?.team_name) {
@@ -254,16 +275,17 @@ export const SleeperDataProvider = ({ children }) => {
                 const currentName = getNameFromUser(currentUser);
                 if (currentName) {
                     resolvedName = currentName;
+                    // console.log(`[getTeamName] Found current name: ${resolvedName}`); // Removed excessive log
                 } else {
                     // 2. If not found in current data, search historical data from most recent year backwards
                     const sortedYearsDesc = Array.from(yearSpecificUserMap.keys()).sort((a, b) => parseInt(b) - parseInt(a));
                     for (const historicalYear of sortedYearsDesc) {
                         const userMapInHistoricalYear = yearSpecificUserMap.get(historicalYear);
-                        // FIXED: Corrected this line to use ownerId as the key
                         const userInHistoricalYear = userMapInHistoricalYear.get(ownerId);
                         const historicalName = getNameFromUser(userInHistoricalYear);
                         if (historicalName) {
                             resolvedName = historicalName;
+                            // console.log(`[getTeamName] Found historical name for year ${historicalYear}: ${resolvedName}`); // Removed excessive log
                             break; // Found a name, break the loop
                         }
                     }
@@ -274,6 +296,7 @@ export const SleeperDataProvider = ({ children }) => {
                     const careerTeam = careerDPRData?.find(team => team.ownerId === ownerId);
                     if (careerTeam && careerTeam.teamName && !careerTeam.teamName.startsWith('Unknown Team (ID:')) {
                         resolvedName = careerTeam.teamName;
+                        // console.log(`[getTeamName] Fallback to careerDPRData name: ${resolvedName}`); // Removed excessive log
                     }
                 }
             } else {
@@ -284,6 +307,7 @@ export const SleeperDataProvider = ({ children }) => {
                     const specificYearName = getNameFromUser(userInSpecificYear);
                     if (specificYearName) {
                         resolvedName = specificYearName;
+                        // console.log(`[getTeamName] Found year-specific name for ${year}: ${resolvedName}`); // Removed excessive log
                     }
                 }
 
@@ -293,11 +317,11 @@ export const SleeperDataProvider = ({ children }) => {
                     const sortedYearsDesc = Array.from(yearSpecificUserMap.keys()).sort((a, b) => parseInt(b) - parseInt(a));
                     for (const historicalYear of sortedYearsDesc) {
                         const userMapInHistoricalYear = yearSpecificUserMap.get(historicalYear);
-                        // FIXED: Corrected this line to use ownerId as the key
                         const userInHistoricalYear = userMapInHistoricalYear.get(ownerId);
                         const historicalName = getNameFromUser(userInHistoricalYear);
                         if (historicalName) {
                             resolvedName = historicalName;
+                            // console.log(`[getTeamName] Fallback to any historical name for year ${historicalYear}: ${resolvedName}`); // Removed excessive log
                             break; // Found a name, break the loop
                         }
                     }
@@ -309,6 +333,7 @@ export const SleeperDataProvider = ({ children }) => {
                     const currentName = getNameFromUser(currentUser);
                     if (currentName) {
                         resolvedName = currentName;
+                        // console.log(`[getTeamName] Fallback to current league name: ${resolvedName}`); // Removed excessive log
                     }
                 }
 
@@ -317,10 +342,12 @@ export const SleeperDataProvider = ({ children }) => {
                     const careerTeam = careerDPRData?.find(team => team.ownerId === ownerId);
                     if (careerTeam && careerTeam.teamName && !careerTeam.teamName.startsWith('Unknown Team (ID:')) {
                         resolvedName = careerTeam.teamName;
+                        // console.log(`[getTeamName] Fallback to careerDPRData name as last resort: ${resolvedName}`); // Removed excessive log
                     }
                 }
             }
 
+            console.log(`[getTeamName] Final name for ownerId ${ownerId} (year ${year}): ${resolvedName}`); // Keep final log
             return resolvedName;
         };
     }, [usersData, historicalMatchups, careerDPRData]);
@@ -334,7 +361,7 @@ export const SleeperDataProvider = ({ children }) => {
                 const [
                     leagues,
                     users,
-                    rosters,
+                    rosters, // This is raw rosters
                     players,
                     state,
                     historicalDataFromSleeperAPI, // Renamed 'matchups' to be more descriptive
@@ -342,7 +369,7 @@ export const SleeperDataProvider = ({ children }) => {
                 ] = await Promise.all([
                     fetchLeagueData(CURRENT_LEAGUE_ID),
                     fetchUsersData(CURRENT_LEAGUE_ID),
-                    fetchRostersWithDetails(CURRENT_LEAGUE_ID),
+                    fetchRosterData(CURRENT_LEAGUE_ID), // Fetch raw roster data
                     fetchNFLPlayers(),
                     fetchNFLState(),
                     fetchAllHistoricalMatchups(), // This fetches historical data, potentially nested by week
@@ -351,7 +378,7 @@ export const SleeperDataProvider = ({ children }) => {
 
                 setLeagueData(leagues);
                 setUsersData(users);
-                setRostersWithDetails(rosters);
+                setRostersWithDetails(rosters); // Set raw rosters here
                 setNflPlayers(players);
                 setNflState(state);
                 setAllDraftHistory(draftHistory);
@@ -369,7 +396,7 @@ export const SleeperDataProvider = ({ children }) => {
                             flattenedSleeperMatchupsBySeason[year] = weeklyMatchupsObject;
                         } else {
                             // Handle unexpected structure, e.g., default to empty array
-                            console.warn(`Unexpected matchupsBySeason structure for year ${year}:`, weeklyMatchupsObject);
+                            console.warn(`SleeperDataContext: Unexpected matchupsBySeason structure for year ${year}:`, weeklyMatchupsObject);
                             flattenedSleeperMatchupsBySeason[year] = [];
                         }
                     });
@@ -391,11 +418,22 @@ export const SleeperDataProvider = ({ children }) => {
                 };
                 setHistoricalMatchups(mergedHistoricalData);
 
+                // Condensed debug logs for merged data structure
+                console.log("SleeperDataContext: Merged historical data keys:");
+                console.log("  matchupsBySeason (years):", Object.keys(mergedHistoricalData.matchupsBySeason));
+                console.log("  rostersBySeason (years):", Object.keys(mergedHistoricalData.rostersBySeason));
+                console.log("  usersBySeason (years):", Object.keys(mergedHistoricalData.usersBySeason));
+                console.log("  winnersBracketBySeason (years):", Object.keys(mergedHistoricalData.winnersBracketBySeason));
+                console.log("  losersBracketBySeason (years):", Object.keys(mergedHistoricalData.losersBracketBySeason));
+
 
                 if (mergedHistoricalData && Object.keys(mergedHistoricalData.matchupsBySeason).length > 0) {
                     // Pass nflState to calculateAllLeagueMetrics
                     const { seasonalMetrics, careerDPRData: calculatedCareerDPRData } = calculateAllLeagueMetrics(mergedHistoricalData, draftHistory, getTeamName, state);
-                    console.log("SleeperDataContext: Calculated seasonalMetrics:", seasonalMetrics);
+                    console.log("SleeperDataContext: Calculated seasonalMetrics (first 5 entries per year):");
+                    Object.entries(seasonalMetrics).forEach(([year, metrics]) => {
+                        console.log(`  Year ${year}:`, Object.values(metrics).slice(0, 5));
+                    });
                     setProcessedSeasonalRecords(seasonalMetrics);
                     setCareerDPRData(calculatedCareerDPRData);
                 } else {
@@ -403,7 +441,7 @@ export const SleeperDataProvider = ({ children }) => {
                     setProcessedSeasonalRecords({});
                     setCareerDPRData(null);
                 }
-                
+
                 setLoading(false);
             } catch (err) {
                 console.error("Failed to load initial Sleeper data:", err);

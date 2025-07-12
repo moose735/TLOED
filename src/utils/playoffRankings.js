@@ -7,17 +7,18 @@
  * @param {Object} bracketData - An object containing winnersBracket and losersBracket arrays.
  * @param {Map<string, string>} rosterIdToOwnerIdMap - A map from roster_id to owner_id.
  * @param {Function} getTeamName - A function to get the display name of a team.
- * @param {number} currentYear - The year for which playoffs are being calculated.
+ * @param {number} currentYear - The year for which playoffs is being calculated.
  * @param {Object} seasonalStatsForYear - Raw seasonal stats for all teams in the current year (from calculations.js's yearStatsRaw).
  * @returns {Array<Object>} An array of objects, each with roster_id and playoffFinish (rank).
  */
 export const calculatePlayoffFinishes = (bracketData, rosterIdToOwnerIdMap, getTeamName, currentYear, seasonalStatsForYear) => {
+    console.log(`[playoffRankings] Starting calculatePlayoffFinishes for year ${currentYear}`);
     const { winnersBracket, losersBracket } = bracketData;
     const finalRanks = new Map(); // Map to store final ranks: roster_id -> rank
 
-    // Helper to get team details (for logging purposes)
+    // Helper to get team details (for logging/debugging)
     const getTeamDetails = (rosterId) => {
-        const ownerId = rosterIdToOwnerIdMap.get(String(roosterId));
+        const ownerId = rosterIdToOwnerIdMap.get(String(rosterId));
         return {
             roster_id: rosterId,
             owner_id: ownerId,
@@ -25,135 +26,200 @@ export const calculatePlayoffFinishes = (bracketData, rosterIdToOwnerIdMap, getT
         };
     };
 
-    // --- Process Winners Bracket for Championship, 3rd, 5th place ---
-    // Sort winnersBracket by round (desc) and then match_id (desc) to ensure final matches are processed first
-    const sortedWinnersBracket = [...winnersBracket].sort((a, b) => {
-        if (b.r !== a.r) return b.r - a.r;
-        return b.m - a.m;
-    });
+    // --- Step 1: Explicitly identify Champion, Runner-Up, and 3rd Place from Winners Bracket ---
+    // These are the most important ranks and must be unique.
+    // Find the championship match (p=1). If multiple, pick the one in the highest round (most final).
+    const potentialChampionshipMatches = winnersBracket.filter(match => match.p === 1 && match.w && match.l);
+    const championshipMatch = potentialChampionshipMatches.sort((a, b) => b.r - a.r)[0]; // Pick the one from the highest round
 
-    sortedWinnersBracket.forEach(match => {
-        if (match.w && match.l && typeof match.p === 'number') { // Only process if winner and loser are determined AND 'p' is present
-            const winnerId = String(match.w);
-            const loserId = String(match.l);
+    if (championshipMatch) {
+        const championRosterId = String(championshipMatch.w);
+        const runnerUpRosterId = String(championshipMatch.l);
 
-            let rankWinner = null;
-            let rankLoser = null;
+        // Assign ranks 1 and 2 only if they haven't been assigned yet.
+        // This ensures absolute uniqueness for the top two spots.
+        if (!finalRanks.has(championRosterId)) {
+            finalRanks.set(championRosterId, 1);
+            console.log(`[playoffRankings] Year ${currentYear}: Explicit Champion: ${getTeamDetails(championRosterId).teamName}`);
+        }
+        if (!finalRanks.has(runnerUpRosterId)) {
+            finalRanks.set(runnerUpRosterId, 2);
+            console.log(`[playoffRankings] Year ${currentYear}: Explicit Runner-Up: ${getTeamDetails(runnerUpRosterId).teamName}`);
+        }
+    } else {
+        console.warn(`[playoffRankings] Year ${currentYear}: Championship match (p=1) not found or incomplete in winners bracket. Cannot determine 1st/2nd place explicitly.`);
+    }
 
-            if (match.p === 1) { // Championship Game
-                rankWinner = 1;
-                rankLoser = 2;
-            } else if (match.p === 3) { // 3rd Place Game
-                rankWinner = 3;
-                rankLoser = 4;
-            } else if (match.p === 5) { // 5th Place Game
-                rankWinner = 5;
-                rankLoser = 6;
-            }
+    // Find the 3rd place match (p=3). If multiple, pick the one in the highest round.
+    const potentialThirdPlaceMatches = winnersBracket.filter(match => match.p === 3 && match.w && match.l);
+    const thirdPlaceMatch = potentialThirdPlaceMatches.sort((a, b) => b.r - a.r)[0]; // Pick the one from the highest round
 
-            if (rankWinner !== null) {
-                // Assign ranks if not already assigned (e.g., if a team won multiple consolation games, only their highest rank counts)
-                if (!finalRanks.has(winnerId)) {
-                    finalRanks.set(winnerId, rankWinner);
-                }
-                if (!finalRanks.has(loserId)) {
-                    finalRanks.set(loserId, rankLoser);
-                }
-            }
+    if (thirdPlaceMatch) {
+        const thirdPlaceRosterId = String(thirdPlaceMatch.w);
+        const fourthPlaceRosterId = String(thirdPlaceMatch.l);
+
+        // Assign rank 3 only if it hasn't been assigned and the team doesn't already have a better rank
+        if (!finalRanks.has(thirdPlaceRosterId) || finalRanks.get(thirdPlaceRosterId) > 3) {
+            finalRanks.set(thirdPlaceRosterId, 3);
+            console.log(`[playoffRankings] Year ${currentYear}: Explicit 3rd Place: ${getTeamDetails(thirdPlaceRosterId).teamName}`);
+        }
+        // Assign rank 4 only if it hasn't been assigned and the team doesn't already have a better rank
+        if (!finalRanks.has(fourthPlaceRosterId) || finalRanks.get(fourthPlaceRosterId) > 4) {
+            finalRanks.set(fourthPlaceRosterId, 4);
+            console.log(`[playoffRankings] Year ${currentYear}: Explicit 4th Place: ${getTeamDetails(fourthPlaceRosterId).teamName}`);
+        }
+    } else {
+        console.warn(`[playoffRankings] Year ${currentYear}: 3rd Place match (p=3) not found or incomplete in winners bracket. Cannot determine 3rd/4th place explicitly.`);
+    }
+
+    // --- Step 2: Process other explicit place games (e.g., 5th, 7th, 9th, 11th) ---
+    // These are less critical than top 3, but still explicit.
+    // Ensure they don't overwrite higher ranks already set in Step 1.
+    const otherPlaceMatches = [...winnersBracket, ...losersBracket].filter(match =>
+        match.w && match.l && typeof match.p === 'number' && match.p !== 1 && match.p !== 3
+    ).sort((a, b) => a.p - b.p); // Sort by place to process lower ranks first
+
+    otherPlaceMatches.forEach(match => {
+        const winnerId = String(match.w);
+        const loserId = String(match.l);
+        const rankWinner = match.p;
+        const rankLoser = match.p + 1;
+
+        // Only assign if the rank is not already set OR if the new rank is better (lower number)
+        if (!finalRanks.has(winnerId) || finalRanks.get(winnerId) > rankWinner) {
+            finalRanks.set(winnerId, rankWinner);
+        }
+        if (!finalRanks.has(loserId) || finalRanks.get(loserId) > rankLoser) {
+            finalRanks.set(loserId, rankLoser);
         }
     });
 
-    // --- Process Losers Bracket for 7th, 9th, 11th place ---
-    const sortedLosersBracket = [...losersBracket].sort((a, b) => {
-        if (b.r !== a.r) return b.r - a.r;
-        return b.m - a.m;
-    });
-
-    sortedLosersBracket.forEach(match => {
-        if (match.w && match.l && typeof match.p === 'number') { // Only process if winner and loser are determined AND 'p' is present
-            const winnerId = String(match.w);
-            const loserId = String(match.l);
-
-            // The 'p' value in losersBracket directly corresponds to the winner's rank
-            const rankWinner = match.p;
-            const rankLoser = match.p + 1; // Loser gets the next rank
-
-            if (rankWinner !== null) {
-                // Assign ranks, but only if the team hasn't already been assigned a higher (better) rank
-                if (!finalRanks.has(winnerId) || finalRanks.get(winnerId) > rankWinner) {
-                    finalRanks.set(winnerId, rankWinner);
-                }
-                if (!finalRanks.has(loserId) || finalRanks.get(loserId) > rankLoser) {
-                    finalRanks.set(loserId, rankLoser);
-                }
-            }
-        }
-    });
+    console.log(`[playoffRankings] Year ${currentYear}: Ranks after processing all explicit place games:`, Array.from(finalRanks.entries()).map(([rid, rank]) => `${getTeamDetails(rid).teamName}:${rank}`));
 
 
-    // --- Assign ranks to all remaining unranked teams based on regular season performance ---
+    // --- Step 3: Assign ranks to remaining unranked teams based on playoff progression ---
     const allLeagueRosterIds = Array.from(rosterIdToOwnerIdMap.keys());
-    const totalTeamsInLeague = allLeagueRosterIds.length;
-
-    // Get all roster IDs that are still unranked
     let unrankedRosterIds = allLeagueRosterIds.filter(rosterId => !finalRanks.has(rosterId));
 
-    // Sort unranked teams by regular season performance:
-    // 1. Win Percentage (descending)
-    // 2. Points For (descending)
-    // 3. Roster ID (ascending, as a tie-breaker for consistency)
-    unrankedRosterIds.sort((a, b) => {
+    // Track all participants in winners and losers brackets, and their deepest round reached
+    const allBracketParticipants = new Map(); // rosterId -> max_round_reached
+
+    // Populate allBracketParticipants from both brackets
+    [...winnersBracket, ...losersBracket].forEach(match => {
+        // Ensure t1, t2, w, l are resolved roster IDs (as done in sleeperApi.js's enrichBracketWithScores)
+        if (match.t1) allBracketParticipants.set(String(match.t1), Math.max(match.r, allBracketParticipants.get(String(match.t1)) || 0));
+        if (match.t2) allBracketParticipants.set(String(match.t2), Math.max(match.r, allBracketParticipants.get(String(match.t2)) || 0));
+        if (match.w) allBracketParticipants.set(String(match.w), Math.max(match.r, allBracketParticipants.get(String(match.w)) || 0));
+        if (match.l) allBracketParticipants.set(String(match.l), Math.max(match.r, allBracketParticipants.get(String(match.l)) || 0));
+    });
+
+
+    // Filter unranked teams that participated in any bracket (winners or losers)
+    const unrankedPlayoffTeams = unrankedRosterIds.filter(rosterId => allBracketParticipants.has(rosterId));
+
+    // Sort unranked playoff teams by deepest round reached (descending), then by regular season win % (desc), then pointsFor (desc)
+    unrankedPlayoffTeams.sort((a, b) => {
+        const roundA = allBracketParticipants.get(a) || 0;
+        const roundB = allBracketParticipants.get(b) || 0;
+
+        if (roundA !== roundB) return roundB - roundA; // Higher round reached is better
+
+        // Tie-breaker: regular season win percentage
         const statsA = seasonalStatsForYear[a];
         const statsB = seasonalStatsForYear[b];
 
-        // Handle cases where stats might be missing
         if (!statsA && !statsB) return 0;
-        if (!statsA) return 1; // Push missing stats to the end
-        if (!statsB) return -1; // Pull valid stats forward
+        if (!statsA) return 1; // Put teams with no stats at the end
+        if (!statsB) return -1;
 
         const winPctA = statsA.totalGames > 0 ? (statsA.wins + 0.5 * statsA.ties) / statsA.totalGames : 0;
         const winPctB = statsB.totalGames > 0 ? (statsB.wins + 0.5 * statsB.ties) / statsB.totalGames : 0;
 
         if (winPctB !== winPctA) {
-            return winPctB - winPctA; // Higher win percentage first
+            return winPctB - winPctA;
         }
-
+        // Secondary tie-breaker: total points for
         if (statsB.pointsFor !== statsA.pointsFor) {
-            return statsB.pointsFor - statsA.pointsFor; // Higher points for first
+            return statsB.pointsFor - statsA.pointsFor;
         }
-
-        return parseInt(a) - parseInt(b); // Fallback to roster ID
+        // Final tie-breaker: roster ID (ascending) for deterministic order
+        return parseInt(a) - parseInt(b);
     });
 
-
-    // Assign ranks to the remaining unranked teams, filling sequentially from the next available rank
+    // Assign ranks to unranked playoff teams, filling in gaps
     let nextAvailableRank = 1;
-    // Find the highest rank already assigned to ensure we start from the next available integer rank
-    for (const rank of finalRanks.values()) {
-        if (typeof rank === 'number') {
-            nextAvailableRank = Math.max(nextAvailableRank, rank + 1);
-        }
-    }
-    // Ensure nextAvailableRank is at least 1
-    nextAvailableRank = Math.max(1, nextAvailableRank);
-
-    for (const rosterId of unrankedRosterIds) {
-        if (!finalRanks.has(rosterId)) { // Double check in case it was assigned by a previous heuristic
-            finalRanks.set(rosterId, nextAvailableRank);
-            nextAvailableRank++;
-        }
+    const takenRanks = new Set(Array.from(finalRanks.values()).filter(r => typeof r === 'number'));
+    while(takenRanks.has(nextAvailableRank)) {
+        nextAvailableRank++;
     }
 
-    // Final safety net: Ensure all teams have a rank from 1 to totalTeamsInLeague
-    // This handles any teams that might have been missed entirely (e.g., didn't play in playoffs, or data issues)
-    allLeagueRosterIds.forEach(rosterId => {
+    for (const rosterId of unrankedPlayoffTeams) {
         if (!finalRanks.has(rosterId)) {
             finalRanks.set(rosterId, nextAvailableRank);
+            takenRanks.add(nextAvailableRank); // Mark as taken
             nextAvailableRank++;
+            while(takenRanks.has(nextAvailableRank)) { // Ensure next rank is also available
+                nextAvailableRank++;
+            }
         }
+    }
+
+    console.log(`[playoffRankings] Year ${currentYear}: Ranks after processing unranked playoff teams:`, Array.from(finalRanks.entries()).map(([rid, rank]) => `${getTeamDetails(rid).teamName}:${rank}`));
+
+
+    // --- Step 4: Assign ranks to non-playoff teams (lowest ranks) ---
+    const nonPlayoffTeams = allLeagueRosterIds.filter(rosterId => !finalRanks.has(rosterId));
+
+    // Sort non-playoff teams by regular season performance (win %, then pointsFor) for lower ranks
+    nonPlayoffTeams.sort((a, b) => {
+        const statsA = seasonalStatsForYear[a];
+        const statsB = seasonalStatsForYear[b];
+
+        if (!statsA && !statsB) return 0;
+        if (!statsA) return 1;
+        if (!statsB) return -1;
+
+        const winPctA = statsA.totalGames > 0 ? (statsA.wins + 0.5 * statsA.ties) / statsA.totalGames : 0;
+        const winPctB = statsB.totalGames > 0 ? (statsB.wins + 0.5 * statsB.ties) / statsB.totalGames : 0;
+
+        if (winPctB !== winPctA) { // Higher win percentage is better
+            return winPctB - winPctA;
+        }
+        if (statsB.pointsFor !== statsA.pointsFor) { // Higher points for is better
+            return statsB.pointsFor - statsA.pointsFor;
+        }
+        return parseInt(a) - parseInt(b); // Consistent tie-breaker: roster ID (ascending)
     });
 
 
+    // Assign ranks to non-playoff teams, starting from the next available rank
+    let currentNonPlayoffRank = 1;
+    for (const rank of finalRanks.values()) {
+        if (typeof rank === 'number') {
+            currentNonPlayoffRank = Math.max(currentNonPlayoffRank, rank + 1);
+        }
+    }
+    // Ensure we start from an unused rank
+    while(takenRanks.has(currentNonPlayoffRank)) {
+        currentNonPlayoffRank++;
+    }
+
+
+    for (const rosterId of nonPlayoffTeams) {
+        if (!finalRanks.has(rosterId)) {
+            finalRanks.set(rosterId, currentNonPlayoffRank);
+            takenRanks.add(currentNonPlayoffRank); // Mark as taken
+            currentNonPlayoffRank++;
+            while(takenRanks.has(currentNonPlayoffRank)) { // Ensure next rank is also available
+                currentNonPlayoffRank++;
+            }
+        }
+    }
+
+    console.log(`[playoffRankings] Year ${currentYear}: Final ranks assigned:`, Array.from(finalRanks.entries()).map(([rid, rank]) => `${getTeamDetails(rid).teamName}:${rank}`));
+
+
+    // Convert Map to array of objects
     const result = Array.from(finalRanks.entries()).map(([roster_id, rank]) => ({
         roster_id,
         playoffFinish: rank
@@ -165,6 +231,8 @@ export const calculatePlayoffFinishes = (bracketData, rosterIdToOwnerIdMap, getT
         const rankB = typeof b.playoffFinish === 'number' ? b.playoffFinish : Infinity;
         return rankA - rankB;
     });
+
+    console.log(`[playoffRankings] Year ${currentYear}: Final sorted playoff finishes:`, result.map(entry => `${getTeamDetails(entry.roster_id).teamName}: ${entry.playoffFinish}`));
 
     return result;
 };

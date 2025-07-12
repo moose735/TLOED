@@ -127,7 +127,7 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
                 seasonalExpectedWinsSum: 0, // Accumulates expected wins for luck calculation for THIS season
                 rank: 'N/A', // Initialize rank
                 pointsRank: 'N/A', // Initialize points rank
-                isChampion: false, // Initialize playoff award flags
+                isChampion: false,
                 isRunnerUp: false,
                 isThirdPlace: false,
                 isPointsChampion: false, // Initialize points award flags
@@ -510,6 +510,10 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
                             seasonalMetrics[year][rosterId].isThirdPlace = true;
                         }
                     }
+                });
+                console.log(`calculations.js: Playoff/Points Award Flags for year ${year}:`); // NEW LOG
+                Object.values(seasonalMetrics[year]).forEach(teamStats => {
+                    console.log(`  Team: ${teamStats.teamName}, Champion: ${teamStats.isChampion}, RunnerUp: ${teamStats.isRunnerUp}, ThirdPlace: ${teamStats.isThirdPlace}, PointsChamp: ${teamStats.isPointsChampion}, PointsRunnerUp: ${teamStats.isPointsRunnerUp}, PointsThird: ${teamStats.isThirdPlacePoints}`);
                 });
             } else {
                 Object.keys(seasonalMetrics[year]).forEach(rosterId => {
