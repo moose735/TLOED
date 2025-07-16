@@ -1,3 +1,39 @@
+        // Helper to update a record (max/min)
+        function updateRecord(recordObj, newValue, entryDetails, isMin = false) {
+            if (isMin) {
+                if (newValue < recordObj.value) {
+                    recordObj.value = newValue;
+                    recordObj.entries = [entryDetails];
+                } else if (newValue === recordObj.value) {
+                    // Prevent duplicate entries for ties if they are identical
+                    const isDuplicate = recordObj.entries.some(existingEntry =>
+                        existingEntry.year === entryDetails.year &&
+                        existingEntry.week === entryDetails.week &&
+                        existingEntry.team1RosterId === entryDetails.team1RosterId &&
+                        existingEntry.team2RosterId === entryDetails.team2RosterId
+                    );
+                    if (!isDuplicate) {
+                        recordObj.entries.push(entryDetails);
+                    }
+                }
+            } else {
+                if (newValue > recordObj.value) {
+                    recordObj.value = newValue;
+                    recordObj.entries = [entryDetails];
+                } else if (newValue === recordObj.value) {
+                    // Prevent duplicate entries for ties if they are identical
+                    const isDuplicate = recordObj.entries.some(existingEntry =>
+                        existingEntry.year === entryDetails.year &&
+                        existingEntry.week === entryDetails.week &&
+                        existingEntry.team1RosterId === entryDetails.team1RosterId &&
+                        existingEntry.team2RosterId === entryDetails.team2RosterId
+                    );
+                    if (!isDuplicate) {
+                        recordObj.entries.push(entryDetails);
+                    }
+                }
+            }
+        }
 // src/lib/MatchupRecords.js
 import React, { useState, useEffect } from 'react';
 import { useSleeperData } from '../contexts/SleeperDataContext'; // Import useSleeperData context hook
@@ -90,52 +126,14 @@ const MatchupRecords = () => {
             // Base entry details to pass to updateRecord, includes all relevant match data
             const baseEntryDetails = {
                 matchup: `${team1Name} vs ${team2Name}`,
-                year: year,
-                week: week,
+                year,
+                week,
                 team1: team1Name,
                 team2: team2Name,
-                team1Score: team1Score,
-                team2Score: team2Score,
-                // Add roster IDs for unique key generation and debugging
-                team1RosterId: team1RosterId,
-                team2RosterId: team2RosterId,
-            };
-
-            // Helper to update a record
-            const updateRecord = (recordObj, newValue, entryDetails, isMin = false) => {
-                if (isMin) {
-                    if (newValue < recordObj.value) {
-                        recordObj.value = newValue;
-                        recordObj.entries = [entryDetails];
-                    } else if (newValue === recordObj.value) {
-                        // Prevent duplicate entries for ties if they are identical
-                        const isDuplicate = recordObj.entries.some(existingEntry =>
-                            existingEntry.year === entryDetails.year &&
-                            existingEntry.week === entryDetails.week &&
-                            existingEntry.team1RosterId === entryDetails.team1RosterId &&
-                            existingEntry.team2RosterId === entryDetails.team2RosterId
-                        );
-                        if (!isDuplicate) {
-                            recordObj.entries.push(entryDetails);
-                        }
-                    }
-                } else {
-                    if (newValue > recordObj.value) {
-                        recordObj.value = newValue;
-                        recordObj.entries = [entryDetails];
-                    } else if (newValue === recordObj.value) {
-                        // Prevent duplicate entries for ties if they are identical
-                        const isDuplicate = recordObj.entries.some(existingEntry =>
-                            existingEntry.year === entryDetails.year &&
-                            existingEntry.week === entryDetails.week &&
-                            existingEntry.team1RosterId === entryDetails.team1RosterId &&
-                            existingEntry.team2RosterId === entryDetails.team2RosterId
-                        );
-                        if (!isDuplicate) {
-                            recordObj.entries.push(entryDetails);
-                        }
-                    }
-                }
+                team1Score,
+                team2Score,
+                team1RosterId,
+                team2RosterId,
             };
 
             // --- Update Records ---

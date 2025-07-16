@@ -13,8 +13,6 @@ const SeasonRecords = () => {
     // State to hold the "seasonal highlights" (e.g., highest DPR ever in a single season)
     // FIXED: Initialize with default empty record structures to prevent 'undefined' errors
     const [seasonalHighlights, setSeasonalHighlights] = useState(() => ({
-        highestDPRSeason: { value: -Infinity, entries: [], key: 'adjustedDPR' },
-        lowestDPRSeason: { value: Infinity, entries: [], key: 'adjustedDPR' },
         mostWinsSeason: { value: -Infinity, entries: [], key: 'wins' },
         mostLossesSeason: { value: -Infinity, entries: [], key: 'losses' },
         bestWinPctSeason: { value: -Infinity, entries: [], key: 'winPercentage' },
@@ -27,9 +25,46 @@ const SeasonRecords = () => {
         mostSlimLossesSeason: { value: -Infinity, entries: [], key: 'slimLosses' },
         mostPointsSeason: { value: -Infinity, entries: [], key: 'pointsFor' },
         fewestPointsSeason: { value: Infinity, entries: [], key: 'pointsFor' },
-        highestLuckRatingSeason: { value: -Infinity, entries: [], key: 'luckRating' },
-        lowestLuckRatingSeason: { value: Infinity, entries: [], key: 'luckRating' },
+        bestLuckRatingSeason: { value: -Infinity, entries: [], key: 'luckRating' },
+        worstLuckRatingSeason: { value: Infinity, entries: [], key: 'luckRating' },
+        highestDPRSeason: { value: -Infinity, entries: [], key: 'highestDPR' },
+        lowestDPRSeason: { value: Infinity, entries: [], key: 'lowestDPR' },
     }));
+        // Highest/Lowest Season DPR
+        let currentHighestDPRSeason = { value: -Infinity, entries: [], key: 'highestDPR' };
+        let currentLowestDPRSeason = { value: Infinity, entries: [], key: 'lowestDPR' };
+        // Find highest/lowest DPR by season
+        Object.keys(processedSeasonalRecords).forEach(year => {
+            const teamsInSeasonObject = processedSeasonalRecords[year];
+            if (!teamsInSeasonObject || typeof teamsInSeasonObject !== 'object') return;
+            const teamsInSeason = Object.values(teamsInSeasonObject);
+            teamsInSeason.forEach(teamStats => {
+                if (!teamStats || typeof teamStats !== 'object' || !teamStats.rosterId || !teamStats.ownerId) return;
+                if (teamStats.totalGames === 0) return;
+                if (typeof teamStats.adjustedDPR === 'number' && !isNaN(teamStats.adjustedDPR)) {
+                    const teamName = getTeamName(teamStats.ownerId, year);
+                    const entry = {
+                        teamName,
+                        year,
+                        value: teamStats.adjustedDPR,
+                        ownerId: teamStats.ownerId,
+                        rosterId: teamStats.rosterId
+                    };
+                    if (teamStats.adjustedDPR > currentHighestDPRSeason.value) {
+                        currentHighestDPRSeason.value = teamStats.adjustedDPR;
+                        currentHighestDPRSeason.entries = [entry];
+                    } else if (teamStats.adjustedDPR === currentHighestDPRSeason.value) {
+                        currentHighestDPRSeason.entries.push(entry);
+                    }
+                    if (teamStats.adjustedDPR < currentLowestDPRSeason.value) {
+                        currentLowestDPRSeason.value = teamStats.adjustedDPR;
+                        currentLowestDPRSeason.entries = [entry];
+                    } else if (teamStats.adjustedDPR === currentLowestDPRSeason.value) {
+                        currentLowestDPRSeason.entries.push(entry);
+                    }
+                }
+            });
+        });
 
     // Configuration for number formatting per stat (similar to LeagueRecords)
     const formatConfig = {
@@ -76,8 +111,7 @@ const SeasonRecords = () => {
         }
 
         // Initialize highlight records with extreme values for this run
-        let currentHighestDPRSeason = { value: -Infinity, entries: [], key: 'adjustedDPR' };
-        let currentLowestDPRSeason = { value: Infinity, entries: [], key: 'adjustedDPR' };
+        // Remove adjustedDPR from highlights
         let currentMostWinsSeason = { value: -Infinity, entries: [], key: 'wins' };
         let currentMostLossesSeason = { value: -Infinity, entries: [], key: 'losses' };
         let currentBestWinPctSeason = { value: -Infinity, entries: [], key: 'winPercentage' };
@@ -90,8 +124,8 @@ const SeasonRecords = () => {
         let currentMostSlimLossesSeason = { value: -Infinity, entries: [], key: 'slimLosses' };
         let currentMostPointsSeason = { value: -Infinity, entries: [], key: 'pointsFor' };
         let currentFewestPointsSeason = { value: Infinity, entries: [], key: 'pointsFor' };
-        let currentHighestLuckRatingSeason = { value: -Infinity, entries: [], key: 'luckRating' };
-        let currentLowestLuckRatingSeason = { value: Infinity, entries: [], key: 'luckRating' };
+        let currentBestLuckRatingSeason = { value: -Infinity, entries: [], key: 'luckRating' };
+        let currentWorstLuckRatingSeason = { value: Infinity, entries: [], key: 'luckRating' };
 
 
         // Helper to update records (handles ties)
@@ -122,71 +156,52 @@ const SeasonRecords = () => {
             }
         };
 
-        // Iterate through each season and each team's processed stats
+        // --- Best/Worst Luck Rating by Season (from LuckRatingAnalysis logic) ---
+        let bestLuck = { value: -Infinity, entries: [], key: 'luckRating' };
+        let worstLuck = { value: Infinity, entries: [], key: 'luckRating' };
         Object.keys(processedSeasonalRecords).forEach(year => {
             const teamsInSeasonObject = processedSeasonalRecords[year];
-
-            if (!teamsInSeasonObject || typeof teamsInSeasonObject !== 'object') {
-                console.warn(`SeasonRecords: Skipping invalid processedSeasonalRecords[${year}] entry.`);
-                return;
-            }
-
+            if (!teamsInSeasonObject || typeof teamsInSeasonObject !== 'object') return;
             const teamsInSeason = Object.values(teamsInSeasonObject);
-
             teamsInSeason.forEach(teamStats => {
-                // Ensure teamStats is a valid object and has basic identifiers
-                if (!teamStats || typeof teamStats !== 'object' || !teamStats.rosterId || !teamStats.ownerId) { // Ensure ownerId is present
-                    console.warn(`SeasonRecords: Skipping invalid or incomplete teamStats for year ${year}. TeamStats:`, teamStats);
-                    return;
-                }
-
-                // FIXED: Skip teams/seasons with 0 total games to avoid 0.000 DPR for future seasons
-                if (teamStats.totalGames === 0) {
-                    return;
-                }
-
-                // FIXED: Call getTeamName with ownerId and year for seasonal context
-                let resolvedTeamName = getTeamName(teamStats.ownerId, year);
-                // The getTeamName function in context is now robust, so this local fallback is less necessary
-                // but keeping it for extreme edge cases where getTeamName might still return generic.
-                if (resolvedTeamName.startsWith('Unknown Team (ID:')) {
-                    resolvedTeamName = teamStats.teamName || 'Unknown Team';
-                }
-
-                const teamInfo = {
-                    teamName: resolvedTeamName,
-                    year: year,
-                    rosterId: teamStats.rosterId,
-                    ownerId: teamStats.ownerId,
-                };
-
-                // Update highlights based on seasonal team stats
-                if (typeof teamStats.adjustedDPR === 'number') {
-                    updateRecord(currentHighestDPRSeason, teamStats.adjustedDPR, { ...teamInfo, value: teamStats.adjustedDPR });
-                    // Only update lowest DPR if it's not 0, to avoid future/empty season issues
-                    if (teamStats.adjustedDPR > 0) {
-                        updateRecord(currentLowestDPRSeason, teamStats.adjustedDPR, { ...teamInfo, value: teamStats.adjustedDPR }, true);
+                if (!teamStats || typeof teamStats !== 'object' || !teamStats.rosterId || !teamStats.ownerId) return;
+                if (teamStats.totalGames === 0) return;
+                if (typeof teamStats.luckRating === 'number' && !isNaN(teamStats.luckRating)) {
+                    const teamName = getTeamName(teamStats.ownerId, year);
+                    const entry = {
+                        teamName,
+                        year,
+                        value: teamStats.luckRating,
+                        ownerId: teamStats.ownerId,
+                        rosterId: teamStats.rosterId
+                    };
+                    if (teamStats.luckRating > bestLuck.value) {
+                        bestLuck.value = teamStats.luckRating;
+                        bestLuck.entries = [entry];
+                    } else if (teamStats.luckRating === bestLuck.value) {
+                        bestLuck.entries.push(entry);
+                    }
+                    if (teamStats.luckRating < worstLuck.value) {
+                        worstLuck.value = teamStats.luckRating;
+                        worstLuck.entries = [entry];
+                    } else if (teamStats.luckRating === worstLuck.value) {
+                        worstLuck.entries.push(entry);
                     }
                 }
-                if (teamStats.totalGames > 0) {
-                    if (typeof teamStats.wins === 'number') updateRecord(currentMostWinsSeason, teamStats.wins, { ...teamInfo, value: teamStats.wins });
-                    if (typeof teamStats.losses === 'number') updateRecord(currentMostLossesSeason, teamStats.losses, { ...teamInfo, value: teamStats.losses });
-                    if (typeof teamStats.winPercentage === 'number') updateRecord(currentBestWinPctSeason, teamStats.winPercentage, { ...teamInfo, value: teamStats.winPercentage });
-                    if (typeof teamStats.allPlayWinPercentage === 'number') updateRecord(currentBestAllPlayWinPctSeason, teamStats.allPlayWinPercentage, { ...teamInfo, value: teamStats.allPlayWinPercentage });
-                    if (typeof teamStats.topScoreWeeksCount === 'number') updateRecord(currentMostWeeklyHighScoresSeason, teamStats.topScoreWeeksCount, { ...teamInfo, value: teamStats.topScoreWeeksCount });
-                    if (typeof teamStats.weeklyTop2ScoresCount === 'number') updateRecord(currentMostWeeklyTop2ScoresSeason, teamStats.weeklyTop2ScoresCount, { ...teamInfo, value: teamStats.weeklyTop2ScoresCount });
-                    if (typeof teamStats.blowoutWins === 'number') updateRecord(currentMostBlowoutWinsSeason, teamStats.blowoutWins, { ...teamInfo, value: teamStats.blowoutWins });
-                    if (typeof teamStats.blowoutLosses === 'number') updateRecord(currentMostBlowoutLossesSeason, teamStats.blowoutLosses, { ...teamInfo, value: teamStats.blowoutLosses });
-                    if (typeof teamStats.slimWins === 'number') updateRecord(currentMostSlimWinsSeason, teamStats.slimWins, { ...teamInfo, value: teamStats.slimWins });
-                    if (typeof teamStats.slimLosses === 'number') updateRecord(currentMostSlimLossesSeason, teamStats.slimLosses, { ...teamInfo, value: teamStats.slimLosses });
-                    if (typeof teamStats.pointsFor === 'number') {
-                        updateRecord(currentMostPointsSeason, teamStats.pointsFor, { ...teamInfo, value: teamStats.pointsFor });
-                        updateRecord(currentFewestPointsSeason, teamStats.pointsFor, { ...teamInfo, value: teamStats.pointsFor }, true);
-                    }
-                    if (typeof teamStats.luckRating === 'number') {
-                        updateRecord(currentHighestLuckRatingSeason, teamStats.luckRating, { ...teamInfo, value: teamStats.luckRating });
-                        updateRecord(currentLowestLuckRatingSeason, teamStats.luckRating, { ...teamInfo, value: teamStats.luckRating }, true);
-                    }
+                // Always include year in teamInfo for all records
+                if (typeof teamStats.wins === 'number') updateRecord(currentMostWinsSeason, teamStats.wins, { ...teamStats, teamName: getTeamName(teamStats.ownerId, year), value: teamStats.wins, year });
+                if (typeof teamStats.losses === 'number') updateRecord(currentMostLossesSeason, teamStats.losses, { ...teamStats, teamName: getTeamName(teamStats.ownerId, year), value: teamStats.losses, year });
+                if (typeof teamStats.winPercentage === 'number') updateRecord(currentBestWinPctSeason, teamStats.winPercentage, { ...teamStats, teamName: getTeamName(teamStats.ownerId, year), value: teamStats.winPercentage, year });
+                if (typeof teamStats.allPlayWinPercentage === 'number') updateRecord(currentBestAllPlayWinPctSeason, teamStats.allPlayWinPercentage, { ...teamStats, teamName: getTeamName(teamStats.ownerId, year), value: teamStats.allPlayWinPercentage, year });
+                if (typeof teamStats.topScoreWeeksCount === 'number') updateRecord(currentMostWeeklyHighScoresSeason, teamStats.topScoreWeeksCount, { ...teamStats, teamName: getTeamName(teamStats.ownerId, year), value: teamStats.topScoreWeeksCount, year });
+                if (typeof teamStats.weeklyTop2ScoresCount === 'number') updateRecord(currentMostWeeklyTop2ScoresSeason, teamStats.weeklyTop2ScoresCount, { ...teamStats, teamName: getTeamName(teamStats.ownerId, year), value: teamStats.weeklyTop2ScoresCount, year });
+                if (typeof teamStats.blowoutWins === 'number') updateRecord(currentMostBlowoutWinsSeason, teamStats.blowoutWins, { ...teamStats, teamName: getTeamName(teamStats.ownerId, year), value: teamStats.blowoutWins, year });
+                if (typeof teamStats.blowoutLosses === 'number') updateRecord(currentMostBlowoutLossesSeason, teamStats.blowoutLosses, { ...teamStats, teamName: getTeamName(teamStats.ownerId, year), value: teamStats.blowoutLosses, year });
+                if (typeof teamStats.slimWins === 'number') updateRecord(currentMostSlimWinsSeason, teamStats.slimWins, { ...teamStats, teamName: getTeamName(teamStats.ownerId, year), value: teamStats.slimWins, year });
+                if (typeof teamStats.slimLosses === 'number') updateRecord(currentMostSlimLossesSeason, teamStats.slimLosses, { ...teamStats, teamName: getTeamName(teamStats.ownerId, year), value: teamStats.slimLosses, year });
+                if (typeof teamStats.pointsFor === 'number') {
+                    updateRecord(currentMostPointsSeason, teamStats.pointsFor, { ...teamStats, teamName: getTeamName(teamStats.ownerId, year), value: teamStats.pointsFor, year });
+                    updateRecord(currentFewestPointsSeason, teamStats.pointsFor, { ...teamStats, teamName: getTeamName(teamStats.ownerId, year), value: teamStats.pointsFor, year }, true);
                 }
             });
         });
@@ -200,8 +215,6 @@ const SeasonRecords = () => {
             }
         };
 
-        sortRecordEntries(currentHighestDPRSeason);
-        sortRecordEntries(currentLowestDPRSeason);
         sortRecordEntries(currentMostWinsSeason);
         sortRecordEntries(currentMostLossesSeason);
         sortRecordEntries(currentBestWinPctSeason);
@@ -214,13 +227,10 @@ const SeasonRecords = () => {
         sortRecordEntries(currentMostSlimLossesSeason);
         sortRecordEntries(currentMostPointsSeason);
         sortRecordEntries(currentFewestPointsSeason);
-        sortRecordEntries(currentHighestLuckRatingSeason);
-        sortRecordEntries(currentLowestLuckRatingSeason);
+        // No adjustedDPR or luckRating sort needed
 
 
         setSeasonalHighlights({
-            highestDPRSeason: currentHighestDPRSeason,
-            lowestDPRSeason: currentLowestDPRSeason,
             mostWinsSeason: currentMostWinsSeason,
             mostLossesSeason: currentMostLossesSeason,
             bestWinPctSeason: currentBestWinPctSeason,
@@ -233,8 +243,10 @@ const SeasonRecords = () => {
             mostSlimLossesSeason: currentMostSlimLossesSeason,
             mostPointsSeason: currentMostPointsSeason,
             fewestPointsSeason: currentFewestPointsSeason,
-            highestLuckRatingSeason: currentHighestLuckRatingSeason,
-            lowestLuckRatingSeason: currentLowestLuckRatingSeason,
+            bestLuckRatingSeason: bestLuck,
+            worstLuckRatingSeason: worstLuck,
+            highestDPRSeason: currentHighestDPRSeason,
+            lowestDPRSeason: currentLowestDPRSeason,
         });
 
     }, [processedSeasonalRecords, getTeamName, loading, error]); // Removed getOwnerName from dependencies as it's not used
@@ -251,124 +263,133 @@ const SeasonRecords = () => {
         return <div className="text-center py-8 text-gray-600">No seasonal data available to display.</div>;
     }
 
-    // Helper to render a single highlight record entry
-    const renderHighlightRecordEntry = (record) => {
-        // FIXED: Added a robust check for 'record' and its 'entries' property
-        if (!record || !Array.isArray(record.entries) || record.entries.length === 0 ||
-            (typeof record.value === 'number' && (record.value === -Infinity || record.value === Infinity))) {
-            return (
-                <>
-                    <td className="py-2 px-4 text-left font-medium text-gray-700 capitalize">
-                        {record?.key?.replace(/([A-Z])/g, ' $1').trim() || 'N/A'}
-                    </td>
-                    <td className="py-2 px-4 text-center text-gray-500">N/A</td>
-                    <td className="py-2 px-4 text-right text-gray-500"></td>
-                </>
-            );
-        }
 
-        const config = formatConfig[record.key] || { decimals: 2, type: 'default' };
-
-        let displayValue;
-        if (config.type === 'percentage') {
-            displayValue = formatNumber(record.value, config.decimals, 'decimal') + '%';
-        } else {
-            displayValue = formatNumber(record.value, config.decimals, config.type);
-        }
-
-        const allTiedTeamsDisplay = record.entries.map((entry, index) => {
-            if (!entry || !entry.ownerId) { // Ensure entry and ownerId are present
-                console.warn(`SeasonRecords: Skipping invalid entry in record.entries for key '${record.key}'. Index: ${index}`, entry);
-                return null;
-            }
-            // FIXED: Always use ownerId and specific year for seasonal records
-            const teamDisplayName = getTeamName(entry.ownerId, entry.year);
-
-            return (
-                <div
-                    key={`${record.key}-${entry.ownerId}-${entry.year}-${index}`} // Use ownerId for key
-                    className="leading-tight"
-                >
-                    {teamDisplayName}{entry.year ? ` (${entry.year})` : ''}
-                </div>
-            );
-        }).filter(Boolean); // Filter out any nulls from invalid entries
-
-        return (
-            <>
-                <td className="py-2 px-4 text-left font-medium text-gray-700 capitalize">
-                    {record.key.replace(/([A-Z])/g, ' $1').trim()}
-                </td>
-                <td className="py-2 px-4 text-center font-semibold text-lg">{displayValue}</td>
-                <td className="py-2 px-4 text-right text-gray-700">
-                    {allTiedTeamsDisplay}
-                </td>
-            </>
-        );
-    };
+    // Only include highlight records that have at least one valid entry (no N/A rows at all)
+    const highlightRecords = [
+        seasonalHighlights.mostWinsSeason,
+        seasonalHighlights.mostLossesSeason,
+        seasonalHighlights.bestWinPctSeason,
+        seasonalHighlights.bestAllPlayWinPctSeason,
+        seasonalHighlights.mostWeeklyHighScoresSeason,
+        seasonalHighlights.mostWeeklyTop2ScoresSeason,
+        seasonalHighlights.mostBlowoutWinsSeason,
+        seasonalHighlights.mostBlowoutLossesSeason,
+        seasonalHighlights.mostSlimWinsSeason,
+        seasonalHighlights.mostSlimLossesSeason,
+        seasonalHighlights.mostPointsSeason,
+        seasonalHighlights.fewestPointsSeason,
+        seasonalHighlights.bestLuckRatingSeason,
+        seasonalHighlights.worstLuckRatingSeason,
+        seasonalHighlights.highestDPRSeason,
+        seasonalHighlights.lowestDPRSeason,
+    ].filter(
+        (record) => record && record.value !== -Infinity && record.value !== Infinity && record.entries && record.entries.length > 0
+    );
 
     return (
         <div className="w-full">
             <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">SEASON RECORDS HIGHLIGHTS</h3>
             <p className="text-sm text-gray-600 mb-6">Highlight records achieved in a single season.</p>
-
-            <section className="mb-8 p-4 bg-gray-50 rounded-lg shadow-sm border border-gray-200">
-                <h4 className="text-lg font-bold text-gray-800 mb-3">Single Season Best/Worst</h4>
-                <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm text-sm">
+            <div className="overflow-x-auto">
+                <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
+                    <thead className="bg-gray-100">
+                        <tr>
+                            <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/3">Record</th>
+                            <th className="py-2 px-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/3">Value</th>
+                            <th className="py-2 px-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/3">Team</th>
+                        </tr>
+                    </thead>
                     <tbody>
-                        <tr className="border-b border-gray-100 last:border-b-0 bg-white">
-                            {renderHighlightRecordEntry(seasonalHighlights.highestDPRSeason)}
-                        </tr>
-                        <tr className="border-b border-gray-100 last:border-b-0 bg-gray-50">
-                            {renderHighlightRecordEntry(seasonalHighlights.lowestDPRSeason)}
-                        </tr>
-                        <tr className="border-b border-gray-100 last:border-b-0 bg-white">
-                            {renderHighlightRecordEntry(seasonalHighlights.mostWinsSeason)}
-                        </tr>
-                        <tr className="border-b border-gray-100 last:border-b-0 bg-gray-50">
-                            {renderHighlightRecordEntry(seasonalHighlights.mostLossesSeason)}
-                        </tr>
-                        <tr className="border-b border-gray-100 last:border-b-0 bg-white">
-                            {renderHighlightRecordEntry(seasonalHighlights.bestWinPctSeason)}
-                        </tr>
-                        <tr className="border-b border-gray-100 last:border-b-0 bg-gray-50">
-                            {renderHighlightRecordEntry(seasonalHighlights.bestAllPlayWinPctSeason)}
-                        </tr>
-                        <tr className="border-b border-gray-100 last:border-b-0 bg-white">
-                            {renderHighlightRecordEntry(seasonalHighlights.mostWeeklyHighScoresSeason)}
-                        </tr>
-                        <tr className="border-b border-gray-100 last:border-b-0 bg-gray-50">
-                            {renderHighlightRecordEntry(seasonalHighlights.mostWeeklyTop2ScoresSeason)}
-                        </tr>
-                        <tr className="border-b border-gray-100 last:border-b-0 bg-white">
-                            {renderHighlightRecordEntry(seasonalHighlights.mostBlowoutWinsSeason)}
-                        </tr>
-                        <tr className="border-b border-gray-100 last:border-b-0 bg-gray-50">
-                            {renderHighlightRecordEntry(seasonalHighlights.mostBlowoutLossesSeason)}
-                        </tr>
-                        <tr className="border-b border-gray-100 last:border-b-0 bg-white">
-                            {renderHighlightRecordEntry(seasonalHighlights.mostSlimWinsSeason)}
-                        </tr>
-                        <tr className="border-b border-gray-100 last:border-b-0 bg-gray-50">
-                            {renderHighlightRecordEntry(seasonalHighlights.mostSlimLossesSeason)}
-                        </tr>
-                        <tr className="border-b border-gray-100 last:border-b-0 bg-white">
-                            {renderHighlightRecordEntry(seasonalHighlights.mostPointsSeason)}
-                        </tr>
-                        <tr className="border-b border-gray-100 last:border-b-0 bg-gray-50">
-                            {renderHighlightRecordEntry(seasonalHighlights.fewestPointsSeason)}
-                        </tr>
-                        <tr className="border-b border-gray-100 last:border-b-0 bg-white">
-                            {renderHighlightRecordEntry(seasonalHighlights.highestLuckRatingSeason)}
-                        </tr>
-                        <tr className="border-b border-gray-100 last:border-b-0 bg-gray-50">
-                            {renderHighlightRecordEntry(seasonalHighlights.lowestLuckRatingSeason)}
-                        </tr>
+                        {highlightRecords.map((record, recordGroupIndex) => {
+                            if (!record || record.value === -Infinity || record.value === Infinity || !record.entries || record.entries.length === 0) {
+                                // Capitalize and prefix for empty rows
+                                let label = '';
+                                if (record.key === 'luckRating') {
+                                    label = record === seasonalHighlights.bestLuckRatingSeason ? 'Most Luck Rating' : 'Worst Luck Rating';
+                                } else if (record.key === 'pointsFor') {
+                                    label = record === seasonalHighlights.mostPointsSeason ? 'Most Points For' : 'Fewest Points For';
+                                } else if (record.key.startsWith('most')) {
+                                    label = 'Most ' + record.key.replace(/^most/, '').replace(/([A-Z])/g, ' $1').trim();
+                                } else if (record.key.startsWith('fewest')) {
+                                    label = 'Fewest ' + record.key.replace(/^fewest/, '').replace(/([A-Z])/g, ' $1').trim();
+                                } else if (record.key.startsWith('best')) {
+                                    label = 'Best ' + record.key.replace(/^best/, '').replace(/([A-Z])/g, ' $1').trim();
+                                } else if (record.key.startsWith('worst')) {
+                                    label = 'Worst ' + record.key.replace(/^worst/, '').replace(/([A-Z])/g, ' $1').trim();
+                                } else {
+                                    label = record.key.charAt(0).toUpperCase() + record.key.slice(1).replace(/([A-Z])/g, ' $1');
+                                }
+                                return (
+                                    <tr key={record.key} className={recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                        <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{label}</td>
+                                        <td className="py-2 px-3 text-sm text-gray-800 text-center">N/A</td>
+                                        <td className="py-2 px-3 text-sm text-gray-700 text-center"></td>
+                                    </tr>
+                                );
+                            }
+                            return record.entries.map((entry, entryIndex) => {
+                                // Use teamName for display, fallback to getTeamName if missing
+                                const teamDisplayName = entry.teamName || getTeamName(entry.ownerId, entry.year);
+                                // Format value: no decimals for counts, 3 decimals for luckRating/DPR, 2 for pointsFor
+                                let valueDisplay = entry.value;
+                                if (typeof entry.value === 'number') {
+                                    if ([
+                                        'wins', 'losses', 'topScoreWeeksCount', 'weeklyTop2ScoresCount',
+                                        'blowoutWins', 'blowoutLosses', 'slimWins', 'slimLosses'
+                                    ].includes(record.key)) {
+                                        valueDisplay = Math.round(entry.value).toLocaleString('en-US', { maximumFractionDigits: 0 });
+                                    } else if ([
+                                        'luckRating', 'highestDPR', 'lowestDPR'
+                                    ].includes(record.key)) {
+                                        valueDisplay = entry.value.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+                                    } else if (record.key === 'pointsFor') {
+                                        valueDisplay = entry.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                                    } else if (record.key === 'winPercentage' || record.key === 'allPlayWinPercentage') {
+                                        valueDisplay = entry.value.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + '%';
+                                    } else {
+                                        valueDisplay = entry.value;
+                                    }
+                                }
+                                // Capitalize and prefix for filled rows
+                                let label = '';
+                                if (entryIndex === 0) {
+                                    if (record.key === 'luckRating') {
+                                        label = record === seasonalHighlights.bestLuckRatingSeason ? 'Most Luck Rating' : 'Worst Luck Rating';
+                                    } else if (record.key === 'pointsFor') {
+                                        label = record === seasonalHighlights.mostPointsSeason ? 'Most Points For' : 'Fewest Points For';
+                                    } else if (record.key.startsWith('most')) {
+                                        label = 'Most ' + record.key.replace(/^most/, '').replace(/([A-Z])/g, ' $1').trim();
+                                    } else if (record.key.startsWith('fewest')) {
+                                        label = 'Fewest ' + record.key.replace(/^fewest/, '').replace(/([A-Z])/g, ' $1').trim();
+                                    } else if (record.key.startsWith('best')) {
+                                        label = 'Best ' + record.key.replace(/^best/, '').replace(/([A-Z])/g, ' $1').trim();
+                                    } else if (record.key.startsWith('worst')) {
+                                        label = 'Worst ' + record.key.replace(/^worst/, '').replace(/([A-Z])/g, ' $1').trim();
+                                    } else {
+                                        label = record.key.charAt(0).toUpperCase() + record.key.slice(1).replace(/([A-Z])/g, ' $1');
+                                    }
+                                    // Capitalize the first letter of the label
+                                    if (label.length > 0) {
+                                        label = label.charAt(0).toUpperCase() + label.slice(1);
+                                    }
+                                }
+                                // Always show season year for each entry (even for multi-entry records)
+                                return (
+                                    <tr key={`${record.key}-${teamDisplayName}-${entryIndex}`} className={recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                        <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{entryIndex === 0 ? label : ''}</td>
+                                        <td className="py-2 px-3 text-sm text-gray-800 text-center">
+                                            {entryIndex === 0 ? valueDisplay : ''}
+                                        </td>
+                                        <td className="py-2 px-3 text-sm text-gray-700 text-center">{teamDisplayName}{entry.year ? ` (${entry.year})` : ''}</td>
+                                    </tr>
+                                );
+                            });
+                        })}
                     </tbody>
                 </table>
-            </section>
+            </div>
         </div>
     );
-};
+}
 
 export default SeasonRecords;

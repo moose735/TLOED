@@ -86,46 +86,47 @@ const LeagueRecords = () => {
             let mostWeeklyTop2Scores = { value: -Infinity, teams: [], key: 'mostWeeklyTop2Scores' };
 
 
-            // Helper to update records (handles ties)
-            const updateRecord = (currentRecord, newValue, teamInfo) => {
-                // Ensure teamInfo has ownerId for lookup later
-                if (!teamInfo.ownerId && teamInfo.rosterId && historicalData.rostersBySeason) {
-                    // Try to derive ownerId from rosterId if not directly provided
-                    const rosterMap = Object.values(historicalData.rostersBySeason).flat().find(r => r.roster_id === teamInfo.rosterId);
-                    if (rosterMap) {
-                        teamInfo.ownerId = rosterMap.owner_id;
-                    }
-                }
 
-                if (newValue > currentRecord.value) {
-                    currentRecord.value = newValue;
-                    currentRecord.teams = [teamInfo];
-                } else if (newValue === currentRecord.value && newValue !== -Infinity) {
-                    // Check for existing team info to avoid duplicates in ties
-                    if (!currentRecord.teams.some(t => t.ownerId === teamInfo.ownerId && t.year === teamInfo.year)) {
-                        currentRecord.teams.push(teamInfo);
-                    }
-                }
-            };
+    // Helper to update records (handles ties)
+    const updateRecord = (currentRecord, newValue, teamInfo) => {
+        // Ensure teamInfo has ownerId for lookup later
+        if (!teamInfo.ownerId && teamInfo.rosterId && historicalData.rostersBySeason) {
+            // Try to derive ownerId from rosterId if not directly provided
+            const rosterMap = Object.values(historicalData.rostersBySeason).flat().find(r => r.roster_id === teamInfo.rosterId);
+            if (rosterMap) {
+                teamInfo.ownerId = rosterMap.owner_id;
+            }
+        }
 
-            const updateLowestRecord = (currentRecord, newValue, teamInfo) => {
-                // Ensure teamInfo has ownerId for lookup later
-                if (!teamInfo.ownerId && teamInfo.rosterId && historicalData.rostersBySeason) {
-                    const rosterMap = Object.values(historicalData.rostersBySeason).flat().find(r => r.roster_id === teamInfo.rosterId);
-                    if (rosterMap) {
-                        teamInfo.ownerId = rosterMap.owner_id;
-                    }
-                }
+        if (newValue > currentRecord.value) {
+            currentRecord.value = newValue;
+            currentRecord.teams = [teamInfo];
+        } else if (newValue === currentRecord.value && newValue !== -Infinity) {
+            // Check for existing team info to avoid duplicates in ties
+            if (!currentRecord.teams.some(t => t.ownerId === teamInfo.ownerId && t.year === teamInfo.year)) {
+                currentRecord.teams.push(teamInfo);
+            }
+        }
+    };
 
-                if (newValue < currentRecord.value) {
-                    currentRecord.value = newValue;
-                    currentRecord.teams = [teamInfo];
-                } else if (newValue === currentRecord.value && newValue !== Infinity) {
-                    if (!currentRecord.teams.some(t => t.ownerId === teamInfo.ownerId && t.year === teamInfo.year)) {
-                        currentRecord.teams.push(teamInfo);
-                    }
-                }
-            };
+    const updateLowestRecord = (currentRecord, newValue, teamInfo) => {
+        // Ensure teamInfo has ownerId for lookup later
+        if (!teamInfo.ownerId && teamInfo.rosterId && historicalData.rostersBySeason) {
+            const rosterMap = Object.values(historicalData.rostersBySeason).flat().find(r => r.roster_id === teamInfo.rosterId);
+            if (rosterMap) {
+                teamInfo.ownerId = rosterMap.owner_id;
+            }
+        }
+
+        if (newValue < currentRecord.value) {
+            currentRecord.value = newValue;
+            currentRecord.teams = [teamInfo];
+        } else if (newValue === currentRecord.value && newValue !== Infinity) {
+            if (!currentRecord.teams.some(t => t.ownerId === teamInfo.ownerId && t.year === teamInfo.year)) {
+                currentRecord.teams.push(teamInfo);
+            }
+        }
+    };
 
             // --- Process Career DPR Data for All-Time Records ---
             // This is where you should primarily get your career totals
@@ -214,104 +215,66 @@ const LeagueRecords = () => {
         return <div className="text-center py-8">No historical data available to calculate all-time records.</div>;
     }
 
-    // Helper to render a record entry
-    const renderRecordEntry = (record) => {
-        const config = formatConfig[record.key] || { decimals: 2, type: 'default' };
 
-        if (!record || record.value === -Infinity || record.value === Infinity || record.teams.length === 0) {
-            return (
-                <>
-                    <td className="py-2 px-4 text-left font-medium text-gray-700 capitalize">
-                        {record.key.replace(/([A-Z])/g, ' $1').trim()}
-                    </td>
-                    <td className="py-2 px-4 text-center text-gray-500">N/A</td>
-                    <td className="py-2 px-4 text-right text-gray-500"></td>
-                </>
-            );
-        }
-
-        // Determine the display value based on config type
-        let displayValue;
-        if (config.type === 'percentage') {
-            // Corrected: formatNumber gives "0.XXX", no extra dot needed
-            displayValue = formatNumber(record.teams[0].value, config.decimals, 'decimal') + '%';
-        } else {
-            // Keep existing logic for other types (DPR, points, count)
-            displayValue = formatNumber(record.teams[0].value, config.decimals, config.type);
-        }
-
-        // Logic for displaying all tied teams vertically
-        const allTiedTeamsDisplay = record.teams.map((team, index) => {
-            let currentTeamDisplayName = "Unknown Team"; // Default fallback
-
-            if (team.ownerId) {
-                // Always get the current team name by passing null for the year
-                currentTeamDisplayName = getTeamName(team.ownerId, null);
-            } else if (team.rosterId && team.year) {
-                // If only rosterId and year are available, try to get ownerId from historicalData
-                const rosterForYear = historicalData.rostersBySeason?.[team.year]?.find(r => String(r.roster_id) === String(team.rosterId));
-                if (rosterForYear?.owner_id) {
-                    currentTeamDisplayName = getTeamName(rosterForYear.owner_id, null); // Pass null to get the current name
-                } else {
-                    currentTeamDisplayName = `Unknown Team (Roster: ${team.rosterId})`;
-                }
+    // Helper to get display name for a team
+    const getDisplayTeamName = (team) => {
+        if (team.ownerId) {
+            return getTeamName(team.ownerId, null);
+        } else if (team.rosterId && team.year) {
+            const rosterForYear = historicalData.rostersBySeason?.[team.year]?.find(r => String(r.roster_id) === String(team.rosterId));
+            if (rosterForYear?.owner_id) {
+                return getTeamName(rosterForYear.owner_id, null);
+            } else {
+                return `Unknown Team (Roster: ${team.rosterId})`;
             }
-
-            // Fallback for any remaining "Unknown Team (ID:..." if getTeamName couldn't resolve
-            if (currentTeamDisplayName.startsWith('Unknown Team (ID:')) {
-                currentTeamDisplayName = "Unknown Team";
-            }
-
-            return (
-                <div
-                    key={`${record.key}-${team.ownerId || team.rosterId || 'unknown'}-${team.year || 'career'}-${index}`}
-                    className="leading-tight" // This class helps stack lines closely
-                >
-                    {currentTeamDisplayName}
-                </div>
-            );
-        });
-
-        return (
-            <>
-                <td className="py-2 px-4 text-left font-medium text-gray-700 capitalize">
-                    {record.key.replace(/([A-Z])/g, ' $1').trim()}
-                </td>
-                <td className="py-2 px-4 text-center font-semibold text-lg">{displayValue}</td>
-                <td className="py-2 px-4 text-right text-gray-700">
-                    {/* Render the array of div elements, which will stack vertically */}
-                    {allTiedTeamsDisplay}
-                </td>
-            </>
-        );
+        }
+        return "Unknown Team";
     };
 
 
     return (
-        <div className="bg-white shadow-lg rounded-lg p-6 mb-8">
-            <h2 className="text-2xl font-bold text-gray-800 mb-6 border-b pb-3">All-Time League Records</h2>
-
+        <div className="w-full">
+            <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">ALL-TIME LEAGUE RECORD HOLDERS</h3>
+            <p className="text-sm text-gray-600 mb-6">Historical league performance records.</p>
             <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
+                <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
+                    <thead className="bg-gray-100">
                         <tr>
-                            <th scope="col" className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Stat
-                            </th>
-                            <th scope="col" className="py-3 px-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Value
-                            </th>
-                            <th scope="col" className="py-3 px-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Team
-                            </th>
+                            <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/4">Record</th>
+                            <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/6">Value</th>
+                            <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/2">Team</th>
                         </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                        {Object.entries(allTimeRecords).map(([key, record]) => (
-                            <tr key={key}>
-                                {renderRecordEntry({ ...record, key: key })}
-                            </tr>
-                        ))}
+                    <tbody>
+                        {Object.entries(allTimeRecords).map(([key, record], recordGroupIndex) => {
+                            const config = formatConfig[record.key] || { decimals: 2, type: 'default' };
+                            // Capitalize the first letter of the label
+                            const getLabel = () => {
+                                let label = record.key.replace(/([A-Z])/g, ' $1').trim();
+                                if (label.length > 0) {
+                                    label = label.charAt(0).toUpperCase() + label.slice(1);
+                                }
+                                return label;
+                            };
+                            if (!record || record.value === -Infinity || record.value === Infinity || !record.teams || record.teams.length === 0) {
+                                return (
+                                    <tr key={key} className={recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                        <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{getLabel()}</td>
+                                        <td className="py-2 px-3 text-sm text-gray-800">N/A</td>
+                                        <td className="py-2 px-3 text-sm text-gray-700"></td>
+                                    </tr>
+                                );
+                            }
+                            return record.teams.map((team, entryIndex) => (
+                                <tr key={`${key}-${getDisplayTeamName(team)}-${entryIndex}`} className={recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                    <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{entryIndex === 0 ? getLabel() : ''}</td>
+                                    <td className="py-2 px-3 text-sm text-gray-800">
+                                        {entryIndex === 0 ? (config.type === 'percentage' ? (team.value.toLocaleString('en-US', { minimumFractionDigits: config.decimals, maximumFractionDigits: config.decimals }) + '%') : team.value.toLocaleString('en-US', { minimumFractionDigits: config.decimals, maximumFractionDigits: config.decimals })) : ''}
+                                    </td>
+                                    <td className="py-2 px-3 text-sm text-gray-700">{getDisplayTeamName(team)}</td>
+                                </tr>
+                            ));
+                        })}
                     </tbody>
                 </table>
             </div>

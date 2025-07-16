@@ -1,5 +1,6 @@
 // src/App.js
 import React, { useState, useEffect, useCallback } from 'react';
+
 import {
     // GOOGLE_SHEET_POWER_RANKINGS_API_URL, // Keep if other GAS APIs are still in use elsewhere
     // CURRENT_LEAGUE_ID, // This is for Sleeper and will be used by SleeperDataProvider's internals, no direct use here
@@ -12,7 +13,7 @@ import RecordBook from './lib/RecordBook';
 import DPRAnalysis from './lib/DPRAnalysis';
 import LuckRatingAnalysis from './lib/LuckRatingAnalysis';
 import TeamDetailPage from './lib/TeamDetailPage';
-import Head2HeadGrid from './lib/Head2HeadGrid';
+import Head2HeadGrid from './lib/Head2HeadGrid'; // Correctly imported
 import FinancialTracker from './components/FinancialTracker';
 import Dashboard from './components/Dashboard';
 import MatchupHistory from './components/MatchupHistory';
@@ -73,18 +74,12 @@ const AppContent = () => {
     } = useSleeperData(); // Removed rostersBySeason and getTeamName as they are not directly used here anymore
 
     const [activeTab, setActiveTab] = useState(TABS.DASHBOARD);
-    // selectedTeam state is no longer needed here as TeamsOverviewPage manages it
-    // const [selectedTeam, setSelectedTeam] = useState(null);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [openSubMenu, setOpenSubMenu] = useState(null);
-
-    // Removed the useEffect that dynamically populated team sub-tabs.
-    // This logic is now handled within TeamsOverviewPage.
 
     // Placeholder functions for UI interactions
     const handleTabClick = (tab) => {
         setActiveTab(tab);
-        // setSelectedTeam(null); // No longer needed
         setIsMobileMenuOpen(false); // Close mobile menu on tab click
         setOpenSubMenu(null); // Close any open sub-menus
     };
@@ -141,7 +136,8 @@ const AppContent = () => {
             case TABS.RECORD_BOOK:
                 return <RecordBook historicalMatchups={historicalData.matchupsBySeason} />; // Pass matchupsBySeason
             case TABS.HEAD_TO_HEAD:
-                return <Head2HeadGrid />; // Head2HeadGrid also consumes historicalData from context
+                // Head2HeadGrid now gets all its data from context internally
+                return <Head2HeadGrid />;
             case TABS.DPR_ANALYSIS:
                 // DPRAnalysis now directly consumes historicalData from context, no props needed here
                 return <DPRAnalysis />;
@@ -169,8 +165,65 @@ const AppContent = () => {
             {/* Header */}
             <header className="bg-gray-800 text-white p-4 shadow-md">
                 <div className="container mx-auto flex justify-between items-center">
-                    <h1 className="text-2xl font-bold">Fantasy Football History</h1>
-                    <button className="md:hidden text-white text-2xl" onClick={toggleMobileMenu}>
+                    <div className="flex items-center">
+                        <img
+                            src={process.env.PUBLIC_URL + '/LeagueLogoNoBack.PNG'}
+                            alt="League Logo"
+                            className="h-14 w-14 mr-4 object-contain"
+                        />
+                        <h1 className="text-2xl font-bold">The League of Extraordinary Douchebags</h1>
+                    </div>
+                    {/* Gold Trophy and Champion Name (FontAwesome, same as LeagueHistory) */}
+                    <div className="flex items-center gap-2">
+                        <span title="Reigning Champion">
+                            <i className="fas fa-trophy text-yellow-500 text-2xl mr-1"></i>
+                        </span>
+                        <span className="font-semibold text-yellow-300 text-lg">
+                            {/* Champion Name Logic (debug and fix) */}
+                            {(() => {
+                                let champion = '';
+                                // DEBUG: Show available keys and values
+                                // window.historicalDebug = historicalData;
+                                // Try to find the most recent year with a champion
+                                if (historicalData && historicalData.seasonAwardsSummary) {
+                                    const years = Object.keys(historicalData.seasonAwardsSummary).map(Number).sort((a, b) => b - a);
+                                    for (const year of years) {
+                                        const summary = historicalData.seasonAwardsSummary[year];
+                                        // Try different possible keys
+                                        if (summary) {
+                                            if (summary.champion && summary.champion !== 'N/A') {
+                                                champion = summary.champion.trim();
+                                                break;
+                                            }
+                                            // Try alternative keys if present
+                                            if (summary["Champion"] && summary["Champion"] !== 'N/A') {
+                                                champion = summary["Champion"].trim();
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                                if (!champion && historicalData && historicalData.awardsSummary) {
+                                    const years = Object.keys(historicalData.awardsSummary).map(Number).sort((a, b) => b - a);
+                                    for (const year of years) {
+                                        const summary = historicalData.awardsSummary[year];
+                                        if (summary) {
+                                            if (summary.champion && summary.champion !== 'N/A') {
+                                                champion = summary.champion.trim();
+                                                break;
+                                            }
+                                            if (summary["Champion"] && summary["Champion"] !== 'N/A') {
+                                                champion = summary["Champion"].trim();
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                                return champion || 'No Champion';
+                            })()}
+                        </span>
+                    </div>
+                    <button className="md:hidden text-white text-2xl ml-2" onClick={toggleMobileMenu}>
                         ☰
                     </button>
                 </div>

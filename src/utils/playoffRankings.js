@@ -12,7 +12,6 @@
  * @returns {Array<Object>} An array of objects, each with roster_id and playoffFinish (rank).
  */
 export const calculatePlayoffFinishes = (bracketData, rosterIdToOwnerIdMap, getTeamName, currentYear, seasonalStatsForYear) => {
-    console.log(`[playoffRankings] Starting calculatePlayoffFinishes for year ${currentYear}`);
     const { winnersBracket, losersBracket } = bracketData;
     const finalRanks = new Map(); // Map to store final ranks: roster_id -> rank
 
@@ -47,7 +46,7 @@ export const calculatePlayoffFinishes = (bracketData, rosterIdToOwnerIdMap, getT
             console.log(`[playoffRankings] Year ${currentYear}: Explicit Runner-Up: ${getTeamDetails(runnerUpRosterId).teamName}`);
         }
     } else {
-        console.warn(`[playoffRankings] Year ${currentYear}: Championship match (p=1) not found or incomplete in winners bracket. Cannot determine 1st/2nd place explicitly.`);
+        // Championship match not found or incomplete in winners bracket.
     }
 
     // Find the 3rd place match (p=3). If multiple, pick the one in the highest round.
@@ -69,7 +68,7 @@ export const calculatePlayoffFinishes = (bracketData, rosterIdToOwnerIdMap, getT
             console.log(`[playoffRankings] Year ${currentYear}: Explicit 4th Place: ${getTeamDetails(fourthPlaceRosterId).teamName}`);
         }
     } else {
-        console.warn(`[playoffRankings] Year ${currentYear}: 3rd Place match (p=3) not found or incomplete in winners bracket. Cannot determine 3rd/4th place explicitly.`);
+        // 3rd Place match not found or incomplete in winners bracket.
     }
 
     // --- Step 2: Process other explicit place games (e.g., 5th, 7th, 9th, 11th) ---
@@ -94,7 +93,7 @@ export const calculatePlayoffFinishes = (bracketData, rosterIdToOwnerIdMap, getT
         }
     });
 
-    console.log(`[playoffRankings] Year ${currentYear}: Ranks after processing all explicit place games:`, Array.from(finalRanks.entries()).map(([rid, rank]) => `${getTeamDetails(rid).teamName}:${rank}`));
+    // Ranks after processing all explicit place games
 
 
     // --- Step 3: Assign ranks to remaining unranked teams based on playoff progression ---
@@ -164,7 +163,7 @@ export const calculatePlayoffFinishes = (bracketData, rosterIdToOwnerIdMap, getT
         }
     }
 
-    console.log(`[playoffRankings] Year ${currentYear}: Ranks after processing unranked playoff teams:`, Array.from(finalRanks.entries()).map(([rid, rank]) => `${getTeamDetails(rid).teamName}:${rank}`));
+    // Ranks after processing unranked playoff teams
 
 
     // --- Step 4: Assign ranks to non-playoff teams (lowest ranks) ---
@@ -216,7 +215,7 @@ export const calculatePlayoffFinishes = (bracketData, rosterIdToOwnerIdMap, getT
         }
     }
 
-    console.log(`[playoffRankings] Year ${currentYear}: Final ranks assigned:`, Array.from(finalRanks.entries()).map(([rid, rank]) => `${getTeamDetails(rid).teamName}:${rank}`));
+    // Final ranks assigned
 
 
     // Convert Map to array of objects
@@ -232,7 +231,7 @@ export const calculatePlayoffFinishes = (bracketData, rosterIdToOwnerIdMap, getT
         return rankA - rankB;
     });
 
-    console.log(`[playoffRankings] Year ${currentYear}: Final sorted playoff finishes:`, result.map(entry => `${getTeamDetails(entry.roster_id).teamName}: ${entry.playoffFinish}`));
+    // Final sorted playoff finishes
 
     return result;
 };

@@ -1,6 +1,7 @@
 // src/lib/Head2HeadGrid.js
-import React, { useState, useEffect, useCallback, useMemo } from 'react'; // Added useMemo
-import { useSleeperData } from '../contexts/SleeperDataContext'; // Import the custom hook
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+
+import { useSleeperData } from '../contexts/SleeperDataContext';
 
 // Helper function to render record (W-L-T)
 const renderRecord = (record) => {
@@ -33,19 +34,24 @@ const calculateRank = (value, allValues, isHigherBetter = true) => {
 };
 
 // Component to render the Head-to-Head Grid and details
-const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a prop
+
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from 'recharts';
+
+const Head2HeadGrid = () => {
     const {
         loading: contextLoading,
         error: contextError,
-        historicalData, // Contains matchupsBySeason, leaguesMetadataBySeason, rostersBySeason, winnersBracketBySeason, losersBracketBySeason
-        getTeamName
+        historicalData,
+        getTeamName,
+        careerDPRData // Use careerDPRData directly from context
     } = useSleeperData();
 
     const [headToHeadRecords, setHeadToHeadRecords] = useState({});
     const [selectedRivalryKey, setSelectedRivalryKey] = useState(null); // Stores the H2H key (e.g., "ownerId1 vs ownerId2")
     const [loading, setLoading] = useState(true); // Local loading state for calculations
+    const [weeklyHighScoreCounts, setWeeklyHighScoreCounts] = useState({});
 
-    // Data processing for head-to-head records
+    // Data processing for head-to-head records and weekly high score counts
     useEffect(() => {
         if (contextLoading || contextError) {
             setLoading(true);
@@ -54,184 +60,238 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
 
         if (!historicalData || Object.keys(historicalData.matchupsBySeason || {}).length === 0) {
             setHeadToHeadRecords({});
+            setWeeklyHighScoreCounts({});
             setLoading(false);
             return;
         }
 
         setLoading(true);
-        const newHeadToHeadRecords = {}; // { h2hKey: { owners: [], ownerId1: {w,l,t,pw,pl,pt}, ownerId2: {w,l,t,pw,pl,pt}, allMatches: [] } }
+        const newHeadToHeadRecords = {};
+        const highScoreCounts = {};
 
-        // Iterate through all seasons and their matchups
-        Object.keys(historicalData.matchupsBySeason).forEach(year => {
-            const weeklyMatchupsForYear = historicalData.matchupsBySeason[year];
+        // Calculate weekly high score counts
+        Object.entries(historicalData.matchupsBySeason).forEach(([year, matchupsArray]) => {
+            // Group matchups by week
+            const matchupsByWeek = {};
+            matchupsArray.forEach(matchup => {
+                if (!matchup.week) return;
+                if (!matchupsByWeek[matchup.week]) matchupsByWeek[matchup.week] = [];
+                matchupsByWeek[matchup.week].push(matchup);
+            });
+
+            Object.entries(matchupsByWeek).forEach(([week, weekMatchups]) => {
+                const rostersForYear = historicalData.rostersBySeason?.[year] || [];
+                const scores = [];
+                weekMatchups.forEach(matchup => {
+                    const team1Roster = rostersForYear.find(r => String(r.roster_id) === String(matchup.team1_roster_id));
+                    const team2Roster = rostersForYear.find(r => String(r.roster_id) === String(matchup.team2_roster_id));
+                    const team1OwnerId = team1Roster?.owner_id;
+                    const team2OwnerId = team2Roster?.owner_id;
+                    const team1Score = parseFloat(matchup.team1_score);
+                    const team2Score = parseFloat(matchup.team2_score);
+                    if (team1OwnerId && !isNaN(team1Score)) {
+                        scores.push({ ownerId: team1OwnerId, score: team1Score });
+                    }
+                    if (team2OwnerId && !isNaN(team2Score)) {
+                        scores.push({ ownerId: team2OwnerId, score: team2Score });
+                    }
+                });
+                if (scores.length === 0) return;
+                const maxScore = Math.max(...scores.map(s => s.score));
+                const highScorers = scores.filter(s => s.score === maxScore).map(s => s.ownerId);
+                highScorers.forEach(ownerId => {
+                    highScoreCounts[ownerId] = (highScoreCounts[ownerId] || 0) + 1;
+                });
+            });
+        });
+
+        // ...existing code for head-to-head records...
+        Object.entries(historicalData.matchupsBySeason).forEach(([year, matchupsArray]) => {
             const leagueMetadataForYear = historicalData.leaguesMetadataBySeason[year];
             const championshipWeek = leagueMetadataForYear?.settings?.championship_week ? parseInt(leagueMetadataForYear.settings.championship_week) : null;
-
             const rostersForYear = historicalData.rostersBySeason?.[year] || [];
             const winnersBracketForYear = historicalData.winnersBracketBySeason?.[year] || [];
             const losersBracketForYear = historicalData.losersBracketBySeason?.[year] || [];
 
-            Object.keys(weeklyMatchupsForYear).forEach(weekStr => {
-                const week = parseInt(weekStr);
-                const matchupsInWeek = weeklyMatchupsForYear[weekStr];
+            matchupsArray.forEach(matchup => {
+                const team1RosterId = String(matchup.team1_roster_id);
+                const team2RosterId = String(matchup.team2_roster_id);
+                const team1Score = parseFloat(matchup.team1_score);
+                const team2Score = parseFloat(matchup.team2_score);
 
-                if (!matchupsInWeek || matchupsInWeek.length === 0) return;
+                if (!team1RosterId || !team2RosterId || team1RosterId === team2RosterId || isNaN(team1Score) || isNaN(team2Score)) {
+                    return;
+                }
 
-                matchupsInWeek.forEach(matchup => {
-                    const team1RosterId = String(matchup.team1_roster_id);
-                    const team2RosterId = String(matchup.team2_roster_id);
-                    const team1Score = parseFloat(matchup.team1_score);
-                    const team2Score = parseFloat(matchup.team2_score);
+                const team1Roster = rostersForYear.find(r => String(r.roster_id) === team1RosterId);
+                const team2Roster = rostersForYear.find(r => String(r.roster_id) === team2RosterId);
 
-                    // Skip invalid data, self-matches, or matches without valid scores
-                    if (!team1RosterId || !team2RosterId || team1RosterId === team2RosterId || isNaN(team1Score) || isNaN(team2Score)) {
-                        return;
-                    }
+                const team1OwnerId = team1Roster?.owner_id;
+                const team2OwnerId = team2Roster?.owner_id;
 
-                    // Get owner IDs from roster IDs for the current year
-                    const team1Roster = rostersForYear.find(r => String(r.roster_id) === team1RosterId);
-                    const team2Roster = rostersForYear.find(r => String(r.roster_id) === team2RosterId);
+                if (!team1OwnerId || !team2OwnerId) {
+                    return;
+                }
 
-                    const team1OwnerId = team1Roster?.owner_id;
-                    const team2OwnerId = team2Roster?.owner_id;
+                const team1DisplayName = getTeamName(team1OwnerId, year);
+                const team2DisplayName = getTeamName(team2OwnerId, year);
 
-                    // Skip if owner IDs cannot be resolved
-                    if (!team1OwnerId || !team2OwnerId) {
-                        return;
-                    }
+                if (team1DisplayName.startsWith('Unknown Team') || team2DisplayName.startsWith('Unknown Team')) {
+                    return;
+                }
 
-                    // Get display names using owner IDs for the current matchup's year
-                    const team1DisplayName = getTeamName(team1OwnerId, year);
-                    const team2DisplayName = getTeamName(team2OwnerId, year);
+                const isTie = team1Score === team2Score;
+                const team1Won = team1Score > team2Score;
 
-                    // Skip if display names are not resolved to actual names (i.e., they are still 'Unknown Team (ID:...)')
-                    if (team1DisplayName.startsWith('Unknown Team') || team2DisplayName.startsWith('Unknown Team')) {
-                        return;
-                    }
+                // --- Improved Playoff Game Type Detection (always check bracket data) ---
+                let matchType = 'Reg. Season';
+                const team1RosterIdStr = String(matchup.team1_roster_id);
+                const team2RosterIdStr = String(matchup.team2_roster_id);
+                const matchupWeek = parseInt(matchup.week);
 
-                    const isTie = team1Score === team2Score;
-                    const team1Won = team1Score > team2Score;
-
-                    // Determine match type based on matchup.playoff flag and bracket data
-                    let matchType = 'Reg. Season';
-
-                    // Use matchup.playoff as the primary indicator for a playoff game
-                    if (matchup.playoff) {
-                        const team1RosterIdStr = String(matchup.team1_roster_id);
-                        const team2RosterIdStr = String(matchup.team2_roster_id);
-
-                        // Function to check if a matchup (by its two roster IDs) is in a given bracket
-                        const isMatchInBracketByRosterIds = (bracket, rId1, rId2) => {
-                            return bracket.some(bracketMatch => {
-                                const bracketTeams = [String(bracketMatch.t1), String(bracketMatch.t2)].filter(Boolean);
-                                return (
-                                    (bracketTeams.includes(rId1) && bracketTeams.includes(rId2))
-                                );
-                            });
-                        };
-
-                        const isInWinnersBracket = isMatchInBracketByRosterIds(winnersBracketForYear, team1RosterIdStr, team2RosterIdStr);
-                        const isInLosersBracket = isMatchInBracketByRosterIds(losersBracketForYear, team1RosterIdStr, team2RosterIdStr);
-
-                        if (isInWinnersBracket) {
-                            if (championshipWeek && week === championshipWeek) {
-                                matchType = 'Championship';
-                            } else {
-                                matchType = 'Playoffs';
-                            }
-                        } else if (isInLosersBracket) {
-                            matchType = 'Consolation';
-                        } else {
-                            // Fallback if playoff flag is true but not found in explicit brackets by roster IDs,
-                            // it's still a playoff game, but uncategorized (e.g., 3rd place game not in main bracket)
-                            matchType = 'Playoffs (Uncategorized)';
-                        }
-                    }
-
-                    // Ensure consistent ordering for H2H keys using owner IDs
-                    const sortedOwners = [team1OwnerId, team2OwnerId].sort();
-                    const h2hKey = `${sortedOwners[0]} vs ${sortedOwners[1]}`;
-
-                    if (!newHeadToHeadRecords[h2hKey]) {
-                        newHeadToHeadRecords[h2hKey] = {
-                            owners: sortedOwners, // Store sorted owner IDs
-                            [sortedOwners[0]]: { wins: 0, losses: 0, ties: 0, playoffWins: 0, playoffLosses: 0, playoffTies: 0 },
-                            [sortedOwners[1]]: { wins: 0, losses: 0, ties: 0, playoffWins: 0, playoffLosses: 0, playoffTies: 0 },
-                            allMatches: []
-                        };
-                    }
-
-                    const h2hRecord = newHeadToHeadRecords[h2hKey];
-
-                    // Determine the winner and loser for this specific match (using owner IDs)
-                    let winnerOwnerId = 'Tie';
-                    let loserOwnerId = 'Tie';
-                    if (team1Won) {
-                        winnerOwnerId = team1OwnerId;
-                        loserOwnerId = team2OwnerId;
-                    } else if (team2Score > team1Score) {
-                        winnerOwnerId = team2OwnerId;
-                        loserOwnerId = team1OwnerId;
-                    }
-
-                    // Update records from the perspective of each owner in the pair
-                    const recordForOwner1 = (team1OwnerId === sortedOwners[0]) ? h2hRecord[sortedOwners[0]] : h2hRecord[sortedOwners[1]];
-                    const recordForOwner2 = (team2OwnerId === sortedOwners[0]) ? h2hRecord[sortedOwners[0]] : h2hRecord[sortedOwners[1]];
-
-                    // Only update playoff record if the matchType is indeed a playoff/championship/consolation game
-                    const isActualPlayoffGame = (matchType === 'Playoffs' || matchType === 'Championship' || matchType === 'Consolation');
-
-                    if (isTie) {
-                        recordForOwner1.ties++;
-                        recordForOwner2.ties++;
-                        if (isActualPlayoffGame) {
-                            recordForOwner1.playoffTies++;
-                            recordForOwner2.playoffTies++;
-                        }
-                    } else if (team1Won) {
-                        recordForOwner1.wins++;
-                        recordForOwner2.losses++;
-                        if (isActualPlayoffGame) {
-                            recordForOwner1.playoffWins++;
-                            recordForOwner2.playoffLosses++;
-                        }
-                    } else { // team2Won
-                        recordForOwner2.wins++;
-                        recordForOwner1.losses++;
-                        if (isActualPlayoffGame) {
-                            recordForOwner2.playoffWins++;
-                            recordForOwner1.playoffLosses++;
-                        }
-                    }
-
-                    // Add match details to allMatches array
-                    h2hRecord.allMatches.push({
-                        year: parseInt(year),
-                        week: week,
-                        matchupId: matchup.match_id, // Store matchup_id for bracket lookup
-                        team1RosterId: team1RosterId, // Store roster IDs for history
-                        team2RosterId: team2RosterId,
-                        team1OwnerId: team1OwnerId, // Store owner IDs for history
-                        team2OwnerId: team2OwnerId,
-                        team1DisplayName: team1DisplayName, // Store display names for history
-                        team2DisplayName: team2DisplayName,
-                        team1Score: team1Score,
-                        team2Score: team2Score,
-                        winnerOwnerId: winnerOwnerId, // Store owner ID of winner
-                        loserOwnerId: loserOwnerId,
-                        winnerDisplayName: winnerOwnerId === team1OwnerId ? team1DisplayName : team2DisplayName,
-                        loserDisplayName: loserOwnerId === team1OwnerId ? team1DisplayName : team2DisplayName,
-                        winnerScore: winnerOwnerId === team1OwnerId ? team1Score : team2Score,
-                        loserScore: loserOwnerId === team1OwnerId ? team1Score : team2Score,
-                        isTie: isTie,
-                        matchType: matchType, // Store the determined match type
+                // Helper to find a bracket match for these two teams in the same week
+                const findBracketMatch = (bracket) => {
+                    return bracket.find(bracketMatch => {
+                        const bracketTeams = [String(bracketMatch.t1), String(bracketMatch.t2)].filter(Boolean);
+                        const bracketWeek = parseInt(bracketMatch.week);
+                        return (
+                            bracketWeek === matchupWeek &&
+                            bracketTeams.includes(team1RosterIdStr) && bracketTeams.includes(team2RosterIdStr)
+                        );
                     });
+                };
+
+                const winnersMatch = findBracketMatch(winnersBracketForYear);
+                const losersMatch = findBracketMatch(losersBracketForYear);
+
+                if (winnersMatch) {
+                    if (winnersMatch.p) {
+                        const place = winnersMatch.p;
+                        if (place === 1) {
+                            matchType = 'Championship Game';
+                        } else if (place === 3) {
+                            matchType = '3rd Place Game';
+                        } else if (place === 5) {
+                            matchType = '5th Place Game';
+                        } else if (place === 7) {
+                            matchType = '7th Place Game';
+                        } else if (place === 9) {
+                            matchType = '9th Place Game';
+                        } else if (place === 11) {
+                            matchType = '11th Place Game';
+                        } else {
+                            matchType = `${place}th Place Game`;
+                        }
+                    } else if (championshipWeek && matchupWeek === championshipWeek) {
+                        matchType = 'Championship Game';
+                    } else {
+                        matchType = 'Playoffs';
+                    }
+                } else if (losersMatch) {
+                    if (losersMatch.p) {
+                        const place = losersMatch.p;
+                        // Map losers bracket place values: 1=7th, 3=9th, 5=11th
+                        if (place === 1) {
+                            matchType = '7th Place Game';
+                        } else if (place === 3) {
+                            matchType = '9th Place Game';
+                        } else if (place === 5) {
+                            matchType = '11th Place Game';
+                        } else {
+                            matchType = `Placement Game`;
+                        }
+                    } else {
+                        matchType = 'Consolation';
+                    }
+                } else if (matchup.playoff) {
+                    // Fallback: if matchup.playoff is set but not found in brackets
+                    matchType = 'Playoffs (Uncategorized)';
+                }
+
+                const sortedOwners = [team1OwnerId, team2OwnerId].sort();
+                const h2hKey = `${sortedOwners[0]} vs ${sortedOwners[1]}`;
+
+                if (!newHeadToHeadRecords[h2hKey]) {
+                    newHeadToHeadRecords[h2hKey] = {
+                        owners: sortedOwners,
+                        [sortedOwners[0]]: { wins: 0, losses: 0, ties: 0, playoffWins: 0, playoffLosses: 0, playoffTies: 0 },
+                        [sortedOwners[1]]: { wins: 0, losses: 0, ties: 0, playoffWins: 0, playoffLosses: 0, playoffTies: 0 },
+                        allMatches: []
+                    };
+                }
+
+                const h2hRecord = newHeadToHeadRecords[h2hKey];
+
+                let winnerOwnerId = 'Tie';
+                let loserOwnerId = 'Tie';
+                if (team1Won) {
+                    winnerOwnerId = team1OwnerId;
+                    loserOwnerId = team2OwnerId;
+                } else if (team2Score > team1Score) {
+                    winnerOwnerId = team2OwnerId;
+                    loserOwnerId = team1OwnerId;
+                }
+
+                const recordForOwner1 = (team1OwnerId === sortedOwners[0]) ? h2hRecord[sortedOwners[0]] : h2hRecord[sortedOwners[1]];
+                const recordForOwner2 = (team2OwnerId === sortedOwners[0]) ? h2hRecord[sortedOwners[0]] : h2hRecord[sortedOwners[1]];
+
+                // Consider all playoff/consolation/placement games for playoff record
+                const isActualPlayoffGame = (
+                    matchType.includes('Playoff') ||
+                    matchType.includes('Championship') ||
+                    matchType.includes('Consolation')
+                );
+
+                if (isTie) {
+                    recordForOwner1.ties++;
+                    recordForOwner2.ties++;
+                    if (isActualPlayoffGame) {
+                        recordForOwner1.playoffTies++;
+                        recordForOwner2.playoffTies++;
+                    }
+                } else if (team1Won) {
+                    recordForOwner1.wins++;
+                    recordForOwner2.losses++;
+                    if (isActualPlayoffGame) {
+                        recordForOwner1.playoffWins++;
+                        recordForOwner2.playoffLosses++;
+                    }
+                } else {
+                    recordForOwner2.wins++;
+                    recordForOwner1.losses++;
+                    if (isActualPlayoffGame) {
+                        recordForOwner2.playoffWins++;
+                        recordForOwner1.playoffLosses++;
+                    }
+                }
+
+                h2hRecord.allMatches.push({
+                    year: parseInt(year),
+                    week: matchup.week,
+                    matchupId: matchup.match_id,
+                    team1RosterId,
+                    team2RosterId,
+                    team1OwnerId,
+                    team2OwnerId,
+                    team1DisplayName,
+                    team2DisplayName,
+                    team1Score,
+                    team2Score,
+                    winnerOwnerId,
+                    loserOwnerId,
+                    winnerDisplayName: winnerOwnerId === team1OwnerId ? team1DisplayName : team2DisplayName,
+                    loserDisplayName: loserOwnerId === team1OwnerId ? team1DisplayName : team2DisplayName,
+                    winnerScore: winnerOwnerId === team1OwnerId ? team1Score : team2Score,
+                    loserScore: loserOwnerId === team1OwnerId ? team1Score : team2Score,
+                    isTie,
+                    matchType,
                 });
             });
         });
         setHeadToHeadRecords(newHeadToHeadRecords);
+        setWeeklyHighScoreCounts(highScoreCounts);
         setLoading(false);
-    }, [historicalData, getTeamName, contextLoading, contextError]); // Dependencies updated
+    }, [historicalData, getTeamName, contextLoading, contextError]);
 
     // Create a single, consistent sorted list of display names and their corresponding owner IDs for the grid axes
     const sortedDisplayNamesAndOwners = useMemo(() => {
@@ -280,6 +340,27 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
         const sortedMatches = [...rivalry.allMatches].sort((a, b) => {
             if (a.year !== b.year) return a.year - b.year;
             return a.week - b.week;
+        });
+
+        // Prepare net points data for line graph, with split for positive/negative fill and zero-crossing points
+        const netPointsData = sortedMatches.map((match) => {
+            let mainTeamScore, oppTeamScore;
+            if (match.team1OwnerId === ownerA) {
+                mainTeamScore = match.team1Score;
+                oppTeamScore = match.team2Score;
+            } else {
+                mainTeamScore = match.team2Score;
+                oppTeamScore = match.team1Score;
+            }
+            const netPoints = mainTeamScore - oppTeamScore;
+            return {
+                name: `${match.year} W${match.week}`,
+                netPoints,
+                mainTeamScore,
+                oppTeamScore,
+                week: match.week,
+                year: match.year,
+            };
         });
 
         sortedMatches.forEach(match => {
@@ -383,111 +464,332 @@ const Head2HeadGrid = ({ careerDPRData }) => { // Expecting careerDPRData as a p
                     <p className="text-sm text-gray-600">Performance, stats, and records</p>
                 </div>
 
-                {/* Main Teams Cards - Conditionally rendered */}
-                {(() => {
-                    const overallTeamAStats = careerDPRData?.find(d => d.ownerId === ownerA);
-                    const overallTeamBStats = careerDPRData?.find(d => d.ownerId === ownerB);
 
-                    // Check if at least one team has some meaningful stats to display
-                    const hasAnyStats = (stats) => stats && (
-                        (stats.wins !== null && stats.wins !== 0) ||
-                        (stats.pointsFor !== null && stats.pointsFor !== 0) ||
-                        (stats.dpr !== null && stats.dpr !== 0) ||
-                        (stats.highScore !== null && stats.highScore !== 0) ||
-                        (stats.winPercentage !== null && stats.winPercentage !== 0)
-                    );
+                {/* Main Teams Cards and VERSUS section in a 3-column grid */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 items-center">
+                    {/* Main Team Card (vertical/row axis, ownerA) */}
+                    {(() => {
+                        const currentOwnerId = ownerA;
+                        const currentTeamDisplayName = getTeamName(currentOwnerId, null);
+                        const overallTeamStats = careerDPRData?.find(d => d.ownerId === currentOwnerId);
+                        const opponentOwnerId = ownerB;
+                        const opponentTeamStats = careerDPRData?.find(d => d.ownerId === opponentOwnerId);
+                        // ...stat values and statBubble logic as before...
+                        // Individual Stats values
+                        const totalWins = overallTeamStats ? overallTeamStats.wins : null;
+                        const winPercentage = overallTeamStats && typeof overallTeamStats.winPercentage === 'number'
+                            ? overallTeamStats.winPercentage
+                            : null;
+                        const careerDPR = overallTeamStats ? overallTeamStats.dpr : null;
+                        const weeklyHighScoreCount = weeklyHighScoreCounts[currentOwnerId] || 0;
+                        const weeklyHighScore = overallTeamStats ? overallTeamStats.highScore : null;
+                        const totalPointsScored = overallTeamStats ? overallTeamStats.pointsFor : null;
+                        // Medal Score calculation
+                        let medalScore = 0;
+                        if (overallTeamStats) {
+                            medalScore += (overallTeamStats.championships || 0) * 10;
+                            medalScore += (overallTeamStats.runnerUps || 0) * 6;
+                            medalScore += (overallTeamStats.thirdPlaces || 0) * 4;
+                            medalScore += (overallTeamStats.pointsChampionships || 0) * 8;
+                            medalScore += (overallTeamStats.pointsRunnerUps || 0) * 5;
+                            medalScore += (overallTeamStats.thirdPlacePoints || 0) * 3;
+                        }
+                        // Medal Score rank and highlight
+                        const allMedalScores = careerDPRData ? careerDPRData.map(d => {
+                            let ms = 0;
+                            ms += (d.championships || 0) * 10;
+                            ms += (d.runnerUps || 0) * 6;
+                            ms += (d.thirdPlaces || 0) * 4;
+                            ms += (d.pointsChampionships || 0) * 8;
+                            ms += (d.pointsRunnerUps || 0) * 5;
+                            ms += (d.thirdPlacePoints || 0) * 3;
+                            return ms;
+                        }) : [];
+                        const medalScoreRank = calculateRank(medalScore, allMedalScores, true);
+                        const oppMedalScore = (() => {
+                            if (!opponentTeamStats) return 0;
+                            let ms = 0;
+                            ms += (opponentTeamStats.championships || 0) * 10;
+                            ms += (opponentTeamStats.runnerUps || 0) * 6;
+                            ms += (opponentTeamStats.thirdPlaces || 0) * 4;
+                            ms += (opponentTeamStats.pointsChampionships || 0) * 8;
+                            ms += (opponentTeamStats.pointsRunnerUps || 0) * 5;
+                            ms += (opponentTeamStats.thirdPlacePoints || 0) * 3;
+                            return ms;
+                        })();
+                        let medalScoreClass = 'bg-blue-50';
+                        if (medalScore > oppMedalScore) {
+                            medalScoreClass = 'bg-green-100 text-green-800';
+                        } else if (medalScore < oppMedalScore) {
+                            medalScoreClass = 'bg-red-100 text-red-800';
+                        } else if (medalScore === oppMedalScore && medalScore !== 0) {
+                            medalScoreClass = 'bg-yellow-100 text-yellow-800';
+                        }
+                        // Opponent's Individual Stats values for comparison
+                        const oppTotalWins = opponentTeamStats ? opponentTeamStats.wins : null;
+                        const oppWinPercentage = opponentTeamStats ? opponentTeamStats.winPercentage : null;
+                        const oppCareerDPR = opponentTeamStats ? opponentTeamStats.dpr : null;
+                        const oppWeeklyHighScore = opponentTeamStats ? opponentTeamStats.highScore : null;
+                        const oppTotalPointsScored = opponentTeamStats ? opponentTeamStats.pointsFor : null;
+                        const getComparisonClass = (teamValue, opponentValue, isHigherBetter = true) => {
+                            if (teamValue === null || opponentValue === null || typeof teamValue === 'undefined' || typeof opponentValue === 'undefined' || isNaN(teamValue) || isNaN(opponentValue)) {
+                                return 'bg-blue-50';
+                            }
+                            if (teamValue === opponentValue) return 'bg-yellow-100 text-yellow-800';
+                            if (isHigherBetter) {
+                                return teamValue > opponentValue ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+                            } else {
+                                return teamValue < opponentValue ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+                            }
+                        };
+                        const totalWinsRank = calculateRank(totalWins, allTotalWins, true);
+                        const winPercentageRank = calculateRank(winPercentage, allWinPercentages, true);
+                        const careerDPRRank = calculateRank(careerDPR, allCareerDPRs, true);
+                        const weeklyHighScoreRank = calculateRank(weeklyHighScore, allHighestSingleGameScores, true);
+                        const totalPointsScoredRank = calculateRank(totalPointsScored, allTotalPointsScored, true);
+                        // Highlight for weekly high score count: green if more, red if less, yellow if equal
+                        const oppWeeklyHighScoreCount = weeklyHighScoreCounts[opponentOwnerId] || 0;
+                        let weeklyHighScoreCountClass = 'p-2 rounded-md ';
+                        if (weeklyHighScoreCount > oppWeeklyHighScoreCount) {
+                            weeklyHighScoreCountClass += 'bg-green-100 text-green-800';
+                        } else if (weeklyHighScoreCount < oppWeeklyHighScoreCount) {
+                            weeklyHighScoreCountClass += 'bg-red-100 text-red-800';
+                        } else {
+                            weeklyHighScoreCountClass += 'bg-yellow-100 text-yellow-800';
+                        }
+                        // Win % highlight (green if higher, red if lower, yellow if equal)
+                        const winPctClass = getComparisonClass(winPercentage, oppWinPercentage, true);
+                        // Stat bubble display helper (responsive, even sizing)
+                        const statBubble = (rank, label, value, className) => (
+                            <div className={className + ' flex flex-col items-center justify-center aspect-[5/3] w-full h-full rounded-lg shadow-sm'}>
+                                <span className="block text-base font-bold mb-1">{rank}</span>
+                                <span className="block text-xs font-semibold text-center">{label} <span className="font-normal">({value})</span></span>
+                            </div>
+                        );
+                        return (
+                            <div className="bg-white p-5 rounded-lg shadow-md border border-gray-200 flex flex-col items-center text-center">
+                                <div className="w-16 h-16 bg-blue-200 rounded-full flex items-center justify-center text-blue-800 font-bold text-2xl mb-3">
+                                    {currentTeamDisplayName.charAt(0)}
+                                </div>
+                                <h4 className="text-xl font-bold text-gray-800 mb-2">{currentTeamDisplayName}</h4>
+                                <div className="grid grid-cols-3 gap-3 w-full text-xs font-medium text-gray-700">
+                                    {statBubble(totalWinsRank, 'Total Wins', totalWins !== null ? totalWins : 'N/A', getComparisonClass(totalWins, oppTotalWins))}
+                                    {statBubble(winPercentageRank, 'Win %', winPercentage !== null ? winPercentage.toFixed(3) + '%' : 'N/A', winPctClass)}
+                                    {statBubble(careerDPRRank, 'Career DPR', careerDPR !== null ? careerDPR.toFixed(3) : 'N/A', getComparisonClass(careerDPR, oppCareerDPR))}
+                                    {statBubble(calculateRank(weeklyHighScoreCount, Object.values(weeklyHighScoreCounts), true), 'Weekly High Score', weeklyHighScoreCount, weeklyHighScoreCountClass)}
+                                    {statBubble(totalPointsScoredRank, 'Total Points', totalPointsScored !== null ? totalPointsScored.toFixed(2) : 'N/A', getComparisonClass(totalPointsScored, oppTotalPointsScored))}
+                                    {statBubble(medalScoreRank, 'Medal Score', medalScore, medalScoreClass)}
+                                </div>
+                            </div>
+                        );
+                    })()}
 
-                    if (!hasAnyStats(overallTeamAStats) && !hasAnyStats(overallTeamBStats)) {
-                        return null; // Remove the box and statement if no stats
-                    }
-
-                    return (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                            {[ownerA, ownerB].map(currentOwnerId => {
-                                const currentTeamDisplayName = getTeamName(currentOwnerId, null);
-                                const overallTeamStats = careerDPRData?.find(d => d.ownerId === currentOwnerId);
-                                const opponentOwnerId = (currentOwnerId === ownerA) ? ownerB : ownerA;
-                                const opponentTeamStats = careerDPRData?.find(d => d.ownerId === opponentOwnerId);
-
-                                // Individual Stats values
-                                const totalWins = overallTeamStats ? overallTeamStats.wins : null;
-                                const winPercentage = overallTeamStats && typeof overallTeamStats.winPercentage === 'number'
-                                                         ? overallTeamStats.winPercentage
-                                                         : null;
-                                const careerDPR = overallTeamStats ? overallTeamStats.dpr : null;
-                                const weeklyHighScore = overallTeamStats ? overallTeamStats.highScore : null;
-                                const totalPointsScored = overallTeamStats ? overallTeamStats.pointsFor : null;
-
-                                // Opponent's Individual Stats values for comparison
-                                const oppTotalWins = opponentTeamStats ? opponentTeamStats.wins : null;
-                                const oppWinPercentage = opponentTeamStats ? opponentTeamStats.winPercentage : null;
-                                const oppCareerDPR = opponentTeamStats ? oppCareerDPR : null;
-                                const oppWeeklyHighScore = opponentTeamStats ? opponentTeamStats.highScore : null;
-                                const oppTotalPointsScored = opponentTeamStats ? opponentTeamStats.pointsFor : null;
-
-                                const getComparisonClass = (teamValue, opponentValue, isHigherBetter = true) => {
-                                    if (teamValue === null || opponentValue === null || typeof teamValue === 'undefined' || typeof opponentValue === 'undefined' || isNaN(teamValue) || isNaN(opponentValue)) {
-                                        return 'bg-blue-50';
-                                    }
-                                    if (teamValue === opponentValue) return 'bg-yellow-100 text-yellow-800';
-                                    if (isHigherBetter) {
-                                        return teamValue > opponentValue ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
-                                    } else {
-                                        return teamValue < opponentValue ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
-                                    }
-                                };
-
-                                const totalWinsRank = calculateRank(totalWins, allTotalWins, true);
-                                const winPercentageRank = calculateRank(winPercentage, allWinPercentages, true);
-                                const careerDPRRank = calculateRank(careerDPR, allCareerDPRs, true);
-                                const weeklyHighScoreRank = calculateRank(weeklyHighScore, allHighestSingleGameScores, true);
-                                const totalPointsScoredRank = calculateRank(totalPointsScored, allTotalPointsScored, true);
-
-                                return (
-                                    <div key={currentOwnerId} className="bg-white p-5 rounded-lg shadow-md border border-gray-200 flex flex-col items-center text-center">
-                                        <div className="w-16 h-16 bg-blue-200 rounded-full flex items-center justify-center text-blue-800 font-bold text-2xl mb-3">
-                                            {currentTeamDisplayName.charAt(0)}
-                                        </div>
-                                        <h4 className="text-xl font-bold text-gray-800 mb-2">{currentTeamDisplayName}</h4>
-                                        <div className="grid grid-cols-2 gap-2 w-full text-xs font-medium text-gray-700">
-                                            <div className={`${getComparisonClass(totalWins, oppTotalWins)} p-2 rounded-md`}>
-                                                Total Wins: {totalWins !== null ? totalWins : 'N/A'} (Rank: {totalWinsRank})
-                                            </div>
-                                            <div className="bg-blue-50 p-2 rounded-md">
-                                                Win %: {winPercentage !== null ? (winPercentage * 100).toFixed(1) + '%' : 'N/A'} (Rank: {winPercentageRank})
-                                            </div>
-                                            <div className={`${getComparisonClass(careerDPR, oppCareerDPR)} p-2 rounded-md`}>
-                                                Career DPR: {careerDPR !== null ? careerDPR.toFixed(2) : 'N/A'} (Rank: {careerDPRRank})
-                                            </div>
-                                            <div className={`${getComparisonClass(weeklyHighScore, oppWeeklyHighScore)} p-2 rounded-md`}>
-                                                Weekly High Score: {weeklyHighScore !== null ? weeklyHighScore.toFixed(2) : 'N/A'} (Rank: {weeklyHighScoreRank})
-                                            </div>
-                                            <div className={`${getComparisonClass(totalPointsScored, oppTotalPointsScored)} p-2 rounded-md`}>
-                                                Total Points Scored: {totalPointsScored !== null ? totalPointsScored.toFixed(2) : 'N/A'} (Rank: {totalPointsScoredRank})
-                                            </div>
-                                            <div className="bg-blue-50 p-2 rounded-md">Draft Rank: N/A</div>
-                                            <div className="bg-blue-50 p-2 rounded-md">Manager Rank: N/A</div>
-                                            <div className="bg-blue-50 p-2 rounded-md">Medal Score: N/A</div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                    {/* VERSUS Section (center column) */}
+                    <div className="flex flex-col items-center justify-center h-full">
+                        <div className="bg-gradient-to-r from-blue-700 to-blue-900 text-white p-6 rounded-xl shadow-lg border border-blue-600 text-center w-full max-w-xs mx-auto">
+                            <h4 className="text-2xl font-extrabold mb-3 tracking-wide">★ VERSUS ★</h4>
+                            <p className="text-xl font-semibold mb-2">Record: <span className="font-bold">{
+                                ownerARecord.ties && ownerARecord.ties > 0
+                                    ? renderRecord(ownerARecord)
+                                    : `${ownerARecord.wins || 0}-${ownerARecord.losses || 0}`
+                            }</span></p>
+                            {currentStreakTeam ? (
+                                <p className="text-lg mb-2">Streak: {currentStreakTeam === ownerA ? `W-${currentStreakCount}` : `L-${currentStreakCount}`}</p>
+                            ) : (
+                                <div className="mb-2 h-6"></div>
+                            )}
+                            <p className="text-lg">
+                                Playoff Record: <span className="font-bold">
+                                    {(() => {
+                                        // Only count Playoff and Championship games
+                                        const playoffWins = rivalry.allMatches.filter(m => (
+                                            m.matchType === 'Playoffs' || m.matchType === 'Championship Game') && m.winnerOwnerId === ownerA
+                                        ).length;
+                                        const playoffLosses = rivalry.allMatches.filter(m => (
+                                            m.matchType === 'Playoffs' || m.matchType === 'Championship Game') && m.loserOwnerId === ownerA
+                                        ).length;
+                                        const playoffTies = rivalry.allMatches.filter(m => (
+                                            m.matchType === 'Playoffs' || m.matchType === 'Championship Game') && m.isTie
+                                        ).length;
+                                        if (playoffTies > 0) {
+                                            return `${playoffWins}-${playoffLosses}-${playoffTies}`;
+                                        } else {
+                                            return `${playoffWins}-${playoffLosses}`;
+                                        }
+                                    })()}
+                                </span>
+                            </p>
                         </div>
-                    );
-                })()}
+                    </div>
 
-                {/* VERSUS Section - Styled */}
-                <div className="bg-gradient-to-r from-blue-700 to-blue-900 text-white p-6 rounded-xl shadow-lg border border-blue-600 text-center mb-8 transform hover:scale-105 transition-transform duration-300 ease-in-out">
-                    <h4 className="text-2xl font-extrabold mb-3 tracking-wide">★ VERSUS ★</h4>
-                    <p className="text-xl font-semibold mb-2">Record: <span className="font-bold">{renderRecord(ownerARecord)}</span> vs <span className="font-bold">{renderRecord(ownerBRecord)}</span></p>
-                    <p className="text-lg mb-2">Current Streak: <span className="font-medium">{currentStreak}</span></p>
-                    <p className="text-lg">
-                        Playoff Record: <span className="font-bold">{ownerARecord.playoffWins}-{ownerARecord.playoffLosses}-{ownerARecord.playoffTies}</span>
-                        {' '}vs{' '}
-                        <span className="font-bold">{ownerBRecord.playoffWins}-{ownerBRecord.playoffLosses}-{ownerBRecord.playoffTies}</span>
-                    </p>
+                    {/* Opponent Team Card (horizontal/col axis, ownerB) */}
+                    {(() => {
+                        const currentOwnerId = ownerB;
+                        const currentTeamDisplayName = getTeamName(currentOwnerId, null);
+                        const overallTeamStats = careerDPRData?.find(d => d.ownerId === currentOwnerId);
+                        const opponentOwnerId = ownerA;
+                        const opponentTeamStats = careerDPRData?.find(d => d.ownerId === opponentOwnerId);
+                        // ...stat values and statBubble logic as before...
+                        // Individual Stats values
+                        const totalWins = overallTeamStats ? overallTeamStats.wins : null;
+                        const winPercentage = overallTeamStats && typeof overallTeamStats.winPercentage === 'number'
+                            ? overallTeamStats.winPercentage
+                            : null;
+                        const careerDPR = overallTeamStats ? overallTeamStats.dpr : null;
+                        const weeklyHighScoreCount = weeklyHighScoreCounts[currentOwnerId] || 0;
+                        const weeklyHighScore = overallTeamStats ? overallTeamStats.highScore : null;
+                        const totalPointsScored = overallTeamStats ? overallTeamStats.pointsFor : null;
+                        // Medal Score calculation
+                        let medalScore = 0;
+                        if (overallTeamStats) {
+                            medalScore += (overallTeamStats.championships || 0) * 10;
+                            medalScore += (overallTeamStats.runnerUps || 0) * 6;
+                            medalScore += (overallTeamStats.thirdPlaces || 0) * 4;
+                            medalScore += (overallTeamStats.pointsChampionships || 0) * 8;
+                            medalScore += (overallTeamStats.pointsRunnerUps || 0) * 5;
+                            medalScore += (overallTeamStats.thirdPlacePoints || 0) * 3;
+                        }
+                        // Medal Score rank and highlight
+                        const allMedalScores = careerDPRData ? careerDPRData.map(d => {
+                            let ms = 0;
+                            ms += (d.championships || 0) * 10;
+                            ms += (d.runnerUps || 0) * 6;
+                            ms += (d.thirdPlaces || 0) * 4;
+                            ms += (d.pointsChampionships || 0) * 8;
+                            ms += (d.pointsRunnerUps || 0) * 5;
+                            ms += (d.thirdPlacePoints || 0) * 3;
+                            return ms;
+                        }) : [];
+                        const medalScoreRank = calculateRank(medalScore, allMedalScores, true);
+                        const oppMedalScore = (() => {
+                            if (!opponentTeamStats) return 0;
+                            let ms = 0;
+                            ms += (opponentTeamStats.championships || 0) * 10;
+                            ms += (opponentTeamStats.runnerUps || 0) * 6;
+                            ms += (opponentTeamStats.thirdPlaces || 0) * 4;
+                            ms += (opponentTeamStats.pointsChampionships || 0) * 8;
+                            ms += (opponentTeamStats.pointsRunnerUps || 0) * 5;
+                            ms += (opponentTeamStats.thirdPlacePoints || 0) * 3;
+                            return ms;
+                        })();
+                        let medalScoreClass = 'bg-blue-50';
+                        if (medalScore > oppMedalScore) {
+                            medalScoreClass = 'bg-green-100 text-green-800';
+                        } else if (medalScore < oppMedalScore) {
+                            medalScoreClass = 'bg-red-100 text-red-800';
+                        } else if (medalScore === oppMedalScore && medalScore !== 0) {
+                            medalScoreClass = 'bg-yellow-100 text-yellow-800';
+                        }
+                        // Opponent's Individual Stats values for comparison
+                        const oppTotalWins = opponentTeamStats ? opponentTeamStats.wins : null;
+                        const oppWinPercentage = opponentTeamStats ? opponentTeamStats.winPercentage : null;
+                        const oppCareerDPR = opponentTeamStats ? opponentTeamStats.dpr : null;
+                        const oppWeeklyHighScore = opponentTeamStats ? opponentTeamStats.highScore : null;
+                        const oppTotalPointsScored = opponentTeamStats ? opponentTeamStats.pointsFor : null;
+                        const getComparisonClass = (teamValue, opponentValue, isHigherBetter = true) => {
+                            if (teamValue === null || opponentValue === null || typeof teamValue === 'undefined' || typeof opponentValue === 'undefined' || isNaN(teamValue) || isNaN(opponentValue)) {
+                                return 'bg-blue-50';
+                            }
+                            if (teamValue === opponentValue) return 'bg-yellow-100 text-yellow-800';
+                            if (isHigherBetter) {
+                                return teamValue > opponentValue ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+                            } else {
+                                return teamValue < opponentValue ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+                            }
+                        };
+                        const totalWinsRank = calculateRank(totalWins, allTotalWins, true);
+                        const winPercentageRank = calculateRank(winPercentage, allWinPercentages, true);
+                        const careerDPRRank = calculateRank(careerDPR, allCareerDPRs, true);
+                        const weeklyHighScoreRank = calculateRank(weeklyHighScore, allHighestSingleGameScores, true);
+                        const totalPointsScoredRank = calculateRank(totalPointsScored, allTotalPointsScored, true);
+                        // Highlight for weekly high score count: green if more, red if less, yellow if equal
+                        const oppWeeklyHighScoreCount = weeklyHighScoreCounts[opponentOwnerId] || 0;
+                        let weeklyHighScoreCountClass = 'p-2 rounded-md ';
+                        if (weeklyHighScoreCount > oppWeeklyHighScoreCount) {
+                            weeklyHighScoreCountClass += 'bg-green-100 text-green-800';
+                        } else if (weeklyHighScoreCount < oppWeeklyHighScoreCount) {
+                            weeklyHighScoreCountClass += 'bg-red-100 text-red-800';
+                        } else {
+                            weeklyHighScoreCountClass += 'bg-yellow-100 text-yellow-800';
+                        }
+                        // Win % highlight (green if higher, red if lower, yellow if equal)
+                        const winPctClass = getComparisonClass(winPercentage, oppWinPercentage, true);
+                        // Stat bubble display helper (responsive, even sizing)
+                        const statBubble = (rank, label, value, className) => (
+                            <div className={className + ' flex flex-col items-center justify-center aspect-[5/3] w-full h-full rounded-lg shadow-sm'}>
+                                <span className="block text-base font-bold mb-1">{rank}</span>
+                                <span className="block text-xs font-semibold text-center">{label} <span className="font-normal">({value})</span></span>
+                            </div>
+                        );
+                        return (
+                            <div className="bg-white p-5 rounded-lg shadow-md border border-gray-200 flex flex-col items-center text-center">
+                                <div className="w-16 h-16 bg-blue-200 rounded-full flex items-center justify-center text-blue-800 font-bold text-2xl mb-3">
+                                    {currentTeamDisplayName.charAt(0)}
+                                </div>
+                                <h4 className="text-xl font-bold text-gray-800 mb-2">{currentTeamDisplayName}</h4>
+                                <div className="grid grid-cols-3 gap-3 w-full text-xs font-medium text-gray-700">
+                                    {statBubble(totalWinsRank, 'Total Wins', totalWins !== null ? totalWins : 'N/A', getComparisonClass(totalWins, oppTotalWins))}
+                                    {statBubble(winPercentageRank, 'Win %', winPercentage !== null ? winPercentage.toFixed(3) + '%' : 'N/A', winPctClass)}
+                                    {statBubble(careerDPRRank, 'Career DPR', careerDPR !== null ? careerDPR.toFixed(3) : 'N/A', getComparisonClass(careerDPR, oppCareerDPR))}
+                                    {statBubble(calculateRank(weeklyHighScoreCount, Object.values(weeklyHighScoreCounts), true), 'Weekly High Score', weeklyHighScoreCount, weeklyHighScoreCountClass)}
+                                    {statBubble(totalPointsScoredRank, 'Total Points', totalPointsScored !== null ? totalPointsScored.toFixed(2) : 'N/A', getComparisonClass(totalPointsScored, oppTotalPointsScored))}
+                                    {statBubble(medalScoreRank, 'Medal Score', medalScore, medalScoreClass)}
+                                </div>
+                            </div>
+                        );
+                    })()}
                 </div>
 
+                {/* ...removed duplicate VERSUS section... */}
+
+
+                {/* Net Points Bar Chart */}
+                <h4 className="text-xl font-bold text-gray-800 mt-6 mb-2 border-b pb-2">Net Points Over Time</h4>
+                <div className="w-full h-64 mb-8">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={netPointsData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis
+                                dataKey="name"
+                                fontSize={12}
+                                angle={-30}
+                                textAnchor="end"
+                                height={50}
+                                interval={0}
+                                tickFormatter={(value, index) => value}
+                                ticks={netPointsData.map(d => d.name)}
+                            />
+                            <YAxis domain={['auto', 'auto']} fontSize={12} />
+                            <Tooltip formatter={(value, name) => [typeof value === 'number' ? value.toFixed(2) : value, name === 'netPoints' ? 'Net Points' : name]} />
+                            <ReferenceLine y={0} stroke="#888" strokeDasharray="3 3" />
+                            <Bar
+                                dataKey="netPoints"
+                                isAnimationActive={false}
+                                radius={[4, 4, 0, 0]}
+                                minPointSize={2}
+                                fill="#888"
+                                // Custom bar color by value and correct y/height for negative values
+                                shape={(props) => {
+                                    const { x, y, width, height, payload } = props;
+                                    let color = '#eab308';
+                                    if (payload.netPoints > 0) color = '#22c55e';
+                                    else if (payload.netPoints < 0) color = '#ef4444';
+                                    // For negative bars, y is the top of the bar, height is positive downwards
+                                    // For positive bars, y is the top of the bar, height is positive downwards
+                                    // But sometimes height can be negative, so fix it:
+                                    const barY = height < 0 ? y + height : y;
+                                    const barHeight = Math.abs(height);
+                                    return (
+                                        <rect x={x} y={barY} width={width} height={barHeight} fill={color} rx={4} />
+                                    );
+                                }}
+                            />
+                        </BarChart>
+                    </ResponsiveContainer>
+                    <div className="text-xs text-center mt-2 text-gray-600">
+                        Green bar: {teamADisplayName} outscored {teamBDisplayName}. Red bar: {teamBDisplayName} outscored {teamADisplayName}. Yellow bar: tie.
+                    </div>
+                </div>
 
                 {/* Matchup Highlights */}
                 <h4 className="text-xl font-bold text-gray-800 mt-6 mb-4 border-b pb-2">Matchup Highlights</h4>

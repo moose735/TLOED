@@ -378,8 +378,21 @@ const LeagueHistory = () => {
         return null;
     };
 
-    // Generate ticks for Y-axis (appropriate for DPR values)
-    const yAxisTicks = [0.5, 0.75, 1.0, 1.25, 1.5];
+    // Generate ticks and domain for Y-axis based on actual DPR values
+    const allDPRValues = seasonalDPRChartData.flatMap(dataPoint =>
+        uniqueTeamsForChart.map(team => typeof dataPoint[team] === 'number' ? dataPoint[team] : null).filter(v => v !== null)
+    );
+    const minDPR = allDPRValues.length > 0 ? Math.min(...allDPRValues) : 0.5;
+    const maxDPR = allDPRValues.length > 0 ? Math.max(...allDPRValues) : 1.5;
+    // Add a little padding to min/max
+    const paddedMin = Math.max(0, minDPR - 0.05);
+    const paddedMax = maxDPR + 0.05;
+    // Generate ticks between paddedMin and paddedMax
+    const tickStep = 0.05;
+    const yAxisTicks = [];
+    for (let t = Math.floor(paddedMin * 20) / 20; t <= paddedMax; t += tickStep) {
+        yAxisTicks.push(Number(t.toFixed(2)));
+    }
 
 
     return (
@@ -537,9 +550,11 @@ const LeagueHistory = () => {
                                     <XAxis dataKey="year" label={{ value: "Season", position: "insideBottom", offset: 0 }} />
                                     <YAxis
                                         label={{ value: "Adjusted DPR", angle: -90, position: "insideLeft", offset: 0 }}
-                                        domain={[0.5, 1.5]} // Set a fixed domain for DPR values
+                                        domain={[paddedMin, paddedMax]}
                                         tickFormatter={value => value.toFixed(2)}
                                         ticks={yAxisTicks}
+                                        allowDataOverflow={true}
+                                        padding={{ top: 10, bottom: 10 }}
                                     />
                                     <Tooltip content={<CustomTooltip />} />
                                     <Legend />

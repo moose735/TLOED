@@ -14,10 +14,10 @@
     "firebase": "^10.12.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-router-dom": "^7.6.3",
     "react-scripts": "5.0.1",
-    "recharts": "^2.12.7"
+    "recharts": "^2.15.4"
   },
-  "devDependencies": {},
   "browserslist": {
     "production": [
       ">0.2%",

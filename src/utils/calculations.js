@@ -30,14 +30,14 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
     const careerTeamStatsRaw = {}; // Aggregated raw career stats, keyed by ownerId
 
     if (!historicalData || Object.keys(historicalData).length === 0) {
-        console.error("calculateAllLeagueMetrics: No historical data provided or it's empty. Returning empty metrics.");
+        // No historical data provided or it's empty. Returning empty metrics.
         return { seasonalMetrics: {}, careerDPRData: [] };
     }
 
     const allYears = Object.keys(historicalData.matchupsBySeason || {}).map(Number).sort((a, b) => a - b);
 
     if (allYears.length === 0) {
-        console.warn("calculateAllLeagueMetrics: No years found in historicalData.matchupsBySeason. Returning empty metrics.");
+        // No years found in historicalData.matchupsBySeason. Returning empty metrics.
         return { seasonalMetrics: {}, careerDPRData: [] };
     }
 
@@ -632,6 +632,44 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
         });
 
 
+        // Calculate how many times this owner had the highest score in any week (all seasons)
+        let weeklyHighScoreCount = 0;
+        Object.values(seasonalMetrics).forEach(seasonMetrics => {
+            // Build a map: week -> [{ ownerId, score }]
+            const weekScores = {};
+            Object.values(seasonMetrics).forEach(teamStats => {
+                if (Array.isArray(teamStats.weeklyScores)) {
+                    teamStats.weeklyScores.forEach((score, idx) => {
+                        const week = idx + 1;
+                        if (!weekScores[week]) weekScores[week] = [];
+                        weekScores[week].push({ ownerId: teamStats.ownerId, score });
+                    });
+                }
+            });
+
+            // For each week, find the highest score and which owner(s) had it
+            Object.entries(weekScores).forEach(([week, scoresArr]) => {
+                let weekHigh = -Infinity;
+                scoresArr.forEach(({ score }) => {
+                    if (typeof score === 'number' && !isNaN(score)) {
+                        if (score > weekHigh) weekHigh = score;
+                    }
+                });
+                // Count all owners who had the high score this week (ties allowed)
+                scoresArr.forEach(({ ownerId: oid, score }) => {
+                    if (
+                        oid === ownerId &&
+                        typeof score === 'number' &&
+                        !isNaN(score) &&
+                        score === weekHigh &&
+                        weekHigh !== -Infinity
+                    ) {
+                        weeklyHighScoreCount++;
+                    }
+                });
+            });
+        });
+
         // Ensure high/low scores are calculated from the *accumulated* careerWeeklyScores
         const careerHighScore = stats.careerWeeklyScores.length > 0 ? Math.max(...stats.careerWeeklyScores) : 0;
         const careerLowScore = stats.careerWeeklyScores.length > 0 ? Math.min(...stats.careerWeeklyScores) : 0;
@@ -695,8 +733,9 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
             slimWins: stats.slimWins,
             slimLosses: stats.slimLosses,
             weeklyTop2ScoresCount: stats.weeklyTop2ScoresCount,
-            highScore: careerHighScore,
-            lowScore: careerLowScore,
+            highScore: stats.careerWeeklyScores.length > 0 ? Math.max(...stats.careerWeeklyScores) : 0,
+            lowScore: stats.careerWeeklyScores.length > 0 ? Math.min(...stats.careerWeeklyScores) : 0,
+            weeklyHighScoreCount, // <-- Add the count here
             totalLuckRating: stats.totalLuckRating, // This is already conditionally aggregated
             highestSeasonalPointsAvg: highestSeasonalPointsAvg,
             lowestSeasonalPointsAvg: lowestSeasonalPointsAvg,
