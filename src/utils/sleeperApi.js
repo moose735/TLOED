@@ -19,19 +19,23 @@ async function fetchDataWithCache(url, cacheKey, expirationHours = 1) {
     const expiryMs = expirationHours * 60 * 60 * 1000;
 
     if (cachedEntry && (now - cachedEntry.timestamp < expiryMs)) {
+        console.log(`[Cache Hit] Returning cached data for ${cacheKey}`);
         return cachedEntry.data;
     }
 
     try {
+        console.log(`[Cache Miss] Fetching from ${url} for ${cacheKey}`);
         const response = await fetch(url);
         if (!response.ok) {
             if (response.status === 404) {
-                return null; // Return null or empty array depending on expected data type for 404
+                console.warn(`[API Error] 404 Not Found for ${url}. Returning null.`);
+                return null; // Return null for 404s, indicating resource not found
             }
             throw new Error(`HTTP error! status: ${response.status} for ${url}`);
         }
         const data = await response.json();
         inMemoryCache.set(cacheKey, { data, timestamp: now, expirationHours });
+        console.log(`[Cache Set] Data fetched and cached for ${cacheKey}.`);
         return data;
     } catch (error) {
         console.error(`Error fetching ${url}:`, error);
@@ -76,47 +80,40 @@ export async function fetchLeagueDetails(leagueId) {
  */
 export async function fetchLeagueData(currentLeagueId) {
     let leagues = [];
-    let leagueIdToFetch = currentLeagueId; // Use a distinct variable name for clarity in the loop
+    let leagueIdToFetch = currentLeagueId;
 
-    // --- Added check for valid CURRENT_LEAGUE_ID ---
     if (!currentLeagueId || currentLeagueId === '0' || currentLeagueId === '') {
         console.error("CURRENT_LEAGUE_ID is invalid. Please ensure it's set correctly in config.js.");
         return [];
     }
-    // --- End Added check ---
 
-    // Cache the entire chain of leagues for longer
     const CACHE_KEY = `league_chain_${currentLeagueId}`;
     const now = Date.now();
     const expiryMs = 24 * 60 * 60 * 1000; // 24 hours for league chain
 
     const cachedEntry = inMemoryCache.get(CACHE_KEY);
     if (cachedEntry && (now - cachedEntry.timestamp < expiryMs)) {
+        console.log(`[Cache Hit] Returning cached league chain for ${CACHE_KEY}`);
         return cachedEntry.data;
     }
 
     try {
-        while (leagueIdToFetch) { // Loop as long as leagueIdToFetch is a truthy value
+        while (leagueIdToFetch) {
             const league = await fetchLeagueDetails(leagueIdToFetch);
             if (league) {
                 leagues.push(league);
-                // Crucial change: Ensure previous_league_id is not '0' or an empty string,
-                // otherwise set it to null to terminate the loop.
                 if (league.previous_league_id && league.previous_league_id !== '0' && league.previous_league_id !== '') {
                     leagueIdToFetch = league.previous_league_id;
                 } else {
-                    leagueIdToFetch = null; // Terminate the loop
+                    leagueIdToFetch = null;
                 }
             } else {
-                // If fetchLeagueDetails returns null (e.g., 404 for a non-existent league),
-                // or any other error, break the loop.
                 console.warn(`Could not fetch details for league ID ${leagueIdToFetch}. Terminating historical league chain fetch.`);
-                leagueIdToFetch = null; // Terminate the loop
+                leagueIdToFetch = null;
             }
         }
     } catch (error) {
         console.error("Error fetching historical league chain:", error);
-        // Continue with whatever was fetched or return empty if nothing
     }
 
     inMemoryCache.set(CACHE_KEY, { data: leagues, timestamp: now, expirationHours: 24 });
@@ -138,7 +135,6 @@ export async function fetchUsersData(leagueId) {
  * @returns {Promise<Object>} A promise that resolves to an object of NFL player data.
  */
 export async function fetchNFLPlayers() {
-    // Player data is large and rarely changes within a day, cache for longer
     return fetchDataWithCache('https://api.sleeper.app/v1/players/nfl', 'nfl_players', 24); // Cache for 24 hours
 }
 
@@ -175,16 +171,13 @@ export async function fetchRostersWithDetails(leagueId) {
         return [];
     }
 
-    // Create a map from user_id to user details for efficient lookup
     const userMap = new Map(users.map(user => [user.user_id, user]));
 
-    // Enrich rosters with user display names and team names
     return rosters.map(roster => {
         const user = userMap.get(roster.owner_id);
         return {
             ...roster,
             ownerDisplayName: user ? (user.display_name || 'Unknown User') : 'Unknown User',
-            // CORRECTED LINE: Access team_name from the user object's metadata
             ownerTeamName: user ? (user.metadata?.team_name || user.display_name) : 'Unknown Team',
             ownerAvatar: user ? user.avatar : null
         };
@@ -219,8 +212,6 @@ function processRawMatchups(rawMatchups, rosterIdToDetailsMap, season, week) {
         }
 
         if (matchupId !== null) {
-            // This is a head-to-head matchup. We need to find its pair.
-            // Use a unique key for the pair to avoid processing it twice.
             const uniqueMatchupKey = `${matchupId}_${week}`;
 
             if (!processedMatchupKeys.has(uniqueMatchupKey)) {
@@ -265,47 +256,42 @@ function processRawMatchups(rawMatchups, rosterIdToDetailsMap, season, week) {
                         newMatchup.loser_roster_id = null;
                     }
                     processedMatchups.push(newMatchup);
-                    processedMatchupKeys.add(uniqueMatchupKey); // Mark this matchup as processed
+                    processedMatchupKeys.add(uniqueMatchupKey);
                 } else {
-                    // This case means a matchup_id was present, but no opponent was found.
-                    // This could be an an incomplete matchup or an edge case where a team is effectively on a bye
-                    // but still assigned a matchup_id. Treat it as a bye to ensure score is counted.
                     console.warn(`[processRawMatchups] Matchup ID ${matchupId} for roster ${rosterId} in week ${week} has no apparent opponent. Treating as a bye.`);
                     processedMatchups.push({
-                        matchup_id: null, // Set to null as it's not a paired matchup
+                        matchup_id: null,
                         season: season,
                         week: week,
                         team1_roster_id: rosterId,
                         team1_score: points,
                         team1_details: rosterIdToDetailsMap.get(rosterId),
-                        team2_roster_id: null, // Explicitly null for bye
-                        team2_score: 0, // Bye opponent score is 0
+                        team2_roster_id: null,
+                        team2_score: 0,
                         team2_details: null,
-                        winner_roster_id: points > 0 ? rosterId : null, // If score > 0, they "win" the bye
-                        loser_roster_id: points <= 0 ? rosterId : null, // If score <= 0, they "lose" the bye (or tie)
+                        winner_roster_id: points > 0 ? rosterId : null,
+                        loser_roster_id: points <= 0 ? rosterId : null,
                     });
-                    processedMatchupKeys.add(`${rosterId}_${week}_bye`); // Ensure unique key for this bye
+                    processedMatchupKeys.add(`${rosterId}_${week}_bye`);
                 }
             }
         } else {
-            // matchup_id is null. This is a bye week or a single entry playoff game.
-            // Ensure its score is recorded.
             const uniqueByeKey = `${rosterId}_${week}_bye`;
             if (!processedMatchupKeys.has(uniqueByeKey)) {
                 processedMatchups.push({
-                    matchup_id: null, // Explicitly null for bye
+                    matchup_id: null,
                     season: season,
                     week: week,
                     team1_roster_id: rosterId,
                     team1_score: points,
                     team1_details: rosterIdToDetailsMap.get(rosterId),
-                    team2_roster_id: null, // Explicitly null for bye
-                    team2_score: 0, // Bye opponent score is 0
+                    team2_roster_id: null,
+                    team2_score: 0,
                     team2_details: null,
-                    winner_roster_id: points > 0 ? rosterId : null, // If score > 0, they "win" the bye
-                    loser_roster_id: points <= 0 ? rosterId : null, // If score <= 0, they "lose" the bye (or tie)
+                    winner_roster_id: points > 0 ? rosterId : null,
+                    loser_roster_id: points <= 0 ? rosterId : null,
                 });
-                processedMatchupKeys.add(uniqueByeKey); // Mark this bye as processed
+                processedMatchupKeys.add(uniqueByeKey);
             }
         }
     });
@@ -317,10 +303,10 @@ function processRawMatchups(rawMatchups, rosterIdToDetailsMap, season, week) {
  * Fetches and processes matchups for a specific league and range of weeks.
  * @param {string} leagueId The ID of the Sleeper league.
  * @param {number | number[]} weeks The week number(s) to fetch matchups for. Can be a single number or an array.
- * @param {string} season The season (year) for these matchups. // ADDED season parameter
+ * @param {string} season The season (year) for these matchups.
  * @returns {Promise<Object>} A promise that resolves to an object where keys are week numbers and values are arrays of processed matchup data.
  */
-export async function fetchMatchupsForLeague(leagueId, weeks, season) { // ADDED season parameter
+export async function fetchMatchupsForLeague(leagueId, weeks, season) {
     let weeksToFetch = [];
     if (typeof weeks === 'number') {
         weeksToFetch = [weeks];
@@ -332,15 +318,15 @@ export async function fetchMatchupsForLeague(leagueId, weeks, season) { // ADDED
     }
 
     const allMatchupsByWeek = {};
-    const rosters = await fetchRostersWithDetails(leagueId); // Fetch once
-    const rosterIdToDetailsMap = new Map(rosters.map(r => [String(r.roster_id), r])); // Ensure key is string here
+    const rosters = await fetchRostersWithDetails(leagueId);
+    const rosterIdToDetailsMap = new Map(rosters.map(r => [String(r.roster_id), r]));
 
     const fetchPromises = weeksToFetch.map(async (week) => {
         try {
             const rawMatchups = await fetchDataWithCache(
                 `${BASE_URL}/league/${leagueId}/matchups/${week}`,
                 `matchups_${leagueId}_${week}`,
-                0.5 // Cache matchups for 30 mins, as scores update frequently during game days
+                0.5
             );
 
             if (rawMatchups) {
@@ -348,7 +334,6 @@ export async function fetchMatchupsForLeague(leagueId, weeks, season) { // ADDED
             }
         } catch (error) {
             console.error(`Error fetching matchups for league ${leagueId}, week ${week}:`, error);
-            // Don't re-throw, just log and continue for other weeks
         }
     });
 
@@ -393,29 +378,26 @@ export async function fetchLosersBracket(leagueId) {
  * @param {Map<string, Object>} rosterIdToDetailsMap A map for roster_id to enriched roster details.
  * @param {number} playoffStartWeek The week number when playoffs begin for this league.
  * @param {string} bracketType - 'winners' or 'losers' for logging clarity.
- * @param {string} season - The current season being processed. // NEW: Added season parameter
+ * @param {string} season - The current season being processed.
  * @returns {Array<Object>} The bracket data with added score information and bye teams.
  */
-function enrichBracketWithScores(rawBracketData, allWeeklyScoresForSeason, rosterIdToDetailsMap, playoffStartWeek, bracketType, season) { // NEW: Added season parameter
+function enrichBracketWithScores(rawBracketData, allWeeklyScoresForSeason, rosterIdToDetailsMap, playoffStartWeek, bracketType, season) {
     console.log(`[enrichBracketWithScores] Starting for ${bracketType} bracket, season: ${season}, raw data count: ${rawBracketData.length}`);
     if (!rawBracketData || rawBracketData.length === 0 || !allWeeklyScoresForSeason || !rosterIdToDetailsMap) {
         console.warn(`[enrichBracketWithScores] Returning empty array due to missing input data for ${bracketType} bracket, season ${season}.`);
-        return []; // Return empty array if no data
+        return [];
     }
 
-    // Sort raw bracket data by round and then match_id to ensure dependencies are processed first
     const sortedRawBracketData = [...rawBracketData].sort((a, b) => {
-        // Process lower rounds first (e.g., Round 1 before Round 2)
         if (a.r !== b.r) return a.r - b.r;
-        return a.m - b.m; // Then by match ID
+        return a.m - b.m;
     });
 
-    const processedMatchesMap = new Map(); // Stores enriched matches keyed by their match_id (m)
+    const processedMatchesMap = new Map();
 
-    // Helper to resolve t1/t2 references (e.g., {w: 1} to a roster_id)
     const resolveTeamFromRef = (ref) => {
         if (typeof ref === 'number' || typeof ref === 'string') {
-            return String(ref); // Direct roster ID
+            return String(ref);
         }
         if (typeof ref === 'object' && ref !== null) {
             if (ref.w) {
@@ -427,7 +409,7 @@ function enrichBracketWithScores(rawBracketData, allWeeklyScoresForSeason, roste
                 return prevMatch ? (String(prevMatch.l) || null) : null;
             }
         }
-        return null; // Could not resolve
+        return null;
     };
 
     sortedRawBracketData.forEach(bracketMatch => {
@@ -438,9 +420,8 @@ function enrichBracketWithScores(rawBracketData, allWeeklyScoresForSeason, roste
         const correspondingPlayoffWeek = playoffStartWeek + (bracketMatch.r - 1);
 
         enrichedMatch.week = correspondingPlayoffWeek;
-        enrichedMatch.playoffs = true; // Mark as playoff match
+        enrichedMatch.playoffs = true;
 
-        // Resolve t1 and t2 to actual roster IDs using the helper
         const resolvedT1 = resolveTeamFromRef(bracketMatch.t1 || bracketMatch.t1_from);
         const resolvedT2 = resolveTeamFromRef(bracketMatch.t2 || bracketMatch.t2_from);
 
@@ -449,14 +430,12 @@ function enrichBracketWithScores(rawBracketData, allWeeklyScoresForSeason, roste
         enrichedMatch.team1_details = rosterIdToDetailsMap.get(resolvedT1);
         enrichedMatch.team2_details = rosterIdToDetailsMap.get(resolvedT2);
 
-        // Add finalSeedingGame for championship and 3rd place matches
-        if (bracketMatch.p === 1) { // Championship match
+        if (bracketMatch.p === 1) {
             enrichedMatch.finalSeedingGame = 1;
-        } else if (bracketMatch.p === 3) { // 3rd place match
+        } else if (bracketMatch.p === 3) {
             enrichedMatch.finalSeedingGame = 3;
         }
 
-        // Initialize w and l from bracketMatch's own w and l (if provided by Sleeper API directly)
         enrichedMatch.w = bracketMatch.w ? String(bracketMatch.w) : null;
         enrichedMatch.l = bracketMatch.l ? String(bracketMatch.l) : null;
 
@@ -466,7 +445,6 @@ function enrichBracketWithScores(rawBracketData, allWeeklyScoresForSeason, roste
 
 
         if (weekMatchups && weekMatchups.length > 0) {
-            // Try to find by both resolved roster IDs
             if (resolvedT1 && resolvedT2) {
                 matchupFound = weekMatchups.find(m =>
                     (String(m.team1_roster_id) === resolvedT1 && String(m.team2_roster_id) === resolvedT2) ||
@@ -477,7 +455,6 @@ function enrichBracketWithScores(rawBracketData, allWeeklyScoresForSeason, roste
                 }
             }
 
-            // If not found by both, and one of the teams is null (indicating a bye in the bracket structure)
             if (!matchupFound && (resolvedT1 === null || resolvedT2 === null)) {
                 const nonNullRosterId = resolvedT1 || resolvedT2;
                 if (nonNullRosterId) {
@@ -490,8 +467,6 @@ function enrichBracketWithScores(rawBracketData, allWeeklyScoresForSeason, roste
                 }
             }
 
-            // Fallback: Try to find by matchup_id if it's explicitly provided in the bracketMatch
-            // This is less reliable if matchup_id is not consistent across regular and playoff matchups.
             if (!matchupFound && bracketMatch.m) {
                 matchupFound = weekMatchups.find(m => String(m.matchup_id) === String(bracketMatch.m));
                 if (matchupFound) {
@@ -504,8 +479,6 @@ function enrichBracketWithScores(rawBracketData, allWeeklyScoresForSeason, roste
 
 
         if (matchupFound) {
-            // Assign scores and winner/loser based on the found weekly matchup
-            // Ensure scores are assigned to t1/t2 based on their resolved positions
             if (String(matchupFound.team1_roster_id) === resolvedT1) {
                 enrichedMatch.t1_score = matchupFound.team1_score;
                 enrichedMatch.t2_score = matchupFound.team2_score;
@@ -513,14 +486,10 @@ function enrichBracketWithScores(rawBracketData, allWeeklyScoresForSeason, roste
                 enrichedMatch.t1_score = matchupFound.team2_score;
                 enrichedMatch.t2_score = matchupFound.team1_score;
             } else {
-                // This case should ideally not happen if matchupFound was based on resolvedT1/T2,
-                // but as a fallback, assign directly. This might occur if one of the resolved
-                // IDs was null (a bye), and we're just assigning the single available score.
                 enrichedMatch.t1_score = matchupFound.team1_score;
                 enrichedMatch.t2_score = matchupFound.team2_score;
             }
 
-            // Only override w/l if matchupFound has valid winner/loser IDs
             if (matchupFound.winner_roster_id) {
                 enrichedMatch.w = String(matchupFound.winner_roster_id);
             }
@@ -530,16 +499,14 @@ function enrichBracketWithScores(rawBracketData, allWeeklyScoresForSeason, roste
             console.log(`[enrichBracketWithScores] Scores and W/L assigned for M${matchId} R${bracketMatch.r}, Season ${season}. Winner: ${enrichedMatch.w}, Loser: ${enrichedMatch.l}, T1 Score: ${enrichedMatch.t1_score}, T2 Score: ${enrichedMatch.t2_score}`);
 
         } else {
-            // If no matchup found, scores remain null, but w/l from bracketMatch are preserved
             enrichedMatch.t1_score = null;
             enrichedMatch.t2_score = null;
             console.warn(`[enrichBracketWithScores] WARNING: No weekly matchup found for bracket match M${matchId} (R${bracketMatch.r}), Season ${season} with resolved teams T1:${resolvedT1}, T2:${resolvedT2}. Scores will be null.`);
         }
 
-        processedMatchesMap.set(matchId, enrichedMatch); // Store the processed match
+        processedMatchesMap.set(matchId, enrichedMatch);
     });
 
-    // Return the array of enriched matches, sorted by round and match ID
     return Array.from(processedMatchesMap.values()).sort((a, b) => {
         if (a.r !== b.r) return a.r - b.r;
         return a.m - b.m;
@@ -567,6 +534,7 @@ export async function fetchAllHistoricalMatchups() {
     const expiryMs = 24 * 60 * 60 * 1000; // 24 hours for full historical data
 
     if (cachedEntry && (now - cachedEntry.timestamp < expiryMs)) {
+        console.log(`[Cache Hit] Returning cached historical data for ${CACHE_KEY}`);
         return cachedEntry.data;
     }
 
@@ -574,9 +542,9 @@ export async function fetchAllHistoricalMatchups() {
         matchupsBySeason: {},
         rostersBySeason: {},
         leaguesMetadataBySeason: {},
-        winnersBracketBySeason: {}, // New property for winners bracket data
-        losersBracketBySeason: {},    // New property for losers bracket data
-        usersBySeason: {}, // NEW: Add a property to store users per season
+        winnersBracketBySeason: {},
+        losersBracketBySeason: {},
+        usersBySeason: {},
     };
 
     try {
@@ -588,22 +556,19 @@ export async function fetchAllHistoricalMatchups() {
         }
 
         const nflState = await fetchNFLState();
-        const currentNFLSeason = nflState?.season || new Date().getFullYear().toString(); // Ensure it's a string for comparison
+        const currentNFLSeason = nflState?.season || new Date().getFullYear().toString();
 
         for (const league of leagues) {
             const leagueId = league.league_id;
             const season = league.season;
             console.log(`[fetchAllHistoricalMatchups] Processing league ${leagueId} for season ${season}.`);
 
-
             allHistoricalData.leaguesMetadataBySeason[season] = league;
 
-            // NEW: Fetch users for this specific historical league
             const users = await fetchUsersData(leagueId);
-            allHistoricalData.usersBySeason[season] = users; // Store users for this season
+            allHistoricalData.usersBySeason[season] = users;
 
-            const rosters = await fetchRosterData(leagueId); // Fetch raw rosters first
-            // Manually enrich rosters with user data for this specific season
+            const rosters = await fetchRosterData(leagueId);
             const userMapForSeason = new Map(users.map(user => [user.user_id, user]));
             const enrichedRostersForSeason = rosters.map(roster => {
                 const user = userMapForSeason.get(roster.owner_id);
@@ -615,26 +580,24 @@ export async function fetchAllHistoricalMatchups() {
                 };
             });
             allHistoricalData.rostersBySeason[season] = enrichedRostersForSeason;
-            const rosterIdToDetailsMap = new Map(enrichedRostersForSeason.map(r => [String(r.roster_id), r])); // Ensure key is string here
+            const rosterIdToDetailsMap = new Map(enrichedRostersForSeason.map(r => [String(r.roster_id), r]));
 
 
-            // Determine regular season weeks and playoff start week
             let playoffStartWeek = league.settings?.playoff_start_week;
             if (!playoffStartWeek) {
-                playoffStartWeek = 15; // Common default if not explicitly set
+                playoffStartWeek = 15;
             }
-            playoffStartWeek = Math.max(1, playoffStartWeek); // Ensure it's at least week 1
+            playoffStartWeek = Math.max(1, playoffStartWeek);
 
             let regularSeasonWeeksEnd = playoffStartWeek - 1;
 
-            let seasonMatchupsData = {}; // Temp storage for all matchups of this season
+            let seasonMatchupsData = {};
 
-            // Fetch regular season matchups only for past/current seasons
             if (parseInt(season) <= parseInt(currentNFLSeason)) {
-                const weeksToFetchRegular = Array.from({ length: regularSeasonWeeksEnd }, (_, i) => i + 1); // Weeks 1 to regularSeasonWeeksEnd
+                const weeksToFetchRegular = Array.from({ length: regularSeasonWeeksEnd }, (_, i) => i + 1);
                 console.log(`[fetchAllHistoricalMatchups] Fetching regular season matchups for ${season}, weeks: ${weeksToFetchRegular.join(', ')}`);
                 const regularMatchupsByWeek = await fetchMatchupsForLeague(leagueId, weeksToFetchRegular, season);
-                Object.assign(seasonMatchupsData, regularMatchupsByWeek); // Merge into seasonMatchupsData
+                Object.assign(seasonMatchupsData, regularMatchupsByWeek);
 
                 if (Object.keys(regularMatchupsByWeek).length === 0 && parseInt(season) === parseInt(currentNFLSeason)) {
                     console.warn(`[fetchAllHistoricalMatchups] No regular season matchups found for current season ${season}.`);
@@ -643,7 +606,6 @@ export async function fetchAllHistoricalMatchups() {
                 console.log(`[fetchAllHistoricalMatchups] Skipping regular season matchup fetch for future season ${season}.`);
             }
 
-            // Fetch playoff bracket data
             let winnersBracketRaw = [];
             let losersBracketRaw = [];
             if (parseInt(season) <= parseInt(currentNFLSeason)) {
@@ -652,7 +614,6 @@ export async function fetchAllHistoricalMatchups() {
                     fetchLosersBracket(leagueId)
                 ]);
 
-                // Determine maximum playoff round to fetch all playoff matchup weeks
                 const maxWinnersRound = winnersBracketRaw.reduce((max, match) => Math.max(max, match.r || 0), 0);
                 const maxLosersRound = losersBracketRaw.reduce((max, match) => Math.max(max, match.r || 0), 0);
                 const maxPlayoffRound = Math.max(maxWinnersRound, maxLosersRound);
@@ -663,15 +624,12 @@ export async function fetchAllHistoricalMatchups() {
                     const playoffWeeksToFetch = Array.from({ length: maxPlayoffRound}, (_, i) => playoffStartWeek + i);
                     console.log(`[fetchAllHistoricalMatchups] Fetching playoff matchups for ${season}, weeks: ${playoffWeeksToFetch.join(', ')}`);
                     const playoffMatchupsByWeek = await fetchMatchupsForLeague(leagueId, playoffWeeksToFetch, season);
-                    Object.assign(seasonMatchupsData, playoffMatchupsByWeek); // Merge playoff week data
+                    Object.assign(seasonMatchupsData, playoffMatchupsByWeek);
                     console.log(`[fetchAllHistoricalMatchups] Season ${season}: Playoff matchups fetched. Total weeks in seasonMatchupsData: ${Object.keys(seasonMatchupsData).length}`);
                 } else {
                     console.log(`[fetchAllHistoricalMatchups] No playoff rounds found for season ${season}.`);
                 }
 
-                // Now, enrich the bracket data with scores from `seasonMatchupsData`
-                // Pass rosterIdToDetailsMap for bye week detection and to ensure team details are present
-                // NEW: Pass season to enrichBracketWithScores
                 allHistoricalData.winnersBracketBySeason[season] = enrichBracketWithScores(winnersBracketRaw, seasonMatchupsData, rosterIdToDetailsMap, playoffStartWeek, 'winners', season);
                 allHistoricalData.losersBracketBySeason[season] = enrichBracketWithScores(losersBracketRaw, seasonMatchupsData, rosterIdToDetailsMap, playoffStartWeek, 'losers', season);
 
@@ -680,7 +638,7 @@ export async function fetchAllHistoricalMatchups() {
                 allHistoricalData.winnersBracketBySeason[season] = [];
                 allHistoricalData.losersBracketBySeason[season] = [];
             }
-            allHistoricalData.matchupsBySeason[season] = seasonMatchupsData; // Store all matchups for the season
+            allHistoricalData.matchupsBySeason[season] = seasonMatchupsData;
             console.log(`[fetchAllHistoricalMatchups] Final seasonMatchupsData for season ${season}:`, seasonMatchupsData);
         }
 
@@ -689,8 +647,8 @@ export async function fetchAllHistoricalMatchups() {
 
     } catch (error) {
         console.error('Critical error in fetchAllHistoricalMatchups:', error);
-        inMemoryCache.delete(CACHE_KEY); // Clear cache on critical error to force refetch next time
-        return { matchupsBySeason: {}, rostersBySeason: {}, leaguesMetadataBySeason: {}, winnersBracketBySeason: {}, losersBracketBySeason: {}, usersBySeason: {} }; // Include usersBySeason in error return
+        inMemoryCache.delete(CACHE_KEY);
+        return { matchupsBySeason: {}, rostersBySeason: {}, leaguesMetadataBySeason: {}, winnersBracketBySeason: {}, losersBracketBySeason: {}, usersBySeason: {} };
     }
 }
 
@@ -711,7 +669,7 @@ export async function fetchTransactionsForWeek(leagueId, week) {
  * @returns {Promise<Array<Object>>} A promise that resolves to an array of draft objects.
  */
 export async function fetchLeagueDrafts(leagueId) {
-    return fetchDataWithCache(`${BASE_URL}/league/${leagueId}/drafts`, `drafts_${leagueId}`, 24); // Drafts change rarely, cache for 24h
+    return fetchDataWithCache(`${BASE_URL}/league/${leagueId}/drafts`, `drafts_${leagueId}`, 24);
 }
 
 /**
@@ -753,6 +711,7 @@ export async function fetchAllDraftHistory() {
     const expiryMs = 24 * 60 * 60 * 1000; // 24 hours for full draft history
 
     if (cachedEntry && (now - cachedEntry.timestamp < expiryMs)) {
+        console.log(`[Cache Hit] Returning cached draft history for ${CACHE_KEY}`);
         return cachedEntry.data;
     }
 
@@ -765,7 +724,7 @@ export async function fetchAllDraftHistory() {
         for (const league of leagues) {
             const season = league.season;
             const leagueId = league.league_id;
-
+            console.log(`[fetchAllDraftHistory] Processing league ${leagueId} for season ${season}.`);
 
             const drafts = await fetchLeagueDrafts(leagueId);
             const tradedPicks = await fetchTradedPicks(leagueId);
@@ -773,7 +732,6 @@ export async function fetchAllDraftHistory() {
             const seasonDraftsData = [];
             for (const draft of drafts) {
                 const picks = await fetchDraftPicks(draft.draft_id);
-                // Enrich picks with player names
                 const enrichedPicks = picks.map(pick => ({
                     ...pick,
                     player_name: nflPlayers[pick.player_id]?.full_name || 'Unknown Player',
@@ -791,6 +749,7 @@ export async function fetchAllDraftHistory() {
                 drafts: seasonDraftsData,
                 tradedPicks: tradedPicks
             };
+            console.log(`[fetchAllDraftHistory] Draft data for season ${season}:`, allDraftHistory[season]);
         }
 
         inMemoryCache.set(CACHE_KEY, { data: allDraftHistory, timestamp: now, expirationHours: 24 });
@@ -798,7 +757,7 @@ export async function fetchAllDraftHistory() {
 
     } catch (error) {
         console.error('Critical error in fetchAllDraftHistory:', error);
-        inMemoryCache.delete(CACHE_KEY); // Clear cache on critical error to force refetch next time
+        inMemoryCache.delete(CACHE_KEY);
         return {};
     }
 }
