@@ -1,6 +1,7 @@
 // src/lib/Head2HeadGrid.js
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-
+// Ensure LineChart, Line, Area, Defs, LinearGradient, Stop are imported for a line graph with area fill
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer, Area } from 'recharts'; // Removed Defs, LinearGradient, Stop from recharts import
 import { useSleeperData } from '../contexts/SleeperDataContext';
 
 // Helper function to render record (W-L-T)
@@ -34,8 +35,6 @@ const calculateRank = (value, allValues, isHigherBetter = true) => {
 };
 
 // Component to render the Head-to-Head Grid and details
-
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from 'recharts';
 
 const Head2HeadGrid = () => {
     const {
@@ -273,8 +272,6 @@ const Head2HeadGrid = () => {
                     team2RosterId,
                     team1OwnerId,
                     team2OwnerId,
-                    team1DisplayName,
-                    team2DisplayName,
                     team1Score,
                     team2Score,
                     winnerOwnerId,
@@ -308,6 +305,7 @@ const Head2HeadGrid = () => {
         // Sort by display name alphabetically
         return displayNamesWithOwners.sort((a, b) => a.displayName.localeCompare(b.displayName));
     }, [headToHeadRecords, getTeamName]);
+
 
     // Component to render the detailed rivalry view
     const renderSelectedRivalryDetails = useCallback(() => {
@@ -343,6 +341,7 @@ const Head2HeadGrid = () => {
         });
 
         // Prepare net points data for line graph, with split for positive/negative fill and zero-crossing points
+        let cumulativeNetPoints = 0; // Initialize cumulative points
         const netPointsData = sortedMatches.map((match) => {
             let mainTeamScore, oppTeamScore;
             if (match.team1OwnerId === ownerA) {
@@ -352,16 +351,23 @@ const Head2HeadGrid = () => {
                 mainTeamScore = match.team2Score;
                 oppTeamScore = match.team1Score;
             }
-            const netPoints = mainTeamScore - oppTeamScore;
+            const currentMatchNetPoints = mainTeamScore - oppTeamScore;
+            cumulativeNetPoints += currentMatchNetPoints; // CRITICAL FIX: Accumulate net points
+
             return {
                 name: `${match.year} W${match.week}`,
-                netPoints,
+                netPoints: currentMatchNetPoints, // Keep individual net points for tooltip if needed
+                cumulativeNetPoints: cumulativeNetPoints, // The actual cumulative value
+                positiveCumulativeNetPoints: cumulativeNetPoints >= 0 ? cumulativeNetPoints : null, // For green area
+                negativeCumulativeNetPoints: cumulativeNetPoints < 0 ? cumulativeNetPoints : null,   // For red area
                 mainTeamScore,
                 oppTeamScore,
                 week: match.week,
                 year: match.year,
             };
         });
+
+        console.log('Net Points Data for chart:', netPointsData); // Debugging: Check data before chart
 
         sortedMatches.forEach(match => {
             let scoreAValue, scoreBValue;
@@ -740,14 +746,12 @@ const Head2HeadGrid = () => {
                     })()}
                 </div>
 
-                {/* ...removed duplicate VERSUS section... */}
 
-
-                {/* Net Points Bar Chart */}
-                <h4 className="text-xl font-bold text-gray-800 mt-6 mb-2 border-b pb-2">Net Points Over Time</h4>
+                {/* Net Points Line Graph */}
+                <h4 className="text-xl font-bold text-gray-800 mt-6 mb-2 border-b pb-2">Cumulative Net Points Over Time</h4>
                 <div className="w-full h-64 mb-8">
                     <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={netPointsData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                        <LineChart data={netPointsData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis
                                 dataKey="name"
@@ -760,34 +764,73 @@ const Head2HeadGrid = () => {
                                 ticks={netPointsData.map(d => d.name)}
                             />
                             <YAxis domain={['auto', 'auto']} fontSize={12} />
-                            <Tooltip formatter={(value, name) => [typeof value === 'number' ? value.toFixed(2) : value, name === 'netPoints' ? 'Net Points' : name]} />
+                            <Tooltip formatter={(value, name) => {
+                                if (name === 'cumulativeNetPoints') { // Show cumulative in tooltip
+                                    return [`${value.toFixed(2)}`, 'Cumulative Net Points'];
+                                }
+                                return [value, name];
+                            }} />
                             <ReferenceLine y={0} stroke="#888" strokeDasharray="3 3" />
-                            <Bar
-                                dataKey="netPoints"
+
+                            {/* Area for positive cumulative net points */}
+                            <Area
+                                type="monotone"
+                                dataKey="positiveCumulativeNetPoints" // Use positive data key
+                                stroke="#22c55e" // Line color for positive segment
+                                fill="#22c55e" // Fill color for positive area
+                                fillOpacity={0.3}
                                 isAnimationActive={false}
-                                radius={[4, 4, 0, 0]}
-                                minPointSize={2}
-                                fill="#888"
-                                // Custom bar color by value and correct y/height for negative values
-                                shape={(props) => {
-                                    const { x, y, width, height, payload } = props;
-                                    let color = '#eab308';
-                                    if (payload.netPoints > 0) color = '#22c55e';
-                                    else if (payload.netPoints < 0) color = '#ef4444';
-                                    // For negative bars, y is the top of the bar, height is positive downwards
-                                    // For positive bars, y is the top of the bar, height is positive downwards
-                                    // But sometimes height can be negative, so fix it:
-                                    const barY = height < 0 ? y + height : y;
-                                    const barHeight = Math.abs(height);
-                                    return (
-                                        <rect x={x} y={barY} width={width} height={barHeight} fill={color} rx={4} />
-                                    );
-                                }}
+                                connectNulls={true}
+                                baseLine={0} // Crucial for filling from zero
                             />
-                        </BarChart>
+                            {/* Area for negative cumulative net points */}
+                            <Area
+                                type="monotone"
+                                dataKey="negativeCumulativeNetPoints" // Use negative data key
+                                stroke="#ef4444" // Line color for negative segment
+                                fill="#ef4444" // Fill color for negative area
+                                fillOpacity={0.3}
+                                isAnimationActive={false}
+                                connectNulls={true}
+                                baseLine={0} // Crucial for filling from zero
+                            />
+                            {/* A single line to connect all points, with conditional dot coloring */}
+                            <Line
+                                type="monotone"
+                                dataKey="cumulativeNetPoints"
+                                stroke="#888" // Default line color, dots will override
+                                strokeWidth={2}
+                                dot={(props) => { // Custom dot for positive/negative values
+                                    const { cx, cy, payload } = props;
+                                    let color = '#888'; // Default for 0 or undefined
+                                    if (payload.cumulativeNetPoints > 0) {
+                                        color = '#22c55e';
+                                    } else if (payload.cumulativeNetPoints < 0) {
+                                        color = '#ef4444';
+                                    } else {
+                                        color = '#eab308'; // Yellow for exactly zero
+                                    }
+                                    return <circle cx={cx} cy={cy} r={4} fill={color} stroke={color} strokeWidth={1} />;
+                                }}
+                                activeDot={(props) => { // Custom active dot for positive/negative values
+                                    const { cx, cy, payload } = props;
+                                    let color = '#888'; // Default for 0 or undefined
+                                    if (payload.cumulativeNetPoints > 0) {
+                                        color = '#22c55e';
+                                    } else if (payload.cumulativeNetPoints < 0) {
+                                        color = '#ef4444';
+                                    } else {
+                                        color = '#eab308'; // Yellow for exactly zero
+                                    }
+                                    return <circle cx={cx} cy={cy} r={6} fill={color} stroke={color} strokeWidth={2} />;
+                                }}
+                                isAnimationActive={false}
+                                connectNulls={true}
+                            />
+                        </LineChart>
                     </ResponsiveContainer>
                     <div className="text-xs text-center mt-2 text-gray-600">
-                        Green bar: {teamADisplayName} outscored {teamBDisplayName}. Red bar: {teamBDisplayName} outscored {teamADisplayName}. Yellow bar: tie.
+                        Green area: {teamADisplayName} leading in cumulative net points. Red area: {teamBDisplayName} leading in cumulative net points.
                     </div>
                 </div>
 

@@ -1,10 +1,4 @@
-// src/App.js
 import React, { useState, useEffect, useCallback } from 'react';
-
-import {
-    // GOOGLE_SHEET_POWER_RANKINGS_API_URL, // Keep if other GAS APIs are still in use elsewhere
-    // CURRENT_LEAGUE_ID, // This is for Sleeper and will be used by SleeperDataProvider's internals, no direct use here
-} from './config';
 
 // Import all your components
 import PowerRankings from './lib/PowerRankings';
@@ -13,12 +7,13 @@ import RecordBook from './lib/RecordBook';
 import DPRAnalysis from './lib/DPRAnalysis';
 import LuckRatingAnalysis from './lib/LuckRatingAnalysis';
 import TeamDetailPage from './lib/TeamDetailPage';
-import Head2HeadGrid from './lib/Head2HeadGrid'; // Correctly imported
+import Head2HeadGrid from './lib/Head2HeadGrid';
 import FinancialTracker from './components/FinancialTracker';
 import Dashboard from './components/Dashboard';
-import MatchupHistory from './components/MatchupHistory';
-import TeamsOverviewPage from './lib/TeamsOverviewPage'; // Import the new TeamsOverviewPage
-// import YahooDataLoader from './components/YahooDataLoader'; // Removed as it's no longer needed
+// Removed: import MatchupHistory from './lib/MatchupHistory';
+import TeamsOverviewPage from './lib/TeamsOverviewPage';
+import SeasonBreakdown from './lib/SeasonBreakdown';
+import DraftAnalysis from './lib/DraftAnalysis'; // Import the new DraftAnalysis component
 
 // Import the custom hook from your SleeperDataContext
 import { SleeperDataProvider, useSleeperData } from './contexts/SleeperDataContext';
@@ -35,16 +30,16 @@ const NAV_CATEGORIES = {
             { label: 'Head-to-Head', tab: 'headToHead' },
             { label: 'DPR Analysis', tab: 'dprAnalysis' },
             { label: 'Luck Rating', tab: 'luckRating' },
-            { label: 'Matchup History', tab: 'matchupHistory' },
+            // Removed: { label: 'Matchup History', tab: 'matchupHistory' },
         ]
     },
-    // Modified TEAMS category to point directly to TeamsOverviewPage
     TEAMS: {
         label: 'Teams',
-        tab: 'teamsOverview', // This tab will render TeamsOverviewPage
+        tab: 'teamsOverview',
     },
+    SEASON_BREAKDOWN: { label: 'Season Breakdown', tab: 'seasonBreakdown' },
+    DRAFT: { label: 'Draft', tab: 'draftAnalysis' }, // New tab for Draft Analysis
     FINANCIALS: { label: 'Financials', tab: 'financials' },
-    // Removed DATA_TOOLS category as it's no longer needed
 };
 
 // Flattened list of all possible tabs
@@ -56,26 +51,137 @@ const TABS = {
     HEAD_TO_HEAD: 'headToHead',
     DPR_ANALYSIS: 'dprAnalysis',
     LUCK_RATING: 'luckRating',
-    TEAM_DETAIL: 'teamDetail', // Still used by TeamDetailPage internally, but not directly navigated to from main nav
+    TEAM_DETAIL: 'teamDetail',
     FINANCIALS: 'financials',
-    MATCHUP_HISTORY: 'matchupHistory',
-    TEAMS_OVERVIEW: 'teamsOverview', // New tab for the TeamsOverviewPage
-    // Removed IMPORT_YAHOO_DATA as it's no longer needed
+    // Removed: MATCHUP_HISTORY: 'matchupHistory',
+    TEAMS_OVERVIEW: 'teamsOverview',
+    SEASON_BREAKDOWN: 'seasonBreakdown',
+    DRAFT_ANALYSIS: 'draftAnalysis', // New tab for Draft Analysis
 };
-
 
 const AppContent = () => {
     // Consume data from SleeperDataContext
     const {
         loading,
         error,
-        historicalData, // Now an object containing matchups and champions
-        usersData // Also useful for team names
-    } = useSleeperData(); // Removed rostersBySeason and getTeamName as they are not directly used here anymore
+        historicalData,
+        usersData // Make sure usersData is available here
+        // Removed rostersBySeason from direct destructuring as it's inside historicalData
+    } = useSleeperData();
 
     const [activeTab, setActiveTab] = useState(TABS.DASHBOARD);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [openSubMenu, setOpenSubMenu] = useState(null);
+
+    // Helper function to get user display name from user ID
+    const getUserDisplayName = useCallback((userId, usersData) => {
+        if (!userId || !usersData) {
+            return 'Unknown Champion';
+        }
+        const user = usersData.find(u => u.user_id === userId);
+        if (user) {
+            // Prioritize team_name from metadata, otherwise use display_name
+            const nameToDisplay = user.metadata?.team_name || user.display_name;
+            return nameToDisplay;
+        } else {
+            return 'Unknown Champion';
+        }
+    }, [usersData]); // Memoize this function, re-create only if usersData changes
+
+    // State to hold the reigning champion's display name
+    const [reigningChampion, setReigningChampion] = useState(''); // Changed initial state to empty string
+
+    // Effect to determine the reigning champion once historicalData and usersData are loaded
+    useEffect(() => {
+        // Access rostersBySeason from historicalData
+        const rostersBySeason = historicalData?.rostersBySeason;
+
+        // Check if all necessary top-level data objects are available
+        const isDataReady = !loading && !error && historicalData && usersData && rostersBySeason;
+
+        if (isDataReady) {
+            // Further check if the specific summary objects within historicalData are present
+            const hasSummaryData = historicalData.seasonAwardsSummary || historicalData.awardsSummary || historicalData.winnersBracketBySeason;
+
+            if (hasSummaryData) {
+                let championDisplayName = ''; // Initialize as empty string here too
+                let foundChampion = false;
+
+                // Get all years from all relevant sources, sort them descending
+                const allYears = new Set();
+                if (historicalData.seasonAwardsSummary) {
+                    Object.keys(historicalData.seasonAwardsSummary).forEach(year => allYears.add(Number(year)));
+                }
+                if (historicalData.awardsSummary) {
+                    Object.keys(historicalData.awardsSummary).forEach(year => allYears.add(Number(year)));
+                }
+                if (historicalData.winnersBracketBySeason) {
+                    Object.keys(historicalData.winnersBracketBySeason).forEach(year => allYears.add(Number(year)));
+                }
+                const sortedYears = Array.from(allYears).sort((a, b) => b - a);
+
+                for (const year of sortedYears) {
+                    let potentialChampionValue = '';
+                    let championRosterId = '';
+
+                    // --- PRIORITY 1: Check winnersBracketBySeason for the championship game (p: 1) ---
+                    if (historicalData.winnersBracketBySeason && historicalData.winnersBracketBySeason[year]) {
+                        const championshipGame = historicalData.winnersBracketBySeason[year].find(
+                            matchup => matchup.p === 1 && matchup.w // Find the playoff game with position 1 and a winner
+                        );
+                        if (championshipGame) {
+                            championRosterId = String(championshipGame.w).trim();
+
+                            // Now, map roster_id to user_id using rostersBySeason for that year
+                            if (rostersBySeason[year]) {
+                                const winningRoster = rostersBySeason[year].find(
+                                    roster => String(roster.roster_id) === championRosterId
+                                );
+                                if (winningRoster && winningRoster.owner_id) {
+                                    potentialChampionValue = winningRoster.owner_id; // This is the user_id
+                                }
+                            }
+                        }
+                    }
+
+                    // --- PRIORITY 2: Check seasonAwardsSummary if not found in winnersBracket ---
+                    if (!potentialChampionValue && historicalData.seasonAwardsSummary && historicalData.seasonAwardsSummary[year]) {
+                        const summary = historicalData.seasonAwardsSummary[year];
+                        if (summary.champion && summary.champion !== 'N/A' && summary.champion.trim() !== '') {
+                            potentialChampionValue = summary.champion.trim();
+                        }
+                    }
+
+                    // --- PRIORITY 3: Check awardsSummary if not found in previous sources ---
+                    if (!potentialChampionValue && historicalData.awardsSummary && historicalData.awardsSummary[year]) {
+                        const summary = historicalData.awardsSummary[year];
+                        const champKey = summary.champion || summary["Champion"];
+                        if (champKey && champKey !== 'N/A' && String(champKey).trim() !== '') {
+                            potentialChampionValue = String(champKey).trim();
+                        }
+                    }
+
+                    // If a potential champion value was found for this year, try to resolve it
+                    if (potentialChampionValue) {
+                        const resolvedName = getUserDisplayName(potentialChampionValue, usersData);
+                        if (resolvedName !== 'Unknown Champion') {
+                            championDisplayName = resolvedName;
+                            foundChampion = true;
+                            break; // Found the most recent champion, stop
+                        } else {
+                            // If it's not a user ID (e.g., if it's already a display name from Google Sheet data), use it directly
+                            championDisplayName = potentialChampionValue;
+                            foundChampion = true;
+                            break; // Found the most recent champion, stop
+                        }
+                    }
+                }
+
+                setReigningChampion(championDisplayName);
+            }
+        }
+    }, [loading, error, historicalData, usersData, getUserDisplayName]);
+
 
     // Placeholder functions for UI interactions
     const handleTabClick = (tab) => {
@@ -124,33 +230,38 @@ const AppContent = () => {
             );
         }
 
+        // Flatten historical matchups from the object structure to a single array
+        // This is kept here because other components (RecordBook, Head2HeadGrid) still need it
+        const allMatchups = historicalData && historicalData.matchupsBySeason
+            ? Object.values(historicalData.matchupsBySeason).flat()
+            : [];
+
         // Render components based on activeTab, passing necessary data from context
         switch (activeTab) {
             case TABS.DASHBOARD:
-                return <Dashboard />; // This will eventually use Sleeper Context internally
+                return <Dashboard />;
             case TABS.POWER_RANKINGS:
-                return <PowerRankings />; // This will need Sleeper Context internally
+                return <PowerRankings />;
             case TABS.LEAGUE_HISTORY:
-                // LeagueHistory now directly consumes historicalData from context, no props needed here
                 return <LeagueHistory />;
             case TABS.RECORD_BOOK:
-                return <RecordBook historicalMatchups={historicalData.matchupsBySeason} />; // Pass matchupsBySeason
+                return <RecordBook historicalMatchups={allMatchups} />;
             case TABS.HEAD_TO_HEAD:
-                // Head2HeadGrid now gets all its data from context internally
-                return <Head2HeadGrid />;
+                return <Head2HeadGrid historicalMatchups={allMatchups} getDisplayTeamName={getUserDisplayName} />;
             case TABS.DPR_ANALYSIS:
-                // DPRAnalysis now directly consumes historicalData from context, no props needed here
                 return <DPRAnalysis />;
             case TABS.LUCK_RATING:
-                // REMOVED historicalMatchups prop. LuckRatingAnalysis now gets data from context.
                 return <LuckRatingAnalysis />;
-            case TABS.TEAMS_OVERVIEW: // New case for the TeamsOverviewPage
-                return <TeamsOverviewPage />; // TeamsOverviewPage handles its own team selection
+            case TABS.TEAMS_OVERVIEW:
+                return <TeamsOverviewPage />;
             case TABS.FINANCIALS:
                 return <FinancialTracker />;
-            case TABS.MATCHUP_HISTORY:
-                return <MatchupHistory />;
-            // Removed case for TABS.IMPORT_YAHOO_DATA
+            // Removed: case TABS.MATCHUP_HISTORY:
+            // Removed:    return <MatchupHistory />;
+            case TABS.SEASON_BREAKDOWN:
+                return <SeasonBreakdown />;
+            case TABS.DRAFT_ANALYSIS: // New case for Draft Analysis
+                return <DraftAnalysis />;
             default:
                 return <Dashboard />;
         }
@@ -158,10 +269,6 @@ const AppContent = () => {
 
     return (
         <div className="min-h-screen bg-gray-100 flex flex-col font-inter">
-            {/* Tailwind CSS Script - Always include this in the head of your HTML or equivalent */}
-            <script src="https://cdn.tailwindcss.com"></script>
-            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-
             {/* Header */}
             <header className="bg-gray-800 text-white p-4 shadow-md">
                 <div className="container mx-auto flex justify-between items-center">
@@ -175,52 +282,13 @@ const AppContent = () => {
                     </div>
                     {/* Gold Trophy and Champion Name (FontAwesome, same as LeagueHistory) */}
                     <div className="flex items-center gap-2">
-                        <span title="Reigning Champion">
-                            <i className="fas fa-trophy text-yellow-500 text-2xl mr-1"></i>
-                        </span>
-                        <span className="font-semibold text-yellow-300 text-lg">
-                            {/* Champion Name Logic (debug and fix) */}
-                            {(() => {
-                                let champion = '';
-                                // DEBUG: Show available keys and values
-                                // window.historicalDebug = historicalData;
-                                // Try to find the most recent year with a champion
-                                if (historicalData && historicalData.seasonAwardsSummary) {
-                                    const years = Object.keys(historicalData.seasonAwardsSummary).map(Number).sort((a, b) => b - a);
-                                    for (const year of years) {
-                                        const summary = historicalData.seasonAwardsSummary[year];
-                                        // Try different possible keys
-                                        if (summary) {
-                                            if (summary.champion && summary.champion !== 'N/A') {
-                                                champion = summary.champion.trim();
-                                                break;
-                                            }
-                                            // Try alternative keys if present
-                                            if (summary["Champion"] && summary["Champion"] !== 'N/A') {
-                                                champion = summary["Champion"].trim();
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                                if (!champion && historicalData && historicalData.awardsSummary) {
-                                    const years = Object.keys(historicalData.awardsSummary).map(Number).sort((a, b) => b - a);
-                                    for (const year of years) {
-                                        const summary = historicalData.awardsSummary[year];
-                                        if (summary) {
-                                            if (summary.champion && summary.champion !== 'N/A') {
-                                                champion = summary.champion.trim();
-                                                break;
-                                            }
-                                            if (summary["Champion"] && summary["Champion"] !== 'N/A') {
-                                                champion = summary["Champion"].trim();
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                                return champion || 'No Champion';
-                            })()}
+                        {reigningChampion && ( // Conditionally render the trophy icon
+                            <span title="Reigning Champion">
+                                <i className="fas fa-trophy text-[#eab308] text-2xl mr-1"></i>
+                            </span>
+                        )}
+                        <span className="font-semibold text-[#eab308] text-lg">
+                            {reigningChampion}
                         </span>
                     </div>
                     <button className="md:hidden text-white text-2xl ml-2" onClick={toggleMobileMenu}>
@@ -262,24 +330,30 @@ const AppContent = () => {
                         onClick={() => handleTabClick(NAV_CATEGORIES.TEAMS.tab)}>
                         {NAV_CATEGORIES.TEAMS.label}
                     </li>
+                    {/* Season Breakdown Tab */}
+                    <li className="px-4 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 my-0.5 md:my-0"
+                        onClick={() => handleTabClick(NAV_CATEGORIES.SEASON_BREAKDOWN.tab)}>
+                        {NAV_CATEGORIES.SEASON_BREAKDOWN.label}
+                    </li>
+                    {/* New Draft Tab */}
+                    <li className="px-4 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 my-0.5 md:my-0"
+                        onClick={() => handleTabClick(NAV_CATEGORIES.DRAFT.tab)}>
+                        {NAV_CATEGORIES.DRAFT.label}
+                    </li>
                     {/* Financials Tab */}
                     <li className="px-4 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 my-0.5 md:my-0"
                         onClick={() => handleTabClick(NAV_CATEGORIES.FINANCIALS.tab)}>
                         {NAV_CATEGORIES.FINANCIALS.label}
                     </li>
-                    {/* Removed Data Tools Submenu */}
                 </ul>
             </nav>
 
             {/* Main Content Area */}
             <main className="flex-grow container mx-auto p-4">
-                {renderContent()}
+                <div>
+                    {renderContent()}
+                </div>
             </main>
-
-            {/* Footer (Optional) */}
-            <footer className="bg-gray-800 text-white text-center p-3 mt-auto">
-                <p>&copy; {new Date().getFullYear()} Fantasy Football History. All rights reserved.</p>
-            </footer>
         </div>
     );
 };

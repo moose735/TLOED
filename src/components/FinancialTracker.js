@@ -5,12 +5,18 @@ import {
     onAuthStateChanged,
     signInWithEmailAndPassword,
     signOut,
-    signInAnonymously
+    signInAnonymously,
+    signInWithCustomToken // Ensure this is imported if used
 } from 'firebase/auth';
 import {
     getFirestore, collection, addDoc, query, orderBy, onSnapshot,
     serverTimestamp, deleteDoc, doc, setDoc, getDoc, writeBatch
 } from 'firebase/firestore';
+import { useSleeperData } from '../contexts/SleeperDataContext'; // Corrected import path
+
+// Your web app's Firebase configuration - Directly using the provided config
+const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+
 
 // Helper function to format currency
 const formatCurrency = (value) => {
@@ -26,7 +32,8 @@ export const calculateFinancialDataForTeamDetailPage = (transactions, getMappedT
 
     transactions.forEach(transaction => {
         const year = transaction.season ? parseInt(transaction.season) : (transaction.date?.toDate ? new Date(transaction.date.toDate()).getFullYear() : null);
-        const team = getMappedTeamName(String(transaction.teamName || '').trim());
+        // Use getMappedTeamName to resolve the team name for calculation
+        const team = getMappedTeamName(String(transaction.teamName || '').trim(), year); // Pass season to getMappedTeamName
         const amount = parseFloat(transaction.amount);
         const type = transaction.type;
 
@@ -62,9 +69,13 @@ export const calculateFinancialDataForTeamDetailPage = (transactions, getMappedT
 };
 
 // New component for the Overall Financial History Tab
-const OverallFinancialHistoryTab = ({ allTransactions, getDisplayTeamName, uniqueTeamsForOverallHistory }) => { // Added uniqueTeamsForOverallHistory
+const OverallFinancialHistoryTab = ({ allTransactions, getDisplayName, uniqueTeamsForOverallHistory }) => {
     // Calculate overall team financials across all seasons
     const overallTeamFinancials = useMemo(() => {
+        if (typeof getDisplayName !== 'function') {
+            return []; // Return empty if getDisplayName is not available
+        }
+
         const teamStats = {};
 
         // Initialize teamStats for all unique teams to ensure all teams are listed
@@ -73,7 +84,9 @@ const OverallFinancialHistoryTab = ({ allTransactions, getDisplayTeamName, uniqu
         });
 
         allTransactions.forEach(t => {
-            const displayTeam = getDisplayTeamName(String(t.teamName || '').trim());
+            // Resolve team name for the transaction using getDisplayName and its season
+            const transactionSeason = t.season ? parseInt(t.season) : (t.date?.toDate ? new Date(t.date.toDate()).getFullYear() : null);
+            const displayTeam = getDisplayName(String(t.teamName || '').trim(), transactionSeason);
             const amount = parseFloat(t.amount);
 
             if (isNaN(amount)) return;
@@ -102,7 +115,7 @@ const OverallFinancialHistoryTab = ({ allTransactions, getDisplayTeamName, uniqu
 
         // Sort by team name before returning for display
         return Object.values(teamStats).sort((a, b) => a.name.localeCompare(b.name));
-    }, [allTransactions, getDisplayTeamName, uniqueTeamsForOverallHistory]);
+    }, [allTransactions, getDisplayName, uniqueTeamsForOverallHistory]);
 
     return (
         <section className="bg-white p-6 rounded-lg shadow-md mt-8">
@@ -140,8 +153,145 @@ const OverallFinancialHistoryTab = ({ allTransactions, getDisplayTeamName, uniqu
     );
 };
 
+// New component for Weekly Matchup History Tab
+const WeeklyMatchupHistoryTab = () => { // Removed props, will use context
+    const { loading, error, historicalData, getDisplayName } = useSleeperData();
+    const [selectedSeasonForMatchups, setSelectedSeasonForMatchups] = useState(null);
+    const [availableMatchupSeasons, setAvailableMatchupSeasons] = useState([]);
+    const [filterMatchupTeam, setFilterMatchupTeam] = useState('');
 
-const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
+    // Effect to populate seasons dropdown for matchups
+    useEffect(() => {
+        if (historicalData && historicalData.matchupsBySeason) {
+            const years = Object.keys(historicalData.matchupsBySeason).map(Number).sort((a, b) => b - a);
+            setAvailableMatchupSeasons(years);
+            if (years.length > 0 && selectedSeasonForMatchups === null) {
+                setSelectedSeasonForMatchups(years[0]); // Default to most recent
+            }
+        } else {
+            setAvailableMatchupSeasons([]);
+            setSelectedSeasonForMatchups(null);
+        }
+    }, [historicalData, selectedSeasonForMatchups]);
+
+    // Process matchup data for display
+    const processedMatchups = useMemo(() => {
+        // Ensure all necessary data and functions are available
+        if (loading || error || !selectedSeasonForMatchups || !historicalData || !historicalData.matchupsBySeason || !historicalData.rostersBySeason || typeof getDisplayName !== 'function') {
+            return [];
+        }
+
+        const matchupsForSeason = historicalData.matchupsBySeason[selectedSeasonForMatchups];
+        const rostersForSeason = historicalData.rostersBySeason[selectedSeasonForMatchups];
+
+        if (!matchupsForSeason || !rostersForSeason) {
+            console.warn(`No matchup or roster data found for season ${selectedSeasonForMatchups}.`);
+            return [];
+        }
+
+        const allMatchups = [];
+        // Iterate through weeks in matchupsForSeason object
+        Object.values(matchupsForSeason).forEach(weekMatchups => {
+            // Ensure weekMatchups is an array before iterating
+            if (Array.isArray(weekMatchups)) {
+                weekMatchups.forEach(match => {
+                    // Use owner_id from team_details if available, fallback to roster_id
+                    const team1Id = match.team1_details?.owner_id || match.roster_id;
+                    const team2Id = match.team2_details?.owner_id || match.matchup_id; // matchup_id is often the opponent's roster ID
+
+                    const team1Name = getDisplayName(team1Id, selectedSeasonForMatchups);
+                    const team2Name = getDisplayName(team2Id, selectedSeasonForMatchups);
+
+                    // Filter by team if filterMatchupTeam is set
+                    const teamFilterApplies = !filterMatchupTeam ||
+                                              (team1Name && team1Name.toLowerCase().includes(filterMatchupTeam.toLowerCase())) ||
+                                              (team2Name && team2Name.toLowerCase().includes(filterMatchupTeam.toLowerCase()));
+
+                    if (teamFilterApplies) {
+                        allMatchups.push({
+                            week: match.week,
+                            team1: team1Name,
+                            team1Score: match.team1_points,
+                            team2: team2Name,
+                            team2Score: match.team2_points,
+                        });
+                    }
+                });
+            }
+        });
+        // Sort by week number
+        return allMatchups.sort((a, b) => a.week - b.week);
+    }, [selectedSeasonForMatchups, historicalData, getDisplayName, filterMatchupTeam, loading, error]);
+
+    if (loading) return <p className="text-center text-blue-600">Loading matchup data...</p>;
+    if (error) return <p className="text-center text-red-600">Error loading matchup data: {error.message}</p>;
+
+    return (
+        <section className="bg-white p-6 rounded-lg shadow-md mt-8">
+            <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">Weekly Matchup History</h3>
+
+            {availableMatchupSeasons.length > 0 && (
+                <div className="flex flex-col sm:flex-row justify-center items-center mb-4 p-2 bg-blue-50 rounded-lg shadow-sm gap-2">
+                    <label htmlFor="matchupSeasonFilter" className="mr-2 font-semibold text-blue-700">Select Season:</label>
+                    <select
+                        id="matchupSeasonFilter"
+                        value={selectedSeasonForMatchups || ''}
+                        onChange={(e) => setSelectedSeasonForMatchups(parseInt(e.target.value))}
+                        className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    >
+                        {availableMatchupSeasons.map(year => (
+                            <option key={year} value={year}>{year}</option>
+                        ))}
+                    </select>
+                    <label htmlFor="filterMatchupTeam" className="mr-2 font-semibold text-blue-700">Filter by Team:</label>
+                    <input
+                        type="text"
+                        id="filterMatchupTeam"
+                        value={filterMatchupTeam}
+                        onChange={(e) => setFilterMatchupTeam(e.target.value)}
+                        placeholder="Search team name"
+                        className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    />
+                </div>
+            )}
+
+            {processedMatchups.length === 0 ? (
+                <p className="text-center text-gray-600">No matchup data available for the selected season or filter.</p>
+            ) : (
+                <div className="overflow-x-auto">
+                    <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
+                        <thead className="bg-blue-100">
+                            <tr>
+                                <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Week</th>
+                                <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team 1</th>
+                                <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Score</th>
+                                <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team 2</th>
+                                <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Score</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {processedMatchups.map((match, index) => (
+                                <tr key={`${match.week}-${match.team1}-${match.team2}-${index}`} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                                    <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{match.week}</td>
+                                    <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{match.team1}</td>
+                                    <td className="py-2 px-4 text-sm text-right text-gray-900 font-medium border-b border-gray-200">{match.team1Score?.toFixed(2) || 'N/A'}</td>
+                                    <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{match.team2}</td>
+                                    <td className="py-2 px-4 text-sm text-right text-gray-900 font-medium border-b border-gray-200">{match.team2Score?.toFixed(2) || 'N/A'}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </section>
+    );
+};
+
+
+const FinancialTracker = () => {
+    // Use the useSleeperData hook to get data from the context
+    const { loading: sleeperLoading, error: sleeperError, historicalData, usersData, getDisplayName } = useSleeperData();
+
     const [transactions, setTransactions] = useState([]); // Transactions for the selected season (for main view)
     const [allTransactions, setAllTransactions] = useState([]); // All transactions (for overall history)
 
@@ -152,26 +302,26 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [weeklyPointsWeek, setWeeklyPointsWeek] = useState('');
     const [sidePotName, setSidePotName] = useState('');
 
-    const [teamName, setTeamName] = useState('');
-    const [tradeTeams, setTradeTeams] = useState(['', '']);
-    const [waiverEntries, setWaiverEntries] = useState([{ team: '', numPickups: 1 }]);
+    const [teamName, setTeamName] = useState(''); // Will store user_id or 'ALL_TEAMS_MULTIPLIER'
+    const [tradeTeams, setTradeTeams] = useState(['', '']); // Will store user_ids
+    const [waiverEntries, setWaiverEntries] = useState([{ team: '', numPickups: 1 }]); // 'team' will store user_id
 
     const [tradeEntryMethod, setTradeEntryMethod] = useState('multi_team');
     const [numTrades, setNumTrades] = useState(1);
 
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const [loading, setLoading] = useState(true); // Combined with sleeperLoading
+    const [error, setError] = useState(null); // Combined with sleeperError
     const [db, setDb] = useState(null);
     const [auth, setAuth] = useState(null);
     const [userId, setUserId] = useState(null);
     const [isAuthReady, setIsAuthReady] = useState(false);
-    const [uniqueTeams, setUniqueTeams] = useState([]); // Unique teams for selected season
+    const [uniqueTeams, setUniqueTeams] = useState([]); // Stores { label: 'Display Name', value: 'user_id' }
     const [weeklyHighScores, setWeeklyHighScores] = useState({});
     const [currentWeekForSelectedSeason, setCurrentWeekForSelectedSeason] = useState(0);
 
     const [selectedSeason, setSelectedSeason] = useState(null);
     const [availableSeasons, setAvailableSeasons] = useState([]);
-    const [activeTeamsCount, setActiveTeamsCount] = useState(0);
+    const [activeTeamsCount, setActiveTeams] = useState(0); // Renamed to avoid confusion with `activeTeamsCount` in the `OverallFinancialHistoryTab`
 
     const [isTeamAutoPopulated, setIsTeamAutoPopulated] = useState(false);
     const [autoPopulateWarning, setAutoPopulateWarning] = useState(null);
@@ -186,7 +336,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const [loginError, setLoginError] = useState(null);
     const [showCommishLogin, setShowCommishLogin] = useState(false);
 
-    const [filterTeam, setFilterTeam] = useState('');
+    const [filterTeam, setFilterTeam] = useState(''); // Stores display name for filter dropdown
 
     const [debitStructureData, setDebitStructureData] = useState([]);
     const [creditStructureData, setCreditStructureData] = useState([]);
@@ -199,10 +349,12 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const transactionsPerPage = 10;
 
     // New state for active tab
-    const [activeTab, setActiveTab] = useState('transactions'); // 'transactions' or 'overall_history'
+    const [activeTab, setActiveTab] = useState('transactions'); // 'transactions', 'overall_history', or 'matchup_history'
 
-    const COMMISH_UID = process.env.REACT_APP_COMMISH_UID;
+    // Use global variable for Commish UID
+    const COMMISH_UID = typeof __commish_uid !== 'undefined' ? __commish_uid : null;
     const isCommish = userId && COMMISH_UID && userId === COMMISH_UID;
+
 
     const getCategoriesForType = useCallback((currentType) => {
         if (currentType === 'debit') {
@@ -267,15 +419,16 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
 
     useEffect(() => {
-        if (historicalMatchups && Array.isArray(historicalMatchups)) {
+        if (historicalData && historicalData.leaguesMetadataBySeason) {
             const yearsSet = new Set();
             let maxSeasonOverall = 0;
 
-            historicalMatchups.forEach(match => {
-                if (match.year && typeof match.year === 'number') {
-                    yearsSet.add(match.year);
-                    if (match.year > maxSeasonOverall) {
-                        maxSeasonOverall = match.year;
+            Object.keys(historicalData.leaguesMetadataBySeason).forEach(yearStr => {
+                const year = parseInt(yearStr);
+                if (!isNaN(year)) {
+                    yearsSet.add(year);
+                    if (year > maxSeasonOverall) {
+                        maxSeasonOverall = year;
                     }
                 }
             });
@@ -284,49 +437,84 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setAvailableSeasons(sortedYears);
 
             if (maxSeasonOverall > 0 && selectedSeason === null) {
-                setSelectedSeason(maxSeasonOverall);
+                setSelectedSeason(sortedYears[0]); // Set to the most recent season by default
             }
+        } else {
+            setAvailableSeasons([]);
+            setSelectedSeason(null);
         }
-    }, [historicalMatchups, selectedSeason]);
+    }, [historicalData, selectedSeason]);
 
 
     useEffect(() => {
-        if (!selectedSeason || !historicalMatchups) {
+        // Add sleeperLoading and getDisplayName to the condition
+        if (sleeperLoading || !isAuthReady || !selectedSeason || !historicalData || !historicalData.usersBySeason || !historicalData.matchupsBySeason || typeof getDisplayName !== 'function') {
             setUniqueTeams([]);
             setWeeklyHighScores({});
             setCurrentWeekForSelectedSeason(0);
-            setActiveTeamsCount(0);
+            setActiveTeams(0);
             return;
         }
 
-        const teamsSet = new Set();
+        const teamsMap = new Map(); // Map to store { display_name: user_id }
         const weeklyScores = {};
         let maxWeekForCurrentSelectedSeason = 0;
 
-        historicalMatchups.forEach(match => {
-            if (match.year === selectedSeason) {
-                const team1 = getDisplayTeamName(match.team1);
-                const team2 = getDisplayTeamName(match.team2);
-                if (team1) teamsSet.add(team1);
-                if (team2) teamsSet.add(team2);
+        const usersForSelectedSeason = historicalData.usersBySeason[selectedSeason];
+        const matchupsForSelectedSeason = historicalData.matchupsBySeason[selectedSeason];
 
-                const week = match.week;
-                if (week) {
-                    if (!weeklyScores[week]) {
-                        weeklyScores[week] = [];
+
+        if (usersForSelectedSeason && matchupsForSelectedSeason) {
+            // Populate teamsMap with display names and user_ids
+            if (Array.isArray(usersForSelectedSeason)) {
+                usersForSelectedSeason.forEach(user => {
+                    const displayName = getDisplayName(user.user_id, selectedSeason);
+                    if (displayName && displayName !== 'Unknown User') {
+                        teamsMap.set(displayName, user.user_id); // Store display name -> user_id
                     }
-                    if (team1 && match.team1Score != null) {
-                        weeklyScores[week].push({ team: team1, score: parseFloat(match.team1Score) });
+                });
+            } else if (typeof usersForSelectedSeason === 'object' && usersForSelectedSeason !== null) {
+                Object.values(usersForSelectedSeason).forEach(user => {
+                    const displayName = getDisplayName(user.user_id, selectedSeason);
+                    if (displayName && displayName !== 'Unknown User') {
+                        teamsMap.set(displayName, user.user_id);
                     }
-                    if (team2 && match.team2Score != null) {
-                        weeklyScores[week].push({ team: team2, score: parseFloat(match.team2Score) });
-                    }
-                    if (week > maxWeekForCurrentSelectedSeason) {
-                        maxWeekForCurrentSelectedSeason = week;
-                    }
-                }
+                });
             }
-        });
+
+            // Iterate through matchups to find weekly high scores
+            // matchupsForSelectedSeason is an object where keys are week numbers
+            Object.values(matchupsForSelectedSeason).forEach(weekMatchups => {
+                // Ensure weekMatchups is an array before iterating
+                if (Array.isArray(weekMatchups)) {
+                    weekMatchups.forEach(match => {
+                        const week = match.week;
+                        if (week) {
+                            if (!weeklyScores[week]) {
+                                weeklyScores[week] = [];
+                            }
+                            // Ensure team names are resolved using getDisplayName for the specific season
+                            // Use owner_id if available, otherwise roster_id (though owner_id is preferred for display)
+                            const team1Id = match.team1_details?.owner_id || match.roster_id;
+                            const team2Id = match.team2_details?.owner_id || match.matchup_id;
+
+                            const team1Name = getDisplayName(team1Id, selectedSeason);
+                            const team2Name = getDisplayName(team2Id, selectedSeason);
+
+                            if (team1Name && match.team1_points != null) {
+                                weeklyScores[week].push({ team: team1Name, score: parseFloat(match.team1_points) });
+                            }
+                            if (team2Name && match.team2_points != null) {
+                                weeklyScores[week].push({ team: team2Name, score: parseFloat(match.team2_points) });
+                            }
+                            if (week > maxWeekForCurrentSelectedSeason) {
+                                maxWeekForCurrentSelectedSeason = week;
+                            }
+                        }
+                    });
+                }
+            });
+        }
 
         const calculatedHighScores = {};
         Object.keys(weeklyScores).forEach(week => {
@@ -353,11 +541,14 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         setCurrentWeekForSelectedSeason(maxWeekForCurrentSelectedSeason);
 
 
-        const sortedTeams = Array.from(teamsSet).sort();
-        setUniqueTeams(['ALL_TEAMS_MULTIPLIER', ...sortedTeams]);
-        setActiveTeamsCount(sortedTeams.length);
-    }, [selectedSeason, historicalMatchups, getDisplayTeamName]);
+        // Sort by display name, but store user_id for selection
+        const sortedTeamsForSelect = Array.from(teamsMap.entries())
+                                        .sort(([nameA], [nameB]) => nameA.localeCompare(nameB))
+                                        .map(([displayName, userId]) => ({ label: displayName, value: userId }));
 
+        setUniqueTeams([{ label: 'All Teams (Multiplied)', value: 'ALL_TEAMS_MULTIPLIER' }, ...sortedTeamsForSelect]);
+        setActiveTeams(sortedTeamsForSelect.length); // Count actual teams
+    }, [selectedSeason, historicalData, getDisplayName, sleeperLoading, isAuthReady]); // Dependency updated
 
     useEffect(() => {
         setAutoPopulateWarning(null);
@@ -381,10 +572,13 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
             if (weekData) {
                 if (category === 'weekly_1st_points' && weekData.highest) {
+                    // Store the actual team name (display name) as it's coming from weeklyHighScores
+                    // The transaction will store this display name, and getDisplayName will handle it.
                     setTeamName(weekData.highest.team);
                     setDescription(`Payout: Weekly 1st Points - ${weekData.highest.team} (${weekData.highest.score} pts)`);
                     setIsTeamAutoPopulated(true);
                 } else if (category === 'weekly_2nd_points' && weekData.secondHighest) {
+                    // Store the actual team name (display name)
                     setTeamName(weekData.secondHighest.team);
                     setDescription(`Payout: Weekly 2nd Points - ${weekData.secondHighest.team} (${weekData.secondHighest.score} pts)`);
                     setIsTeamAutoPopulated(true);
@@ -405,53 +599,34 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     // Initialize Firebase and set up authentication
     useEffect(() => {
-        let firebaseConfig = {};
-        let appId = 'default-app-id';
+        let appInstance;
+        let firestoreInstance;
+        let firebaseAuthInstance;
 
         try {
-            const rawFirebaseConfig = process.env.REACT_APP_FIREBASE_CONFIG;
-            if (rawFirebaseConfig) {
-                try {
-                    firebaseConfig = JSON.parse(rawFirebaseConfig);
-                } catch (parseError) {
-                    throw new Error(`Failed to parse REACT_APP_FIREBASE_CONFIG environment variable. It might not be valid JSON. Error: ${parseError.message}`);
-                }
-            } else {
-                throw new Error("REACT_APP_FIREBASE_CONFIG environment variable is not defined or is empty. Please ensure it's set in your Vercel project settings with the 'REACT_APP_' prefix.");
-            }
+            // Directly use the firebaseConfig object
+            appInstance = initializeApp(firebaseConfig, firebaseConfig.appId); // Pass appId as the name
+            firestoreInstance = getFirestore(appInstance);
+            firebaseAuthInstance = getAuth(appInstance);
 
-            const envAppId = process.env.REACT_APP_APP_ID;
-            if (envAppId) {
-                appId = envAppId;
-            } else {
-                console.warn("REACT_APP_APP_ID environment variable is not defined or is empty. Using 'default-app-id'.");
-            }
+            setDb(firestoreInstance);
+            setAuth(firebaseAuthInstance);
 
-            if (!firebaseConfig.projectId || !firebaseConfig.apiKey) {
-                throw new Error("Firebase configuration missing projectId or apiKey. Please ensure your REACT_APP_FIREBASE_CONFIG environment variable contains these properties and is correctly formatted JSON.");
-            }
-
-            const app = initializeApp(firebaseConfig, appId);
-            const firestore = getFirestore(app);
-            const firebaseAuth = getAuth(app);
-
-            setDb(firestore);
-            setAuth(firebaseAuth);
-
-            const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
+            const unsubscribe = onAuthStateChanged(firebaseAuthInstance, async (user) => {
                 if (user) {
                     setUserId(user.uid);
                 } else {
+                    // Use __initial_auth_token if available, otherwise sign in anonymously
                     const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
                     if (initialAuthToken) {
-                         try {
-                            // await signInWithCustomToken(firebaseAuth, initialAuthToken); // Changed to signInAnonymously
-                            await signInAnonymously(firebaseAuth); // Fallback to anonymous
-                            setUserId(firebaseAuth.currentUser?.uid);
+                        try {
+                            await signInWithCustomToken(firebaseAuthInstance, initialAuthToken);
+                            setUserId(firebaseAuthInstance.currentUser?.uid);
                         } catch (tokenSignInError) {
+                            console.error("Custom token sign-in failed, falling back to anonymous:", tokenSignInError);
                             try {
-                                await signInAnonymously(firebaseAuth);
-                                setUserId(firebaseAuth.currentUser?.uid);
+                                await signInAnonymously(firebaseAuthInstance);
+                                setUserId(firebaseAuthInstance.currentUser?.uid);
                             } catch (anonSignInError) {
                                 setError(`Failed to sign in: ${anonSignInError.message}. View access may be limited.`);
                                 setUserId(null);
@@ -459,11 +634,11 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                         }
                     } else {
                         try {
-                            await signInAnonymously(firebaseAuth);
-                            setUserId(firebaseAuth.currentUser?.uid);
+                            await signInAnonymously(firebaseAuthInstance);
+                            setUserId(firebaseAuthInstance.currentUser?.uid);
                         } catch (anonSignInError) {
                             setError(`Failed to sign in: ${anonSignInError.message}. View access may be limited.`);
-                            setUserId(null);
+                                setUserId(null);
                         }
                     }
                 }
@@ -476,7 +651,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setLoading(false);
             setIsAuthReady(true);
         }
-    }, []);
+    }, []); // Empty dependency array to run only once on mount
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -510,18 +685,23 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     // Fetch transactions for the currently selected season (for main view)
     useEffect(() => {
-        if (!db || !isAuthReady || selectedSeason === null || activeTab !== 'transactions') {
+        // Combine loading state from Sleeper data and Firebase
+        setLoading(sleeperLoading || !isAuthReady);
+        setError(sleeperError); // Prioritize Sleeper data error
+
+        if (!db || !isAuthReady || selectedSeason === null || activeTab !== 'transactions' || sleeperLoading || sleeperError) {
             setTransactions([]);
             setTransactionPot(0);
             setSelectedTransactionIds([]);
-            if (activeTab === 'transactions') setLoading(false); // Only stop loading if this tab is active
+            if (activeTab === 'transactions' && !sleeperLoading && !sleeperError) setLoading(false);
             return;
         }
 
         setLoading(true);
         setError(null);
 
-        const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
+        // Use the appId from firebaseConfig directly
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const transactionCollectionPath = `/artifacts/${appId}/public/data/financial_transactions`;
 
         const q = query(
@@ -556,21 +736,25 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         });
 
         return () => unsubscribe();
-    }, [db, isAuthReady, selectedSeason, activeTab]);
+    }, [db, isAuthReady, selectedSeason, activeTab, sleeperLoading, sleeperError]);
 
 
     // Fetch ALL transactions (for overall history tab)
     useEffect(() => {
-        if (!db || !isAuthReady || activeTab !== 'overall_history') {
+        // Combine loading state from Sleeper data and Firebase
+        setLoading(sleeperLoading || !isAuthReady);
+        setError(sleeperError); // Prioritize Sleeper data error
+
+        if (!db || !isAuthReady || activeTab !== 'overall_history' || sleeperLoading || sleeperError) {
             setAllTransactions([]);
-            if (activeTab === 'overall_history') setLoading(false); // Only stop loading if this tab is active
+            if (activeTab === 'overall_history' && !sleeperLoading && !sleeperError) setLoading(false);
             return;
         }
 
         setLoading(true);
         setError(null);
 
-        const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const transactionCollectionPath = `/artifacts/${appId}/public/data/financial_transactions`;
 
         const q = query(
@@ -592,11 +776,11 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         });
 
         return () => unsubscribe();
-    }, [db, isAuthReady, activeTab]);
+    }, [db, isAuthReady, activeTab, sleeperLoading, sleeperError]);
 
     // Fetch and listen for updates to the Fee/Payout structure for the SELECTED season
     useEffect(() => {
-        if (!db || !isAuthReady || selectedSeason === null) {
+        if (!db || !isAuthReady || selectedSeason === null || sleeperLoading || sleeperError) {
             setLoadingStructure(false);
             setDebitStructureData(defaultDebitStructure);
             setCreditStructureData(defaultCreditStructure);
@@ -604,14 +788,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         }
 
         setLoadingStructure(true);
-        const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
-        // MODIFIED: Season-specific document path for structure
-        // This path will be `/artifacts/{appId}/public/data/league_structure/{selectedSeason}`
-        // You MUST update your Firestore Security Rules to match this pattern:
-        // match /artifacts/{appId}/public/data/league_structure/{seasonId} {
-        //   allow read: if true; // Public read access
-        //   allow write: if request.auth != null && request.auth.uid == "YOUR_COMMISH_UID_HERE"; // Only commish can write
-        // }
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const structureDocRef = doc(db, `/artifacts/${appId}/public/data/league_structure/${selectedSeason}`);
 
         const unsubscribe = onSnapshot(structureDocRef, (docSnap) => {
@@ -637,7 +814,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         });
 
         return () => unsubscribe();
-    }, [db, isAuthReady, selectedSeason, defaultDebitStructure, defaultCreditStructure]); // Removed isCommish from dependencies as the error is now always suppressed from UI
+    }, [db, isAuthReady, selectedSeason, defaultDebitStructure, defaultCreditStructure, sleeperLoading, sleeperError]);
 
     const handleAddTransaction = async (e) => {
         e.preventDefault();
@@ -649,16 +826,18 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setError("Database not ready or user not authenticated. Cannot add transaction.");
             return;
         }
-        if (!isCommish) {
-            setError("You do not have permission to add transactions.");
-            return;
-        }
+        if (!isCommish) { setError("You do not have permission to add transactions."); return; }
         if (isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
             setError("Please enter a valid positive amount.");
             return;
         }
+        // For waiver/trade fees, description is auto-generated so no need to check if empty
         if (!description.trim() && category !== 'waiver_fa_fee' && !(category === 'trade_fee' && tradeEntryMethod === 'single_team')) {
             setError("Description cannot be empty.");
+            return;
+        }
+        if (typeof getDisplayName !== 'function') {
+            setError("Sleeper data not fully loaded. Please wait and try again.");
             return;
         }
 
@@ -667,7 +846,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
         if (type === 'debit' && category === 'trade_fee') {
             if (tradeEntryMethod === 'multi_team') {
-                const validTradeTeams = tradeTeams.filter(team => team.trim() !== '');
+                const validTradeTeams = tradeTeams.filter(teamId => teamId.trim() !== ''); // teamId is user_id
                 if (validTradeTeams.length < 2) {
                     setError("Please select at least two teams for a trade fee.");
                     return;
@@ -677,12 +856,12 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     return;
                 }
 
-                for (const team of validTradeTeams) {
+                for (const teamId of validTradeTeams) { // teamId is user_id
                     transactionsToAdd.push({
                         amount: parseFloat(amount),
                         description: description.trim(),
                         type: type, // 'debit'
-                        teamName: team,
+                        teamName: teamId, // Store user_id
                         date: transactionDate,
                         userId: userId,
                         category: category,
@@ -692,7 +871,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     });
                 }
             } else if (tradeEntryMethod === 'single_team') {
-                if (!teamName.trim()) {
+                if (!teamName.trim()) { // teamName is user_id
                     setError("Please select a team for the single team trade entry.");
                     return;
                 }
@@ -702,9 +881,10 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 }
                 transactionsToAdd.push({
                     amount: parseFloat(amount) * numTrades,
-                    description: `Trade Fee: ${teamName} - ${numTrades} trade(s)`,
+                    // Resolve display name for description, but store user_id in teamName
+                    description: `Trade Fee: ${getDisplayName(teamName, selectedSeason)} - ${numTrades} trade(s)`,
                     type: type,
-                    teamName: teamName,
+                    teamName: teamName, // Store user_id
                     date: transactionDate,
                     userId: userId,
                     category: category,
@@ -722,12 +902,13 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             const perPickupCost = parseFloat(amount);
 
             for (const entry of waiverEntries) {
-                if (entry.team && entry.numPickups > 0) {
+                if (entry.team && entry.numPickups > 0) { // entry.team is user_id
                     transactionsToAdd.push({
                         amount: perPickupCost * entry.numPickups,
-                        description: `Waiver/FA Fee: ${entry.team} - ${entry.numPickups} pickup(s)`,
+                        // Resolve display name for description, but store user_id in teamName
+                        description: `Waiver/FA Fee: ${getDisplayName(entry.team, selectedSeason)} - ${entry.numPickups} pickup(s)`,
                         type: type,
-                        teamName: entry.team,
+                        teamName: entry.team, // Store user_id
                         date: transactionDate,
                         userId: userId,
                         category: category,
@@ -743,13 +924,13 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             }
 
         } else {
-            if (!teamName.trim() && teamName !== 'ALL_TEAMS_MULTIPLIER') {
+            if (!teamName.trim() && teamName !== 'ALL_TEAMS_MULTIPLIER') { // teamName is user_id or 'ALL_TEAMS_MULTIPLIER'
                 setError("Please select an Associated Team.");
                 return;
             }
 
             let finalAmount = parseFloat(amount);
-            let finalTeamName = teamName;
+            let finalTeamName = teamName; // This will be user_id or 'ALL_TEAMS_MULTIPLIER'
             let teamsInvolved = 1;
 
             if (type === 'debit' && teamName === 'ALL_TEAMS_MULTIPLIER') {
@@ -758,17 +939,17 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     return;
                 }
                 finalAmount = finalAmount * activeTeamsCount;
-                finalTeamName = 'All Teams';
+                finalTeamName = 'All Teams'; // Store literal 'All Teams'
                 teamsInvolved = activeTeamsCount;
             } else if (type === 'credit' && teamName === 'ALL_TEAMS_MULTIPLIER') {
-                finalTeamName = 'All Teams';
+                finalTeamName = 'All Teams'; // Store literal 'All Teams'
             }
 
             transactionsToAdd.push({
                 amount: finalAmount,
                 description: description.trim(),
                 type: type,
-                teamName: finalTeamName,
+                teamName: finalTeamName, // Store user_id or 'All Teams'
                 date: transactionDate,
                 userId: userId,
                 category: category,
@@ -789,10 +970,11 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     const weekData = weeklyHighScores[weekNum];
                     if (weekData) {
                         if (category === 'weekly_1st_points' && weekData.highest) {
-                            transactionsToAdd[0].teamName = weekData.highest.team;
+                            // weeklyHighScores.highest.team already contains the display name
+                            transactionsToAdd[0].teamName = weekData.highest.team; // Store display name
                             transactionsToAdd[0].description = `Payout: Weekly 1st Points - ${weekData.highest.team} (${weekData.highest.score} pts)`;
                         } else if (category === 'weekly_2nd_points' && weekData.secondHighest) {
-                            transactionsToAdd[0].teamName = weekData.secondHighest.team;
+                            transactionsToAdd[0].teamName = weekData.secondHighest.team; // Store display name
                             transactionsToAdd[0].description = `Payout: Weekly 2nd Points - ${weekData.secondHighest.team} (${weekData.secondHighest.score} pts)`;
                         } else {
                             setError(`Could not find a winning team for ${category.replace(/_/g, ' ')} in Week ${weekNum} for the selected season. Transaction not added.`);
@@ -813,7 +995,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         }
 
         try {
-            const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             const transactionCollectionRef = collection(db, `/artifacts/${appId}/public/data/financial_transactions`);
 
             for (const transaction of transactionsToAdd) {
@@ -849,13 +1031,10 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setError("Cannot delete: Invalid transaction or not authenticated.");
             return;
         }
-        if (!isCommish) {
-            setError("You do not have permission to delete transactions.");
-            return;
-        }
+        if (!isCommish) { setError("You do not have permission to delete transactions."); return; }
 
         try {
-            const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             const transactionDocRef = doc(db, `/artifacts/${appId}/public/data/financial_transactions`, transactionToDelete.id);
             await deleteDoc(transactionDocRef);
             setError(null);
@@ -884,23 +1063,31 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         if (field === 'numPickups') {
             newWaiverEntries[index][field] = parseInt(value) || 0;
         } else {
-            newWaiverEntries[index][field] = value;
+            newWaiverEntries[index][field] = value; // value will be user_id
         }
         setWaiverEntries(newWaiverEntries);
     };
 
     const isTeamSelectionDisabled = isTeamAutoPopulated || (type === 'debit' && (category === 'waiver_fa_fee'));
 
-    const filteredTransactions = transactions.filter(t => {
-        if (filterTeam === '') {
-            return true;
-        } else if (filterTeam === 'All Teams') {
-            return t.teamName === 'All Teams';
-        } else {
-            // Filter by specific team, also include 'All Teams' debits for individual team view
-            return (t.teamName === filterTeam || (t.teamName === 'All Teams' && t.type === 'debit'));
+    const filteredTransactions = useMemo(() => {
+        if (typeof getDisplayName !== 'function') {
+            return []; // Return empty if getDisplayName is not available
         }
-    });
+        return transactions.filter(t => {
+            // Resolve the team name for filtering purposes
+            const transactionSeason = t.season ? parseInt(t.season) : (t.date?.toDate ? new Date(t.date.toDate()).getFullYear() : null);
+            const displayTeam = getDisplayName(t.teamName, transactionSeason); // Use getDisplayName from context
+            if (filterTeam === '') {
+                return true;
+            } else if (filterTeam === 'All Teams') {
+                return t.teamName === 'All Teams'; // Still filter by literal 'All Teams' stored
+            } else {
+                // Filter by specific team, also include 'All Teams' debits for individual team view
+                return (displayTeam === filterTeam || (t.teamName === 'All Teams' && t.type === 'debit'));
+            }
+        });
+    }, [transactions, filterTeam, getDisplayName]);
 
     const handleToggleTransaction = (transactionId) => {
         setSelectedTransactionIds(prevSelected => {
@@ -932,14 +1119,11 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
             setError("Database not ready or user not authenticated. Cannot delete transactions.");
             return;
         }
-        if (!isCommish) {
-            setError("You do not have permission to delete transactions.");
-            return;
-        }
+        if (!isCommish) { setError("You do not have permission to delete transactions."); return; }
 
         try {
             const batch = writeBatch(db);
-            const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
             selectedTransactionIds.forEach(id => {
                 const docRef = doc(db, `/artifacts/${appId}/public/data/financial_transactions`, id);
@@ -968,44 +1152,56 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
     const overallNetBalance = overallDebits - overallCredits;
 
     // Calculate team summary data for the CURRENTLY SELECTED season
-    const teamSummary = {};
-    uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').forEach(team => {
-        teamSummary[team] = {
-            totalDebits: 0,
-            totalCredits: 0,
-            netBalance: 0,
-            totalDebitsLessEntryFee: 0,
-            winningsExtraFees: 0,
-        };
-    });
-
-    transactions.forEach(t => {
-        if (t.teamName === 'All Teams' && t.type === 'debit' && t.teamsInvolvedCount > 0) {
-            const perTeamAmount = t.amount / t.teamsInvolvedCount;
-            uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').forEach(team => {
-                if (teamSummary[team]) {
-                    teamSummary[team].totalDebits += perTeamAmount;
-                    if (t.category !== 'entry_fee') {
-                        teamSummary[team].totalDebitsLessEntryFee += perTeamAmount;
-                    }
-                }
-            });
-        } else if (teamSummary[t.teamName]) {
-            if (t.type === 'debit') {
-                teamSummary[t.teamName].totalDebits += (t.amount || 0);
-                if (t.category !== 'entry_fee') {
-                    teamSummary[t.teamName].totalDebitsLessEntryFee += (t.amount || 0);
-                }
-            } else if (t.type === 'credit') {
-                teamSummary[t.teamName].totalCredits += (t.amount || 0);
-            }
+    const teamSummary = useMemo(() => {
+        if (typeof getDisplayName !== 'function') {
+            return {}; // Return empty if getDisplayName is not available
         }
-    });
+        const summary = {};
+        // Initialize teamSummary with all unique display names, not user_ids
+        uniqueTeams.filter(team => team.value !== 'ALL_TEAMS_MULTIPLIER').forEach(team => {
+            summary[team.label] = { // Use label (display name) as key
+                totalDebits: 0,
+                totalCredits: 0,
+                netBalance: 0,
+                totalDebitsLessEntryFee: 0,
+                winningsExtraFees: 0,
+            };
+        });
 
-    Object.keys(teamSummary).forEach(team => {
-        teamSummary[team].netBalance = teamSummary[team].totalCredits - teamSummary[team].totalDebits;
-        teamSummary[team].winningsExtraFees = teamSummary[team].totalCredits - teamSummary[team].totalDebitsLessEntryFee;
-    });
+        transactions.forEach(t => {
+            // Resolve the team name for summary calculation
+            const transactionSeason = t.season ? parseInt(t.season) : (t.date?.toDate ? new Date(t.date.toDate()).getFullYear() : null);
+            const displayTeamName = getDisplayName(t.teamName, transactionSeason); // Use getDisplayName from context
+
+            if (t.teamName === 'All Teams' && t.type === 'debit' && t.teamsInvolvedCount > 0) {
+                const perTeamAmount = t.amount / t.teamsInvolvedCount;
+                // Iterate over actual display names for initialization
+                uniqueTeams.filter(team => team.value !== 'ALL_TEAMS_MULTIPLIER').forEach(teamOption => {
+                    if (summary[teamOption.label]) { // Use label (display name) for lookup
+                        summary[teamOption.label].totalDebits += perTeamAmount;
+                        if (t.category !== 'entry_fee') {
+                            summary[teamOption.label].totalDebitsLessEntryFee += perTeamAmount;
+                        }
+                    }
+                });
+            } else if (summary[displayTeamName]) { // Use the resolved display name for lookup in teamSummary
+                if (t.type === 'debit') {
+                    summary[displayTeamName].totalDebits += (t.amount || 0);
+                    if (t.category !== 'entry_fee') {
+                        summary[displayTeamName].totalDebitsLessEntryFee += (t.amount || 0);
+                    }
+                } else if (t.type === 'credit') {
+                    summary[displayTeamName].totalCredits += (t.amount || 0);
+                }
+            }
+        });
+
+        Object.keys(summary).forEach(team => {
+            summary[team].netBalance = summary[team].totalCredits - summary[team].totalDebits;
+            summary[team].winningsExtraFees = summary[team].totalCredits - summary[team].totalDebitsLessEntryFee;
+        });
+        return summary;
+    }, [transactions, uniqueTeams, getDisplayName]);
 
     const handleAddTradeTeam = () => {
         setTradeTeams([...tradeTeams, '']);
@@ -1017,11 +1213,12 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     const handleTradeTeamChange = (index, value) => {
         const newTradeTeams = [...tradeTeams];
-        newTradeTeams[index] = value;
+        newTradeTeams[index] = value; // value is user_id
         setTradeTeams(newTradeTeams);
     };
 
-    const nonAllTeams = uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER');
+    // `nonAllTeams` now refers to the objects { label, value } from uniqueTeams
+    const nonAllTeamsOptions = uniqueTeams.filter(team => team.value !== 'ALL_TEAMS_MULTIPLIER');
 
     const handleDebitStructureChange = (index, field, value) => {
         const newStructure = [...debitStructureData];
@@ -1058,7 +1255,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         }
         setLoadingStructure(true);
         try {
-            const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
             // Sanitize structure data before saving
             const sanitizedDebitStructure = debitStructureData.map(item => {
@@ -1084,10 +1281,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                 };
             });
 
-            console.log("Saving debit structure:", sanitizedDebitStructure);
-            console.log("Saving credit structure:", sanitizedCreditStructure);
-
-
             const structureDocRef = doc(db, `/artifacts/${appId}/public/data/league_structure/${selectedSeason}`);
             await setDoc(structureDocRef, {
                 fees: sanitizedDebitStructure,
@@ -1105,8 +1298,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
 
     const handleCancelEditStructure = () => {
         setIsEditingStructure(false);
-        // On cancel, re-fetch the current season's structure to discard unsaved changes
-        // This will be handled by the useEffect for structure data based on selectedSeason
         setError(null);
     };
 
@@ -1130,18 +1321,40 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
         }
     };
 
-    // Derive all unique team names for the Overall History tab
+    // Derive all unique team names (display names) for the Overall History tab
     const uniqueTeamsForOverallHistory = useMemo(() => {
+        if (typeof getDisplayName !== 'function') {
+            return []; // Return empty if getDisplayName is not available
+        }
         const names = new Set();
+        // Iterate through all historical data to gather all unique team names
+        if (historicalData && historicalData.usersBySeason) {
+            Object.values(historicalData.usersBySeason).forEach(usersInSeason => {
+                if (Array.isArray(usersInSeason)) {
+                    usersInSeason.forEach(user => {
+                        const displayTeam = getDisplayName(user.user_id, user.season); // Pass season to getDisplayName
+                        if (displayTeam && displayTeam !== 'Unknown User' && displayTeam !== 'All Teams') {
+                            names.add(displayTeam);
+                        }
+                    });
+                } else if (typeof usersInSeason === 'object' && usersInSeason !== null) {
+                    Object.values(usersInSeason).forEach(user => {
+                        const displayTeam = getDisplayName(user.user_id, user.season); // Pass season to getDisplayName
+                        if (displayTeam && displayTeam !== 'Unknown User' && displayTeam !== 'All Teams') {
+                            names.add(displayTeam);
+                        }
+                    });
+                }
+            });
+        }
+        // Also include any literal "All Teams" if it exists in transactions
         allTransactions.forEach(t => {
-            const displayTeam = getDisplayTeamName(String(t.teamName || '').trim());
-            // Only add actual team names, not "All Teams" or empty
-            if (displayTeam && displayTeam !== 'All Teams') {
-                names.add(displayTeam);
+            if (t.teamName === 'All Teams') {
+                names.add('All Teams');
             }
         });
         return Array.from(names).sort();
-    }, [allTransactions, getDisplayTeamName]);
+    }, [historicalData, allTransactions, getDisplayName]);
 
     return (
         <div className="w-full max-w-4xl bg-white p-8 rounded-lg shadow-md mt-4 mx-auto">
@@ -1166,6 +1379,14 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     }`}
                 >
                     Overall Financial History
+                </button>
+                <button
+                    onClick={() => setActiveTab('matchup_history')}
+                    className={`px-6 py-2 rounded-t-lg font-semibold transition-colors duration-200 ${
+                        activeTab === 'matchup_history' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                >
+                    Weekly Matchups
                 </button>
             </div>
 
@@ -1425,17 +1646,17 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                 {tradeEntryMethod === 'multi_team' ? (
                                                     <div className="space-y-2">
                                                         <label className="block text-sm font-medium text-gray-700 mb-1">Teams Involved in Trade (Min 2)</label>
-                                                        {tradeTeams.map((team, index) => (
+                                                        {tradeTeams.map((teamId, index) => (
                                                             <div key={index} className="flex items-center space-x-2">
                                                                 <select
-                                                                    value={team}
+                                                                    value={teamId}
                                                                     onChange={(e) => handleTradeTeamChange(index, e.target.value)}
                                                                     required
                                                                     className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                                                 >
                                                                     <option value="">Select Team</option>
-                                                                    {nonAllTeams.map(optionTeam => (
-                                                                        <option key={optionTeam} value={optionTeam}>{optionTeam}</option>
+                                                                    {nonAllTeamsOptions.map(optionTeam => (
+                                                                        <option key={optionTeam.value} value={optionTeam.value}>{optionTeam.label}</option>
                                                                     ))}
                                                                 </select>
                                                                 {tradeTeams.length > 1 && (
@@ -1469,8 +1690,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                                             >
                                                                 <option value="">Select Team</option>
-                                                                {nonAllTeams.map(team => (
-                                                                    <option key={team} value={team}>{team}</option>
+                                                                {nonAllTeamsOptions.map(team => (
+                                                                    <option key={team.value} value={team.value}>{team.label}</option>
                                                                 ))}
                                                             </select>
                                                         </div>
@@ -1502,8 +1723,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                             className="flex-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                                         >
                                                             <option value="">Select Team</option>
-                                                            {nonAllTeams.map(optionTeam => (
-                                                                <option key={optionTeam} value={optionTeam}>{optionTeam}</option>
+                                                            {nonAllTeamsOptions.map(optionTeam => (
+                                                                <option key={optionTeam.value} value={optionTeam.value}>{optionTeam.label}</option>
                                                             ))}
                                                         </select>
                                                         <input
@@ -1539,7 +1760,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                 <label htmlFor="teamName" className="block text-sm font-medium text-gray-700 mb-1">Associated Team</label>
                                                 <select
                                                     id="teamName"
-                                                    value={teamName}
+                                                    value={teamName} // This will be user_id or 'ALL_TEAMS_MULTIPLIER'
                                                     onChange={(e) => {
                                                         setTeamName(e.target.value);
                                                         setIsTeamAutoPopulated(false);
@@ -1550,18 +1771,17 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                     className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none ${isTeamAutoPopulated ? 'bg-gray-200 cursor-not-allowed' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'} sm:text-sm`}
                                                 >
                                                     <option value="">Select Team</option>
-                                                    {type === 'debit' && (
-                                                        <option value="ALL_TEAMS_MULTIPLIER">All Teams (Multiplied)</option>
-                                                    )}
-                                                    {nonAllTeams.map(team => (
-                                                        <option key={team} value={team}>{team}</option>
+                                                    {uniqueTeams.map(teamOption => (
+                                                        <option key={teamOption.value} value={teamOption.value}>
+                                                            {teamOption.label}
+                                                        </option>
                                                     ))}
                                                 </select>
                                                 {autoPopulateWarning && (
                                                     <p className="text-xs text-orange-600 mt-1">{autoPopulateWarning}</p>
                                                 )}
                                                 {isTeamAutoPopulated && teamName && (
-                                                    <p className="text-xs text-gray-500 mt-1">Automatically determined: {teamName}</p>
+                                                    <p className="text-xs text-gray-500 mt-1">Automatically determined: {getDisplayName(teamName, selectedSeason)}</p>
                                                 )}
                                             </div>
                                         )}
@@ -1575,7 +1795,6 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                     </form>
                                 </section>
                             ) : (
-                                // This entire block is removed, as requested by the user
                                 null
                             )}
 
@@ -1587,7 +1806,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                         <label htmlFor="filterTeam" className="block text-sm font-medium text-gray-700 mb-1">Filter by Team:</label>
                                         <select
                                             id="filterTeam"
-                                            value={filterTeam}
+                                            value={filterTeam} // filterTeam holds display name
                                             onChange={(e) => {
                                                 setFilterTeam(e.target.value);
                                                 setCurrentPage(1);
@@ -1595,8 +1814,8 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                             className="mt-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm w-full"
                                         >
                                             <option value="">Show All Teams</option>
-                                            {uniqueTeams.filter(team => team !== 'ALL_TEAMS_MULTIPLIER').map(team => (
-                                                <option key={team} value={team}>{team}</option>
+                                            {uniqueTeams.filter(team => team.value !== 'ALL_TEAMS_MULTIPLIER').map(team => (
+                                                <option key={team.value} value={team.label}>{team.label}</option> // Option value is display name for filter
                                             ))}
                                             <option value="All Teams">Transactions for 'All Teams'</option>
                                         </select>
@@ -1641,6 +1860,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                 {currentTransactions.map((t, index) => {
                                                     let displayAmount = (t.amount || 0).toFixed(2);
                                                     const effectiveTeamsCount = t.teamsInvolvedCount > 0 ? t.teamsInvolvedCount : activeTeamsCount;
+                                                    const transactionSeason = t.season ? parseInt(t.season) : (t.date?.toDate ? new Date(t.date.toDate()).getFullYear() : null);
 
                                                     if (filterTeam !== '' && filterTeam !== 'All Teams' && t.teamName === 'All Teams' && t.type === 'debit' && effectiveTeamsCount > 0) {
                                                         displayAmount = (t.amount / effectiveTeamsCount).toFixed(2);
@@ -1664,7 +1884,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                                 {t.description}
                                                                 {t.category === 'side_pot' && t.potName && ` (${t.potName})`}
                                                             </td>
-                                                            <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{t.teamName || '-'}</td>
+                                                            <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">
+                                                                {getDisplayName && (getDisplayName(t.teamName, transactionSeason) || '-')}
+                                                            </td>
                                                             <td className="py-2 px-4 text-sm text-right border-b border-gray-200">
                                                                 <span className={`${t.type === 'debit' ? 'text-red-700' : 'text-green-700'} font-medium`}>
                                                                     {formatCurrency(parseFloat(displayAmount))}
@@ -1748,9 +1970,9 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {Object.entries(teamSummary).sort(([teamA], [teamB]) => teamA.localeCompare(teamB)).map(([team, data], index) => (
-                                                    <tr key={team} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                                        <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{team}</td>
+                                                {Object.entries(teamSummary).sort(([teamA], [teamB]) => teamA.localeCompare(teamB)).map(([teamDisplayName, data], index) => (
+                                                    <tr key={teamDisplayName} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                                                        <td className="py-2 px-4 text-sm text-gray-700 border-b border-gray-200">{teamDisplayName}</td>
                                                         <td className="py-2 px-4 text-sm text-right text-gray-900 font-medium border-b border-gray-200">{formatCurrency(data.totalDebits)}</td>
                                                         <td className="py-2 px-4 text-sm text-right text-gray-900 font-medium border-b border-gray-200">{formatCurrency(data.totalCredits)}</td>
                                                         <td className={`py-2 px-4 text-sm text-right font-bold border-b border-gray-200 ${data.netBalance >= 0 ? 'text-green-900' : 'text-red-900'}`}>
@@ -1805,7 +2027,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                     />
                                                     <input
                                                         type="text"
-                                                        value={item.description} // Ensured value is bound to state
+                                                        value={item.description}
                                                         onChange={(e) => handleDebitStructureChange(index, 'description', e.target.value)}
                                                         placeholder="Description (optional)"
                                                         className="flex-1 px-3 py-2 border rounded-md"
@@ -1848,7 +2070,7 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                                                     />
                                                     <input
                                                         type="text"
-                                                        value={item.description} // Ensured value is bound to state
+                                                        value={item.description}
                                                         onChange={(e) => handleCreditStructureChange(index, 'description', e.target.value)}
                                                         placeholder="Description (optional)"
                                                         className="flex-1 px-3 py-2 border rounded-md"
@@ -1918,9 +2140,13 @@ const FinancialTracker = ({ getDisplayTeamName, historicalMatchups }) => {
                     {activeTab === 'overall_history' && (
                         <OverallFinancialHistoryTab
                             allTransactions={allTransactions}
-                            getDisplayTeamName={getDisplayTeamName}
-                            uniqueTeamsForOverallHistory={uniqueTeamsForOverallHistory} // Pass this prop
+                            getDisplayName={getDisplayName}
+                            uniqueTeamsForOverallHistory={uniqueTeamsForOverallHistory}
                         />
+                    )}
+
+                    {activeTab === 'matchup_history' && (
+                        <WeeklyMatchupHistoryTab />
                     )}
                 </>
             )}

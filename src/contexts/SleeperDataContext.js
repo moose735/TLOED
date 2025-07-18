@@ -3,19 +3,28 @@ import React, { createContext, useState, useEffect, useContext, useMemo } from '
 import {
     fetchLeagueData,
     fetchUsersData,
-    fetchRosterData, // Changed from fetchRostersWithDetails to fetchRosterData
+    fetchRosterData,
     fetchNFLPlayers,
     fetchNFLState,
     fetchAllHistoricalMatchups,
-    fetchAllDraftHistory,
+    fetchAllDraftHistory, // NEW: Import the comprehensive draft history function
 } from '../utils/sleeperApi';
-import { CURRENT_LEAGUE_ID } from '../config';
+import { CURRENT_LEAGUE_ID } from '../config'; // Importing CURRENT_LEAGUE_ID from config.js
 
 // IMPORT THE CALCULATION FUNCTION HERE
 import { calculateAllLeagueMetrics } from '../utils/calculations';
+// NEW: Import new calculation functions for overall draft metrics (from draftCalculations)
+import { enrichPickForCalculations, calculatePlayerValue, calculatePickSlotValue, generateExpectedVorpByPickSlot, calculateVORPDelta } from '../utils/draftCalculations';
+// NEW: Import player stats calculation functions (from sleeperPlayerStats)
+import { fetchPlayerStats, fetchLeagueScoringSettings, fetchLeagueRosterSettings, calculateFantasyPoints, rankPlayersByFantasyPoints, calculateVORP } from '../utils/sleeperPlayerStats';
+
 
 // 1. Create the Context
 const SleeperDataContext = createContext();
+
+// Default league ID for demonstration/fallback.
+// If CURRENT_LEAGUE_ID from config.js is undefined, this ID will be used.
+const FALLBACK_LEAGUE_ID = '1074092015093413888'; // Example ID, replace with a valid one if needed
 
 // 2. Create the Provider Component
 export const SleeperDataProvider = ({ children }) => {
@@ -26,7 +35,10 @@ export const SleeperDataProvider = ({ children }) => {
     const [nflPlayers, setNflPlayers] = useState(null);
     const [nflState, setNflState] = useState(null);
     const [historicalMatchups, setHistoricalMatchups] = useState(null); // This holds historicalData with rostersBySeason AND usersBySeason
-    const [allDraftHistory, setAllDraftHistory] = useState(null);
+
+    // NEW STATES FOR DRAFT DATA (will be populated from fetchAllDraftHistory)
+    const [draftsBySeason, setDraftsBySeason] = useState({});
+    const [draftPicksBySeason, setDraftPicksBySeason] = useState({});
 
     // NEW STATE FOR PROCESSED SEASONAL RECORDS
     const [processedSeasonalRecords, setProcessedSeasonalRecords] = useState({});
@@ -36,7 +48,7 @@ export const SleeperDataProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    // --- Hardcoded 2021 Yahoo Data with Sleeper User IDs ---
+    // --- Hardcoded 2018-2021 Yahoo Data with Sleeper User IDs ---
     // This data has been parsed from the spreadsheet you provided and linked to Sleeper User IDs.
     // It will be merged with Sleeper data and used in all calculations.
     const hardcodedYahooData = {
@@ -172,7 +184,18 @@ export const SleeperDataProvider = ({ children }) => {
                 { "user_id": "787044291066380288", "display_name": "Michael Vick's Vet Clinic" }
             ],
             "leaguesMetadataBySeason": {
-                "settings": { "playoff_start_week": 15 },
+                "settings": {
+                    "playoff_start_week": 15,
+                    // ADDED DEFAULT SCORING SETTINGS FOR 2021 YAHOO DATA
+                    "scoring_settings": {
+                        "pass_yd": 0.04, "pass_td": 4, "pass_int": -1,
+                        "rush_yd": 0.1, "rush_td": 6,
+                        "rec_yd": 0.1, "rec": 0.5, "rec_td": 6,
+                        "fum_lost": -2
+                    },
+                    // ADDED DEFAULT ROSTER SETTINGS FOR 2021 YAHOO DATA
+                    "roster_positions": ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "DEF", "BN", "BN", "BN", "BN", "BN", "BN", "BN"]
+                },
                 "season": "2021"
             },
             "winnersBracketBySeason": [
@@ -241,7 +264,7 @@ export const SleeperDataProvider = ({ children }) => {
                         rosterMapForYear.set(roster.roster_id, roster);
                     });
                 }
-                yearSpecificRosterMap.set(year, rosterMapForYear);
+                rosterMapForYear.set(year, rosterMapForYear);
             });
         }
 
@@ -254,7 +277,6 @@ export const SleeperDataProvider = ({ children }) => {
         }
 
         return (ownerId, year = null) => {
-            // console.log(`[getTeamName] Resolving name for ownerId: ${ownerId}, year: ${year}`); // Removed excessive log
             // Helper to find name from a user object
             const getNameFromUser = (user) => {
                 if (user?.metadata?.team_name) {
@@ -275,7 +297,6 @@ export const SleeperDataProvider = ({ children }) => {
                 const currentName = getNameFromUser(currentUser);
                 if (currentName) {
                     resolvedName = currentName;
-                    // console.log(`[getTeamName] Found current name: ${resolvedName}`); // Removed excessive log
                 } else {
                     // 2. If not found in current data, search historical data from most recent year backwards
                     const sortedYearsDesc = Array.from(yearSpecificUserMap.keys()).sort((a, b) => parseInt(b) - parseInt(a));
@@ -285,7 +306,6 @@ export const SleeperDataProvider = ({ children }) => {
                         const historicalName = getNameFromUser(userInHistoricalYear);
                         if (historicalName) {
                             resolvedName = historicalName;
-                            // console.log(`[getTeamName] Found historical name for year ${historicalYear}: ${resolvedName}`); // Removed excessive log
                             break; // Found a name, break the loop
                         }
                     }
@@ -296,7 +316,6 @@ export const SleeperDataProvider = ({ children }) => {
                     const careerTeam = careerDPRData?.find(team => team.ownerId === ownerId);
                     if (careerTeam && careerTeam.teamName && !careerTeam.teamName.startsWith('Unknown Team (ID:')) {
                         resolvedName = careerTeam.teamName;
-                        // console.log(`[getTeamName] Fallback to careerDPRData name: ${resolvedName}`); // Removed excessive log
                     }
                 }
             } else {
@@ -307,7 +326,6 @@ export const SleeperDataProvider = ({ children }) => {
                     const specificYearName = getNameFromUser(userInSpecificYear);
                     if (specificYearName) {
                         resolvedName = specificYearName;
-                        // console.log(`[getTeamName] Found year-specific name for ${year}: ${resolvedName}`); // Removed excessive log
                     }
                 }
 
@@ -321,7 +339,6 @@ export const SleeperDataProvider = ({ children }) => {
                         const historicalName = getNameFromUser(userInHistoricalYear);
                         if (historicalName) {
                             resolvedName = historicalName;
-                            // console.log(`[getTeamName] Fallback to any historical name for year ${historicalYear}: ${resolvedName}`); // Removed excessive log
                             break; // Found a name, break the loop
                         }
                     }
@@ -333,7 +350,6 @@ export const SleeperDataProvider = ({ children }) => {
                     const currentName = getNameFromUser(currentUser);
                     if (currentName) {
                         resolvedName = currentName;
-                        // console.log(`[getTeamName] Fallback to current league name: ${resolvedName}`); // Removed excessive log
                     }
                 }
 
@@ -342,12 +358,10 @@ export const SleeperDataProvider = ({ children }) => {
                     const careerTeam = careerDPRData?.find(team => team.ownerId === ownerId);
                     if (careerTeam && careerTeam.teamName && !careerTeam.teamName.startsWith('Unknown Team (ID:')) {
                         resolvedName = careerTeam.teamName;
-                        // console.log(`[getTeamName] Fallback to careerDPRData name as last resort: ${resolvedName}`); // Removed excessive log
                     }
                 }
             }
 
-            console.log(`[getTeamName] Final name for ownerId ${ownerId} (year ${year}): ${resolvedName}`); // Keep final log
             return resolvedName;
         };
     }, [usersData, historicalMatchups, careerDPRData]);
@@ -358,6 +372,19 @@ export const SleeperDataProvider = ({ children }) => {
             setLoading(true);
             setError(null);
             try {
+                // Determine which league ID to use
+                const leagueIdToFetch = CURRENT_LEAGUE_ID || FALLBACK_LEAGUE_ID;
+
+                if (!leagueIdToFetch) {
+                    setError(new Error("No league ID provided or fallback ID is invalid. Please set CURRENT_LEAGUE_ID in config.js or ensure FALLBACK_LEAGUE_ID is valid."));
+                    setLoading(false);
+                    return; // Stop execution if no valid league ID
+                }
+
+                if (!CURRENT_LEAGUE_ID) {
+                    console.warn(`SleeperDataContext: CURRENT_LEAGUE_ID is undefined in config.js. Using fallback ID: ${FALLBACK_LEAGUE_ID}`);
+                }
+
                 const [
                     leagues,
                     users,
@@ -365,23 +392,54 @@ export const SleeperDataProvider = ({ children }) => {
                     players,
                     state,
                     historicalDataFromSleeperAPI, // Renamed 'matchups' to be more descriptive
-                    draftHistory
+                    allHistoricalDraftsRaw, // NEW: Fetch all historical draft data
                 ] = await Promise.all([
-                    fetchLeagueData(CURRENT_LEAGUE_ID),
-                    fetchUsersData(CURRENT_LEAGUE_ID),
-                    fetchRosterData(CURRENT_LEAGUE_ID), // Fetch raw roster data
+                    fetchLeagueData(leagueIdToFetch), // Use the determined league ID
+                    fetchUsersData(leagueIdToFetch),
+                    fetchRosterData(leagueIdToFetch), // Fetch raw roster data
                     fetchNFLPlayers(),
                     fetchNFLState(),
                     fetchAllHistoricalMatchups(), // This fetches historical data, potentially nested by week
-                    fetchAllDraftHistory(),
+                    fetchAllDraftHistory(), // NEW: Fetch all historical draft data
                 ]);
+
+                // Crucial check: If initial league data is null, something is wrong with the ID or API.
+                if (!leagues) {
+                    setError(new Error(`Failed to fetch initial league data for ID: ${leagueIdToFetch}. Please check the league ID in config.js or the fallback ID.`));
+                    setLoading(false);
+                    return; // Stop if initial league data is null
+                }
 
                 setLeagueData(leagues);
                 setUsersData(users);
                 setRostersWithDetails(rosters); // Set raw rosters here
                 setNflPlayers(players);
                 setNflState(state);
-                setAllDraftHistory(draftHistory);
+
+                // --- START: Process Draft Data for DraftAnalysis Component ---
+                // allHistoricalDraftsRaw is structured as { [season]: { drafts: [{ draft_object, picks: [...] }], tradedPicks: [...] } }
+                const processedDraftsBySeason = {};
+                const processedDraftPicksBySeason = {};
+
+                if (allHistoricalDraftsRaw) {
+                    for (const season in allHistoricalDraftsRaw) {
+                        if (allHistoricalDraftsRaw.hasOwnProperty(season)) {
+                            const seasonData = allHistoricalDraftsRaw[season];
+                            // Assuming each season has one main draft for analysis, take the first complete one
+                            // or the first available if no complete draft
+                            const mainDraft = seasonData.drafts?.find(d => d.status === 'complete') || seasonData.drafts?.[0];
+
+                            if (mainDraft) {
+                                processedDraftsBySeason[season] = mainDraft;
+                                processedDraftPicksBySeason[season] = mainDraft.picks || []; // Use the enriched picks directly
+                            }
+                        }
+                    }
+                }
+                setDraftsBySeason(processedDraftsBySeason);
+                setDraftPicksBySeason(processedDraftPicksBySeason);
+                // --- END: Process Draft Data ---
+
 
                 // --- START: Process and Flatten Sleeper historical matchups ---
                 const flattenedSleeperMatchupsBySeason = {};
@@ -396,7 +454,6 @@ export const SleeperDataProvider = ({ children }) => {
                             flattenedSleeperMatchupsBySeason[year] = weeklyMatchupsObject;
                         } else {
                             // Handle unexpected structure, e.g., default to empty array
-                            console.warn(`SleeperDataContext: Unexpected matchupsBySeason structure for year ${year}:`, weeklyMatchupsObject);
                             flattenedSleeperMatchupsBySeason[year] = [];
                         }
                     });
@@ -415,34 +472,36 @@ export const SleeperDataProvider = ({ children }) => {
                     // These bracket data sets are the SOLE source of playoff game information for 2021
                     winnersBracketBySeason: { ...(historicalDataFromSleeperAPI?.winnersBracketBySeason || {}), "2021": hardcodedYahooData["2021"]?.winnersBracketBySeason || [] },
                     losersBracketBySeason: { ...(historicalDataFromSleeperAPI?.losersBracketBySeason || {}), "2021": hardcodedYahooData["2021"]?.losersBracketBySeason || [] },
+                    // IMPORTANT: Pass the processed draft data into historicalData
+                    draftsBySeason: processedDraftsBySeason,
+                    draftPicksBySeason: processedDraftPicksBySeason,
                 };
-                setHistoricalMatchups(mergedHistoricalData);
-
-                // Condensed debug logs for merged data structure
-                console.log("SleeperDataContext: Merged historical data keys:");
-                console.log("  matchupsBySeason (years):", Object.keys(mergedHistoricalData.matchupsBySeason));
-                console.log("  rostersBySeason (years):", Object.keys(mergedHistoricalData.rostersBySeason));
-                console.log("  usersBySeason (years):", Object.keys(mergedHistoricalData.usersBySeason));
-                console.log("  winnersBracketBySeason (years):", Object.keys(mergedHistoricalData.winnersBracketBySeason));
-                console.log("  losersBracketBySeason (years):", Object.keys(mergedHistoricalData.losersBracketBySeason));
+                setHistoricalMatchups(mergedHistoricalData); // Update historicalMatchups state with the merged data
 
 
                 if (mergedHistoricalData && Object.keys(mergedHistoricalData.matchupsBySeason).length > 0) {
-                    // Pass nflState to calculateAllLeagueMetrics
-                    const { seasonalMetrics, careerDPRData: calculatedCareerDPRData } = calculateAllLeagueMetrics(mergedHistoricalData, draftHistory, getTeamName, state);
-                    console.log("SleeperDataContext: Calculated seasonalMetrics (first 5 entries per year):");
-                    Object.entries(seasonalMetrics).forEach(([year, metrics]) => {
-                        console.log(`  Year ${year}:`, Object.values(metrics).slice(0, 5));
-                    });
+                    const { seasonalMetrics, careerDPRData: calculatedCareerDPRData } = calculateAllLeagueMetrics(
+                        mergedHistoricalData,
+                        { draftsBySeason: processedDraftsBySeason, draftPicksBySeason: processedDraftPicksBySeason }, // Pass the newly populated draft data
+                        getTeamName,
+                        state // Pass nflStateData
+                    );
                     setProcessedSeasonalRecords(seasonalMetrics);
                     setCareerDPRData(calculatedCareerDPRData);
                 } else {
-                    console.warn("SleeperDataContext: mergedHistoricalData is empty or null, cannot calculate seasonal metrics.");
                     setProcessedSeasonalRecords({});
                     setCareerDPRData(null);
                 }
 
                 setLoading(false);
+
+                // --- DEBUGGING START: Log final state before context provides it ---
+                console.log('SleeperDataContext: Final nflPlayers state:', players);
+                console.log('SleeperDataContext: Final draftsBySeason state:', processedDraftsBySeason);
+                console.log('SleeperDataContext: Final draftPicksBySeason state:', processedDraftPicksBySeason);
+                console.log('SleeperDataContext: Final historicalMatchups (merged historicalData) state:', mergedHistoricalData);
+                // --- DEBUGGING END ---
+
             } catch (err) {
                 console.error("Failed to load initial Sleeper data:", err);
                 setError(err);
@@ -451,8 +510,7 @@ export const SleeperDataProvider = ({ children }) => {
         };
 
         loadAllSleeperData();
-    }, []); // This effect now runs only once on mount.
-
+    }, []); // Empty dependency array means this effect runs once on mount
 
     const contextValue = useMemo(() => ({
         leagueData,
@@ -460,8 +518,7 @@ export const SleeperDataProvider = ({ children }) => {
         rostersWithDetails,
         nflPlayers,
         nflState,
-        historicalData: historicalMatchups, // Provide the merged historical data
-        allDraftHistory,
+        historicalData: historicalMatchups, // This now contains draftsBySeason and draftPicksBySeason
         processedSeasonalRecords,
         careerDPRData,
         loading,
@@ -473,8 +530,7 @@ export const SleeperDataProvider = ({ children }) => {
         rostersWithDetails,
         nflPlayers,
         nflState,
-        historicalMatchups, // Dependency for merged data
-        allDraftHistory,
+        historicalMatchups, // Dependency for merged data (now includes drafts)
         processedSeasonalRecords,
         careerDPRData,
         loading,
