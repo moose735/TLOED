@@ -7,6 +7,20 @@ const BASE_URL = 'https://api.sleeper.app/v1';
 const inMemoryCache = new Map();
 
 /**
+ * Clears a specific entry from the cache or the entire cache if no key is provided.
+ * @param {string} [cacheKey] The key of the cache entry to clear. If not provided, the entire cache is cleared.
+ */
+export function clearCache(cacheKey) {
+    if (cacheKey) {
+        inMemoryCache.delete(cacheKey);
+        console.log(`[Cache Clear] Cleared cache for key: ${cacheKey}`);
+    } else {
+        inMemoryCache.clear();
+        console.log('[Cache Clear] Cleared all in-memory cache.');
+    }
+}
+
+/**
  * Fetches data from a given URL and caches it.
  * @param {string} url The API endpoint URL.
  * @param {string} cacheKey The key to use for caching this data.
@@ -654,13 +668,52 @@ export async function fetchAllHistoricalMatchups() {
 
 
 /**
- * Fetches transactions for a specific week in a league.
+ * Fetches transactions for a specific week or for all weeks of the season if no week is specified.
+ * Transactions are sorted by creation time in descending order.
  * @param {string} leagueId The ID of the Sleeper league.
- * @param {number} week The week number for which to fetch transactions.
+ * @param {number} [week] The week number for which to fetch transactions. If not provided, all transactions for the season are fetched.
  * @returns {Promise<Array<Object>>} A promise that resolves to an array of transaction objects.
  */
-export async function fetchTransactionsForWeek(leagueId, week) {
-    return fetchDataWithCache(`${BASE_URL}/league/${leagueId}/transactions/${week}`, `transactions_${leagueId}_${week}`, 1);
+export async function fetchTransactions(leagueId, week = null) {
+    if (!leagueId) {
+        console.error("fetchTransactions: A league ID is required.");
+        return [];
+    }
+
+    try {
+        let transactions = [];
+        if (week) {
+            // Fetch for a specific week
+            const url = `${BASE_URL}/league/${leagueId}/transactions/${week}`;
+            const cacheKey = `transactions_${leagueId}_${week}`;
+            const weeklyTransactions = await fetchDataWithCache(url, cacheKey, 0.5); // Cache for 30 minutes
+            if (weeklyTransactions) {
+                transactions = weeklyTransactions;
+            }
+        } else {
+            // Fetch all transactions for the season if no week is specified (e.g., pre-season)
+            let currentWeek = 1;
+            let keepFetching = true;
+            while (keepFetching) {
+                const url = `${BASE_URL}/league/${leagueId}/transactions/${currentWeek}`;
+                const cacheKey = `transactions_${leagueId}_${currentWeek}`;
+                const weeklyTransactions = await fetchDataWithCache(url, cacheKey, 0.5);
+                if (!weeklyTransactions || weeklyTransactions.length === 0) {
+                    keepFetching = false;
+                } else {
+                    transactions = transactions.concat(weeklyTransactions);
+                    currentWeek++;
+                }
+            }
+        }
+
+        // Sort by creation timestamp in descending order (most recent first)
+        transactions.sort((a, b) => b.created - a.created);
+        return transactions;
+    } catch (error) {
+        console.error(`Error fetching transactions for league ID ${leagueId}:`, error);
+        return [];
+    }
 }
 
 /**
