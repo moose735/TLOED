@@ -2,9 +2,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { CURRENT_LEAGUE_ID } from '../config'; // Only CURRENT_LEAGUE_ID comes from config
 import {
-    fetchTransactionsForWeek,
+    // This is the correct import now.
+    fetchTransactions,
     getSleeperPlayerHeadshotUrl,
-} from '../utils/sleeperApi'; // Only fetchTransactionsForWeek is needed here now
+} from '../utils/sleeperApi'; // Only fetchTransactions is needed here now
 
 // Import the custom hook from your SleeperDataContext
 import { useSleeperData } from '../contexts/SleeperDataContext';
@@ -41,10 +42,9 @@ const Dashboard = () => {
             const season = leagueData.season;
             const leagueStatus = leagueData.status;
 
-            // --- FIX BEGINS HERE ---
             // If the league is in-season but there's no official week number yet,
             // we'll fetch transactions for the entire season up to this point.
-            // We assume the fetchTransactionsForWeek utility function can handle
+            // We assume the fetchTransactions utility function can handle
             // a null week parameter by fetching for the whole season.
             // This is a reasonable assumption for the beginning of a new season.
             const weekToFetch = (leagueStatus === 'in_season' && !currentWeek) ? null : currentWeek;
@@ -52,14 +52,14 @@ const Dashboard = () => {
             // Fetch transactions for the determined week (or season)
             try {
                 const fetchedTransactions = weekToFetch
-                    ? await fetchTransactionsForWeek(CURRENT_LEAGUE_ID, weekToFetch)
+                    // This is the corrected function call
+                    ? await fetchTransactions(CURRENT_LEAGUE_ID, weekToFetch)
                     : [];
                 setTransactions(fetchedTransactions);
             } catch (err) {
                 console.error('Error fetching transactions:', err);
                 // Don't set global error, just log for transactions
             }
-            // --- FIX ENDS HERE ---
 
             // Check for pre-draft status and set draft start time from allDraftHistory
             if (allDraftHistory && allDraftHistory.length > 0) {
