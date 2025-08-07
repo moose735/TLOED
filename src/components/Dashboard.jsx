@@ -2,10 +2,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { CURRENT_LEAGUE_ID } from '../config'; // Only CURRENT_LEAGUE_ID comes from config
 import {
-    // This is the correct import now.
-    fetchTransactions,
+    fetchTransactionsForWeek,
     getSleeperPlayerHeadshotUrl,
-} from '../utils/sleeperApi'; // Only fetchTransactions is needed here now
+} from '../utils/sleeperApi'; // Only fetchTransactionsForWeek is needed here now
 
 // Import the custom hook from your SleeperDataContext
 import { useSleeperData } from '../contexts/SleeperDataContext';
@@ -40,20 +39,11 @@ const Dashboard = () => {
 
             const currentWeek = leagueData.settings?.week;
             const season = leagueData.season;
-            const leagueStatus = leagueData.status;
 
-            // If the league is in-season but there's no official week number yet,
-            // we'll fetch transactions for the entire season up to this point.
-            // We assume the fetchTransactions utility function can handle
-            // a null week parameter by fetching for the whole season.
-            // This is a reasonable assumption for the beginning of a new season.
-            const weekToFetch = (leagueStatus === 'in_season' && !currentWeek) ? null : currentWeek;
-            
-            // Fetch transactions for the determined week (or season)
+            // Fetch transactions for the current week
             try {
-                const fetchedTransactions = weekToFetch
-                    // This is the corrected function call
-                    ? await fetchTransactions(CURRENT_LEAGUE_ID, weekToFetch)
+                const fetchedTransactions = currentWeek
+                    ? await fetchTransactionsForWeek(CURRENT_LEAGUE_ID, currentWeek)
                     : [];
                 setTransactions(fetchedTransactions);
             } catch (err) {
@@ -232,7 +222,7 @@ const Dashboard = () => {
 
                 {/* Recent Transactions Section */}
                 <div className="bg-gray-50 p-6 rounded-lg shadow-inner">
-                    <h3 className="text-2xl font-semibold text-blue-700 mb-4 border-b pb-2">Recent Transactions ({leagueData?.settings?.week ? `Week ${leagueData.settings.week}` : 'Current Season'})</h3>
+                    <h3 className="text-2xl font-semibold text-blue-700 mb-4 border-b pb-2">Recent Transactions ({leagueData?.settings?.week ? `Week ${leagueData.settings.week}` : 'N/A'})</h3>
                     {transactions.length > 0 ? (
                         <ul className="space-y-4">
                             {transactions.slice(0, 5).map((transaction) => ( // Show up to 5 recent transactions
@@ -296,7 +286,10 @@ const Dashboard = () => {
                         </ul>
                     ) : (
                         <p className="text-sm text-gray-500">
-                            No recent transactions available.
+                            {leagueData?.status === 'pre_draft'
+                                ? 'No transactions available before the draft begins.'
+                                : 'No recent transactions for this week.'
+                            }
                         </p>
                     )}
                 </div>
