@@ -39,17 +39,27 @@ const Dashboard = () => {
 
             const currentWeek = leagueData.settings?.week;
             const season = leagueData.season;
+            const leagueStatus = leagueData.status;
 
-            // Fetch transactions for the current week
+            // --- FIX BEGINS HERE ---
+            // If the league is in-season but there's no official week number yet,
+            // we'll fetch transactions for the entire season up to this point.
+            // We assume the fetchTransactionsForWeek utility function can handle
+            // a null week parameter by fetching for the whole season.
+            // This is a reasonable assumption for the beginning of a new season.
+            const weekToFetch = (leagueStatus === 'in_season' && !currentWeek) ? null : currentWeek;
+            
+            // Fetch transactions for the determined week (or season)
             try {
-                const fetchedTransactions = currentWeek
-                    ? await fetchTransactionsForWeek(CURRENT_LEAGUE_ID, currentWeek)
+                const fetchedTransactions = weekToFetch
+                    ? await fetchTransactionsForWeek(CURRENT_LEAGUE_ID, weekToFetch)
                     : [];
                 setTransactions(fetchedTransactions);
             } catch (err) {
                 console.error('Error fetching transactions:', err);
                 // Don't set global error, just log for transactions
             }
+            // --- FIX ENDS HERE ---
 
             // Check for pre-draft status and set draft start time from allDraftHistory
             if (allDraftHistory && allDraftHistory.length > 0) {
@@ -222,7 +232,7 @@ const Dashboard = () => {
 
                 {/* Recent Transactions Section */}
                 <div className="bg-gray-50 p-6 rounded-lg shadow-inner">
-                    <h3 className="text-2xl font-semibold text-blue-700 mb-4 border-b pb-2">Recent Transactions ({leagueData?.settings?.week ? `Week ${leagueData.settings.week}` : 'N/A'})</h3>
+                    <h3 className="text-2xl font-semibold text-blue-700 mb-4 border-b pb-2">Recent Transactions ({leagueData?.settings?.week ? `Week ${leagueData.settings.week}` : 'Current Season'})</h3>
                     {transactions.length > 0 ? (
                         <ul className="space-y-4">
                             {transactions.slice(0, 5).map((transaction) => ( // Show up to 5 recent transactions
@@ -286,10 +296,7 @@ const Dashboard = () => {
                         </ul>
                     ) : (
                         <p className="text-sm text-gray-500">
-                            {leagueData?.status === 'pre_draft'
-                                ? 'No transactions available before the draft begins.'
-                                : 'No recent transactions for this week.'
-                            }
+                            No recent transactions available.
                         </p>
                     )}
                 </div>
