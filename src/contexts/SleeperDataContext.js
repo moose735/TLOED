@@ -512,6 +512,45 @@ export const SleeperDataProvider = ({ children }) => {
         loadAllSleeperData();
     }, []); // Empty dependency array means this effect runs once on mount
 
+
+    // Utility: Get 1st and 2nd highest scorers per week for a given season
+    const getWeeklyHighScores = (season) => {
+        const result = {};
+        if (!historicalMatchups || !historicalMatchups.matchupsBySeason || !historicalMatchups.matchupsBySeason[season]) return result;
+        const matchups = historicalMatchups.matchupsBySeason[season];
+        // Group all scores by week
+        const scoresByWeek = {};
+        matchups.forEach(match => {
+            const week = match.week || match.weekNumber;
+            if (!week) return;
+            if (!scoresByWeek[week]) scoresByWeek[week] = [];
+            // Team 1
+            if (match.team1_roster_id && match.team1_score != null) {
+                scoresByWeek[week].push({
+                    teamId: match.team1_roster_id,
+                    score: parseFloat(match.team1_score),
+                });
+            }
+            // Team 2
+            if (match.team2_roster_id && match.team2_score != null) {
+                scoresByWeek[week].push({
+                    teamId: match.team2_roster_id,
+                    score: parseFloat(match.team2_score),
+                });
+            }
+        });
+        // For each week, find top 2
+        Object.entries(scoresByWeek).forEach(([week, scores]) => {
+            if (scores.length === 0) return;
+            const sorted = scores.sort((a, b) => b.score - a.score);
+            result[week] = {
+                first: sorted[0],
+                second: sorted.length > 1 ? sorted.find(s => s.score < sorted[0].score) || null : null
+            };
+        });
+        return result;
+    };
+
     const contextValue = useMemo(() => ({
         leagueData,
         usersData,
@@ -524,6 +563,7 @@ export const SleeperDataProvider = ({ children }) => {
         loading,
         error,
         getTeamName,
+        getWeeklyHighScores,
     }), [
         leagueData,
         usersData,
