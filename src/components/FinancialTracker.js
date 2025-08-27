@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useSleeperData } from '../contexts/SleeperDataContext';
 import { getAuth, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 
 const firebaseConfig = {
 	apiKey: 'AIzaSyDcuPXgRPIdX-NYblBqQkdXqrGiD6yobcA',
@@ -95,32 +95,28 @@ const FinancialTracker = () => {
 	const [firestoreLoading, setFirestoreLoading] = useState(true);
 	const initialLoadRef = React.useRef(true);
 
-       // Firestore: Load transactions for all years on mount
+       // Firestore: Real-time updates for all years on mount
        React.useEffect(() => {
-	       let isMounted = true;
-	       async function fetchAllYears() {
-		       setFirestoreLoading(true);
-		       try {
-			       const docRef = doc(db, 'league_finances', 'main');
-			       const docSnap = await getDoc(docRef);
-			       if (docSnap.exists() && isMounted) {
-				       const data = docSnap.data();
-				       setTransactionsByYear(data && data.transactionsByYear ? data.transactionsByYear : {});
-			       } else if (isMounted) {
-				       setTransactionsByYear({});
-			       }
-		       } catch (e) {
-			       if (isMounted) setTransactionsByYear({});
-		       } finally {
-			       if (isMounted) setFirestoreLoading(false);
-			       initialLoadRef.current = false;
+	       setFirestoreLoading(true);
+	       const docRef = doc(db, 'league_finances', 'main');
+	       const unsub = onSnapshot(docRef, (docSnap) => {
+		       if (docSnap.exists()) {
+			       const data = docSnap.data();
+			       setTransactionsByYear(data && data.transactionsByYear ? data.transactionsByYear : {});
+		       } else {
+			       setTransactionsByYear({});
 		       }
-	       }
-	       fetchAllYears();
-	       return () => { isMounted = false; };
+		       setFirestoreLoading(false);
+		       initialLoadRef.current = false;
+	       }, (error) => {
+		       setTransactionsByYear({});
+		       setFirestoreLoading(false);
+		       initialLoadRef.current = false;
+	       });
+	       return () => unsub();
        }, []);
 
-       // Firestore: Save transactionsByYear on change (not on initial load)
+       // Firestore: Save transactionsByYear on change (not on initial load, only if admin)
        React.useEffect(() => {
 	       async function saveAllYears() {
 		       try {
@@ -130,11 +126,11 @@ const FinancialTracker = () => {
 			       // Optionally handle error
 		       }
 	       }
-	       // Only save if not initial load, and there is at least one year and at least one transaction
-	       if (!initialLoadRef.current && Object.keys(transactionsByYear).length > 0 && Object.values(transactionsByYear).some(arr => arr.length > 0)) {
+	       // Only save if not initial load, and there is at least one year and at least one transaction, and isAdmin
+	       if (!initialLoadRef.current && Object.keys(transactionsByYear).length > 0 && Object.values(transactionsByYear).some(arr => arr.length > 0) && isAdmin) {
 		       saveAllYears();
 	       }
-       }, [transactionsByYear]);
+       }, [transactionsByYear, isAdmin]);
 
 	// Weekly top 2 scorers for each week/season
 	const weeklyTopScorers = useMemo(() => {
@@ -262,189 +258,198 @@ const FinancialTracker = () => {
 		      </div>
 
 		      {/* Commish-only transaction entry section */}
-	      {isAdmin && (
-		      <div className="mb-8 bg-white rounded-lg shadow p-6 border border-blue-200">
-			      <button
-				      className="mb-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-semibold text-sm"
-				      onClick={() => setShowTransactionForm(v => !v)}
-			      >
-				      {showTransactionForm ? 'Hide Transaction Entry' : 'Add Fee/Payout Transaction'}
-			      </button>
-		      {showTransactionForm && (
-			      <form
-				      className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end bg-blue-50 p-4 rounded"
-				      onSubmit={e => {
-					      e.preventDefault();
-					      // Save transaction(s) to the selected year only
-					      setTransactionsByYear(prev => {
-						      const prevYearTx = prev[selectedYear] || [];
-						      let newTxs = [];
-						      const now = new Date().toISOString();
-						      if (transaction.team === 'ALL') {
-							      newTxs = [
-								      ...prevYearTx,
-								      ...allMembers.map(m => ({ ...transaction, team: m.userId, date: now }))
-							      ];
-						      } else {
-							      newTxs = [...prevYearTx, { ...transaction, date: now }];
-						      }
-						      return { ...prev, [selectedYear]: newTxs };
-					      });
-					      setTransaction({ type: 'Fee', amount: '', category: '', description: '', week: '', team: 'ALL' });
-					      setShowTransactionForm(false);
-				      }}
-			      >
-				      <div>
-					      <label className="block text-xs font-semibold mb-1">Type</label>
-					      <select
-						      className="w-full border rounded px-2 py-2"
-						      value={transaction.type}
-						      onChange={e => {
-							      const newType = e.target.value;
-							      setTransaction(t => ({
-								      ...t,
-								      type: newType,
-								      // Reset description/category when type changes
-								      description: '',
-								      category: '',
-							      }));
-						      }}
-					      >
-						      <option value="Fee">Fee</option>
-						      <option value="Payout">Payout</option>
-					      </select>
-				      </div>
-				      <div>
-					      <label className="block text-xs font-semibold mb-1">Amount ($)</label>
-					      <input
-						      type="number"
-						      min="0"
-						      step="0.01"
-						      className="w-full border rounded px-2 py-2"
-						      value={transaction.amount}
-						      onChange={e => setTransaction(t => ({ ...t, amount: e.target.value }))}
-						      required
-					      />
-				      </div>
-				      <div>
-					      <label className="block text-xs font-semibold mb-1">Team</label>
-					      <select
-						      className="w-full border rounded px-2 py-2"
-						      value={transaction.team}
-						      onChange={e => setTransaction(t => ({ ...t, team: e.target.value }))}
-						      disabled={transaction.type === 'Payout' && (transaction.description === 'Weekly 1st' || transaction.description === 'Weekly 2nd') && transaction.week}
-					      >
-						      <option value="ALL">All Teams</option>
-						      {allMembers.map(m => (
-							      <option key={m.userId} value={m.userId}>{m.displayName}</option>
-						      ))}
-					      </select>
-				      </div>
+	      {/* Commish-only transaction entry section (read-only for non-commish) */}
+	      <div className="mb-8 bg-white rounded-lg shadow p-6 border border-blue-200">
+		      <button
+			      className={`mb-4 px-4 py-2 ${isAdmin ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-300 text-gray-500 cursor-not-allowed'} rounded font-semibold text-sm`}
+			      onClick={() => isAdmin && setShowTransactionForm(v => !v)}
+			      disabled={!isAdmin}
+		      >
+			      {showTransactionForm ? 'Hide Transaction Entry' : 'Add Fee/Payout Transaction'}
+		      </button>
+	      {showTransactionForm && (
+		      <form
+			      className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end bg-blue-50 p-4 rounded"
+			      onSubmit={e => {
+				      e.preventDefault();
+				      if (!isAdmin) return;
+				      // Save transaction(s) to the selected year only
+				      setTransactionsByYear(prev => {
+					      const prevYearTx = prev[selectedYear] || [];
+					      let newTxs = [];
+					      const now = new Date().toISOString();
+					      if (transaction.team === 'ALL') {
+						      newTxs = [
+							      ...prevYearTx,
+							      ...allMembers.map(m => ({ ...transaction, team: m.userId, date: now }))
+						      ];
+					      } else {
+						      newTxs = [...prevYearTx, { ...transaction, date: now }];
+					      }
+					      return { ...prev, [selectedYear]: newTxs };
+				      });
+				      setTransaction({ type: 'Fee', amount: '', category: '', description: '', week: '', team: 'ALL' });
+				      setShowTransactionForm(false);
+			      }}
+		      >
 			      <div>
-				      <label className="block text-xs font-semibold mb-1">Description</label>
-				      <input
-					      type="text"
-					      className="w-full border rounded px-2 py-2"
-					      value={transaction.description}
-					      onChange={e => setTransaction(t => ({ ...t, description: e.target.value }))}
-					      placeholder="e.g. Paid for entry, Weekly winner, etc."
-					      required
-				      />
-			      </div>
-			      <div className="md:col-span-2">
-				      <label className="block text-xs font-semibold mb-1">Category</label>
+				      <label className="block text-xs font-semibold mb-1">Type</label>
 				      <select
 					      className="w-full border rounded px-2 py-2"
-					      value={transaction.category}
+					      value={transaction.type}
 					      onChange={e => {
-						      const cat = e.target.value;
-						      let newTeam = transaction.team;
-						      let newDesc = transaction.description;
-						      // Auto-select team and description for weekly payouts
-						      if (transaction.type === 'Payout' && (cat === 'Weekly 1st' || cat === 'Weekly 2nd') && transaction.week && weeklyTopScorers[selectedYear]?.[transaction.week]) {
-							      const idx = cat === 'Weekly 1st' ? 0 : 1;
-							      const topUserId = weeklyTopScorers[selectedYear][transaction.week][idx];
-							      if (topUserId) {
-								      newTeam = topUserId;
-								      // Find points for that user that week
-								      const matchups = historicalData.matchupsBySeason?.[selectedYear]?.filter(m => String(m.week) === String(transaction.week));
-								      let points = null;
-								      if (matchups) {
-									      for (const m of matchups) {
-										      if (historicalData.rostersBySeason?.[selectedYear]) {
-											      if (String(m.team1_roster_id) && historicalData.rostersBySeason[selectedYear].find(r => String(r.roster_id) === String(m.team1_roster_id) && r.owner_id === topUserId)) {
-												      points = m.team1_score;
-											      }
-											      if (String(m.team2_roster_id) && historicalData.rostersBySeason[selectedYear].find(r => String(r.roster_id) === String(m.team2_roster_id) && r.owner_id === topUserId)) {
-												      points = m.team2_score;
-											      }
-										      }
-									      }
-								      }
-								      if (points !== null && !isNaN(points)) {
-									      newDesc = `${cat} (${points.toFixed(2)} pts)`;
-								      }
-							      }
-						      }
-						      setTransaction(t => ({ ...t, category: cat, team: newTeam, description: newDesc }));
+						      if (!isAdmin) return;
+						      const newType = e.target.value;
+						      setTransaction(t => ({
+							      ...t,
+							      type: newType,
+							      // Reset description/category when type changes
+							      description: '',
+							      category: '',
+						      }));
 					      }}
-					      required
+					      disabled={!isAdmin}
 				      >
-					      <option value="">Select...</option>
-					      {(transaction.type === 'Fee' ? FEE_DESCRIPTIONS : PAYOUT_DESCRIPTIONS).map(opt => (
-						      <option key={opt} value={opt}>{opt}</option>
-					      ))}
+					      <option value="Fee">Fee</option>
+					      <option value="Payout">Payout</option>
 				      </select>
 			      </div>
 			      <div>
-				      <label className="block text-xs font-semibold mb-1">Week #</label>
+				      <label className="block text-xs font-semibold mb-1">Amount ($)</label>
 				      <input
 					      type="number"
 					      min="0"
+					      step="0.01"
 					      className="w-full border rounded px-2 py-2"
-					      value={transaction.week}
-					      onChange={e => {
-						      const newWeek = e.target.value;
-						      let newTeam = transaction.team;
-						      let newDesc = transaction.description;
-						      // Auto-select team and description for weekly payouts
-						      if (transaction.type === 'Payout' && (transaction.category === 'Weekly 1st' || transaction.category === 'Weekly 2nd') && weeklyTopScorers[selectedYear]?.[newWeek]) {
-							      const idx = transaction.category === 'Weekly 1st' ? 0 : 1;
-							      const topUserId = weeklyTopScorers[selectedYear][newWeek][idx];
-							      if (topUserId) {
-								      newTeam = topUserId;
-								      // Find points for that user that week
-								      const matchups = historicalData.matchupsBySeason?.[selectedYear]?.filter(m => String(m.week) === String(newWeek));
-								      let points = null;
-								      if (matchups) {
-									      for (const m of matchups) {
-										      if (historicalData.rostersBySeason?.[selectedYear]) {
-											      if (String(m.team1_roster_id) && historicalData.rostersBySeason[selectedYear].find(r => String(r.roster_id) === String(m.team1_roster_id) && r.owner_id === topUserId)) {
-												      points = m.team1_score;
-											      }
-											      if (String(m.team2_roster_id) && historicalData.rostersBySeason[selectedYear].find(r => String(r.roster_id) === String(m.team2_roster_id) && r.owner_id === topUserId)) {
-												      points = m.team2_score;
-											      }
+					      value={transaction.amount}
+					      onChange={e => isAdmin && setTransaction(t => ({ ...t, amount: e.target.value }))}
+					      required
+					      disabled={!isAdmin}
+				      />
+			      </div>
+			      <div>
+				      <label className="block text-xs font-semibold mb-1">Team</label>
+				      <select
+					      className="w-full border rounded px-2 py-2"
+					      value={transaction.team}
+					      onChange={e => isAdmin && setTransaction(t => ({ ...t, team: e.target.value }))}
+					      disabled={!isAdmin || (transaction.type === 'Payout' && (transaction.description === 'Weekly 1st' || transaction.description === 'Weekly 2nd') && transaction.week)}
+				      >
+					      <option value="ALL">All Teams</option>
+					      {allMembers.map(m => (
+						      <option key={m.userId} value={m.userId}>{m.displayName}</option>
+					      ))}
+				      </select>
+			      </div>
+		      <div>
+			      <label className="block text-xs font-semibold mb-1">Description</label>
+			      <input
+				      type="text"
+				      className="w-full border rounded px-2 py-2"
+				      value={transaction.description}
+				      onChange={e => isAdmin && setTransaction(t => ({ ...t, description: e.target.value }))}
+				      placeholder="e.g. Paid for entry, Weekly winner, etc."
+				      required
+				      disabled={!isAdmin}
+			      />
+		      </div>
+		      <div className="md:col-span-2">
+			      <label className="block text-xs font-semibold mb-1">Category</label>
+			      <select
+				      className="w-full border rounded px-2 py-2"
+				      value={transaction.category}
+				      onChange={e => {
+					      if (!isAdmin) return;
+					      const cat = e.target.value;
+					      let newTeam = transaction.team;
+					      let newDesc = transaction.description;
+					      // Auto-select team and description for weekly payouts
+					      if (transaction.type === 'Payout' && (cat === 'Weekly 1st' || cat === 'Weekly 2nd') && transaction.week && weeklyTopScorers[selectedYear]?.[transaction.week]) {
+						      const idx = cat === 'Weekly 1st' ? 0 : 1;
+						      const topUserId = weeklyTopScorers[selectedYear][transaction.week][idx];
+						      if (topUserId) {
+							      newTeam = topUserId;
+							      // Find points for that user that week
+							      const matchups = historicalData.matchupsBySeason?.[selectedYear]?.filter(m => String(m.week) === String(transaction.week));
+							      let points = null;
+							      if (matchups) {
+								      for (const m of matchups) {
+									      if (historicalData.rostersBySeason?.[selectedYear]) {
+										      if (String(m.team1_roster_id) && historicalData.rostersBySeason[selectedYear].find(r => String(r.roster_id) === String(m.team1_roster_id) && r.owner_id === topUserId)) {
+											      points = m.team1_score;
+										      }
+										      if (String(m.team2_roster_id) && historicalData.rostersBySeason[selectedYear].find(r => String(r.roster_id) === String(m.team2_roster_id) && r.owner_id === topUserId)) {
+											      points = m.team2_score;
 										      }
 									      }
 								      }
-								      if (points !== null && !isNaN(points)) {
-									      newDesc = `${transaction.category} (${points.toFixed(2)} pts)`;
-								      }
+							      }
+							      if (points !== null && !isNaN(points)) {
+								      newDesc = `${cat} (${points.toFixed(2)} pts)`;
 							      }
 						      }
-						      setTransaction(t => ({ ...t, week: newWeek, team: newTeam, description: newDesc }));
-					      }}
-					      placeholder="e.g. 1, 2, ..."
-				      />
-			      </div>
-				      <div className="md:col-span-2 flex justify-end">
-					      <button type="submit" className="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 font-semibold">Submit Transaction</button>
-				      </div>
-			      </form>
-		      )}
+					      }
+					      setTransaction(t => ({ ...t, category: cat, team: newTeam, description: newDesc }));
+				      }}
+				      required
+				      disabled={!isAdmin}
+			      >
+				      <option value="">Select...</option>
+				      {(transaction.type === 'Fee' ? FEE_DESCRIPTIONS : PAYOUT_DESCRIPTIONS).map(opt => (
+					      <option key={opt} value={opt}>{opt}</option>
+				      ))}
+			      </select>
 		      </div>
+		      <div>
+			      <label className="block text-xs font-semibold mb-1">Week #</label>
+			      <input
+				      type="number"
+				      min="0"
+				      className="w-full border rounded px-2 py-2"
+				      value={transaction.week}
+				      onChange={e => {
+					      if (!isAdmin) return;
+					      const newWeek = e.target.value;
+					      let newTeam = transaction.team;
+					      let newDesc = transaction.description;
+					      // Auto-select team and description for weekly payouts
+					      if (transaction.type === 'Payout' && (transaction.category === 'Weekly 1st' || transaction.category === 'Weekly 2nd') && weeklyTopScorers[selectedYear]?.[newWeek]) {
+						      const idx = transaction.category === 'Weekly 1st' ? 0 : 1;
+						      const topUserId = weeklyTopScorers[selectedYear][newWeek][idx];
+						      if (topUserId) {
+							      newTeam = topUserId;
+							      // Find points for that user that week
+							      const matchups = historicalData.matchupsBySeason?.[selectedYear]?.filter(m => String(m.week) === String(newWeek));
+							      let points = null;
+							      if (matchups) {
+								      for (const m of matchups) {
+									      if (historicalData.rostersBySeason?.[selectedYear]) {
+										      if (String(m.team1_roster_id) && historicalData.rostersBySeason[selectedYear].find(r => String(r.roster_id) === String(m.team1_roster_id) && r.owner_id === topUserId)) {
+											      points = m.team1_score;
+										      }
+										      if (String(m.team2_roster_id) && historicalData.rostersBySeason[selectedYear].find(r => String(r.roster_id) === String(m.team2_roster_id) && r.owner_id === topUserId)) {
+											      points = m.team2_score;
+										      }
+									      }
+								      }
+							      }
+							      if (points !== null && !isNaN(points)) {
+								      newDesc = `${transaction.category} (${points.toFixed(2)} pts)`;
+							      }
+						      }
+					      }
+					      setTransaction(t => ({ ...t, week: newWeek, team: newTeam, description: newDesc }));
+				      }}
+				      placeholder="e.g. 1, 2, ..."
+				      disabled={!isAdmin}
+			      />
+		      </div>
+			      <div className="md:col-span-2 flex justify-end">
+				      <button type="submit" className={`bg-green-600 text-white px-6 py-2 rounded font-semibold ${!isAdmin ? 'opacity-50 cursor-not-allowed' : 'hover:bg-green-700'}`} disabled={!isAdmin}>Submit Transaction</button>
+			      </div>
+		      </form>
 	      )}
+	      </div>
 
 		      {/* Member Dues & Transaction Table */}
 	      <div className="mb-10 bg-white rounded-lg shadow p-6 border border-gray-100">
