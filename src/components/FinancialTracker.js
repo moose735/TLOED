@@ -180,16 +180,51 @@ const FinancialTracker = () => {
 		signOut(auth);
 	};
 
+	// Pagination state for transactions (must be at top level)
+const [currentPage, setCurrentPage] = useState(1);
+const transactionsPerPage = 10;
+// Get transactions for selected year (must come before pagination calculations)
+const transactions = transactionsByYear[selectedYear] || [];
+// For the all transactions table, sort transactions by most recent first
+const sortedTransactions = [...transactions].sort((a, b) => {
+  // Sort by date descending (most recent first)
+  if (!a.date) return 1;
+  if (!b.date) return -1;
+  return new Date(b.date) - new Date(a.date);
+});
+const totalPages = Math.ceil(sortedTransactions.length / transactionsPerPage);
+const paginatedTransactions = sortedTransactions.slice((currentPage - 1) * transactionsPerPage, currentPage * transactionsPerPage);
+
 	if (loading || firestoreLoading) return <div className="p-4 text-blue-600">Loading financial tracker...</div>;
 	if (error) return <div className="p-4 text-red-600">Error loading data: {error.message}</div>;
 	if (!usersData || !historicalData) return <div className="p-4 text-orange-600">No data available.</div>;
 
-	// Get transactions for selected year
-	const transactions = transactionsByYear[selectedYear] || [];
 	// Calculate summary bubbles (per selected year)
 	const totalFees = transactions.filter(t => t.type === 'Fee').reduce((sum, t) => sum + Number(t.amount || 0), 0);
 	const totalPayouts = transactions.filter(t => t.type === 'Payout').reduce((sum, t) => sum + Number(t.amount || 0), 0);
 	const leagueBank = totalFees - totalPayouts;
+
+       // Delete transaction handler (commish only)
+const handleDeleteTransaction = (transactionToDelete) => {
+  if (!isAdmin) return;
+  setTransactionsByYear(prev => {
+    const prevYearTx = prev[selectedYear] || [];
+    // Remove by unique date (and all fields for extra safety)
+    const newTxs = prevYearTx.filter(t => {
+      // Compare all fields to ensure uniqueness
+      return !(
+        t.date === transactionToDelete.date &&
+        t.team === transactionToDelete.team &&
+        t.type === transactionToDelete.type &&
+        t.amount === transactionToDelete.amount &&
+        t.category === transactionToDelete.category &&
+        t.description === transactionToDelete.description &&
+        t.week === transactionToDelete.week
+      );
+    });
+    return { ...prev, [selectedYear]: newTxs };
+  });
+};
 
        return (
 	      <div className="p-4 max-w-5xl mx-auto">
@@ -289,7 +324,7 @@ const FinancialTracker = () => {
 					      return { ...prev, [selectedYear]: newTxs };
 				      });
 				      setTransaction({ type: 'Fee', amount: '', category: '', description: '', week: '', team: 'ALL' });
-				      setShowTransactionForm(false);
+				      // Do NOT close the entry section after submit
 			      }}
 		      >
 			      <div>
@@ -330,10 +365,11 @@ const FinancialTracker = () => {
 			      <div>
 				      <label className="block text-xs font-semibold mb-1">Team</label>
 				      <select
-					      className="w-full border rounded px-2 py-2"
+					      className={`w-full border rounded px-2 py-2 ${(transaction.type === 'Payout' && (transaction.category === 'Weekly 1st' || transaction.category === 'Weekly 2nd') && transaction.week) ? 'bg-gray-100 text-gray-500' : ''}`}
 					      value={transaction.team}
 					      onChange={e => isAdmin && setTransaction(t => ({ ...t, team: e.target.value }))}
-					      disabled={!isAdmin || (transaction.type === 'Payout' && (transaction.description === 'Weekly 1st' || transaction.description === 'Weekly 2nd') && transaction.week)}
+					      disabled={!isAdmin || (transaction.type === 'Payout' && (transaction.category === 'Weekly 1st' || transaction.category === 'Weekly 2nd') && transaction.week)}
+					      style={(transaction.type === 'Payout' && (transaction.category === 'Weekly 1st' || transaction.category === 'Weekly 2nd') && transaction.week) ? { backgroundColor: '#f3f4f6', color: '#6b7280', cursor: 'not-allowed' } : {}}
 				      >
 					      <option value="ALL">All Teams</option>
 					      {allMembers.map(m => (
@@ -345,12 +381,18 @@ const FinancialTracker = () => {
 			      <label className="block text-xs font-semibold mb-1">Description</label>
 			      <input
 				      type="text"
-				      className="w-full border rounded px-2 py-2"
+				      className={`w-full border rounded px-2 py-2 ${(transaction.type === 'Payout' && (transaction.category === 'Weekly 1st' || transaction.category === 'Weekly 2nd') && transaction.week) ? 'bg-gray-100 text-gray-500' : ''}`}
 				      value={transaction.description}
-				      onChange={e => isAdmin && setTransaction(t => ({ ...t, description: e.target.value }))}
+				      onChange={e => {
+					      if (!isAdmin) return;
+					      if (!(transaction.type === 'Payout' && (transaction.category === 'Weekly 1st' || transaction.category === 'Weekly 2nd') && transaction.week)) {
+					        setTransaction(t => ({ ...t, description: e.target.value }));
+					      }
+				      }}
 				      placeholder="e.g. Paid for entry, Weekly winner, etc."
 				      required
-				      disabled={!isAdmin}
+				      disabled={!isAdmin || (transaction.type === 'Payout' && (transaction.category === 'Weekly 1st' || transaction.category === 'Weekly 2nd') && transaction.week)}
+				      style={(transaction.type === 'Payout' && (transaction.category === 'Weekly 1st' || transaction.category === 'Weekly 2nd') && transaction.week) ? { backgroundColor: '#f3f4f6', color: '#6b7280', cursor: 'not-allowed' } : {}}
 			      />
 		      </div>
 		      <div className="md:col-span-2">
@@ -412,8 +454,10 @@ const FinancialTracker = () => {
 					      const newWeek = e.target.value;
 					      let newTeam = transaction.team;
 					      let newDesc = transaction.description;
-					      // Auto-select team and description for weekly payouts
-					      if (transaction.type === 'Payout' && (transaction.category === 'Weekly 1st' || transaction.category === 'Weekly 2nd') && weeklyTopScorers[selectedYear]?.[newWeek]) {
+					      if (!newWeek) {
+					        newTeam = '';
+					        newDesc = '';
+					      } else if (transaction.type === 'Payout' && (transaction.category === 'Weekly 1st' || transaction.category === 'Weekly 2nd') && weeklyTopScorers[selectedYear]?.[newWeek]) {
 						      const idx = transaction.category === 'Weekly 1st' ? 0 : 1;
 						      const topUserId = weeklyTopScorers[selectedYear][newWeek][idx];
 						      if (topUserId) {
@@ -489,43 +533,66 @@ const FinancialTracker = () => {
 		      )}
 	      </div>
 
-		      {/* Last 10 Transactions Section */}
-		      <div className="mb-10 bg-white rounded-lg shadow p-6 border border-gray-100">
-			      <h3 className="text-lg font-semibold mb-4 text-blue-800">Last 10 Transactions ({selectedYear})</h3>
-			      <div className="overflow-x-auto">
-				      <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm text-sm">
-					      <thead className="bg-blue-50">
-						      <tr>
-							      <th className="py-2 px-3 text-left">Date</th>
-							      <th className="py-2 px-3 text-left">Team</th>
-							      <th className="py-2 px-3 text-center">Type</th>
-							      <th className="py-2 px-3 text-center">Amount</th>
-							      <th className="py-2 px-3 text-center">Category</th>
-							      <th className="py-2 px-3 text-center">Description</th>
-							      <th className="py-2 px-3 text-center">Week</th>
-						      </tr>
-					      </thead>
-					      <tbody>
-						      {[...transactions].slice(-10).reverse().map((t, idx) => {
-							      const teamName = allMembers.find(m => m.userId === t.team)?.displayName || t.team;
-							      return (
-								      <tr key={idx} className="even:bg-gray-50">
-									      <td className="py-2 px-3">{t.date ? new Date(t.date).toLocaleString() : ''}</td>
-									      <td className="py-2 px-3">{teamName}</td>
-									      <td className="py-2 px-3 text-center">{t.type}</td>
-									      <td className="py-2 px-3 text-center">${Number(t.amount || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
-									      <td className="py-2 px-3 text-center">{t.category}</td>
-									      <td className="py-2 px-3 text-center">{t.description}</td>
-									      <td className="py-2 px-3 text-center">{t.week}</td>
-								      </tr>
-							      );
-						      })}
-					      </tbody>
-				      </table>
-			      </div>
-		      </div>
-			   {/* Weekly high scorer tables removed as requested, logic retained for auto-fill */}
-			{/* TODO: Add yearly payouts and Firebase sync */}
+		      {/* All Transactions Table */}
+			<div className="mb-10 bg-white rounded-lg shadow p-6 border border-gray-100">
+  <h3 className="text-lg font-semibold mb-4 text-blue-800">All Transactions ({selectedYear})</h3>
+  <div className="overflow-x-auto">
+    <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm text-sm">
+      <thead className="bg-blue-50">
+        <tr>
+          <th className="py-2 px-3 text-left">Date</th>
+          <th className="py-2 px-3 text-left">Team</th>
+          <th className="py-2 px-3 text-center">Type</th>
+          <th className="py-2 px-3 text-center">Amount</th>
+          <th className="py-2 px-3 text-center">Category</th>
+          <th className="py-2 px-3 text-center">Description</th>
+          <th className="py-2 px-3 text-center">Week</th>
+          {isAdmin && <th className="py-2 px-3 text-center">Delete</th>}
+        </tr>
+      </thead>
+      <tbody>
+        {paginatedTransactions.map((t, idx) => {
+          const teamName = allMembers.find(m => m.userId === t.team)?.displayName || t.team;
+          return (
+            <tr key={t.date + '-' + t.team + '-' + t.amount + '-' + t.category + '-' + t.description + '-' + t.week} className="even:bg-gray-50">
+              <td className="py-2 px-3">{t.date ? new Date(t.date).toLocaleString() : ''}</td>
+              <td className="py-2 px-3">{teamName}</td>
+              <td className="py-2 px-3 text-center">{t.type}</td>
+              <td className="py-2 px-3 text-center">${Number(t.amount || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+              <td className="py-2 px-3 text-center">{t.category}</td>
+              <td className="py-2 px-3 text-center">{t.description}</td>
+              <td className="py-2 px-3 text-center">{t.week}</td>
+              {isAdmin && (
+                <td className="py-2 px-3 text-center">
+                  <button
+                    className="text-red-600 hover:text-red-800 font-bold text-lg"
+                    title="Delete transaction"
+                    onClick={() => handleDeleteTransaction(t)}
+                  >
+                    &#10006;
+                  </button>
+                </td>
+              )}
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  </div>
+  {/* Pagination controls */}
+  <div className="flex justify-center items-center gap-2 mt-4">
+    {Array.from({ length: totalPages }, (_, i) => (
+      <button
+        key={i}
+        className={`px-3 py-1 rounded ${currentPage === i + 1 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+        onClick={() => setCurrentPage(i + 1)}
+        disabled={currentPage === i + 1}
+      >
+        {i + 1}
+      </button>
+    ))}
+  </div>
+</div>
 		</div>
 	);
 };
