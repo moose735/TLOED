@@ -512,7 +512,6 @@ export const SleeperDataProvider = ({ children }) => {
         loadAllSleeperData();
     }, []); // Empty dependency array means this effect runs once on mount
 
-
     // Utility: Get 1st and 2nd highest scorers per week for a given season
     const getWeeklyHighScores = (season) => {
         const result = {};
@@ -551,6 +550,12 @@ export const SleeperDataProvider = ({ children }) => {
         return result;
     };
 
+    // Compose allDraftHistory for consumers (DraftAnalysis, SeasonBreakdown, etc)
+    const allDraftHistory = useMemo(() => ({
+        draftsBySeason,
+        draftPicksBySeason
+    }), [draftsBySeason, draftPicksBySeason]);
+
     const contextValue = useMemo(() => ({
         leagueData,
         usersData,
@@ -558,6 +563,7 @@ export const SleeperDataProvider = ({ children }) => {
         nflPlayers,
         nflState,
         historicalData: historicalMatchups, // This now contains draftsBySeason and draftPicksBySeason
+        allDraftHistory, // <-- Expose merged draft data for all consumers
         processedSeasonalRecords,
         careerDPRData,
         loading,
@@ -571,6 +577,7 @@ export const SleeperDataProvider = ({ children }) => {
         nflPlayers,
         nflState,
         historicalMatchups, // Dependency for merged data (now includes drafts)
+        allDraftHistory,
         processedSeasonalRecords,
         careerDPRData,
         loading,
