@@ -1,7 +1,7 @@
 // src/lib/DraftAnalysis.jsx
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSleeperData } from '../contexts/SleeperDataContext';
-import { getSleeperAvatarUrl, getSleeperPlayerHeadshotUrl, fetchTradedPicks } from '../utils/sleeperApi'; // Import fetchTradedPicks
+import { getSleeperAvatarUrl, getSleeperPlayerHeadshotUrl, fetchAllTradedPicksMerged } from '../utils/sleeperApi';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'; // Import FontAwesomeIcon
 import { faRepeat } from '@fortawesome/free-solid-svg-icons'; // Import the specific icon
 
@@ -106,6 +106,7 @@ const DraftAnalysis = () => {
         console.log('League Roster Settings:', leagueRosterSettings);
 
 
+
         const processDraftBoardData = async () => {
             if (!selectedSeason || !historicalData || !historicalData.draftsBySeason || !historicalData.draftPicksBySeason || !usersData || !leagueScoringSettings || !leagueRosterSettings) {
                 console.log('Missing data dependencies for draft processing (selectedSeason, historicalData.draftsBySeason, historicalData.draftPicksBySeason, usersData, leagueScoringSettings, or leagueRosterSettings are not fully loaded or available).');
@@ -119,51 +120,52 @@ const DraftAnalysis = () => {
 
             const seasonDrafts = historicalData.draftsBySeason[selectedSeason];
             const seasonPicks = historicalData.draftPicksBySeason[selectedSeason];
+            const leagueId = historicalData.leaguesMetadataBySeason?.[selectedSeason]?.league_id;
 
-            if (!seasonDrafts || !seasonPicks || seasonPicks.length === 0) {
-                console.log(`No draft data found for season ${selectedSeason}. Clearing draft summary and picks.`);
-                setDraftSummary(null);
-                setDraftPicks([]);
-                setOrderedTeamColumns([]);
-                setPicksGroupedByRound({});
-                setTradedPicksData([]);
-                return;
+            // Fetch merged traded picks for this league/season
+            let mergedTradedPicks = [];
+            if (leagueId) {
+                const leagueSettings = historicalData.leaguesMetadataBySeason[selectedSeason]?.settings || {};
+                const totalWeeks = leagueSettings.playoff_start_week ? (parseInt(leagueSettings.playoff_start_week, 10) + 3) : 18;
+                mergedTradedPicks = await fetchAllTradedPicksMerged(leagueId, totalWeeks);
             }
-
-            // Fetch traded picks for the current draft
-            let currentTradedPicks = [];
-            if (seasonDrafts.draft_id) {
-                try {
-                    currentTradedPicks = await fetchTradedPicks(seasonDrafts.draft_id);
-                    console.log(`Fetched ${currentTradedPicks.length} traded picks for draft ID: ${seasonDrafts.draft_id}`);
-                } catch (e) {
-                    console.error(`Error fetching traded picks for draft ${seasonDrafts.draft_id}:`, e);
-                }
-            }
-            setTradedPicksData(currentTradedPicks); // Store traded picks
+            setTradedPicksData(mergedTradedPicks);
 
             // Set draft summary
             setDraftSummary(seasonDrafts);
 
             // 1. Determine Ordered Team Columns
             const draftOrder = seasonDrafts.draft_order; // userId: slot_number
-            const totalTeams = seasonDrafts.settings?.teams || 12; // Default to 12 if not found
+            // const totalTeams already declared above
 
-            const teamsInOrder = Object.entries(draftOrder)
-                .map(([userId, slotNumber]) => {
-                    const user = usersData.find(u => u.user_id === userId);
-                    // Find the roster for this user in the *selected season*
-                    const roster = historicalData.rostersBySeason?.[selectedSeason]?.find(r => String(r.owner_id) === String(userId));
+            // Build orderedTeamColumns as a flat array of userIds in pick order for the entire draft (snake)
+            const totalRounds = seasonDrafts.settings?.rounds || 0;
+            const totalTeams = seasonDrafts.settings?.teams || 12;
+            // Map slot number to userId
+            const slotToUserId = Object.entries(draftOrder).reduce((acc, [userId, slot]) => {
+                acc[slot] = userId;
+                return acc;
+            }, {});
 
-                    return {
-                        userId: userId,
-                        slotNumber: slotNumber,
-                        teamName: roster ? (roster.metadata?.team_name || getTeamName(userId, selectedSeason)) : getTeamName(userId, selectedSeason),
-                        teamAvatar: user ? getSleeperAvatarUrl(user.avatar) : getSleeperAvatarUrl(null)
-                    };
-                })
-                .sort((a, b) => a.slotNumber - b.slotNumber); // Sort by original draft slot number
+            // For each round, build the pick order (snake)
+            const pickOrderByRound = [];
+            for (let round = 1; round <= totalRounds; round++) {
+                let slots = Array.from({ length: totalTeams }, (_, i) => i + 1);
+                if (round % 2 === 0) slots = slots.reverse();
+                pickOrderByRound.push(slots.map(slot => slotToUserId[slot]));
+            }
 
+            // For the board columns, use the order of the first round
+            const firstRoundUserIds = pickOrderByRound[0];
+            const teamsInOrder = firstRoundUserIds.map(userId => {
+                const user = usersData.find(u => u.user_id === userId);
+                const roster = historicalData.rostersBySeason?.[selectedSeason]?.find(r => String(r.owner_id) === String(userId));
+                return {
+                    userId: userId,
+                    teamName: roster ? (roster.metadata?.team_name || getTeamName(userId, selectedSeason)) : getTeamName(userId, selectedSeason),
+                    teamAvatar: user ? getSleeperAvatarUrl(user.avatar) : getSleeperAvatarUrl(null)
+                };
+            });
             setOrderedTeamColumns(teamsInOrder);
 
             // 2. Process and Group Picks by Round and Column
@@ -280,22 +282,35 @@ const DraftAnalysis = () => {
                 };
             });
 
+            // Build a lookup for picks: round -> pick_in_round -> pick object
+            const pickLookup = {};
             finalProcessedPicks.forEach(pick => {
-                const round = pick.round;
-                const totalTeams = seasonDrafts.settings?.teams || 12;
-
-                let columnIndex;
-                if (round % 2 !== 0) { // Odd rounds (1, 3, 5...) go left to right
-                    columnIndex = pick.draft_slot - 1; // 0-indexed
-                } else { // Even rounds (2, 4, 6...) go right to left
-                    columnIndex = totalTeams - pick.draft_slot; // 0-indexed from right
-                }
-
-                if (!newPicksGroupedByRound[round]) {
-                    newPicksGroupedByRound[round] = Array(totalTeams).fill(null);
-                }
-                newPicksGroupedByRound[round][columnIndex] = pick;
+                if (!pickLookup[pick.round]) pickLookup[pick.round] = {};
+                pickLookup[pick.round][pick.pick_in_round] = pick;
             });
+
+            // For each round and each slot, determine the correct owner (traded or not) and assign the pick
+            for (let round = 1; round <= totalRounds; round++) {
+                let slots = Array.from({ length: totalTeams }, (_, i) => i + 1);
+                if (round % 2 === 0) slots = slots.reverse();
+                if (!newPicksGroupedByRound[round]) newPicksGroupedByRound[round] = Array(totalTeams).fill(null);
+                for (let col = 0; col < totalTeams; col++) {
+                    const origSlot = slots[col];
+                    const origUserId = slotToUserId[origSlot];
+                    // Check for a traded pick for this round/slot
+                    let pick = null;
+                    // Find the pick in this round/slot, regardless of who made it
+                    // Find the pick whose pick_in_round matches (col+1) and round matches
+                    if (pickLookup[round] && pickLookup[round][col+1]) {
+                        pick = pickLookup[round][col+1];
+                    } else {
+                        // fallback: try to find a pick in this round made by the traded-to user
+                        // (shouldn't be needed if pick_in_round is correct)
+                        pick = finalProcessedPicks.find(p => p.round === round && p.pick_in_round === (col+1));
+                    }
+                    newPicksGroupedByRound[round][col] = pick || null;
+                }
+            }
 
 
             setPicksGroupedByRound(newPicksGroupedByRound);
