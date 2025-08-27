@@ -270,54 +270,54 @@ const AppContent = () => {
     return (
         <div className="min-h-screen bg-gray-100 flex flex-col font-inter">
             {/* Header */}
-            <header className="bg-gray-800 text-white p-4 shadow-md">
-                <div className="container mx-auto flex justify-between items-center">
-                    <div className="flex items-center">
+            <header className="bg-gray-800 text-white p-3 shadow-md md:p-4">
+                <div className="flex flex-col gap-2 md:flex-row md:justify-between md:items-center max-w-6xl w-full mx-auto">
+                    <div className="flex items-center justify-center md:justify-start">
                         <img
                             src={process.env.PUBLIC_URL + '/LeagueLogoNoBack.PNG'}
                             alt="League Logo"
-                            className="h-14 w-14 mr-4 object-contain"
+                            className="h-12 w-12 md:h-14 md:w-14 mr-3 md:mr-4 object-contain"
                         />
-                        <h1 className="text-2xl font-bold">The League of Extraordinary Douchebags</h1>
+                        <h1 className="text-lg md:text-2xl font-bold text-center md:text-left">The League of Extraordinary Douchebags</h1>
                     </div>
                     {/* Gold Trophy and Champion Name (FontAwesome, same as LeagueHistory) */}
-                    <div className="flex items-center gap-2">
-                        {reigningChampion && ( // Conditionally render the trophy icon
+                    <div className="flex items-center gap-1 md:gap-2 justify-center md:justify-end mt-2 md:mt-0">
+                        {reigningChampion && (
                             <span title="Reigning Champion">
-                                <i className="fas fa-trophy text-[#eab308] text-2xl mr-1"></i>
+                                <i className="fas fa-trophy text-[#eab308] text-xl md:text-2xl mr-1"></i>
                             </span>
                         )}
-                        <span className="font-semibold text-[#eab308] text-lg">
+                        <span className="font-semibold text-[#eab308] text-base md:text-lg">
                             {reigningChampion}
                         </span>
                     </div>
-                    <button className="md:hidden text-white text-2xl ml-2" onClick={toggleMobileMenu}>
-                        ☰
+                    <button className="md:hidden text-white text-2xl ml-2 absolute right-4 top-4" onClick={toggleMobileMenu} aria-label="Open navigation menu">
+                        &#9776;
                     </button>
                 </div>
             </header>
 
             {/* Navigation */}
             <nav className={`bg-gray-700 text-white shadow-lg md:block ${isMobileMenuOpen ? 'block' : 'hidden'}`}>
-                <ul className="flex flex-col md:flex-row md:justify-center py-2">
+                <ul className="flex flex-col md:flex-row md:justify-center py-2 max-w-6xl w-full mx-auto">
                     {/* Home Tab */}
-                    <li className="px-4 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 my-0.5 md:my-0"
+                    <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-0.5 my-0.5 md:mx-1 md:my-0 text-base md:text-lg text-center"
                         onClick={() => handleTabClick(NAV_CATEGORIES.HOME.tab)}>
                         {NAV_CATEGORIES.HOME.label}
                     </li>
                     {/* Power Rankings Tab */}
-                    <li className="px-4 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 my-0.5 md:my-0"
+                    <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-0.5 my-0.5 md:mx-1 md:my-0 text-base md:text-lg text-center"
                         onClick={() => handleTabClick(NAV_CATEGORIES.POWER_RANKINGS.tab)}>
                         {NAV_CATEGORIES.POWER_RANKINGS.label}
                     </li>
                     {/* League Data Submenu */}
-                    <li className="relative px-4 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 my-0.5 md:my-0"
+                    <li className="relative px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-0.5 my-0.5 md:mx-1 md:my-0 text-base md:text-lg text-center"
                         onClick={() => toggleSubMenu('leagueData')}>
-                        {NAV_CATEGORIES.LEAGUE_DATA.label} <span className="ml-1">▼</span>
+                        {NAV_CATEGORIES.LEAGUE_DATA.label} <span className="ml-1">&#9660;</span>
                         {openSubMenu === 'leagueData' && (
-                            <ul className="absolute md:top-full md:left-0 bg-gray-700 shadow-lg rounded-md mt-2 w-48 z-10">
+                            <ul className="absolute left-0 md:top-full bg-gray-700 shadow-lg rounded-md mt-2 w-44 md:w-48 z-10">
                                 {NAV_CATEGORIES.LEAGUE_DATA.subTabs.map(subTab => (
-                                    <li key={subTab.tab} className="px-4 py-2 hover:bg-gray-600 cursor-pointer rounded-md"
+                                    <li key={subTab.tab} className="px-4 py-2 hover:bg-gray-600 cursor-pointer rounded-md text-sm md:text-base"
                                         onClick={(e) => { e.stopPropagation(); handleSubTabClick(subTab.tab); }}>
                                         {subTab.label}
                                     </li>
@@ -326,22 +326,22 @@ const AppContent = () => {
                         )}
                     </li>
                     {/* Teams Tab (now a direct link to TeamsOverviewPage) */}
-                    <li className="px-4 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 my-0.5 md:my-0"
+                    <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-0.5 my-0.5 md:mx-1 md:my-0 text-base md:text-lg text-center"
                         onClick={() => handleTabClick(NAV_CATEGORIES.TEAMS.tab)}>
                         {NAV_CATEGORIES.TEAMS.label}
                     </li>
                     {/* Season Breakdown Tab */}
-                    <li className="px-4 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 my-0.5 md:my-0"
+                    <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-0.5 my-0.5 md:mx-1 md:my-0 text-base md:text-lg text-center"
                         onClick={() => handleTabClick(NAV_CATEGORIES.SEASON_BREAKDOWN.tab)}>
                         {NAV_CATEGORIES.SEASON_BREAKDOWN.label}
                     </li>
                     {/* New Draft Tab */}
-                    <li className="px-4 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 my-0.5 md:my-0"
+                    <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-0.5 my-0.5 md:mx-1 md:my-0 text-base md:text-lg text-center"
                         onClick={() => handleTabClick(NAV_CATEGORIES.DRAFT.tab)}>
                         {NAV_CATEGORIES.DRAFT.label}
                     </li>
                     {/* Financials Tab */}
-                    <li className="px-4 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 my-0.5 md:my-0"
+                    <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-0.5 my-0.5 md:mx-1 md:my-0 text-base md:text-lg text-center"
                         onClick={() => handleTabClick(NAV_CATEGORIES.FINANCIALS.tab)}>
                         {NAV_CATEGORIES.FINANCIALS.label}
                     </li>
@@ -349,7 +349,7 @@ const AppContent = () => {
             </nav>
 
             {/* Main Content Area */}
-            <main className="flex-grow container mx-auto p-4">
+            <main className="flex-grow w-full max-w-6xl mx-auto p-2 sm:p-4">
                 <div>
                     {renderContent()}
                 </div>

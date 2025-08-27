@@ -321,9 +321,9 @@ const Head2HeadGrid = () => {
         const ownerBRecord = rivalry[ownerB]; // Access records by owner ID
 
         // Initialize overall highlight stats
-        let overallHighestScore = { value: null, year: null, week: null, teamDisplayName: null };
-        let overallBiggestWinMargin = { value: null, year: null, week: null, winningTeamDisplayName: null };
-        let overallSlimmestWinMargin = { value: Infinity, year: null, week: null, winningTeamDisplayName: null };
+    let overallHighestScore = { value: null, year: null, week: null, ownerId: null };
+    let overallBiggestWinMargin = { value: null, year: null, week: null, winningOwnerId: null };
+    let overallSlimmestWinMargin = { value: Infinity, year: null, week: null, winningOwnerId: null };
 
         // Initialize total points for each team in the rivalry
         let teamATotalPointsScored = 0;
@@ -350,7 +350,7 @@ const Head2HeadGrid = () => {
                 mainTeamScore = match.team2Score;
                 oppTeamScore = match.team1Score;
             }
-            const currentMatchNetPoints = mainTeamScore - oppTeamScore;
+        const currentMatchNetPoints = mainTeamScore - oppTeamScore; // Calculate net points
             cumulativeNetPoints += currentMatchNetPoints; // CRITICAL FIX: Accumulate net points
 
             return {
@@ -396,10 +396,10 @@ const Head2HeadGrid = () => {
 
             // Overall Highest Score
             if (scoreAValue > (overallHighestScore.value || 0)) {
-                overallHighestScore = { value: scoreAValue, year: match.year, week: match.week, teamDisplayName: match.team1DisplayName };
+                overallHighestScore = { value: scoreAValue, year: match.year, week: match.week, ownerId: match.team1OwnerId };
             }
             if (scoreBValue > (overallHighestScore.value || 0)) {
-                overallHighestScore = { value: scoreBValue, year: match.year, week: match.week, teamDisplayName: match.team2DisplayName };
+                overallHighestScore = { value: scoreBValue, year: match.year, week: match.week, ownerId: match.team2OwnerId };
             }
 
             // Overall Biggest Win Margin
@@ -410,7 +410,7 @@ const Head2HeadGrid = () => {
                         value: margin,
                         year: match.year,
                         week: match.week,
-                        winningTeamDisplayName: match.winnerDisplayName
+                        winningOwnerId: scoreAValue > scoreBValue ? ownerA : ownerB
                     };
                 }
             }
@@ -423,7 +423,7 @@ const Head2HeadGrid = () => {
                         value: margin,
                         year: match.year,
                         week: match.week,
-                        winningTeamDisplayName: match.winnerDisplayName
+                        winningOwnerId: scoreAValue > scoreBValue ? ownerA : ownerB
                     };
                 }
             }
@@ -764,14 +764,14 @@ const Head2HeadGrid = () => {
                                 ticks={netPointsData.map(d => d.name)}
                             />
                             <YAxis domain={['auto', 'auto']} fontSize={12} />
-                            <Tooltip formatter={(value, name) => [value, name === 'netPoints' ? 'Net Points' : name]} />
+                            <Tooltip formatter={(value, name) => [typeof value === 'number' ? value.toFixed(2) : value, name === 'netPoints' ? 'Net Points' : name]} />
                             <ReferenceLine y={0} stroke="#888" strokeDasharray="3 3" />
-                            {/* Dots for each matchup, colored by net points */}
+                            {/* Dots for each matchup, colored by net points (updated colors) */}
                             <Line
                                 type="linear"
                                 dataKey="netPoints"
-                                stroke="#888"
-                                strokeWidth={0}
+                                stroke="#2563eb" // blue-600
+                                strokeWidth={2}
                                 dot={(props) => {
                                     const point = props.payload;
                                     let color = '#888';
@@ -805,14 +805,15 @@ const Head2HeadGrid = () => {
                                         <g>
                                             {validPoints.slice(1).map((curr, i) => {
                                                 const prev = validPoints[i];
-                                                // Defensive: ensure prev and curr are defined
                                                 if (!prev || !curr) return null;
-                                                // Use NEXT netPoints value for color
-                                                const nextData = netPointsData[i + 1];
+                                                // Use the sign of netPoints for the segment (i+1)
+                                                const segmentData = netPointsData[i+1];
                                                 let color = '#888';
-                                                if (nextData && nextData.netPoints > 0) color = '#22c55e';
-                                                else if (nextData && nextData.netPoints < 0) color = '#ef4444';
-                                                else if (nextData && nextData.netPoints === 0) color = '#eab308';
+                                                if (segmentData) {
+                                                    if (segmentData.netPoints > 0) color = '#22c55e'; // green
+                                                    else if (segmentData.netPoints < 0) color = '#ef4444'; // red
+                                                    else color = '#eab308'; // yellow
+                                                }
                                                 return (
                                                     <line
                                                         key={i}
@@ -845,8 +846,8 @@ const Head2HeadGrid = () => {
                             {overallHighestScore.value !== null ? overallHighestScore.value.toFixed(2) : 'N/A'}
                         </p>
                         <p className="text-xs text-gray-500">
-                            {overallHighestScore.value !== null ?
-                                `${overallHighestScore.teamDisplayName} (${overallHighestScore.year} Week ${overallHighestScore.week})` : ''}
+                            {overallHighestScore.value !== null && overallHighestScore.ownerId ?
+                                `${getTeamName(overallHighestScore.ownerId, null)} (${overallHighestScore.year} Week ${overallHighestScore.week})` : ''}
                         </p>
                     </div>
                     <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
@@ -855,8 +856,8 @@ const Head2HeadGrid = () => {
                             {overallBiggestWinMargin.value !== null ? overallBiggestWinMargin.value.toFixed(2) : 'N/A'}
                         </p>
                         <p className="text-xs text-gray-500">
-                            {overallBiggestWinMargin.value !== null ?
-                                `${overallBiggestWinMargin.winningTeamDisplayName} (${overallBiggestWinMargin.year} Week ${overallBiggestWinMargin.week})` : ''}
+                            {overallBiggestWinMargin.value !== null && overallBiggestWinMargin.winningOwnerId ?
+                                `${getTeamName(overallBiggestWinMargin.winningOwnerId, null)} (${overallBiggestWinMargin.year} Week ${overallBiggestWinMargin.week})` : ''}
                         </p>
                     </div>
                     <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
@@ -865,8 +866,8 @@ const Head2HeadGrid = () => {
                             {overallSlimmestWinMargin.value !== Infinity ? overallSlimmestWinMargin.value.toFixed(2) : 'N/A'}
                         </p>
                         <p className="text-xs text-gray-500">
-                            {overallSlimmestWinMargin.value !== Infinity ?
-                                `${overallSlimmestWinMargin.winningTeamDisplayName} (${overallSlimmestWinMargin.year} Week ${overallSlimmestWinMargin.week})` : ''}
+                            {overallSlimmestWinMargin.value !== Infinity && overallSlimmestWinMargin.winningOwnerId ?
+                                `${getTeamName(overallSlimmestWinMargin.winningOwnerId, null)} (${overallSlimmestWinMargin.year} Week ${overallSlimmestWinMargin.week})` : ''}
                         </p>
                     </div>
                 </div>

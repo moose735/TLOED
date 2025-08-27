@@ -40,7 +40,6 @@ const Dashboard = () => {
             const currentWeek = leagueData.settings?.week;
             const season = leagueData.season;
 
-            // Fetch transactions for the current week
             try {
                 const fetchedTransactions = currentWeek
                     ? await fetchTransactionsForWeek(CURRENT_LEAGUE_ID, currentWeek)

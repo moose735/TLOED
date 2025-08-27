@@ -81,15 +81,25 @@ export const calculatePlayoffFinishes = (bracketData, rosterIdToOwnerIdMap, getT
     otherPlaceMatches.forEach(match => {
         const winnerId = String(match.w);
         const loserId = String(match.l);
-        const rankWinner = match.p;
-        const rankLoser = match.p + 1;
-
-        // Only assign if the rank is not already set OR if the new rank is better (lower number)
-        if (!finalRanks.has(winnerId) || finalRanks.get(winnerId) > rankWinner) {
-            finalRanks.set(winnerId, rankWinner);
-        }
-        if (!finalRanks.has(loserId) || finalRanks.get(loserId) > rankLoser) {
-            finalRanks.set(loserId, rankLoser);
+        // Special case: 11th place game in losers bracket (p=5)
+        if (match.p === 5 && losersBracket.includes(match)) {
+            // Winner gets 11th, loser gets 12th
+            if (!finalRanks.has(winnerId) || finalRanks.get(winnerId) > 11) {
+                finalRanks.set(winnerId, 11);
+            }
+            if (!finalRanks.has(loserId) || finalRanks.get(loserId) > 12) {
+                finalRanks.set(loserId, 12);
+            }
+        } else {
+            const rankWinner = match.p;
+            const rankLoser = match.p + 1;
+            // Only assign if the rank is not already set OR if the new rank is better (lower number)
+            if (!finalRanks.has(winnerId) || finalRanks.get(winnerId) > rankWinner) {
+                finalRanks.set(winnerId, rankWinner);
+            }
+            if (!finalRanks.has(loserId) || finalRanks.get(loserId) > rankLoser) {
+                finalRanks.set(loserId, rankLoser);
+            }
         }
     });
 
