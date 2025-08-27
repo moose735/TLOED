@@ -1,3 +1,47 @@
+/**
+ * Fetches and merges all traded picks for a given league and season.
+ * Combines /traded_picks endpoint and in-season trades from /transactions/<week>.
+ * @param {string} leagueId - The Sleeper league ID.
+ * @param {number} totalWeeks - The number of weeks in the season (regular + playoffs).
+ * @returns {Promise<Array<Object>>} Array of all traded pick objects (with source info).
+ */
+export async function fetchAllTradedPicksMerged(leagueId, totalWeeks = 18) {
+    // Fetch traded picks from the /traded_picks endpoint
+    const tradedPicksEndpoint = await fetchTradedPicks(leagueId) || [];
+
+    // Fetch all transactions for each week and extract traded picks from trades
+    let allTransactionTradedPicks = [];
+    const fetchWeekPromises = [];
+    for (let week = 1; week <= totalWeeks; week++) {
+        fetchWeekPromises.push(
+            fetchTransactionsForWeek(leagueId, week).then(transactions => {
+                if (!transactions) return [];
+                // Only look at trade transactions
+                return transactions
+                    .filter(txn => txn.type === 'trade' && Array.isArray(txn.metadata?.traded_picks))
+                    .flatMap(txn =>
+                        txn.metadata.traded_picks.map(pick => ({
+                            ...pick,
+                            trade_transaction_id: txn.transaction_id,
+                            trade_week: week,
+                            source: 'transaction',
+                        }))
+                    );
+            })
+        );
+    }
+    const allWeeksTradedPicks = await Promise.all(fetchWeekPromises);
+    allTransactionTradedPicks = allWeeksTradedPicks.flat();
+
+    // Mark endpoint picks with a source
+    const endpointTradedPicks = (tradedPicksEndpoint || []).map(pick => ({
+        ...pick,
+        source: 'endpoint',
+    }));
+
+    // Merge and return all picks
+    return [...endpointTradedPicks, ...allTransactionTradedPicks];
+}
 // src/utils/sleeperApi.js
 import { CURRENT_LEAGUE_ID } from '../config'; // Ensure this path is correct
 
