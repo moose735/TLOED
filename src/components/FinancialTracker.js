@@ -85,35 +85,38 @@ const FinancialTracker = () => {
 
        // Get all seasons
        const allSeasons = useMemo(() => Object.keys(historicalData?.rostersBySeason || {}).sort((a, b) => b - a), [historicalData]);
-	// Year selection for per-year database
-	const [selectedYear, setSelectedYear] = useState(() => allSeasons[0] || '');
-	React.useEffect(() => {
-		if (allSeasons.length > 0 && !selectedYear) setSelectedYear(allSeasons[0]);
-	}, [allSeasons]);
-	// Store transactions per year: { [year]: [ ...transactions ] }
-	const [transactionsByYear, setTransactionsByYear] = useState({});
+       // Year selection for per-year database
+       const [selectedYear, setSelectedYear] = useState('');
+       React.useEffect(() => {
+	       if (allSeasons.length > 0 && !selectedYear) setSelectedYear(allSeasons[0]);
+       }, [allSeasons, selectedYear]);
+       // Store transactions per year: { [year]: [ ...transactions ] }
+       const [transactionsByYear, setTransactionsByYear] = useState({});
+       const [firestoreLoading, setFirestoreLoading] = useState(true);
 
-	// Firestore: Load transactions for all years on mount
-	React.useEffect(() => {
-		let isMounted = true;
-		async function fetchAllYears() {
-			if (!selectedYear) return;
-			try {
-				// You can scope this to a leagueId if needed
-				const docRef = doc(db, 'league_finances', 'main');
-				const docSnap = await getDoc(docRef);
-				if (docSnap.exists() && isMounted) {
-					setTransactionsByYear(docSnap.data().transactionsByYear || {});
-				}
-			} catch (e) {
-				// Optionally handle error
-			}
-		}
-		fetchAllYears();
-		return () => { isMounted = false; };
-		// Only run on mount
-		// eslint-disable-next-line
-	}, []);
+       // Firestore: Load transactions for all years on mount
+       React.useEffect(() => {
+	       let isMounted = true;
+	       async function fetchAllYears() {
+		       setFirestoreLoading(true);
+		       try {
+			       const docRef = doc(db, 'league_finances', 'main');
+			       const docSnap = await getDoc(docRef);
+			       if (docSnap.exists() && isMounted) {
+				       const data = docSnap.data();
+				       setTransactionsByYear(data && data.transactionsByYear ? data.transactionsByYear : {});
+			       } else if (isMounted) {
+				       setTransactionsByYear({});
+			       }
+		       } catch (e) {
+			       if (isMounted) setTransactionsByYear({});
+		       } finally {
+			       if (isMounted) setFirestoreLoading(false);
+		       }
+	       }
+	       fetchAllYears();
+	       return () => { isMounted = false; };
+       }, []);
 
 	// Firestore: Save transactionsByYear on change
 	React.useEffect(() => {
@@ -179,7 +182,7 @@ const FinancialTracker = () => {
 		signOut(auth);
 	};
 
-	if (loading) return <div className="p-4 text-blue-600">Loading financial tracker...</div>;
+	if (loading || firestoreLoading) return <div className="p-4 text-blue-600">Loading financial tracker...</div>;
 	if (error) return <div className="p-4 text-red-600">Error loading data: {error.message}</div>;
 	if (!usersData || !historicalData) return <div className="p-4 text-orange-600">No data available.</div>;
 
