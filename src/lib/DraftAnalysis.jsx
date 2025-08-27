@@ -34,8 +34,70 @@ const DraftAnalysis = () => {
     const [orderedTeamColumns, setOrderedTeamColumns] = useState([]);
     const [picksGroupedByRound, setPicksGroupedByRound] = useState({});
 
-    // State for managing active tab - Only 'board' remains
+    // State for managing active tab - 'board' and new 'summary' tab
     const [activeTab, setActiveTab] = useState('board');
+
+    // State for draft summary stats
+    const [draftYearSummary, setDraftYearSummary] = useState(null);
+    // Effect to calculate draft year summary for the summary tab
+    useEffect(() => {
+        if (!selectedSeason || !historicalData || !usersData || !draftSummary || !draftPicks.length) {
+            setDraftYearSummary(null);
+            return;
+        }
+        try {
+            // Use the already-calculated VORP delta and assigned VORP from draftPicks (matches board)
+            // Do NOT mutate or recalculate vorp_delta or draft_pick_assigned_vorp
+            // Always sort by pick_no to match board order
+            const picks = [...draftPicks].sort((a, b) => a.pick_no - b.pick_no);
+
+            // Group by team (sum actual VORP, not delta)
+            const teamVorpTotals = {};
+            picks.forEach(pick => {
+                const team = pick.picked_by_team_name || 'Unknown';
+                if (!teamVorpTotals[team]) teamVorpTotals[team] = 0;
+                teamVorpTotals[team] += pick.player_actual_vorp ?? 0;
+            });
+
+            // Best/worst team by total VORP
+            const teamVorpArr = Object.entries(teamVorpTotals).map(([team, totalVorp]) => ({ team, totalVorp }));
+            const bestTeam = teamVorpArr.reduce((a, b) => (a.totalVorp > b.totalVorp ? a : b), { team: '', totalVorp: -Infinity });
+            const worstTeam = teamVorpArr.reduce((a, b) => (a.totalVorp < b.totalVorp ? a : b), { team: '', totalVorp: Infinity });
+
+            // Best/worst pick by VORP delta (use pick.vorp_delta from board)
+            const bestPick = picks.reduce((a, b) => (a.vorp_delta > b.vorp_delta ? a : b), picks[0]);
+            const worstPick = picks.reduce((a, b) => (a.vorp_delta < b.vorp_delta ? a : b), picks[0]);
+
+            // Round-by-round summaries (use pick.vorp_delta and draft_pick_assigned_vorp)
+            const rounds = draftSummary?.settings?.rounds || 0;
+            const picksByRound = Array.from({ length: rounds }, (_, i) => i + 1).map(roundNum =>
+                picks.filter(pick => pick.round === roundNum)
+            );
+            const roundSummaries = picksByRound.map((roundPicks, idx) => {
+                if (!roundPicks.length) return null;
+                const best = roundPicks.reduce((a, b) => (a.vorp_delta > b.vorp_delta ? a : b), roundPicks[0]);
+                const worst = roundPicks.reduce((a, b) => (a.vorp_delta < b.vorp_delta ? a : b), roundPicks[0]);
+                const avgVorp = roundPicks.reduce((sum, p) => sum + (p.player_actual_vorp ?? 0), 0) / roundPicks.length;
+                return {
+                    round: idx + 1,
+                    best,
+                    worst,
+                    avgVorp: Number(avgVorp.toFixed(2)),
+                };
+            });
+
+            setDraftYearSummary({
+                bestTeam,
+                worstTeam,
+                bestPick,
+                worstPick,
+                roundSummaries,
+            });
+        } catch (err) {
+            console.error('Draft summary calculation error:', err);
+            setDraftYearSummary(null);
+        }
+    }, [selectedSeason, historicalData, usersData, draftSummary, draftPicks]);
 
 
     // Log raw data from context
@@ -104,7 +166,6 @@ const DraftAnalysis = () => {
         console.log('Users Data in draft processing useEffect:', usersData);
         console.log('League Scoring Settings:', leagueScoringSettings);
         console.log('League Roster Settings:', leagueRosterSettings);
-
 
 
         const processDraftBoardData = async () => {
@@ -434,8 +495,14 @@ const DraftAnalysis = () => {
                         >
                             Draft Board
                         </button>
-                        {/* Removed: Yearly Stats Tab Button */}
+                        <button
+                            className={`py-2 px-4 text-lg font-medium ${activeTab === 'summary' ? 'border-b-2 border-green-400 text-green-400' : 'text-gray-400 hover:text-gray-200'}`}
+                            onClick={() => setActiveTab('summary')}
+                        >
+                            Draft Summary
+                        </button>
                     </div>
+
 
                     {/* Conditional Rendering of Tabs */}
                     {activeTab === 'board' && (
@@ -479,21 +546,17 @@ const DraftAnalysis = () => {
                                                         }
                                                     }
 
-                                                    // Try to find a traded pick for this slot
+                                                    // Mark as traded if picked_by !== original owner and there is a traded pick for this round/slot in tradedPicksLookup
                                                     let tradedPickInfo = null;
-                                                    if (originalOwnerUserId) {
-                                                        const originalOwnerRosterForLookup = historicalData.rostersBySeason?.[selectedSeason]?.find(r => String(r.roster_id) === String(originalOwnerUserId));
-                                                        const originalOwnerRosterIdForLookup = originalOwnerRosterForLookup ? String(originalOwnerRosterForLookup.roster_id) : null;
-
-                                                        const originalRosterIdForTradedLookup = historicalData.rostersBySeason?.[selectedSeason]?.find(r => r.owner_id === originalOwnerUserId)?.roster_id;
-
-                                                        if (originalRosterIdForTradedLookup) {
-                                                            tradedPickInfo = tradedPicksLookup.get(round)?.get(String(originalRosterIdForTradedLookup));
+                                                    if (originalOwnerUserId && pick && pick.picked_by !== originalOwnerUserId) {
+                                                        // Find the original owner's roster_id for this season
+                                                        const originalOwnerRoster = historicalData.rostersBySeason?.[selectedSeason]?.find(r => String(r.owner_id) === String(originalOwnerUserId));
+                                                        const originalOwnerRosterId = originalOwnerRoster ? String(originalOwnerRoster.roster_id) : null;
+                                                        if (originalOwnerRosterId) {
+                                                            tradedPickInfo = tradedPicksLookup.get(round)?.get(originalOwnerRosterId);
                                                         }
                                                     }
-
-                                                    // Check if the pick was made by someone other than the original slot owner
-                                                    const isTradedPickForPlayer = pick && originalOwnerUserId && pick.picked_by !== originalOwnerUserId;
+                                                    const isTradedPickForPlayer = pick && originalOwnerUserId && pick.picked_by !== originalOwnerUserId && !!tradedPickInfo;
 
                                                     // Determine first and last name for display
                                                     let displayFirstName = '';
@@ -590,7 +653,87 @@ const DraftAnalysis = () => {
                         </div>
                     )}
 
-                    {/* Removed: Yearly Stats Tab Content */}
+                    {activeTab === 'summary' && (
+                        <div className="mt-6">
+                            <h3 className="text-2xl font-semibold mb-4 text-center text-green-400">Draft Year Summary</h3>
+                            {draftYearSummary ? (
+                                <div className="space-y-8">
+                                    {/* Best/Worst Team by VORP */}
+                                    <div className="flex flex-col md:flex-row md:space-x-8 justify-center items-center">
+                                        <div className="bg-gray-700 rounded-lg p-4 shadow-md mb-4 md:mb-0 w-full md:w-1/2">
+                                            <h4 className="text-xl font-bold text-blue-300 mb-2">Best Team by Total VORP</h4>
+                                            <p className="text-lg">{draftYearSummary.bestTeam.team} <span className="text-green-400 font-semibold">({draftYearSummary.bestTeam.totalVorp.toFixed(2)})</span></p>
+                                        </div>
+                                        <div className="bg-gray-700 rounded-lg p-4 shadow-md w-full md:w-1/2">
+                                            <h4 className="text-xl font-bold text-red-300 mb-2">Worst Team by Total VORP</h4>
+                                            <p className="text-lg">{draftYearSummary.worstTeam.team} <span className="text-red-400 font-semibold">({draftYearSummary.worstTeam.totalVorp.toFixed(2)})</span></p>
+                                        </div>
+                                    </div>
+
+                                    {/* Best/Worst Pick by VORP Delta */}
+                                    <div className="flex flex-col md:flex-row md:space-x-8 justify-center items-center">
+                                        <div className="bg-gray-700 rounded-lg p-4 shadow-md mb-4 md:mb-0 w-full md:w-1/2">
+                                            <h4 className="text-xl font-bold text-blue-300 mb-2">Best Pick (VORP Delta)</h4>
+                                            <p className="text-lg">
+                                                {draftYearSummary.bestPick.player_name} ({draftYearSummary.bestPick.player_position})
+                                                <span className="ml-2 text-green-400 font-semibold">{draftYearSummary.bestPick.vorp_delta.toFixed(2)}</span>
+                                                <br />
+                                                <span className="text-sm text-gray-300">Team: {draftYearSummary.bestPick.picked_by_team_name} | Pick: {draftYearSummary.bestPick.pick_no}</span>
+                                            </p>
+                                        </div>
+                                        <div className="bg-gray-700 rounded-lg p-4 shadow-md w-full md:w-1/2">
+                                            <h4 className="text-xl font-bold text-red-300 mb-2">Worst Pick (VORP Delta)</h4>
+                                            <p className="text-lg">
+                                                {draftYearSummary.worstPick.player_name} ({draftYearSummary.worstPick.player_position})
+                                                <span className="ml-2 text-red-400 font-semibold">{draftYearSummary.worstPick.vorp_delta.toFixed(2)}</span>
+                                                <br />
+                                                <span className="text-sm text-gray-300">Team: {draftYearSummary.worstPick.picked_by_team_name} | Pick: {draftYearSummary.worstPick.pick_no}</span>
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Round-by-Round Summaries */}
+                                    <div className="bg-gray-700 rounded-lg p-4 shadow-md">
+                                        <h4 className="text-xl font-bold text-purple-300 mb-4">Round-by-Round Summary</h4>
+                                        <div className="overflow-x-auto">
+                                            <table className="min-w-full text-sm text-gray-200">
+                                                <thead>
+                                                    <tr className="bg-gray-800">
+                                                        <th className="py-2 px-4">Round</th>
+                                                        <th className="py-2 px-4">Best Pick (VORP Δ)</th>
+                                                        <th className="py-2 px-4">Worst Pick (VORP Δ)</th>
+                                                        <th className="py-2 px-4">Avg VORP</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {draftYearSummary.roundSummaries.map((round, idx) => round && (
+                                                        <tr key={idx} className="border-b border-gray-600">
+                                                            <td className="py-2 px-4 text-center font-bold">{round.round}</td>
+                                                            <td className="py-2 px-4">
+                                                                {round.best.player_name} ({round.best.player_position})
+                                                                <span className="ml-2 text-green-400 font-semibold">{round.best.vorp_delta.toFixed(2)}</span>
+                                                                <br />
+                                                                <span className="text-xs text-gray-400">Team: {round.best.picked_by_team_name} | Pick: {round.best.pick_no}</span>
+                                                            </td>
+                                                            <td className="py-2 px-4">
+                                                                {round.worst.player_name} ({round.worst.player_position})
+                                                                <span className="ml-2 text-red-400 font-semibold">{round.worst.vorp_delta.toFixed(2)}</span>
+                                                                <br />
+                                                                <span className="text-xs text-gray-400">Team: {round.worst.picked_by_team_name} | Pick: {round.worst.pick_no}</span>
+                                                            </td>
+                                                            <td className="py-2 px-4 text-center">{round.avgVorp}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <p className="text-center text-gray-400">No draft summary data available for this season.</p>
+                            )}
+                        </div>
+                    )}
 
                 </div>
             ) : (
