@@ -1,7 +1,6 @@
 // src/lib/Head2HeadGrid.js
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-// Ensure LineChart, Line, Area, Defs, LinearGradient, Stop are imported for a line graph with area fill
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer, Area } from 'recharts'; // Removed Defs, LinearGradient, Stop from recharts import
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Area, ResponsiveContainer, Customized } from 'recharts';
 import { useSleeperData } from '../contexts/SleeperDataContext';
 
 // Helper function to render record (W-L-T)
@@ -747,8 +746,9 @@ const Head2HeadGrid = () => {
                 </div>
 
 
+
                 {/* Net Points Line Graph */}
-                <h4 className="text-xl font-bold text-gray-800 mt-6 mb-2 border-b pb-2">Cumulative Net Points Over Time</h4>
+                <h4 className="text-xl font-bold text-gray-800 mt-6 mb-2 border-b pb-2">Net Points Over Time</h4>
                 <div className="w-full h-64 mb-8">
                     <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={netPointsData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
@@ -764,73 +764,75 @@ const Head2HeadGrid = () => {
                                 ticks={netPointsData.map(d => d.name)}
                             />
                             <YAxis domain={['auto', 'auto']} fontSize={12} />
-                            <Tooltip formatter={(value, name) => {
-                                if (name === 'cumulativeNetPoints') { // Show cumulative in tooltip
-                                    return [`${value.toFixed(2)}`, 'Cumulative Net Points'];
-                                }
-                                return [value, name];
-                            }} />
+                            <Tooltip formatter={(value, name) => [value, name === 'netPoints' ? 'Net Points' : name]} />
                             <ReferenceLine y={0} stroke="#888" strokeDasharray="3 3" />
-
-                            {/* Area for positive cumulative net points */}
-                            <Area
-                                type="monotone"
-                                dataKey="positiveCumulativeNetPoints" // Use positive data key
-                                stroke="#22c55e" // Line color for positive segment
-                                fill="#22c55e" // Fill color for positive area
-                                fillOpacity={0.3}
-                                isAnimationActive={false}
-                                connectNulls={true}
-                                baseLine={0} // Crucial for filling from zero
-                            />
-                            {/* Area for negative cumulative net points */}
-                            <Area
-                                type="monotone"
-                                dataKey="negativeCumulativeNetPoints" // Use negative data key
-                                stroke="#ef4444" // Line color for negative segment
-                                fill="#ef4444" // Fill color for negative area
-                                fillOpacity={0.3}
-                                isAnimationActive={false}
-                                connectNulls={true}
-                                baseLine={0} // Crucial for filling from zero
-                            />
-                            {/* A single line to connect all points, with conditional dot coloring */}
+                            {/* Dots for each matchup, colored by net points */}
                             <Line
-                                type="monotone"
-                                dataKey="cumulativeNetPoints"
-                                stroke="#888" // Default line color, dots will override
-                                strokeWidth={2}
-                                dot={(props) => { // Custom dot for positive/negative values
-                                    const { cx, cy, payload } = props;
-                                    let color = '#888'; // Default for 0 or undefined
-                                    if (payload.cumulativeNetPoints > 0) {
-                                        color = '#22c55e';
-                                    } else if (payload.cumulativeNetPoints < 0) {
-                                        color = '#ef4444';
-                                    } else {
-                                        color = '#eab308'; // Yellow for exactly zero
-                                    }
-                                    return <circle cx={cx} cy={cy} r={4} fill={color} stroke={color} strokeWidth={1} />;
+                                type="linear"
+                                dataKey="netPoints"
+                                stroke="#888"
+                                strokeWidth={0}
+                                dot={(props) => {
+                                    const point = props.payload;
+                                    let color = '#888';
+                                    if (point.netPoints > 0) color = '#22c55e';
+                                    else if (point.netPoints < 0) color = '#ef4444';
+                                    else color = '#eab308';
+                                    return (
+                                        <circle cx={props.cx} cy={props.cy} r={3} fill={color} stroke={color} />
+                                    );
                                 }}
-                                activeDot={(props) => { // Custom active dot for positive/negative values
-                                    const { cx, cy, payload } = props;
-                                    let color = '#888'; // Default for 0 or undefined
-                                    if (payload.cumulativeNetPoints > 0) {
-                                        color = '#22c55e';
-                                    } else if (payload.cumulativeNetPoints < 0) {
-                                        color = '#ef4444';
-                                    } else {
-                                        color = '#eab308'; // Yellow for exactly zero
-                                    }
-                                    return <circle cx={cx} cy={cy} r={6} fill={color} stroke={color} strokeWidth={2} />;
+                                activeDot={(props) => {
+                                    const point = props.payload;
+                                    let color = '#888';
+                                    if (point.netPoints > 0) color = '#22c55e';
+                                    else if (point.netPoints < 0) color = '#ef4444';
+                                    else color = '#eab308';
+                                    return (
+                                        <circle cx={props.cx} cy={props.cy} r={6} fill={color} stroke={color} />
+                                    );
                                 }}
                                 isAnimationActive={false}
                                 connectNulls={true}
+                            />
+                            {/* Custom SVG overlay for colored segments */}
+                            <Customized
+                                component={({ points }) => {
+                                    if (!points || points.length < 2) return null;
+                                    // Defensive: filter out points with undefined coordinates
+                                    const validPoints = points.filter(p => typeof p.x === 'number' && typeof p.y === 'number');
+                                    return (
+                                        <g>
+                                            {validPoints.slice(1).map((curr, i) => {
+                                                const prev = validPoints[i];
+                                                // Defensive: ensure prev and curr are defined
+                                                if (!prev || !curr) return null;
+                                                // Use NEXT netPoints value for color
+                                                const nextData = netPointsData[i + 1];
+                                                let color = '#888';
+                                                if (nextData && nextData.netPoints > 0) color = '#22c55e';
+                                                else if (nextData && nextData.netPoints < 0) color = '#ef4444';
+                                                else if (nextData && nextData.netPoints === 0) color = '#eab308';
+                                                return (
+                                                    <line
+                                                        key={i}
+                                                        x1={prev.x}
+                                                        y1={prev.y}
+                                                        x2={curr.x}
+                                                        y2={curr.y}
+                                                        stroke={color}
+                                                        strokeWidth={3}
+                                                    />
+                                                );
+                                            })}
+                                        </g>
+                                    );
+                                }}
                             />
                         </LineChart>
                     </ResponsiveContainer>
                     <div className="text-xs text-center mt-2 text-gray-600">
-                        Green area: {teamADisplayName} leading in cumulative net points. Red area: {teamBDisplayName} leading in cumulative net points.
+                        Green area: {teamADisplayName} outscored {teamBDisplayName}. Red area: {teamBDisplayName} outscored {teamADisplayName}.
                     </div>
                 </div>
 
