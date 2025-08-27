@@ -91,8 +91,9 @@ const FinancialTracker = () => {
 	       if (allSeasons.length > 0 && !selectedYear) setSelectedYear(allSeasons[0]);
        }, [allSeasons, selectedYear]);
        // Store transactions per year: { [year]: [ ...transactions ] }
-       const [transactionsByYear, setTransactionsByYear] = useState({});
-       const [firestoreLoading, setFirestoreLoading] = useState(true);
+	const [transactionsByYear, setTransactionsByYear] = useState({});
+	const [firestoreLoading, setFirestoreLoading] = useState(true);
+	const initialLoadRef = React.useRef(true);
 
        // Firestore: Load transactions for all years on mount
        React.useEffect(() => {
@@ -112,27 +113,28 @@ const FinancialTracker = () => {
 			       if (isMounted) setTransactionsByYear({});
 		       } finally {
 			       if (isMounted) setFirestoreLoading(false);
+			       initialLoadRef.current = false;
 		       }
 	       }
 	       fetchAllYears();
 	       return () => { isMounted = false; };
        }, []);
 
-	// Firestore: Save transactionsByYear on change
-	React.useEffect(() => {
-		async function saveAllYears() {
-			try {
-				const docRef = doc(db, 'league_finances', 'main');
-				await setDoc(docRef, { transactionsByYear }, { merge: true });
-			} catch (e) {
-				// Optionally handle error
-			}
-		}
-		// Only save if there is at least one year and at least one transaction
-		if (Object.keys(transactionsByYear).length > 0 && Object.values(transactionsByYear).some(arr => arr.length > 0)) {
-			saveAllYears();
-		}
-	}, [transactionsByYear]);
+       // Firestore: Save transactionsByYear on change (not on initial load)
+       React.useEffect(() => {
+	       async function saveAllYears() {
+		       try {
+			       const docRef = doc(db, 'league_finances', 'main');
+			       await setDoc(docRef, { transactionsByYear }, { merge: true });
+		       } catch (e) {
+			       // Optionally handle error
+		       }
+	       }
+	       // Only save if not initial load, and there is at least one year and at least one transaction
+	       if (!initialLoadRef.current && Object.keys(transactionsByYear).length > 0 && Object.values(transactionsByYear).some(arr => arr.length > 0)) {
+		       saveAllYears();
+	       }
+       }, [transactionsByYear]);
 
 	// Weekly top 2 scorers for each week/season
 	const weeklyTopScorers = useMemo(() => {
