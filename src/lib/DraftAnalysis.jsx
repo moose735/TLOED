@@ -168,6 +168,7 @@ const DraftAnalysis = () => {
         console.log('League Roster Settings:', leagueRosterSettings);
 
 
+
         const processDraftBoardData = async () => {
             if (!selectedSeason || !historicalData || !historicalData.draftsBySeason || !historicalData.draftPicksBySeason || !usersData || !leagueScoringSettings || !leagueRosterSettings) {
                 console.log('Missing data dependencies for draft processing (selectedSeason, historicalData.draftsBySeason, historicalData.draftPicksBySeason, usersData, leagueScoringSettings, or leagueRosterSettings are not fully loaded or available).');
@@ -530,6 +531,7 @@ const DraftAnalysis = () => {
                                                 <div className="bg-gray-600 text-gray-200 font-bold py-2 px-2 text-center flex items-center justify-center rounded-bl-md">
                                                     {round}
                                                 </div>
+
                                                 {orderedTeamColumns.map((_, colIndex) => {
                                                     const pick = picksGroupedByRound[round]?.[colIndex];
                                                     const totalTeamsInDraft = draftSummary.settings?.teams || 12;
