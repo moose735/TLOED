@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useSleeperData } from '../contexts/SleeperDataContext';
 import { getAuth, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { initializeApp } from 'firebase/app';
+import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 
 const firebaseConfig = {
 	apiKey: 'AIzaSyDcuPXgRPIdX-NYblBqQkdXqrGiD6yobcA',
@@ -20,6 +21,7 @@ if (!window._firebaseInitialized) {
 	initializeApp(firebaseConfig);
 	window._firebaseInitialized = true;
 }
+const db = getFirestore();
 
 const DUE_TYPES = [
 	{ key: 'entry', label: 'Entry Fee', help: 'Annual league buy-in' },
@@ -90,6 +92,44 @@ const FinancialTracker = () => {
 	}, [allSeasons]);
 	// Store transactions per year: { [year]: [ ...transactions ] }
 	const [transactionsByYear, setTransactionsByYear] = useState({});
+
+	// Firestore: Load transactions for all years on mount
+	React.useEffect(() => {
+		let isMounted = true;
+		async function fetchAllYears() {
+			if (!selectedYear) return;
+			try {
+				// You can scope this to a leagueId if needed
+				const docRef = doc(db, 'league_finances', 'main');
+				const docSnap = await getDoc(docRef);
+				if (docSnap.exists() && isMounted) {
+					setTransactionsByYear(docSnap.data().transactionsByYear || {});
+				}
+			} catch (e) {
+				// Optionally handle error
+			}
+		}
+		fetchAllYears();
+		return () => { isMounted = false; };
+		// Only run on mount
+		// eslint-disable-next-line
+	}, []);
+
+	// Firestore: Save transactionsByYear on change
+	React.useEffect(() => {
+		async function saveAllYears() {
+			try {
+				const docRef = doc(db, 'league_finances', 'main');
+				await setDoc(docRef, { transactionsByYear }, { merge: true });
+			} catch (e) {
+				// Optionally handle error
+			}
+		}
+		// Only save if there is at least one year and at least one transaction
+		if (Object.keys(transactionsByYear).length > 0 && Object.values(transactionsByYear).some(arr => arr.length > 0)) {
+			saveAllYears();
+		}
+	}, [transactionsByYear]);
 
 	// Weekly top 2 scorers for each week/season
 	const weeklyTopScorers = useMemo(() => {
