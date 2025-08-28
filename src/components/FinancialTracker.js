@@ -36,12 +36,12 @@ const FinancialTracker = () => {
 		category: '',
 		description: '',
 		week: '',
-		team: 'ALL',
-		team1: '',
-		team2: ''
+		team: [], // Changed to an array for multi-select
+		quantity: 1
 	});
 	const [transactionMessage, setTransactionMessage] = useState({ text: '', type: '' });
 	const [editingTransaction, setEditingTransaction] = useState(null); // State for editing
+	const [showTeamDropdown, setShowTeamDropdown] = useState(false); // State for team dropdown visibility
 
 	// Fee and payout description options
 	const FEE_DESCRIPTIONS = [
@@ -168,6 +168,47 @@ const FinancialTracker = () => {
 		return result;
 	})();
 
+    // Calculate total points leaders for each season
+    const totalPointsLeaders = useMemo(() => {
+        const result = {};
+        if (!historicalData || !historicalData.matchupsBySeason || !historicalData.rostersBySeason) {
+            return result;
+        }
+
+        Object.keys(historicalData.matchupsBySeason).forEach(year => {
+            const teamScores = {};
+            const rosters = historicalData.rostersBySeason[year];
+            if (!rosters) return;
+
+            rosters.forEach(roster => {
+                if (roster.owner_id) {
+                    teamScores[roster.owner_id] = 0;
+                }
+            });
+
+            const matchups = historicalData.matchupsBySeason[year];
+            matchups.forEach(matchup => {
+                const roster1 = rosters.find(r => String(r.roster_id) === String(matchup.team1_roster_id));
+                if (roster1 && roster1.owner_id && !isNaN(matchup.team1_score)) {
+                    teamScores[roster1.owner_id] += matchup.team1_score;
+                }
+
+                const roster2 = rosters.find(r => String(r.roster_id) === String(matchup.team2_roster_id));
+                if (roster2 && roster2.owner_id && !isNaN(matchup.team2_score)) {
+                    teamScores[roster2.owner_id] += matchup.team2_score;
+                }
+            });
+
+            const sortedScores = Object.entries(teamScores)
+                .map(([userId, score]) => ({ userId, score }))
+                .sort((a, b) => b.score - a.score);
+
+            result[year] = sortedScores;
+        });
+
+        return result;
+    }, [historicalData]);
+
     const yearData = financesByYear[selectedYear] || { transactions: [], potentialFees: [], potentialPayouts: [] };
     const transactions = yearData.transactions;
     const potentialFees = yearData.potentialFees;
@@ -244,7 +285,8 @@ const FinancialTracker = () => {
 	const filteredAndSortedTransactions = (() => {
 		let filtered = transactions.filter(t => {
 			const typeMatch = filters.type === 'ALL' || t.type === filters.type;
-			const teamMatch = filters.team === 'ALL' || t.team === filters.team;
+			// Filter by team needs to handle the multi-team trade fee case
+			const teamMatch = filters.team === 'ALL' || (t.team && t.team.includes(filters.team)) || t.team === filters.team;
 			return typeMatch && teamMatch;
 		});
 
@@ -262,8 +304,10 @@ const FinancialTracker = () => {
 					bValue = new Date(bValue);
 				}
 				if (sortConfig.key === 'team') {
-					aValue = allMembers.find(m => m.userId === a.team)?.displayName || a.team;
-					bValue = allMembers.find(m => m.userId === b.team)?.displayName || b.team;
+					// Handle single team or multi-team string representation for sorting
+					const getTeamDisplayName = (teamId) => allMembers.find(m => m.userId === teamId)?.displayName || teamId;
+					aValue = Array.isArray(a.team) ? a.team.map(getTeamDisplayName).join(', ') : getTeamDisplayName(a.team);
+					bValue = Array.isArray(b.team) ? b.team.map(getTeamDisplayName).join(', ') : getTeamDisplayName(b.team);
 				}
 				
 				if (aValue < bValue) {
@@ -296,16 +340,22 @@ const FinancialTracker = () => {
 		// Define columns for the CSV
 		const columns = ["Date", "Team", "Type", "Amount", "Category", "Description", "Week"];
 		// Map transactions to a CSV-friendly format
-		const csvData = filteredAndSortedTransactions.map(t => [
-			// FIX: Ensure date is a valid object before formatting
-			t.date ? (isNaN(new Date(t.date)) ? 'Invalid Date' : new Date(t.date).toLocaleString()) : '',
-			allMembers.find(m => m.userId === t.team)?.displayName || t.team,
-			t.type,
-			Number(t.amount || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}),
-			t.category,
-			t.description,
-			t.week,
-		]);
+		const csvData = filteredAndSortedTransactions.map(t => {
+			// Get team names, handling single or multiple teams
+			const teamNames = Array.isArray(t.team) ? 
+				t.team.map(id => allMembers.find(m => m.userId === id)?.displayName || id).join(', ') :
+				allMembers.find(m => m.userId === t.team)?.displayName || t.team;
+			return [
+				// FIX: Ensure date is a valid object before formatting
+				t.date ? (isNaN(new Date(t.date)) ? 'Invalid Date' : new Date(t.date).toLocaleString()) : '',
+				teamNames,
+				t.type,
+				Number(t.amount || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}),
+				t.category,
+				t.description,
+				t.week,
+			];
+		});
 
 		// Create the CSV content string
 		const csvContent = [
@@ -329,6 +379,10 @@ const FinancialTracker = () => {
 	const handleAddOrUpdateTransaction = (e) => {
 		e.preventDefault();
 		if (!isAdmin) return;
+		if (transaction.team.length === 0) {
+			setTransactionMessage({ text: 'Please select at least one team.', type: 'error' });
+			return;
+		}
 
         setFinancesByYear(prev => {
             const yearData = { ...(prev[selectedYear] || { transactions: [], potentialFees: [], potentialPayouts: [] }) };
@@ -343,25 +397,20 @@ const FinancialTracker = () => {
 				setEditingTransaction(null); // Exit edit mode
 			} else {
 				// If adding a new transaction
-				if (transaction.category === 'Trade Fee') {
-					// Add two separate transactions for a trade
-					if (transaction.team1 && transaction.team2) {
-						newTxs = [
-							...newTxs,
-							{ ...transaction, team: transaction.team1, date: new Date().toISOString() },
-							{ ...transaction, team: transaction.team2, date: new Date().toISOString() }
-						];
+				const baseTransaction = { ...transaction, date: new Date().toISOString() };
+				
+				// Iterate through each selected team
+				transaction.team.forEach(teamId => {
+					// Handle waiver fees with quantity
+					if (baseTransaction.category === 'Waiver/FA Fee' && baseTransaction.quantity > 1) {
+						for (let i = 0; i < baseTransaction.quantity; i++) {
+							newTxs.push({ ...baseTransaction, quantity: 1, description: `Waiver/FA Fee #${i + 1}`, team: teamId });
+						}
+					} else {
+						// Single transaction for this team
+						newTxs.push({ ...baseTransaction, team: teamId });
 					}
-				} else if (transaction.team === 'ALL') {
-					// Add one transaction per team
-					newTxs = [
-						...newTxs,
-						...allMembers.map((m) => ({ ...transaction, team: m.userId, date: new Date().toISOString() }))
-					];
-				} else {
-					// Add a single transaction
-					newTxs = [...newTxs, { ...transaction, date: new Date().toISOString() }];
-				}
+				});
 			}
 
             yearData.transactions = newTxs;
@@ -369,7 +418,7 @@ const FinancialTracker = () => {
 		});
 
 		// Reset form and clear messages
-		setTransaction({ type: 'Fee', amount: '', category: '', description: '', week: '', team: 'ALL', team1: '', team2: '' });
+		setTransaction({ type: 'Fee', amount: '', category: '', description: '', week: '', team: [], quantity: 1 });
 		setTransactionMessage({ text: 'Transaction saved successfully!', type: 'success' });
 	};
 
@@ -379,8 +428,9 @@ const FinancialTracker = () => {
 		setEditingTransaction(transactionToEdit);
 		setTransaction({
 			...transactionToEdit,
-			team1: transactionToEdit.team, // Pre-fill team1 for editing single team transactions
-			team2: '',
+			team: Array.isArray(transactionToEdit.team) ? transactionToEdit.team : [transactionToEdit.team],
+			// Reset quantity to 1 for non-waiver transactions
+			quantity: transactionToEdit.category === 'Waiver/FA Fee' ? transactionToEdit.quantity : 1,
 		});
 		setTransactionMessage({ text: 'Editing transaction...', type: 'info' });
 	};
@@ -565,9 +615,7 @@ const FinancialTracker = () => {
 										type: newType,
 										description: '',
 										category: '',
-										team: newType === 'Fee' ? 'ALL' : '',
-										team1: '',
-										team2: ''
+										team: [], // Reset team selection on type change
 									}));
 								}}
 								disabled={editingTransaction}
@@ -597,30 +645,17 @@ const FinancialTracker = () => {
 									const cat = e.target.value;
 									let newTeam = transaction.team;
 									let newDesc = transaction.description;
-									let newTeam1 = transaction.team1;
-									let newTeam2 = transaction.team2;
-
+									
 									// Reset team selections based on category type
 									if (cat === 'Trade Fee') {
-										newTeam = '';
-										newTeam1 = '';
-										newTeam2 = '';
-									} else {
-										newTeam1 = '';
-										newTeam2 = '';
-										if (transaction.type === 'Fee') {
-											newTeam = 'ALL';
-										} else {
-											newTeam = '';
-										}
+										newTeam = [];
 									}
 
-									// Auto-select team and description for weekly payouts
-									if (transaction.type === 'Payout' && (cat === 'Weekly 1st' || cat === 'Weekly 2nd') && transaction.week && weeklyTopScorers[selectedYear]?.[transaction.week]) {
+									if (transaction.type === 'Payout' && cat.startsWith('Weekly') && transaction.week) {
 										const idx = cat === 'Weekly 1st' ? 0 : 1;
-										const topUserId = weeklyTopScorers[selectedYear][transaction.week][idx];
+										const topUserId = weeklyTopScorers[selectedYear]?.[transaction.week]?.[idx];
 										if (topUserId) {
-											newTeam = topUserId;
+											newTeam = [topUserId];
 											const matchups = historicalData.matchupsBySeason?.[selectedYear]?.filter(m => String(m.week) === String(transaction.week));
 											let points = null;
 											if (matchups) {
@@ -640,7 +675,23 @@ const FinancialTracker = () => {
 											}
 										}
 									}
-									setTransaction(t => ({ ...t, category: cat, team: newTeam, description: newDesc, team1: newTeam1, team2: newTeam2 }));
+                                    
+                                    // Auto-select team and description for total points payouts
+                                    if (transaction.type === 'Payout' && cat.startsWith('Total Points')) {
+                                        const leaders = totalPointsLeaders[selectedYear];
+                                        let leaderIndex = -1;
+                                        if (cat === 'Total Points 1st') leaderIndex = 0;
+                                        if (cat === 'Total Points 2nd') leaderIndex = 1;
+                                        if (cat === 'Total Points 3rd') leaderIndex = 2;
+
+                                        if (leaders && leaders[leaderIndex]) {
+                                            const leader = leaders[leaderIndex];
+                                            newTeam = [leader.userId];
+                                            newDesc = `${cat} (${leader.score.toFixed(2)} pts)`;
+                                        }
+                                    }
+
+									setTransaction(t => ({ ...t, category: cat, team: newTeam, description: newDesc }));
 								}}
 								required
 							>
@@ -650,69 +701,87 @@ const FinancialTracker = () => {
 								))}
 							</select>
 						</div>
-						{/* Conditional Team Boxes */}
-						{transaction.category === 'Trade Fee' ? (
-							<>
-								<div>
-									<label className="block text-xs font-semibold mb-1 text-gray-700">Team 1</label>
-									<select
-										className="w-full border rounded-lg px-2 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-										value={transaction.team1}
-										onChange={e => setTransaction(t => ({ ...t, team1: e.target.value }))}
-										required
-									>
-										<option value="">Select Team 1</option>
-										{allMembers.map(m => (
-											<option key={m.userId} value={m.userId}>{m.displayName}</option>
-										))}
-									</select>
-								</div>
-								<div>
-									<label className="block text-xs font-semibold mb-1 text-gray-700">Team 2</label>
-									<select
-										className="w-full border rounded-lg px-2 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-										value={transaction.team2}
-										onChange={e => setTransaction(t => ({ ...t, team2: e.target.value }))}
-										required
-									>
-										<option value="">Select Team 2</option>
-										{allMembers.map(m => (
-											<option key={m.userId} value={m.userId}>{m.displayName}</option>
-										))}
-									</select>
-								</div>
-							</>
-						) : (
-							<div>
-								<label className="block text-xs font-semibold mb-1 text-gray-700">Team</label>
-								<select
-									className={`w-full border rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${(transaction.type === 'Payout' && (transaction.category === 'Weekly 1st' || transaction.category === 'Weekly 2nd') && transaction.week) ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white'}`}
-									value={transaction.team}
-									onChange={e => setTransaction(t => ({ ...t, team: e.target.value }))}
-									disabled={(transaction.type === 'Payout' && (transaction.category === 'Weekly 1st' || transaction.category === 'Weekly 2nd') && transaction.week) || editingTransaction}
-									required
-								>
-									<option value="ALL">All Teams</option>
+						{/* Team selection dropdown (now used for all transaction types) */}
+						<div className="relative">
+							<label className="block text-xs font-semibold mb-1 text-gray-700">Team(s)</label>
+							<button
+								type="button"
+								onClick={() => setShowTeamDropdown(!showTeamDropdown)}
+								className="w-full border rounded-lg px-2 py-2 text-left bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+							>
+								{transaction.team.length === allMembers.length ? 'All Teams' :
+								transaction.team.length > 0 ? transaction.team.map(id => allMembers.find(m => m.userId === id)?.displayName).join(', ') : 'Select Team(s)'}
+							</button>
+							{showTeamDropdown && (
+								<div className="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+									<label key="all" className="flex items-center gap-2 p-2 hover:bg-gray-100 cursor-pointer">
+										<input
+											type="checkbox"
+											className="form-checkbox"
+											checked={transaction.team.length === allMembers.length}
+											onChange={e => {
+												if (e.target.checked) {
+													setTransaction(t => ({ ...t, team: allMembers.map(m => m.userId) }));
+												} else {
+													setTransaction(t => ({ ...t, team: [] }));
+												}
+											}}
+										/>
+										<span>All Teams</span>
+									</label>
 									{allMembers.map(m => (
-										<option key={m.userId} value={m.userId}>{m.displayName}</option>
+										<label key={m.userId} className="flex items-center gap-2 p-2 hover:bg-gray-100 cursor-pointer">
+											<input
+												type="checkbox"
+												className="form-checkbox"
+												checked={transaction.team.includes(m.userId)}
+												onChange={e => {
+													const isChecked = e.target.checked;
+													setTransaction(t => {
+														const currentTeams = t.team;
+														if (isChecked) {
+															return { ...t, team: [...currentTeams, m.userId] };
+														} else {
+															return { ...t, team: currentTeams.filter(id => id !== m.userId) };
+														}
+													});
+												}}
+											/>
+											<span>{m.displayName}</span>
+										</label>
 									))}
-								</select>
+								</div>
+							)}
+						</div>
+						{/* New Quantity Input Field */}
+						{transaction.category === 'Waiver/FA Fee' && (
+							<div>
+								<label className="block text-xs font-semibold mb-1 text-gray-700">Quantity</label>
+								<input
+									type="number"
+									min="1"
+									step="1"
+									className="w-full border rounded-lg px-2 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+									value={transaction.quantity}
+									onChange={e => setTransaction(t => ({ ...t, quantity: parseInt(e.target.value) || 1 }))}
+									required
+								/>
 							</div>
 						)}
 						<div>
 							<label className="block text-xs font-semibold mb-1 text-gray-700">Description</label>
 							<input
 								type="text"
-								className={`w-full border rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${(transaction.type === 'Payout' && (transaction.category === 'Weekly 1st' || transaction.category === 'Weekly 2nd') && transaction.week) ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white'}`}
+								className={`w-full border rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${(transaction.type === 'Payout' && ((transaction.category.startsWith('Weekly') && transaction.week) || transaction.category.startsWith('Total Points'))) ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white'}`}
 								value={transaction.description}
 								onChange={e => {
-									if (!(transaction.type === 'Payout' && (transaction.category === 'Weekly 1st' || transaction.category === 'Weekly 2nd') && transaction.week)) {
+									if (!(transaction.type === 'Payout' && ((transaction.category.startsWith('Weekly') && transaction.week) || transaction.category.startsWith('Total Points')))) {
 										setTransaction(t => ({ ...t, description: e.target.value }));
 									}
 								}}
 								placeholder="e.g. Paid for entry, Weekly winner, etc."
 								required
-								disabled={(transaction.type === 'Payout' && (transaction.category === 'Weekly 1st' || transaction.category === 'Weekly 2nd') && transaction.week)}
+								disabled={(transaction.type === 'Payout' && ((transaction.category.startsWith('Weekly') && transaction.week) || transaction.category.startsWith('Total Points')))}
 							/>
 						</div>
 						<div>
@@ -727,13 +796,13 @@ const FinancialTracker = () => {
 									let newTeam = transaction.team;
 									let newDesc = transaction.description;
 									if (!newWeek) {
-										newTeam = '';
+										newTeam = [];
 										newDesc = '';
 									} else if (transaction.type === 'Payout' && (transaction.category === 'Weekly 1st' || transaction.category === 'Weekly 2nd') && weeklyTopScorers[selectedYear]?.[newWeek]) {
 										const idx = transaction.category === 'Weekly 1st' ? 0 : 1;
 										const topUserId = weeklyTopScorers[selectedYear][newWeek][idx];
 										if (topUserId) {
-											newTeam = topUserId;
+											newTeam = [topUserId];
 											const matchups = historicalData.matchupsBySeason?.[selectedYear]?.filter(m => String(m.week) === String(newWeek));
 											let points = null;
 											if (matchups) {
@@ -765,7 +834,7 @@ const FinancialTracker = () => {
 									className="bg-gray-400 text-white px-6 py-2 rounded-lg font-semibold hover:bg-gray-500 transition duration-200"
 									onClick={() => {
 										setEditingTransaction(null);
-										setTransaction({ type: 'Fee', amount: '', category: '', description: '', week: '', team: 'ALL', team1: '', team2: '' });
+										setTransaction({ type: 'Fee', amount: '', category: '', description: '', week: '', team: [], quantity: 1 });
 										setTransactionMessage({ text: 'Cancelled edit.', type: 'info' });
 									}}
 								>
@@ -972,7 +1041,10 @@ const FinancialTracker = () => {
 						</thead>
 						<tbody>
 							{paginatedTransactions.map((t) => {
-								const teamName = allMembers.find(m => m.userId === t.team)?.displayName || t.team;
+								// Handle team display for single or multiple teams
+								const teamName = Array.isArray(t.team) ?
+									t.team.map(id => allMembers.find(m => m.userId === id)?.displayName || id).join(', ') :
+									allMembers.find(m => m.userId === t.team)?.displayName || t.team;
 								// FIX: Add a defensive check for the date to prevent "Invalid Date" errors
 								const displayDate = t.date ? (isNaN(new Date(t.date)) ? 'Invalid Date' : new Date(t.date).toLocaleString()) : '';
 								return (
