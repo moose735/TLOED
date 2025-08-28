@@ -29,7 +29,7 @@ const FinancialTracker = () => {
 	const [authUser, setAuthUser] = useState(null);
 	const [login, setLogin] = useState({ email: '', password: '' });
 	const [authError, setAuthError] = useState('');
-	const [showTransactionForm, setShowTransactionForm] = useState(false);
+	const [showCommishLogin, setShowCommishLogin] = useState(false); // New state for collapsible login
 	const [transaction, setTransaction] = useState({
 		type: 'Fee',
 		amount: '',
@@ -97,7 +97,7 @@ const FinancialTracker = () => {
 		if (allSeasons.length > 0 && !selectedYear) setSelectedYear(allSeasons[0]);
 	}, [allSeasons, selectedYear]);
 
-	// Store transactions per year: { [year]: [ ...transactions ] }
+	// Store finances per year: { [year]: [ ...transactions ] }
     const [financesByYear, setFinancesByYear] = useState({});
 	const [firestoreLoading, setFirestoreLoading] = useState(true);
 	const initialLoadRef = useRef(true);
@@ -371,7 +371,6 @@ const FinancialTracker = () => {
 		// Reset form and clear messages
 		setTransaction({ type: 'Fee', amount: '', category: '', description: '', week: '', team: 'ALL', team1: '', team2: '' });
 		setTransactionMessage({ text: 'Transaction saved successfully!', type: 'success' });
-		setShowTransactionForm(false);
 	};
 
 	// Handle editing a transaction
@@ -383,7 +382,6 @@ const FinancialTracker = () => {
 			team1: transactionToEdit.team, // Pre-fill team1 for editing single team transactions
 			team2: '',
 		});
-		setShowTransactionForm(true);
 		setTransactionMessage({ text: 'Editing transaction...', type: 'info' });
 	};
 
@@ -475,7 +473,7 @@ const FinancialTracker = () => {
 				</label>
 			</div>
 			{/* Summary Bubbles */}
-			<div className="flex flex-wrap justify-center gap-4 mb-8 relative">
+			<div className="flex flex-wrap justify-center gap-4 mb-8">
 				<div className="flex flex-col items-center bg-blue-50 rounded-lg px-6 py-3 shadow-md text-blue-800 min-w-[120px]">
 					<span className="text-xs font-semibold uppercase tracking-wide">League Bank</span>
 					<span className="text-2xl font-bold">${leagueBank.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
@@ -495,51 +493,62 @@ const FinancialTracker = () => {
 					<span className="text-xs font-semibold uppercase tracking-wide">Transaction Bank</span>
 					<span className="text-2xl font-bold">${transactionBank.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
 				</div>
-				<button
-					className={`absolute top-4 right-4 rounded-full w-10 h-10 flex items-center justify-center text-2xl font-bold transition-transform duration-200 transform ${isAdmin ? 'bg-blue-600 text-white hover:scale-110' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
-					onClick={() => isAdmin && setShowTransactionForm(v => !v)}
-					disabled={!isAdmin}
-					title="Add New Transaction"
-				>
-					+
-				</button>
 			</div>
-			<div className="flex flex-col md:flex-row md:justify-between md:items-center mb-6 gap-4">
-				<div>
-					{authUser ? (
-						<div className="flex items-center gap-3">
-							<span className="text-green-700 font-semibold">Logged in as {authUser.email}</span>
-							{isAdmin && <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-bold">Commissioner</span>}
-							<button onClick={handleLogout} className="ml-2 px-3 py-1 bg-gray-200 rounded-lg hover:bg-gray-300 text-sm">Logout</button>
-						</div>
-					) : (
-						<form onSubmit={handleLogin} className="flex flex-col sm:flex-row gap-2 items-center">
-							<input
-								type="email"
-								required
-								placeholder="Commish Email"
-								className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-								value={login.email}
-								onChange={e => setLogin(l => ({ ...l, email: e.target.value }))}
-							/>
-							<input
-								type="password"
-								required
-								placeholder="Password"
-								className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-								value={login.password}
-								onChange={e => setLogin(l => ({ ...l, password: e.target.value }))}
-							/>
-							<button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-semibold transition duration-200">Login</button>
-							{authError && <span className="text-red-600 text-xs ml-2">{authError}</span>}
-						</form>
-					)}
-				</div>
+			{/* Login/Logout Section with collapsible commish login */}
+			<div className="flex flex-col md:flex-row md:justify-center md:items-center mb-6 gap-4">
+				{authUser ? (
+					<div className="flex items-center gap-3">
+						<span className="text-green-700 font-semibold">Logged in as {authUser.email}</span>
+						{isAdmin && <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-bold">Commissioner</span>}
+						<button onClick={handleLogout} className="ml-2 px-3 py-1 bg-gray-200 rounded-lg hover:bg-gray-300 text-sm">Logout</button>
+					</div>
+				) : (
+					<div className="w-full max-w-sm mx-auto">
+						<button
+							onClick={() => setShowCommishLogin(!showCommishLogin)}
+							className="w-full text-center py-2 px-4 rounded-lg bg-blue-500 text-white font-semibold mb-4 flex items-center justify-center gap-2 hover:bg-blue-600 transition duration-200"
+						>
+							Commissioner Login
+							<span className={`transform transition-transform duration-200 ${showCommishLogin ? 'rotate-180' : 'rotate-0'}`}>
+								&#9660; {/* Down arrow */}
+							</span>
+						</button>
+						{showCommishLogin && (
+							<div className="bg-white p-6 rounded-2xl shadow-2xl w-full mx-auto animate-fadeIn">
+								<div className="text-center mb-6">
+									<h1 className="text-xl font-bold text-slate-800 mb-2">Commish Login</h1>
+									<p className="text-slate-500 text-sm">Sign in to manage league finances.</p>
+								</div>
+								<form onSubmit={handleLogin} className="flex flex-col gap-4 items-center">
+									<input
+										type="email"
+										required
+										placeholder="Commish Email"
+										className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200"
+										value={login.email}
+										onChange={e => setLogin(l => ({ ...l, email: e.target.value }))}
+									/>
+									<input
+										type="password"
+										required
+										placeholder="Password"
+										className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200"
+										value={login.password}
+										onChange={e => setLogin(l => ({ ...l, password: e.target.value }))}
+									/>
+									<button type="submit" className="w-full bg-blue-600 text-white font-semibold py-3 rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-200">
+										Log In
+									</button>
+									{authError && <span className="text-red-600 text-xs mt-2">{authError}</span>}
+								</form>
+							</div>
+						)}
+					</div>
+				)}
 			</div>
-
 			{/* Commish-only transaction entry section */}
-			<div className="mb-8 bg-white rounded-lg shadow-md p-6 border border-blue-200">
-				{showTransactionForm && (
+			{isAdmin && (
+				<div className="mb-8 bg-white rounded-lg shadow-md p-6 border border-blue-200">
 					<form
 						className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end bg-blue-50 p-4 rounded-lg"
 						onSubmit={handleAddOrUpdateTransaction}
@@ -550,7 +559,6 @@ const FinancialTracker = () => {
 								className="w-full border rounded-lg px-2 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
 								value={transaction.type}
 								onChange={e => {
-									if (!isAdmin) return;
 									const newType = e.target.value;
 									setTransaction(t => ({
 										...t,
@@ -562,7 +570,7 @@ const FinancialTracker = () => {
 										team2: ''
 									}));
 								}}
-								disabled={!isAdmin || editingTransaction}
+								disabled={editingTransaction}
 							>
 								<option value="Fee">Fee</option>
 								<option value="Payout">Payout</option>
@@ -576,9 +584,8 @@ const FinancialTracker = () => {
 								step="0.01"
 								className="w-full border rounded-lg px-2 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
 								value={transaction.amount}
-								onChange={e => isAdmin && setTransaction(t => ({ ...t, amount: e.target.value }))}
+								onChange={e => setTransaction(t => ({ ...t, amount: e.target.value }))}
 								required
-								disabled={!isAdmin}
 							/>
 						</div>
 						<div>
@@ -587,7 +594,6 @@ const FinancialTracker = () => {
 								className="w-full border rounded-lg px-2 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
 								value={transaction.category}
 								onChange={e => {
-									if (!isAdmin) return;
 									const cat = e.target.value;
 									let newTeam = transaction.team;
 									let newDesc = transaction.description;
@@ -637,7 +643,6 @@ const FinancialTracker = () => {
 									setTransaction(t => ({ ...t, category: cat, team: newTeam, description: newDesc, team1: newTeam1, team2: newTeam2 }));
 								}}
 								required
-								disabled={!isAdmin}
 							>
 								<option value="">Select...</option>
 								{(transaction.type === 'Fee' ? FEE_DESCRIPTIONS : PAYOUT_DESCRIPTIONS).map(opt => (
@@ -653,9 +658,8 @@ const FinancialTracker = () => {
 									<select
 										className="w-full border rounded-lg px-2 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
 										value={transaction.team1}
-										onChange={e => isAdmin && setTransaction(t => ({ ...t, team1: e.target.value }))}
+										onChange={e => setTransaction(t => ({ ...t, team1: e.target.value }))}
 										required
-										disabled={!isAdmin}
 									>
 										<option value="">Select Team 1</option>
 										{allMembers.map(m => (
@@ -668,9 +672,8 @@ const FinancialTracker = () => {
 									<select
 										className="w-full border rounded-lg px-2 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
 										value={transaction.team2}
-										onChange={e => isAdmin && setTransaction(t => ({ ...t, team2: e.target.value }))}
+										onChange={e => setTransaction(t => ({ ...t, team2: e.target.value }))}
 										required
-										disabled={!isAdmin}
 									>
 										<option value="">Select Team 2</option>
 										{allMembers.map(m => (
@@ -683,10 +686,10 @@ const FinancialTracker = () => {
 							<div>
 								<label className="block text-xs font-semibold mb-1 text-gray-700">Team</label>
 								<select
-									className={`w-full border rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isAdmin || (transaction.type === 'Payout' && (transaction.category === 'Weekly 1st' || transaction.category === 'Weekly 2nd') && transaction.week) ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white'}`}
+									className={`w-full border rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${(transaction.type === 'Payout' && (transaction.category === 'Weekly 1st' || transaction.category === 'Weekly 2nd') && transaction.week) ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white'}`}
 									value={transaction.team}
-									onChange={e => isAdmin && setTransaction(t => ({ ...t, team: e.target.value }))}
-									disabled={!isAdmin || (transaction.type === 'Payout' && (transaction.category === 'Weekly 1st' || transaction.category === 'Weekly 2nd') && transaction.week) || editingTransaction}
+									onChange={e => setTransaction(t => ({ ...t, team: e.target.value }))}
+									disabled={(transaction.type === 'Payout' && (transaction.category === 'Weekly 1st' || transaction.category === 'Weekly 2nd') && transaction.week) || editingTransaction}
 									required
 								>
 									<option value="ALL">All Teams</option>
@@ -700,17 +703,16 @@ const FinancialTracker = () => {
 							<label className="block text-xs font-semibold mb-1 text-gray-700">Description</label>
 							<input
 								type="text"
-								className={`w-full border rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isAdmin || (transaction.type === 'Payout' && (transaction.category === 'Weekly 1st' || transaction.category === 'Weekly 2nd') && transaction.week) ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white'}`}
+								className={`w-full border rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${(transaction.type === 'Payout' && (transaction.category === 'Weekly 1st' || transaction.category === 'Weekly 2nd') && transaction.week) ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white'}`}
 								value={transaction.description}
 								onChange={e => {
-									if (!isAdmin) return;
 									if (!(transaction.type === 'Payout' && (transaction.category === 'Weekly 1st' || transaction.category === 'Weekly 2nd') && transaction.week)) {
 										setTransaction(t => ({ ...t, description: e.target.value }));
 									}
 								}}
 								placeholder="e.g. Paid for entry, Weekly winner, etc."
 								required
-								disabled={!isAdmin || (transaction.type === 'Payout' && (transaction.category === 'Weekly 1st' || transaction.category === 'Weekly 2nd') && transaction.week)}
+								disabled={(transaction.type === 'Payout' && (transaction.category === 'Weekly 1st' || transaction.category === 'Weekly 2nd') && transaction.week)}
 							/>
 						</div>
 						<div>
@@ -721,7 +723,6 @@ const FinancialTracker = () => {
 								className="w-full border rounded-lg px-2 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
 								value={transaction.week}
 								onChange={e => {
-									if (!isAdmin) return;
 									const newWeek = e.target.value;
 									let newTeam = transaction.team;
 									let newDesc = transaction.description;
@@ -755,7 +756,6 @@ const FinancialTracker = () => {
 									setTransaction(t => ({ ...t, week: newWeek, team: newTeam, description: newDesc }));
 								}}
 								placeholder="e.g. 1, 2, ..."
-								disabled={!isAdmin}
 							/>
 						</div>
 						<div className="md:col-span-2 flex justify-end gap-2">
@@ -772,18 +772,18 @@ const FinancialTracker = () => {
 									Cancel
 								</button>
 							)}
-							<button type="submit" className={`bg-green-600 text-white px-6 py-2 rounded-lg font-semibold ${!isAdmin ? 'opacity-50 cursor-not-allowed' : 'hover:bg-green-700 transition duration-200'}`} disabled={!isAdmin}>
+							<button type="submit" className={`bg-green-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-green-700 transition duration-200`}>
 								{editingTransaction ? 'Update Transaction' : 'Submit Transaction'}
 							</button>
 						</div>
 					</form>
-				)}
-				{transactionMessage.text && (
-					<div className={`mt-4 p-3 rounded-lg text-sm font-medium ${transactionMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-						{transactionMessage.text}
-					</div>
-				)}
-			</div>
+					{transactionMessage.text && (
+						<div className={`mt-4 p-3 rounded-lg text-sm font-medium ${transactionMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+							{transactionMessage.text}
+						</div>
+					)}
+				</div>
+			)}
 
 			{/* Member Dues & Transaction Table */}
 			<div className="mb-10 bg-white rounded-lg shadow-md p-6 border border-gray-100">
@@ -826,13 +826,15 @@ const FinancialTracker = () => {
 				<div className="flex justify-between items-center mb-4">
 					<h3 className="text-lg font-semibold text-blue-800">All Transactions ({selectedYear})</h3>
 					<div className="flex gap-2">
-						<button
-							onClick={handleDeleteSelected}
-							disabled={selectedTransactions.length === 0}
-							className={`px-3 py-1 rounded-lg text-sm font-semibold transition duration-200 ${selectedTransactions.length > 0 ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
-						>
-							Delete Selected ({selectedTransactions.length})
-						</button>
+						{isAdmin && (
+							<button
+								onClick={handleDeleteSelected}
+								disabled={selectedTransactions.length === 0}
+								className={`px-3 py-1 rounded-lg text-sm font-semibold transition duration-200 ${selectedTransactions.length > 0 ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
+							>
+								Delete Selected ({selectedTransactions.length})
+							</button>
+						)}
 						<button
 							onClick={handleExport}
 							className="bg-blue-500 text-white px-3 py-1 rounded-lg text-sm font-semibold hover:bg-blue-600 transition duration-200"
@@ -881,7 +883,7 @@ const FinancialTracker = () => {
 					<table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm text-sm">
 						<thead className="bg-blue-50">
 							<tr>
-								<th className="py-2 px-3 text-center">
+								{isAdmin && <th className="py-2 px-3 text-center">
 									<input 
 										type="checkbox" 
 										className="form-checkbox" 
@@ -894,7 +896,7 @@ const FinancialTracker = () => {
 										}}
 										checked={allTransactionsSelected}
 									/>
-								</th>
+								</th>}
 								<th className="py-2 px-3 text-left cursor-pointer hover:bg-blue-100" onClick={() => requestSort('date')}>
 									<div className="flex items-center">
 										Date
@@ -975,14 +977,14 @@ const FinancialTracker = () => {
 								const displayDate = t.date ? (isNaN(new Date(t.date)) ? 'Invalid Date' : new Date(t.date).toLocaleString()) : '';
 								return (
 									<tr key={t.date} className="even:bg-gray-50">
-										<td className="py-2 px-3 text-center">
+										{isAdmin && <td className="py-2 px-3 text-center">
 											<input 
 												type="checkbox" 
-												className="form-checkbox"
+												className="form-checkbox" 
 												checked={selectedTransactions.some(selT => selT.date === t.date)}
 												onChange={(e) => handleSelectTransaction(t, e.target.checked)}
 											/>
-										</td>
+										</td>}
 										<td className="py-2 px-3 whitespace-nowrap">{displayDate}</td>
 										<td className="py-2 px-3 whitespace-nowrap">{teamName}</td>
 										<td className="py-2 px-3 text-center">{t.type}</td>
@@ -1034,14 +1036,15 @@ const FinancialTracker = () => {
             <div className="mb-10 bg-white rounded-lg shadow-md p-6 border border-gray-100">
                 <div className="flex justify-between items-center mb-4">
                     <h3 className="text-xl font-semibold text-red-800">Fees ({selectedYear})</h3>
-                    <button
-                        className={`rounded-full w-8 h-8 flex items-center justify-center text-xl font-bold transition-transform duration-200 transform ${isAdmin ? 'bg-blue-600 text-white hover:scale-110' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
-                        onClick={() => isAdmin && setShowPotentialForm('fees')}
-                        disabled={!isAdmin}
-                        title="Add Fee"
-                    >
-                        +
-                    </button>
+					{isAdmin && (
+						<button
+							className={`rounded-full w-8 h-8 flex items-center justify-center text-xl font-bold transition-transform duration-200 transform bg-blue-600 text-white hover:scale-110`}
+							onClick={() => setShowPotentialForm('fees')}
+							title="Add Fee"
+						>
+							+
+						</button>
+					)}
                 </div>
                 {potentialFees.length > 0 ? (
                     <div className="overflow-x-auto">
@@ -1050,7 +1053,7 @@ const FinancialTracker = () => {
                                 <tr>
                                     <th className="py-2 px-3 text-left">Description</th>
                                     <th className="py-2 px-3 text-center">Amount</th>
-                                    <th className="py-2 px-3 text-center">Actions</th>
+                                    {isAdmin && <th className="py-2 px-3 text-center">Actions</th>}
                                 </tr>
                             </thead>
                             <tbody>
@@ -1058,15 +1061,16 @@ const FinancialTracker = () => {
                                     <tr key={item.id} className="even:bg-gray-50">
                                         <td className="py-2 px-3 font-semibold text-gray-800 whitespace-nowrap">{item.description}</td>
                                         <td className="py-2 px-3 text-center">${Number(item.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                        <td className="py-2 px-3 text-center">
-                                            <button
-                                                className="text-red-600 hover:text-red-800 font-bold text-lg"
-                                                onClick={() => handleDeletePotentialTransaction(item.id, 'fees')}
-                                                disabled={!isAdmin}
-                                            >
-                                                &#10006;
-                                            </button>
-                                        </td>
+                                        {isAdmin && (
+											<td className="py-2 px-3 text-center">
+												<button
+													className="text-red-600 hover:text-red-800 font-bold text-lg"
+													onClick={() => handleDeletePotentialTransaction(item.id, 'fees')}
+												>
+													&#10006;
+												</button>
+											</td>
+										)}
                                     </tr>
                                 ))}
                             </tbody>
@@ -1080,14 +1084,15 @@ const FinancialTracker = () => {
             <div className="mb-10 bg-white rounded-lg shadow-md p-6 border border-gray-100">
                 <div className="flex justify-between items-center mb-4">
                     <h3 className="text-xl font-semibold text-green-800">Payouts ({selectedYear})</h3>
-                    <button
-                        className={`rounded-full w-8 h-8 flex items-center justify-center text-xl font-bold transition-transform duration-200 transform ${isAdmin ? 'bg-blue-600 text-white hover:scale-110' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
-                        onClick={() => isAdmin && setShowPotentialForm('payouts')}
-                        disabled={!isAdmin}
-                        title="Add Payout"
-                    >
-                        +
-                    </button>
+					{isAdmin && (
+						<button
+							className={`rounded-full w-8 h-8 flex items-center justify-center text-xl font-bold transition-transform duration-200 transform bg-blue-600 text-white hover:scale-110`}
+							onClick={() => setShowPotentialForm('payouts')}
+							title="Add Payout"
+						>
+							+
+						</button>
+					)}
                 </div>
                 {potentialPayouts.length > 0 ? (
                     <div className="overflow-x-auto">
@@ -1096,7 +1101,7 @@ const FinancialTracker = () => {
                                 <tr>
                                     <th className="py-2 px-3 text-left">Description</th>
                                     <th className="py-2 px-3 text-center">Amount</th>
-                                    <th className="py-2 px-3 text-center">Actions</th>
+                                    {isAdmin && <th className="py-2 px-3 text-center">Actions</th>}
                                 </tr>
                             </thead>
                             <tbody>
@@ -1104,15 +1109,16 @@ const FinancialTracker = () => {
                                     <tr key={item.id} className="even:bg-gray-50">
                                         <td className="py-2 px-3 font-semibold text-gray-800 whitespace-nowrap">{item.description}</td>
                                         <td className="py-2 px-3 text-center">${Number(item.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                        <td className="py-2 px-3 text-center">
-                                            <button
-                                                className="text-red-600 hover:text-red-800 font-bold text-lg"
-                                                onClick={() => handleDeletePotentialTransaction(item.id, 'payouts')}
-                                                disabled={!isAdmin}
-                                            >
-                                                &#10006;
-                                            </button>
-                                        </td>
+                                        {isAdmin && (
+											<td className="py-2 px-3 text-center">
+												<button
+													className="text-red-600 hover:text-red-800 font-bold text-lg"
+													onClick={() => handleDeletePotentialTransaction(item.id, 'payouts')}
+												>
+													&#10006;
+												</button>
+											</td>
+										)}
                                     </tr>
                                 ))}
                             </tbody>
