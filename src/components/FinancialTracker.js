@@ -5,6 +5,7 @@ import { getAuth, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 
+// Your Firebase Config (should be replaced by env vars in a real app)
 const firebaseConfig = {
 	apiKey: 'AIzaSyDcuPXgRPIdX-NYblBqQkdXqrGiD6yobcA',
 	authDomain: 'tloed-finance-tracker.firebaseapp.com',
@@ -15,6 +16,7 @@ const firebaseConfig = {
 	measurementId: 'G-0N3ZD0XNTC',
 };
 
+// Commissioner's UID for admin access
 const COMMISH_UID = 'QzIJSZWBHgSzhmC6pOOiuJNxbI83';
 
 // Initialize Firebase only once
@@ -29,19 +31,31 @@ const FinancialTracker = () => {
 	const [authUser, setAuthUser] = useState(null);
 	const [login, setLogin] = useState({ email: '', password: '' });
 	const [authError, setAuthError] = useState('');
-	const [showCommishLogin, setShowCommishLogin] = useState(false); // New state for collapsible login
+	const [showCommishLogin, setShowCommishLogin] = useState(false);
 	const [transaction, setTransaction] = useState({
 		type: 'Fee',
 		amount: '',
 		category: '',
 		description: '',
 		week: '',
-		team: [], // Changed to an array for multi-select
+		team: [],
 		quantity: 1
 	});
 	const [transactionMessage, setTransactionMessage] = useState({ text: '', type: '' });
-	const [editingTransaction, setEditingTransaction] = useState(null); // State for editing
-	const [showTeamDropdown, setShowTeamDropdown] = useState(false); // State for team dropdown visibility
+	const [editingTransaction, setEditingTransaction] = useState(null);
+	const [showTeamDropdown, setShowTeamDropdown] = useState(false);
+	const [filters, setFilters] = useState({ type: 'ALL', team: 'ALL' });
+	const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
+	const [currentPage, setCurrentPage] = useState(1);
+	const transactionsPerPage = 10;
+	const [selectedTransactions, setSelectedTransactions] = useState([]);
+	const [potentialFormInput, setPotentialFormInput] = useState({ description: '', amount: '' });
+    const [showPotentialForm, setShowPotentialForm] = useState(null);
+    const [selectedYear, setSelectedYear] = useState('');
+
+	// State to hold data for the selected year only
+	const [currentYearData, setCurrentYearData] = useState({ transactions: [], potentialFees: [], potentialPayouts: [] });
+	const [firestoreLoading, setFirestoreLoading] = useState(true);
 
 	// Fee and payout description options
 	const FEE_DESCRIPTIONS = [
@@ -63,25 +77,7 @@ const FinancialTracker = () => {
 		'Other',
 	];
 
-	// New state for transaction filters and sorting
-	const [filters, setFilters] = useState({ type: 'ALL', team: 'ALL' });
-	const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
-	const [currentPage, setCurrentPage] = useState(1);
-	const transactionsPerPage = 10;
-	const [selectedTransactions, setSelectedTransactions] = useState([]); // State for multiselect delete
-
-	// New state for potential transactions/budget
-	const [potentialFormInput, setPotentialFormInput] = useState({ description: '', amount: '' });
-    const [showPotentialForm, setShowPotentialForm] = useState(null); // 'fees' or 'payouts'
-
 	const isAdmin = !!authUser && authUser.uid === COMMISH_UID;
-
-	// Firebase Auth state listener
-	useEffect(() => {
-		const auth = getAuth();
-		const unsub = auth.onAuthStateChanged(user => setAuthUser(user));
-		return () => unsub();
-	}, []);
 
 	// Get all league members (owners)
 	const allMembers = usersData ? usersData.map(u => ({
@@ -91,55 +87,9 @@ const FinancialTracker = () => {
 
 	// Get all seasons
 	const allSeasons = Object.keys(historicalData?.rostersBySeason || {}).sort((a, b) => b - a);
-	// Year selection for per-year database
-	const [selectedYear, setSelectedYear] = useState('');
-	useEffect(() => {
-		if (allSeasons.length > 0 && !selectedYear) setSelectedYear(allSeasons[0]);
-	}, [allSeasons, selectedYear]);
-
-	// Store finances per year: { [year]: [ ...transactions ] }
-    const [financesByYear, setFinancesByYear] = useState({});
-	const [firestoreLoading, setFirestoreLoading] = useState(true);
-	const initialLoadRef = useRef(true);
-
-	// Firestore: Real-time updates for all years and potential transactions on mount
-	useEffect(() => {
-		setFirestoreLoading(true);
-		const docRef = doc(db, 'league_finances', 'main');
-		const unsub = onSnapshot(docRef, (docSnap) => {
-			if (docSnap.exists()) {
-				const data = docSnap.data();
-				setFinancesByYear(data && data.financesByYear ? data.financesByYear : {});
-			} else {
-                setFinancesByYear({});
-			}
-			setFirestoreLoading(false);
-			initialLoadRef.current = false;
-		}, (error) => {
-            setFinancesByYear({});
-			setFirestoreLoading(false);
-			initialLoadRef.current = false;
-		});
-		return () => unsub();
-	}, []);
-
-	// Firestore: Save all data on change (not on initial load, only if admin)
-	useEffect(() => {
-		async function saveAllData() {
-			try {
-				const docRef = doc(db, 'league_finances', 'main');
-                await setDoc(docRef, { financesByYear }, { merge: true });
-			} catch (e) {
-				setTransactionMessage({ text: 'Error saving data.', type: 'error' });
-			}
-		}
-		if (!initialLoadRef.current && isAdmin) {
-			saveAllData();
-		}
-	}, [financesByYear, isAdmin]);
 
 	// Weekly top 2 scorers for each week/season
-	const weeklyTopScorers = (() => {
+	const weeklyTopScorers = useMemo(() => {
 		const result = {};
 		if (!historicalData) return result;
 		Object.entries(historicalData.matchupsBySeason || {}).forEach(([year, matchups]) => {
@@ -151,7 +101,6 @@ const FinancialTracker = () => {
 			});
 			result[year] = {};
 			Object.entries(byWeek).forEach(([week, weekMatchups]) => {
-				// Collect all scores for the week
 				let scores = [];
 				weekMatchups.forEach(m => {
 					const team1 = historicalData.rostersBySeason?.[year]?.find(r => String(r.roster_id) === String(m.team1_roster_id));
@@ -159,14 +108,13 @@ const FinancialTracker = () => {
 					if (team1 && !isNaN(m.team1_score)) scores.push({ userId: team1.owner_id, score: m.team1_score });
 					if (team2 && !isNaN(m.team2_score)) scores.push({ userId: team2.owner_id, score: m.team2_score });
 				});
-				// Sort and get top 2
 				scores.sort((a, b) => b.score - a.score);
 				const top2 = scores.slice(0, 2).map(s => s.userId);
 				result[year][week] = top2;
 			});
 		});
 		return result;
-	})();
+	}, [historicalData]);
 
     // Calculate total points leaders for each season
     const totalPointsLeaders = useMemo(() => {
@@ -192,7 +140,6 @@ const FinancialTracker = () => {
                 if (roster1 && roster1.owner_id && !isNaN(matchup.team1_score)) {
                     teamScores[roster1.owner_id] += matchup.team1_score;
                 }
-
                 const roster2 = rosters.find(r => String(r.roster_id) === String(matchup.team2_roster_id));
                 if (roster2 && roster2.owner_id && !isNaN(matchup.team2_score)) {
                     teamScores[roster2.owner_id] += matchup.team2_score;
@@ -205,63 +152,88 @@ const FinancialTracker = () => {
 
             result[year] = sortedScores;
         });
-
         return result;
     }, [historicalData]);
 
-    const yearData = financesByYear[selectedYear] || { transactions: [], potentialFees: [], potentialPayouts: [] };
-    const transactions = yearData.transactions;
-    const potentialFees = yearData.potentialFees;
-    const potentialPayouts = yearData.potentialPayouts;
+	// Filter and sort transactions
+	const filteredAndSortedTransactions = useMemo(() => {
+		let filtered = currentYearData.transactions.filter(t => {
+			const typeMatch = filters.type === 'ALL' || t.type === filters.type;
+			const teamMatch = filters.team === 'ALL' || (Array.isArray(t.team) ? t.team.includes(filters.team) : t.team === filters.team);
+			return typeMatch && teamMatch;
+		});
 
-	const transactionBank = transactions
+		if (sortConfig.key) {
+			filtered.sort((a, b) => {
+				let aValue = a[sortConfig.key];
+				let bValue = b[sortConfig.key];
+				if (sortConfig.key === 'amount') { aValue = Number(aValue); bValue = Number(bValue); }
+				if (sortConfig.key === 'date') { aValue = new Date(aValue); bValue = new Date(bValue); }
+				if (sortConfig.key === 'team') {
+					const getTeamDisplayName = (teamId) => allMembers.find(m => m.userId === teamId)?.displayName || teamId;
+					aValue = Array.isArray(a.team) ? a.team.map(getTeamDisplayName).join(', ') : getTeamDisplayName(a.team);
+					bValue = Array.isArray(b.team) ? b.team.map(getTeamDisplayName).join(', ') : getTeamDisplayName(b.team);
+				}
+				
+				if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+				if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+				return 0;
+			});
+		}
+		
+		return filtered;
+	}, [currentYearData, filters, sortConfig, allMembers]);
+
+	// Pagination
+	const totalPages = Math.ceil(filteredAndSortedTransactions.length / transactionsPerPage);
+	const paginatedTransactions = filteredAndSortedTransactions.slice((currentPage - 1) * transactionsPerPage, currentPage * transactionsPerPage);
+
+	// Firebase Auth state listener
+	useEffect(() => {
+		const auth = getAuth();
+		const unsub = auth.onAuthStateChanged(user => setAuthUser(user));
+		return () => unsub();
+	}, []);
+
+	useEffect(() => {
+		if (allSeasons.length > 0 && !selectedYear) {
+			setSelectedYear(allSeasons[0]);
+		}
+	}, [allSeasons, selectedYear]);
+
+	// Firestore: Real-time updates for the selected year only
+	useEffect(() => {
+		if (!selectedYear) return;
+
+		setFirestoreLoading(true);
+		const docRef = doc(db, 'league_finances', selectedYear);
+		const unsub = onSnapshot(docRef, (docSnap) => {
+			if (docSnap.exists()) {
+				const data = docSnap.data();
+				setCurrentYearData(data && data.transactions ? data : { transactions: [], potentialFees: [], potentialPayouts: [] });
+			} else {
+                setCurrentYearData({ transactions: [], potentialFees: [], potentialPayouts: [] });
+			}
+			setFirestoreLoading(false);
+		}, (error) => {
+            console.error("Error fetching Firestore data:", error);
+            setFirestoreLoading(false);
+        });
+
+		return () => unsub();
+	}, [selectedYear]);
+
+	// Summary calculations for the selected year's data
+	const transactionBank = currentYearData.transactions
 		.filter(t => t.type === 'Fee' && (t.category === 'Trade Fee' || t.category === 'Waiver/FA Fee'))
 		.reduce((sum, t) => sum + Number(t.amount || 0), 0);
-
-	// Use a simple variable to compute the summary of fees and payouts by category for the selected year
-	const feesSummary = useMemo(() => {
-		const summary = {};
-		transactions.filter(t => t.type === 'Fee').forEach(t => {
-			const category = t.category || 'Uncategorized';
-			const amount = Number(t.amount || 0);
-			if (summary[category]) {
-				summary[category] += amount;
-			} else {
-				summary[category] = amount;
-			}
-		});
-		return Object.entries(summary).map(([category, amount]) => ({
-			category,
-			amount
-		})).sort((a, b) => a.category.localeCompare(b.category));
-	}, [transactions]);
-	
-	const payoutsSummary = useMemo(() => {
-		const summary = {};
-		transactions.filter(t => t.type === 'Payout').forEach(t => {
-			const category = t.category || 'Uncategorized';
-			const amount = Number(t.amount || 0);
-			if (summary[category]) {
-				summary[category] += amount;
-			} else {
-				summary[category] = amount;
-			}
-		});
-		return Object.entries(summary).map(([category, amount]) => ({
-			category,
-			amount
-		})).sort((a, b) => a.category.localeCompare(b.category));
-	}, [transactions]);
-
+	const totalFees = currentYearData.transactions.filter(t => t.type === 'Fee').reduce((sum, t) => sum + Number(t.amount || 0), 0);
+	const totalPayouts = currentYearData.transactions.filter(t => t.type === 'Payout').reduce((sum, t) => sum + Number(t.amount || 0), 0);
+	const leagueBank = totalFees - totalPayouts;
 
 	if (loading || firestoreLoading) return <div className="p-4 text-blue-600">Loading financial tracker...</div>;
 	if (error) return <div className="p-4 text-red-600">Error loading data: {error.message}</div>;
 	if (!usersData || !historicalData) return <div className="p-4 text-orange-600">No data available.</div>;
-
-	// Calculate summary bubbles (per selected year)
-	const totalFees = transactions.filter(t => t.type === 'Fee').reduce((sum, t) => sum + Number(t.amount || 0), 0);
-	const totalPayouts = transactions.filter(t => t.type === 'Payout').reduce((sum, t) => sum + Number(t.amount || 0), 0);
-	const leagueBank = totalFees - totalPayouts;
 
 	// Login form handler
 	const handleLogin = async e => {
@@ -281,48 +253,6 @@ const FinancialTracker = () => {
 		signOut(auth);
 	};
 
-	// Filter and sort transactions
-	const filteredAndSortedTransactions = (() => {
-		let filtered = transactions.filter(t => {
-			const typeMatch = filters.type === 'ALL' || t.type === filters.type;
-			// Filter by team needs to handle the multi-team trade fee case
-			const teamMatch = filters.team === 'ALL' || (t.team && t.team.includes(filters.team)) || t.team === filters.team;
-			return typeMatch && teamMatch;
-		});
-
-		if (sortConfig.key) {
-			filtered.sort((a, b) => {
-				let aValue = a[sortConfig.key];
-				let bValue = b[sortConfig.key];
-				// Custom sorting logic for different keys
-				if (sortConfig.key === 'amount') {
-					aValue = Number(aValue);
-					bValue = Number(bValue);
-				}
-				if (sortConfig.key === 'date') {
-					aValue = new Date(aValue);
-					bValue = new Date(bValue);
-				}
-				if (sortConfig.key === 'team') {
-					// Handle single team or multi-team string representation for sorting
-					const getTeamDisplayName = (teamId) => allMembers.find(m => m.userId === teamId)?.displayName || teamId;
-					aValue = Array.isArray(a.team) ? a.team.map(getTeamDisplayName).join(', ') : getTeamDisplayName(a.team);
-					bValue = Array.isArray(b.team) ? b.team.map(getTeamDisplayName).join(', ') : getTeamDisplayName(b.team);
-				}
-				
-				if (aValue < bValue) {
-					return sortConfig.direction === 'asc' ? -1 : 1;
-				}
-				if (aValue > bValue) {
-					return sortConfig.direction === 'asc' ? 1 : -1;
-				}
-				return 0;
-			});
-		}
-		
-		return filtered;
-	})();
-
 	const requestSort = (key) => {
 		let direction = 'asc';
 		if (sortConfig.key === key && sortConfig.direction === 'asc') {
@@ -331,23 +261,16 @@ const FinancialTracker = () => {
 		setSortConfig({ key, direction });
 	};
 
-	// Pagination
-	const totalPages = Math.ceil(filteredAndSortedTransactions.length / transactionsPerPage);
-	const paginatedTransactions = filteredAndSortedTransactions.slice((currentPage - 1) * transactionsPerPage, currentPage * transactionsPerPage);
-
 	// New function to handle CSV export
 	const handleExport = () => {
-		// Define columns for the CSV
 		const columns = ["Date", "Team", "Type", "Amount", "Category", "Description", "Week"];
-		// Map transactions to a CSV-friendly format
 		const csvData = filteredAndSortedTransactions.map(t => {
-			// Get team names, handling single or multiple teams
-			const teamNames = Array.isArray(t.team) ? 
+			const teamNames = Array.isArray(t.team) ?
 				t.team.map(id => allMembers.find(m => m.userId === id)?.displayName || id).join(', ') :
 				allMembers.find(m => m.userId === t.team)?.displayName || t.team;
+			const displayDate = t.date ? (isNaN(new Date(t.date)) ? 'Invalid Date' : new Date(t.date).toLocaleString()) : '';
 			return [
-				// FIX: Ensure date is a valid object before formatting
-				t.date ? (isNaN(new Date(t.date)) ? 'Invalid Date' : new Date(t.date).toLocaleString()) : '',
+				displayDate,
 				teamNames,
 				t.type,
 				Number(t.amount || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}),
@@ -356,14 +279,10 @@ const FinancialTracker = () => {
 				t.week,
 			];
 		});
-
-		// Create the CSV content string
 		const csvContent = [
-			columns.join(','), // Header row
-			...csvData.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')) // Data rows with quotes to handle commas
+			columns.join(','),
+			...csvData.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
 		].join('\n');
-
-		// Create a temporary link element to trigger the download
 		const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
 		const url = URL.createObjectURL(blob);
 		const link = document.createElement("a");
@@ -376,7 +295,7 @@ const FinancialTracker = () => {
 	};
 
 	// Handle saving a new transaction or updating an existing one
-	const handleAddOrUpdateTransaction = (e) => {
+	const handleAddOrUpdateTransaction = async (e) => {
 		e.preventDefault();
 		if (!isAdmin) return;
 		if (transaction.team.length === 0) {
@@ -384,42 +303,44 @@ const FinancialTracker = () => {
 			return;
 		}
 
-        setFinancesByYear(prev => {
-            const yearData = { ...(prev[selectedYear] || { transactions: [], potentialFees: [], potentialPayouts: [] }) };
-            let newTxs = [...yearData.transactions];
-
-			// If editing, find and replace the transaction
-			if (editingTransaction) {
-				const index = newTxs.findIndex(t => t.date === editingTransaction.date);
-				if (index !== -1) {
-					newTxs[index] = { ...transaction, date: editingTransaction.date }; // Keep original date
-				}
-				setEditingTransaction(null); // Exit edit mode
-			} else {
-				// If adding a new transaction
-				const baseTransaction = { ...transaction, date: new Date().toISOString() };
-				
-				// Iterate through each selected team
-				transaction.team.forEach(teamId => {
-					// Handle waiver fees with quantity
-					if (baseTransaction.category === 'Waiver/FA Fee' && baseTransaction.quantity > 1) {
-						for (let i = 0; i < baseTransaction.quantity; i++) {
-							newTxs.push({ ...baseTransaction, quantity: 1, description: `Waiver/FA Fee #${i + 1}`, team: teamId });
-						}
-					} else {
-						// Single transaction for this team
-						newTxs.push({ ...baseTransaction, team: teamId });
+		let newTransactions;
+		let messageText;
+	
+		if (editingTransaction) {
+			newTransactions = currentYearData.transactions.map(t =>
+				t.date === editingTransaction.date ? { ...transaction, date: editingTransaction.date } : t
+			);
+			messageText = 'Transaction updated successfully!';
+			setEditingTransaction(null);
+		} else {
+			const baseTransaction = { ...transaction, date: new Date().toISOString() };
+			const transactionsToAdd = [];
+	
+			transaction.team.forEach(teamId => {
+				if (baseTransaction.category === 'Waiver/FA Fee' && baseTransaction.quantity > 1) {
+					for (let i = 0; i < baseTransaction.quantity; i++) {
+						transactionsToAdd.push({ ...baseTransaction, quantity: 1, description: `Waiver/FA Fee #${i + 1}`, team: teamId });
 					}
-				});
-			}
-
-            yearData.transactions = newTxs;
-            return { ...prev, [selectedYear]: yearData };
-		});
-
-		// Reset form and clear messages
+				} else {
+					transactionsToAdd.push({ ...baseTransaction, team: teamId });
+				}
+			});
+	
+			newTransactions = [...currentYearData.transactions, ...transactionsToAdd];
+			messageText = 'Transaction saved successfully!';
+		}
+	
+		try {
+			const docRef = doc(db, 'league_finances', selectedYear);
+			await setDoc(docRef, { ...currentYearData, transactions: newTransactions }, { merge: true });
+			setTransactionMessage({ text: messageText, type: 'success' });
+		} catch (e) {
+			console.error("Error saving transaction: ", e);
+			setTransactionMessage({ text: 'Error saving transaction.', type: 'error' });
+		}
+	
 		setTransaction({ type: 'Fee', amount: '', category: '', description: '', week: '', team: [], quantity: 1 });
-		setTransactionMessage({ text: 'Transaction saved successfully!', type: 'success' });
+		setShowTeamDropdown(false);
 	};
 
 	// Handle editing a transaction
@@ -429,26 +350,28 @@ const FinancialTracker = () => {
 		setTransaction({
 			...transactionToEdit,
 			team: Array.isArray(transactionToEdit.team) ? transactionToEdit.team : [transactionToEdit.team],
-			// Reset quantity to 1 for non-waiver transactions
 			quantity: transactionToEdit.category === 'Waiver/FA Fee' ? transactionToEdit.quantity : 1,
 		});
 		setTransactionMessage({ text: 'Editing transaction...', type: 'info' });
 	};
 
 	// Delete transaction handler (commish only)
-	const handleDeleteTransaction = (transactionsToDelete) => {
+	const handleDeleteTransaction = async (transactionsToDelete) => {
 		if (!isAdmin) return;
 		
-        setFinancesByYear(prev => {
-            const yearData = { ...(prev[selectedYear] || { transactions: [], potentialFees: [], potentialPayouts: [] }) };
-            const transactionDatesToDelete = new Set(transactionsToDelete.map(t => t.date));
-			
-            yearData.transactions = yearData.transactions.filter(t => !transactionDatesToDelete.has(t.date));
-			
-            return { ...prev, [selectedYear]: yearData };
-		});
-		setSelectedTransactions([]); // Clear selections
-		setTransactionMessage({ text: 'Transaction(s) deleted successfully!', type: 'success' });
+		const transactionDatesToDelete = new Set(transactionsToDelete.map(t => t.date));
+		const newTransactions = currentYearData.transactions.filter(t => !transactionDatesToDelete.has(t.date));
+
+		try {
+			const docRef = doc(db, 'league_finances', selectedYear);
+			await setDoc(docRef, { ...currentYearData, transactions: newTransactions }, { merge: true });
+			setTransactionMessage({ text: 'Transaction(s) deleted successfully!', type: 'success' });
+		} catch (e) {
+			console.error("Error deleting transaction: ", e);
+			setTransactionMessage({ text: 'Error deleting transaction.', type: 'error' });
+		}
+
+		setSelectedTransactions([]);
 	};
 
 	const handleSelectTransaction = (transaction, isChecked) => {
@@ -465,40 +388,55 @@ const FinancialTracker = () => {
 		}
 	};
 	
-	const allTransactionsSelected = selectedTransactions.length === paginatedTransactions.length && paginatedTransactions.length > 0;
+	const allTransactionsSelected = selectedTransactions.length > 0 && selectedTransactions.length === paginatedTransactions.length;
 	
 	// Handle adding/deleting potential transactions
-	const handleAddPotentialTransaction = (e, type) => {
+	const handleAddPotentialTransaction = async (e, type) => {
 		e.preventDefault();
 		if (!isAdmin) return;
 		const newPotentialTx = {
-			id: new Date().toISOString(), // Unique ID for potential transaction
+			id: new Date().toISOString(),
 			...potentialFormInput,
 		};
-        setFinancesByYear(prev => {
-            const yearData = { ...(prev[selectedYear] || { transactions: [], potentialFees: [], potentialPayouts: [] }) };
-            if (type === 'fees') {
-                yearData.potentialFees = [...yearData.potentialFees, newPotentialTx];
-            } else {
-                yearData.potentialPayouts = [...yearData.potentialPayouts, newPotentialTx];
-            }
-            return { ...prev, [selectedYear]: yearData };
-        });
+		let newPotentialArray;
+		if (type === 'fees') {
+			newPotentialArray = [...currentYearData.potentialFees, newPotentialTx];
+		} else {
+			newPotentialArray = [...currentYearData.potentialPayouts, newPotentialTx];
+		}
+
+		try {
+			const docRef = doc(db, 'league_finances', selectedYear);
+			await setDoc(docRef, {
+				...currentYearData,
+				[type === 'fees' ? 'potentialFees' : 'potentialPayouts']: newPotentialArray
+			}, { merge: true });
+			setTransactionMessage({ text: `Potential ${type.slice(0, -1)} added successfully!`, type: 'success' });
+		} catch (e) {
+			console.error("Error saving potential transaction: ", e);
+			setTransactionMessage({ text: `Error saving potential ${type.slice(0, -1)}.`, type: 'error' });
+		}
+
 		setShowPotentialForm(null);
 		setPotentialFormInput({ description: '', amount: '' });
 	};
 
-	const handleDeletePotentialTransaction = (id, type) => {
+	const handleDeletePotentialTransaction = async (id, type) => {
 		if (!isAdmin) return;
-        setFinancesByYear(prev => {
-            const yearData = { ...(prev[selectedYear] || { transactions: [], potentialFees: [], potentialPayouts: [] }) };
-            if (type === 'fees') {
-                yearData.potentialFees = yearData.potentialFees.filter(t => t.id !== id);
-            } else {
-                yearData.potentialPayouts = yearData.potentialPayouts.filter(t => t.id !== id);
-            }
-            return { ...prev, [selectedYear]: yearData };
-        });
+		
+		const newPotentialArray = currentYearData[type === 'fees' ? 'potentialFees' : 'potentialPayouts'].filter(t => t.id !== id);
+
+		try {
+			const docRef = doc(db, 'league_finances', selectedYear);
+			await setDoc(docRef, {
+				...currentYearData,
+				[type === 'fees' ? 'potentialFees' : 'potentialPayouts']: newPotentialArray
+			}, { merge: true });
+			setTransactionMessage({ text: `Potential ${type.slice(0, -1)} deleted successfully!`, type: 'success' });
+		} catch (e) {
+			console.error("Error deleting potential transaction: ", e);
+			setTransactionMessage({ text: `Error deleting potential ${type.slice(0, -1)}.`, type: 'error' });
+		}
 	};
 
 	return (
@@ -513,7 +451,7 @@ const FinancialTracker = () => {
 						value={selectedYear}
 						onChange={e => {
 							setSelectedYear(e.target.value);
-							setCurrentPage(1); // Reset pagination on year change
+							setCurrentPage(1);
 						}}
 					>
 						{allSeasons.map(year => (
@@ -528,17 +466,14 @@ const FinancialTracker = () => {
 					<span className="text-xs font-semibold uppercase tracking-wide">League Bank</span>
 					<span className="text-2xl font-bold">${leagueBank.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
 				</div>
-				{/* The color of the Total Fees card is now red */}
 				<div className="flex flex-col items-center bg-red-50 rounded-lg px-6 py-3 shadow-md text-red-800 min-w-[120px]">
 					<span className="text-xs font-semibold uppercase tracking-wide">Total Fees</span>
 					<span className="text-2xl font-bold">${totalFees.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
 				</div>
-				{/* The color of the Total Payouts card is now green */}
 				<div className="flex flex-col items-center bg-green-50 rounded-lg px-6 py-3 shadow-md text-green-800 min-w-[120px]">
 					<span className="text-xs font-semibold uppercase tracking-wide">Total Payouts</span>
 					<span className="text-2xl font-bold">${totalPayouts.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
 				</div>
-				{/* New Transaction Bank card */}
 				<div className="flex flex-col items-center bg-yellow-50 rounded-lg px-6 py-3 shadow-md text-yellow-800 min-w-[120px]">
 					<span className="text-xs font-semibold uppercase tracking-wide">Transaction Bank</span>
 					<span className="text-2xl font-bold">${transactionBank.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
@@ -560,7 +495,7 @@ const FinancialTracker = () => {
 						>
 							Commissioner Login
 							<span className={`transform transition-transform duration-200 ${showCommishLogin ? 'rotate-180' : 'rotate-0'}`}>
-								&#9660; {/* Down arrow */}
+								&#9660;
 							</span>
 						</button>
 						{showCommishLogin && (
@@ -615,7 +550,7 @@ const FinancialTracker = () => {
 										type: newType,
 										description: '',
 										category: '',
-										team: [], // Reset team selection on type change
+										team: [],
 									}));
 								}}
 								disabled={editingTransaction}
@@ -646,11 +581,9 @@ const FinancialTracker = () => {
 									let newTeam = transaction.team;
 									let newDesc = transaction.description;
 									
-									// Reset team selections based on category type
 									if (cat === 'Trade Fee') {
 										newTeam = [];
 									}
-
 									if (transaction.type === 'Payout' && cat.startsWith('Weekly') && transaction.week) {
 										const idx = cat === 'Weekly 1st' ? 0 : 1;
 										const topUserId = weeklyTopScorers[selectedYear]?.[transaction.week]?.[idx];
@@ -675,22 +608,18 @@ const FinancialTracker = () => {
 											}
 										}
 									}
-                                    
-                                    // Auto-select team and description for total points payouts
                                     if (transaction.type === 'Payout' && cat.startsWith('Total Points')) {
                                         const leaders = totalPointsLeaders[selectedYear];
                                         let leaderIndex = -1;
                                         if (cat === 'Total Points 1st') leaderIndex = 0;
                                         if (cat === 'Total Points 2nd') leaderIndex = 1;
                                         if (cat === 'Total Points 3rd') leaderIndex = 2;
-
                                         if (leaders && leaders[leaderIndex]) {
                                             const leader = leaders[leaderIndex];
                                             newTeam = [leader.userId];
                                             newDesc = `${cat} (${leader.score.toFixed(2)} pts)`;
                                         }
                                     }
-
 									setTransaction(t => ({ ...t, category: cat, team: newTeam, description: newDesc }));
 								}}
 								required
@@ -701,7 +630,6 @@ const FinancialTracker = () => {
 								))}
 							</select>
 						</div>
-						{/* Team selection dropdown (now used for all transaction types) */}
 						<div className="relative">
 							<label className="block text-xs font-semibold mb-1 text-gray-700">Team(s)</label>
 							<button
@@ -753,7 +681,6 @@ const FinancialTracker = () => {
 								</div>
 							)}
 						</div>
-						{/* New Quantity Input Field */}
 						{transaction.category === 'Waiver/FA Fee' && (
 							<div>
 								<label className="block text-xs font-semibold mb-1 text-gray-700">Quantity</label>
@@ -853,8 +780,6 @@ const FinancialTracker = () => {
 					)}
 				</div>
 			)}
-
-			{/* Member Dues & Transaction Table */}
 			<div className="mb-10 bg-white rounded-lg shadow-md p-6 border border-gray-100">
 				<h3 className="text-xl font-semibold text-blue-800 mb-4">League Members & Dues</h3>
 				<div className="overflow-x-auto">
@@ -869,8 +794,8 @@ const FinancialTracker = () => {
 						</thead>
 						<tbody>
 							{allMembers.map(member => {
-								const memberFees = transactions.filter(t => t.type === 'Fee' && t.team === member.userId).reduce((sum, t) => sum + Number(t.amount || 0), 0);
-								const memberPayouts = transactions.filter(t => t.type === 'Payout' && t.team === member.userId).reduce((sum, t) => sum + Number(t.amount || 0), 0);
+								const memberFees = currentYearData.transactions.filter(t => t.type === 'Fee' && (Array.isArray(t.team) ? t.team.includes(member.userId) : t.team === member.userId)).reduce((sum, t) => sum + Number(t.amount || 0), 0);
+								const memberPayouts = currentYearData.transactions.filter(t => t.type === 'Payout' && (Array.isArray(t.team) ? t.team.includes(member.userId) : t.team === member.userId)).reduce((sum, t) => sum + Number(t.amount || 0), 0);
 								const netTotal = memberPayouts - memberFees;
 								const netColor = netTotal < 0 ? 'text-red-600' : 'text-green-600';
 								return (
@@ -890,7 +815,6 @@ const FinancialTracker = () => {
 				)}
 			</div>
 			
-			{/* All Transactions Table */}
 			<div className="mb-10 bg-white rounded-lg shadow-md p-6 border border-gray-100">
 				<div className="flex justify-between items-center mb-4">
 					<h3 className="text-lg font-semibold text-blue-800">All Transactions ({selectedYear})</h3>
@@ -913,7 +837,6 @@ const FinancialTracker = () => {
 					</div>
 				</div>
 
-				{/* Filter controls for the transactions table */}
 				<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
 					<div>
 						<label className="block text-xs font-semibold mb-1 text-gray-700">Filter by Type</label>
@@ -922,7 +845,7 @@ const FinancialTracker = () => {
 							value={filters.type}
 							onChange={e => {
 								setFilters(f => ({ ...f, type: e.target.value }));
-								setCurrentPage(1); // Reset pagination
+								setCurrentPage(1);
 							}}
 						>
 							<option value="ALL">All Types</option>
@@ -937,7 +860,7 @@ const FinancialTracker = () => {
 							value={filters.team}
 							onChange={e => {
 								setFilters(f => ({ ...f, team: e.target.value }));
-								setCurrentPage(1); // Reset pagination
+								setCurrentPage(1);
 							}}
 						>
 							<option value="ALL">All Teams</option>
@@ -1041,11 +964,9 @@ const FinancialTracker = () => {
 						</thead>
 						<tbody>
 							{paginatedTransactions.map((t) => {
-								// Handle team display for single or multiple teams
 								const teamName = Array.isArray(t.team) ?
 									t.team.map(id => allMembers.find(m => m.userId === id)?.displayName || id).join(', ') :
 									allMembers.find(m => m.userId === t.team)?.displayName || t.team;
-								// FIX: Add a defensive check for the date to prevent "Invalid Date" errors
 								const displayDate = t.date ? (isNaN(new Date(t.date)) ? 'Invalid Date' : new Date(t.date).toLocaleString()) : '';
 								return (
 									<tr key={t.date} className="even:bg-gray-50">
@@ -1089,7 +1010,6 @@ const FinancialTracker = () => {
 						</tbody>
 					</table>
 				</div>
-				{/* Pagination controls */}
 				<div className="flex justify-center items-center gap-2 mt-4">
 					{Array.from({ length: totalPages }, (_, i) => (
 						<button
@@ -1104,10 +1024,9 @@ const FinancialTracker = () => {
 				</div>
 			</div>
 
-			{/* New Fees & Payouts Summary Section */}
-            <div className="mb-10 bg-white rounded-lg shadow-md p-6 border border-gray-100">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-semibold text-red-800">Fees ({selectedYear})</h3>
+			<div className="mb-10 bg-white rounded-lg shadow-md p-6 border border-gray-100">
+				<div className="flex justify-between items-center mb-4">
+					<h3 className="text-xl font-semibold text-red-800">Fees ({selectedYear})</h3>
 					{isAdmin && (
 						<button
 							className={`rounded-full w-8 h-8 flex items-center justify-center text-xl font-bold transition-transform duration-200 transform bg-blue-600 text-white hover:scale-110`}
@@ -1117,23 +1036,23 @@ const FinancialTracker = () => {
 							+
 						</button>
 					)}
-                </div>
-                {potentialFees.length > 0 ? (
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm text-sm">
-                            <thead className="bg-red-50">
-                                <tr>
-                                    <th className="py-2 px-3 text-left">Description</th>
-                                    <th className="py-2 px-3 text-center">Amount</th>
-                                    {isAdmin && <th className="py-2 px-3 text-center">Actions</th>}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {potentialFees.map(item => (
-                                    <tr key={item.id} className="even:bg-gray-50">
-                                        <td className="py-2 px-3 font-semibold text-gray-800 whitespace-nowrap">{item.description}</td>
-                                        <td className="py-2 px-3 text-center">${Number(item.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                        {isAdmin && (
+				</div>
+				{currentYearData.potentialFees.length > 0 ? (
+					<div className="overflow-x-auto">
+						<table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm text-sm">
+							<thead className="bg-red-50">
+								<tr>
+									<th className="py-2 px-3 text-left">Description</th>
+									<th className="py-2 px-3 text-center">Amount</th>
+									{isAdmin && <th className="py-2 px-3 text-center">Actions</th>}
+								</tr>
+							</thead>
+							<tbody>
+								{currentYearData.potentialFees.map(item => (
+									<tr key={item.id} className="even:bg-gray-50">
+										<td className="py-2 px-3 font-semibold text-gray-800 whitespace-nowrap">{item.description}</td>
+										<td className="py-2 px-3 text-center">${Number(item.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+										{isAdmin && (
 											<td className="py-2 px-3 text-center">
 												<button
 													className="text-red-600 hover:text-red-800 font-bold text-lg"
@@ -1143,19 +1062,19 @@ const FinancialTracker = () => {
 												</button>
 											</td>
 										)}
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                ) : (
-                    <div className="text-center text-gray-500 py-4 italic">No fees for this year.</div>
-                )}
-            </div>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				) : (
+					<div className="text-center text-gray-500 py-4 italic">No fees for this year.</div>
+				)}
+			</div>
 
-            <div className="mb-10 bg-white rounded-lg shadow-md p-6 border border-gray-100">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-semibold text-green-800">Payouts ({selectedYear})</h3>
+			<div className="mb-10 bg-white rounded-lg shadow-md p-6 border border-gray-100">
+				<div className="flex justify-between items-center mb-4">
+					<h3 className="text-xl font-semibold text-green-800">Payouts ({selectedYear})</h3>
 					{isAdmin && (
 						<button
 							className={`rounded-full w-8 h-8 flex items-center justify-center text-xl font-bold transition-transform duration-200 transform bg-blue-600 text-white hover:scale-110`}
@@ -1165,23 +1084,23 @@ const FinancialTracker = () => {
 							+
 						</button>
 					)}
-                </div>
-                {potentialPayouts.length > 0 ? (
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm text-sm">
-                            <thead className="bg-green-50">
-                                <tr>
-                                    <th className="py-2 px-3 text-left">Description</th>
-                                    <th className="py-2 px-3 text-center">Amount</th>
-                                    {isAdmin && <th className="py-2 px-3 text-center">Actions</th>}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {potentialPayouts.map(item => (
-                                    <tr key={item.id} className="even:bg-gray-50">
-                                        <td className="py-2 px-3 font-semibold text-gray-800 whitespace-nowrap">{item.description}</td>
-                                        <td className="py-2 px-3 text-center">${Number(item.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                        {isAdmin && (
+				</div>
+				{currentYearData.potentialPayouts.length > 0 ? (
+					<div className="overflow-x-auto">
+						<table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm text-sm">
+							<thead className="bg-green-50">
+								<tr>
+									<th className="py-2 px-3 text-left">Description</th>
+									<th className="py-2 px-3 text-center">Amount</th>
+									{isAdmin && <th className="py-2 px-3 text-center">Actions</th>}
+								</tr>
+							</thead>
+							<tbody>
+								{currentYearData.potentialPayouts.map(item => (
+									<tr key={item.id} className="even:bg-gray-50">
+										<td className="py-2 px-3 font-semibold text-gray-800 whitespace-nowrap">{item.description}</td>
+										<td className="py-2 px-3 text-center">${Number(item.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+										{isAdmin && (
 											<td className="py-2 px-3 text-center">
 												<button
 													className="text-red-600 hover:text-red-800 font-bold text-lg"
@@ -1191,66 +1110,65 @@ const FinancialTracker = () => {
 												</button>
 											</td>
 										)}
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                ) : (
-                    <div className="text-center text-gray-500 py-4 italic">No payouts for this year.</div>
-                )}
-            </div>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				) : (
+					<div className="text-center text-gray-500 py-4 italic">No payouts for this year.</div>
+				)}
+			</div>
 
-			{/* Modal for adding potential transaction */}
-            {showPotentialForm && (
-                <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg p-6 shadow-xl w-full max-w-sm mx-auto">
-                        <h3 className="text-xl font-bold mb-4">Add {showPotentialForm === 'fees' ? 'Fee' : 'Payout'}</h3>
-                        <form onSubmit={(e) => handleAddPotentialTransaction(e, showPotentialForm)}>
-                            <div className="mb-4">
-                                <label className="block text-gray-700 text-sm font-bold mb-2">Description</label>
-                                <input
-                                    type="text"
-                                    className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                                    value={potentialFormInput.description}
-                                    onChange={(e) => setPotentialFormInput(p => ({ ...p, description: e.target.value }))}
-                                    required
-                                />
-                            </div>
-                            <div className="mb-4">
-                                <label className="block text-gray-700 text-sm font-bold mb-2">Amount ($)</label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                                    value={potentialFormInput.amount}
-                                    onChange={(e) => setPotentialFormInput(p => ({ ...p, amount: e.target.value }))}
-                                    required
-                                />
-                            </div>
-                            <div className="flex justify-end gap-2">
-                                <button
-                                    type="button"
-                                    className="bg-gray-400 text-white font-bold py-2 px-4 rounded hover:bg-gray-500 transition duration-200"
-                                    onClick={() => {
-                                        setShowPotentialForm(null);
-                                        setPotentialFormInput({ description: '', amount: '' });
-                                    }}
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="bg-green-500 text-white font-bold py-2 px-4 rounded hover:bg-green-600 transition duration-200"
-                                >
-                                    Save
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+			{showPotentialForm && (
+				<div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+					<div className="bg-white rounded-lg p-6 shadow-xl w-full max-w-sm mx-auto">
+						<h3 className="text-xl font-bold mb-4">Add {showPotentialForm === 'fees' ? 'Fee' : 'Payout'}</h3>
+						<form onSubmit={(e) => handleAddPotentialTransaction(e, showPotentialForm)}>
+							<div className="mb-4">
+								<label className="block text-gray-700 text-sm font-bold mb-2">Description</label>
+								<input
+									type="text"
+									className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+									value={potentialFormInput.description}
+									onChange={(e) => setPotentialFormInput(p => ({ ...p, description: e.target.value }))}
+									required
+								/>
+							</div>
+							<div className="mb-4">
+								<label className="block text-gray-700 text-sm font-bold mb-2">Amount ($)</label>
+								<input
+									type="number"
+									min="0"
+									step="0.01"
+									className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+									value={potentialFormInput.amount}
+									onChange={(e) => setPotentialFormInput(p => ({ ...p, amount: e.target.value }))}
+									required
+								/>
+							</div>
+							<div className="flex justify-end gap-2">
+								<button
+									type="button"
+									className="bg-gray-400 text-white font-bold py-2 px-4 rounded hover:bg-gray-500 transition duration-200"
+									onClick={() => {
+										setShowPotentialForm(null);
+										setPotentialFormInput({ description: '', amount: '' });
+									}}
+								>
+									Cancel
+								</button>
+								<button
+									type="submit"
+									className="bg-green-500 text-white font-bold py-2 px-4 rounded hover:bg-green-600 transition duration-200"
+								>
+									Save
+								</button>
+							</div>
+						</form>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 };
