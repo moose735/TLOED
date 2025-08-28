@@ -1,5 +1,5 @@
 //src/components/FinancialTracker.js
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useSleeperData } from '../contexts/SleeperDataContext';
 import { getAuth, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { initializeApp } from 'firebase/app';
@@ -24,15 +24,8 @@ if (!window._firebaseInitialized) {
 }
 const db = getFirestore();
 
-const DUE_TYPES = [
-	{ key: 'entry', label: 'Entry Fee', help: 'Annual league buy-in' },
-	{ key: 'trade', label: 'Trade Fee', help: 'Fee per trade' },
-	{ key: 'waiver', label: 'Waiver/FA Fee', help: 'Fee per waiver/FA move' },
-];
-
 const FinancialTracker = () => {
 	const { loading, error, usersData, historicalData } = useSleeperData();
-	const [dues, setDues] = useState({}); // still editable, but not shown in table
 	const [authUser, setAuthUser] = useState(null);
 	const [login, setLogin] = useState({ email: '', password: '' });
 	const [authError, setAuthError] = useState('');
@@ -77,75 +70,76 @@ const FinancialTracker = () => {
 	const transactionsPerPage = 10;
 	const [selectedTransactions, setSelectedTransactions] = useState([]); // State for multiselect delete
 
+	// New state for potential transactions/budget
+	const [potentialFormInput, setPotentialFormInput] = useState({ description: '', amount: '' });
+    const [showPotentialForm, setShowPotentialForm] = useState(null); // 'fees' or 'payouts'
+
 	const isAdmin = !!authUser && authUser.uid === COMMISH_UID;
 
 	// Firebase Auth state listener
-	React.useEffect(() => {
+	useEffect(() => {
 		const auth = getAuth();
 		const unsub = auth.onAuthStateChanged(user => setAuthUser(user));
 		return () => unsub();
 	}, []);
 
 	// Get all league members (owners)
-	const allMembers = useMemo(() => {
-		if (!usersData) return [];
-		return usersData.map(u => ({
-			userId: u.user_id,
-			displayName: u.display_name || u.username || u.user_id,
-		}));
-	}, [usersData]);
+	const allMembers = usersData ? usersData.map(u => ({
+		userId: u.user_id,
+		displayName: u.display_name || u.username || u.user_id,
+	})) : [];
 
 	// Get all seasons
-	const allSeasons = useMemo(() => Object.keys(historicalData?.rostersBySeason || {}).sort((a, b) => b - a), [historicalData]);
+	const allSeasons = Object.keys(historicalData?.rostersBySeason || {}).sort((a, b) => b - a);
 	// Year selection for per-year database
 	const [selectedYear, setSelectedYear] = useState('');
-	React.useEffect(() => {
+	useEffect(() => {
 		if (allSeasons.length > 0 && !selectedYear) setSelectedYear(allSeasons[0]);
 	}, [allSeasons, selectedYear]);
+
 	// Store transactions per year: { [year]: [ ...transactions ] }
-	const [transactionsByYear, setTransactionsByYear] = useState({});
+    const [financesByYear, setFinancesByYear] = useState({});
 	const [firestoreLoading, setFirestoreLoading] = useState(true);
 	const initialLoadRef = useRef(true);
 
-	// Firestore: Real-time updates for all years on mount
-	React.useEffect(() => {
+	// Firestore: Real-time updates for all years and potential transactions on mount
+	useEffect(() => {
 		setFirestoreLoading(true);
 		const docRef = doc(db, 'league_finances', 'main');
 		const unsub = onSnapshot(docRef, (docSnap) => {
 			if (docSnap.exists()) {
 				const data = docSnap.data();
-				setTransactionsByYear(data && data.transactionsByYear ? data.transactionsByYear : {});
+				setFinancesByYear(data && data.financesByYear ? data.financesByYear : {});
 			} else {
-				setTransactionsByYear({});
+                setFinancesByYear({});
 			}
 			setFirestoreLoading(false);
 			initialLoadRef.current = false;
 		}, (error) => {
-			setTransactionsByYear({});
+            setFinancesByYear({});
 			setFirestoreLoading(false);
 			initialLoadRef.current = false;
 		});
 		return () => unsub();
 	}, []);
 
-	// Firestore: Save transactionsByYear on change (not on initial load, only if admin)
-	React.useEffect(() => {
-		async function saveAllYears() {
+	// Firestore: Save all data on change (not on initial load, only if admin)
+	useEffect(() => {
+		async function saveAllData() {
 			try {
 				const docRef = doc(db, 'league_finances', 'main');
-				await setDoc(docRef, { transactionsByYear }, { merge: true });
+                await setDoc(docRef, { financesByYear }, { merge: true });
 			} catch (e) {
-				setTransactionMessage({ text: 'Error saving transaction.', type: 'error' });
+				setTransactionMessage({ text: 'Error saving data.', type: 'error' });
 			}
 		}
-		// Only save if not initial load, and there is at least one year and at least one transaction, and isAdmin
-		if (!initialLoadRef.current && Object.keys(transactionsByYear).length > 0 && Object.values(transactionsByYear).some(arr => arr.length > 0) && isAdmin) {
-			saveAllYears();
+		if (!initialLoadRef.current && isAdmin) {
+			saveAllData();
 		}
-	}, [transactionsByYear, isAdmin]);
+	}, [financesByYear, isAdmin]);
 
 	// Weekly top 2 scorers for each week/season
-	const weeklyTopScorers = useMemo(() => {
+	const weeklyTopScorers = (() => {
 		const result = {};
 		if (!historicalData) return result;
 		Object.entries(historicalData.matchupsBySeason || {}).forEach(([year, matchups]) => {
@@ -172,7 +166,61 @@ const FinancialTracker = () => {
 			});
 		});
 		return result;
-	}, [historicalData]);
+	})();
+
+    const yearData = financesByYear[selectedYear] || { transactions: [], potentialFees: [], potentialPayouts: [] };
+    const transactions = yearData.transactions;
+    const potentialFees = yearData.potentialFees;
+    const potentialPayouts = yearData.potentialPayouts;
+
+	const transactionBank = transactions
+		.filter(t => t.type === 'Fee' && (t.category === 'Trade Fee' || t.category === 'Waiver/FA Fee'))
+		.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+
+	// Use a simple variable to compute the summary of fees and payouts by category for the selected year
+	const feesSummary = useMemo(() => {
+		const summary = {};
+		transactions.filter(t => t.type === 'Fee').forEach(t => {
+			const category = t.category || 'Uncategorized';
+			const amount = Number(t.amount || 0);
+			if (summary[category]) {
+				summary[category] += amount;
+			} else {
+				summary[category] = amount;
+			}
+		});
+		return Object.entries(summary).map(([category, amount]) => ({
+			category,
+			amount
+		})).sort((a, b) => a.category.localeCompare(b.category));
+	}, [transactions]);
+	
+	const payoutsSummary = useMemo(() => {
+		const summary = {};
+		transactions.filter(t => t.type === 'Payout').forEach(t => {
+			const category = t.category || 'Uncategorized';
+			const amount = Number(t.amount || 0);
+			if (summary[category]) {
+				summary[category] += amount;
+			} else {
+				summary[category] = amount;
+			}
+		});
+		return Object.entries(summary).map(([category, amount]) => ({
+			category,
+			amount
+		})).sort((a, b) => a.category.localeCompare(b.category));
+	}, [transactions]);
+
+
+	if (loading || firestoreLoading) return <div className="p-4 text-blue-600">Loading financial tracker...</div>;
+	if (error) return <div className="p-4 text-red-600">Error loading data: {error.message}</div>;
+	if (!usersData || !historicalData) return <div className="p-4 text-orange-600">No data available.</div>;
+
+	// Calculate summary bubbles (per selected year)
+	const totalFees = transactions.filter(t => t.type === 'Fee').reduce((sum, t) => sum + Number(t.amount || 0), 0);
+	const totalPayouts = transactions.filter(t => t.type === 'Payout').reduce((sum, t) => sum + Number(t.amount || 0), 0);
+	const leagueBank = totalFees - totalPayouts;
 
 	// Login form handler
 	const handleLogin = async e => {
@@ -192,11 +240,8 @@ const FinancialTracker = () => {
 		signOut(auth);
 	};
 
-	// Get transactions for selected year
-	const transactions = transactionsByYear[selectedYear] || [];
-
 	// Filter and sort transactions
-	const filteredAndSortedTransactions = useMemo(() => {
+	const filteredAndSortedTransactions = (() => {
 		let filtered = transactions.filter(t => {
 			const typeMatch = filters.type === 'ALL' || t.type === filters.type;
 			const teamMatch = filters.team === 'ALL' || t.team === filters.team;
@@ -225,14 +270,14 @@ const FinancialTracker = () => {
 					return sortConfig.direction === 'asc' ? -1 : 1;
 				}
 				if (aValue > bValue) {
-					return sortConfig.direction === 'asc' ? 1 : 1;
+					return sortConfig.direction === 'asc' ? 1 : -1;
 				}
 				return 0;
 			});
 		}
 		
 		return filtered;
-	}, [transactions, filters, sortConfig, allMembers]);
+	})();
 
 	const requestSort = (key) => {
 		let direction = 'asc';
@@ -245,21 +290,6 @@ const FinancialTracker = () => {
 	// Pagination
 	const totalPages = Math.ceil(filteredAndSortedTransactions.length / transactionsPerPage);
 	const paginatedTransactions = filteredAndSortedTransactions.slice((currentPage - 1) * transactionsPerPage, currentPage * transactionsPerPage);
-
-	if (loading || firestoreLoading) return <div className="p-4 text-blue-600">Loading financial tracker...</div>;
-	if (error) return <div className="p-4 text-red-600">Error loading data: {error.message}</div>;
-	if (!usersData || !historicalData) return <div className="p-4 text-orange-600">No data available.</div>;
-
-	// Calculate summary bubbles (per selected year)
-	const totalFees = transactions.filter(t => t.type === 'Fee').reduce((sum, t) => sum + Number(t.amount || 0), 0);
-	const totalPayouts = transactions.filter(t => t.type === 'Payout').reduce((sum, t) => sum + Number(t.amount || 0), 0);
-	const leagueBank = totalFees - totalPayouts;
-
-	// NOTE: Removed useMemo for this calculation to resolve the React Hook error.
-	// The calculation is simple and doesn't require memoization for performance.
-	const transactionBank = transactions
-		.filter(t => t.type === 'Fee' && (t.category === 'Trade Fee' || t.category === 'Waiver/FA Fee'))
-		.reduce((sum, t) => sum + Number(t.amount || 0), 0);
 
 	// New function to handle CSV export
 	const handleExport = () => {
@@ -300,10 +330,9 @@ const FinancialTracker = () => {
 		e.preventDefault();
 		if (!isAdmin) return;
 
-		setTransactionsByYear(prev => {
-			const prevYearTx = prev[selectedYear] || [];
-			
-			let newTxs = [...prevYearTx];
+        setFinancesByYear(prev => {
+            const yearData = { ...(prev[selectedYear] || { transactions: [], potentialFees: [], potentialPayouts: [] }) };
+            let newTxs = [...yearData.transactions];
 
 			// If editing, find and replace the transaction
 			if (editingTransaction) {
@@ -335,7 +364,8 @@ const FinancialTracker = () => {
 				}
 			}
 
-			return { ...prev, [selectedYear]: newTxs };
+            yearData.transactions = newTxs;
+            return { ...prev, [selectedYear]: yearData };
 		});
 
 		// Reset form and clear messages
@@ -361,13 +391,13 @@ const FinancialTracker = () => {
 	const handleDeleteTransaction = (transactionsToDelete) => {
 		if (!isAdmin) return;
 		
-		setTransactionsByYear(prev => {
-			const prevYearTx = prev[selectedYear] || [];
-			const transactionDatesToDelete = new Set(transactionsToDelete.map(t => t.date));
+        setFinancesByYear(prev => {
+            const yearData = { ...(prev[selectedYear] || { transactions: [], potentialFees: [], potentialPayouts: [] }) };
+            const transactionDatesToDelete = new Set(transactionsToDelete.map(t => t.date));
 			
-			const newTxs = prevYearTx.filter(t => !transactionDatesToDelete.has(t.date));
+            yearData.transactions = yearData.transactions.filter(t => !transactionDatesToDelete.has(t.date));
 			
-			return { ...prev, [selectedYear]: newTxs };
+            return { ...prev, [selectedYear]: yearData };
 		});
 		setSelectedTransactions([]); // Clear selections
 		setTransactionMessage({ text: 'Transaction(s) deleted successfully!', type: 'success' });
@@ -388,6 +418,40 @@ const FinancialTracker = () => {
 	};
 	
 	const allTransactionsSelected = selectedTransactions.length === paginatedTransactions.length && paginatedTransactions.length > 0;
+	
+	// Handle adding/deleting potential transactions
+	const handleAddPotentialTransaction = (e, type) => {
+		e.preventDefault();
+		if (!isAdmin) return;
+		const newPotentialTx = {
+			id: new Date().toISOString(), // Unique ID for potential transaction
+			...potentialFormInput,
+		};
+        setFinancesByYear(prev => {
+            const yearData = { ...(prev[selectedYear] || { transactions: [], potentialFees: [], potentialPayouts: [] }) };
+            if (type === 'fees') {
+                yearData.potentialFees = [...yearData.potentialFees, newPotentialTx];
+            } else {
+                yearData.potentialPayouts = [...yearData.potentialPayouts, newPotentialTx];
+            }
+            return { ...prev, [selectedYear]: yearData };
+        });
+		setShowPotentialForm(null);
+		setPotentialFormInput({ description: '', amount: '' });
+	};
+
+	const handleDeletePotentialTransaction = (id, type) => {
+		if (!isAdmin) return;
+        setFinancesByYear(prev => {
+            const yearData = { ...(prev[selectedYear] || { transactions: [], potentialFees: [], potentialPayouts: [] }) };
+            if (type === 'fees') {
+                yearData.potentialFees = yearData.potentialFees.filter(t => t.id !== id);
+            } else {
+                yearData.potentialPayouts = yearData.potentialPayouts.filter(t => t.id !== id);
+            }
+            return { ...prev, [selectedYear]: yearData };
+        });
+	};
 
 	return (
 		<div className="p-4 max-w-5xl mx-auto font-sans">
@@ -411,7 +475,7 @@ const FinancialTracker = () => {
 				</label>
 			</div>
 			{/* Summary Bubbles */}
-			<div className="flex flex-wrap justify-center gap-4 mb-8">
+			<div className="flex flex-wrap justify-center gap-4 mb-8 relative">
 				<div className="flex flex-col items-center bg-blue-50 rounded-lg px-6 py-3 shadow-md text-blue-800 min-w-[120px]">
 					<span className="text-xs font-semibold uppercase tracking-wide">League Bank</span>
 					<span className="text-2xl font-bold">${leagueBank.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
@@ -431,6 +495,14 @@ const FinancialTracker = () => {
 					<span className="text-xs font-semibold uppercase tracking-wide">Transaction Bank</span>
 					<span className="text-2xl font-bold">${transactionBank.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
 				</div>
+				<button
+					className={`absolute top-4 right-4 rounded-full w-10 h-10 flex items-center justify-center text-2xl font-bold transition-transform duration-200 transform ${isAdmin ? 'bg-blue-600 text-white hover:scale-110' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
+					onClick={() => isAdmin && setShowTransactionForm(v => !v)}
+					disabled={!isAdmin}
+					title="Add New Transaction"
+				>
+					+
+				</button>
 			</div>
 			<div className="flex flex-col md:flex-row md:justify-between md:items-center mb-6 gap-4">
 				<div>
@@ -467,13 +539,6 @@ const FinancialTracker = () => {
 
 			{/* Commish-only transaction entry section */}
 			<div className="mb-8 bg-white rounded-lg shadow-md p-6 border border-blue-200">
-				<button
-					className={`mb-4 px-4 py-2 rounded-lg font-semibold text-sm transition-colors duration-200 ${isAdmin ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
-					onClick={() => isAdmin && setShowTransactionForm(v => !v)}
-					disabled={!isAdmin}
-				>
-					{showTransactionForm ? 'Hide Transaction Entry' : 'Add Fee/Payout Transaction'}
-				</button>
 				{showTransactionForm && (
 					<form
 						className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end bg-blue-50 p-4 rounded-lg"
@@ -937,7 +1002,6 @@ const FinancialTracker = () => {
 													</button>
 													<button
 														className="text-red-600 hover:text-red-800 font-bold text-lg"
-														title="Delete transaction"
 														onClick={() => handleDeleteTransaction([t])}
 													>
 														&#10006;
@@ -965,6 +1029,150 @@ const FinancialTracker = () => {
 					))}
 				</div>
 			</div>
+
+			{/* New Fees & Payouts Summary Section */}
+            <div className="mb-10 bg-white rounded-lg shadow-md p-6 border border-gray-100">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-semibold text-red-800">Potential Fees ({selectedYear})</h3>
+                    <button
+                        className={`rounded-full w-8 h-8 flex items-center justify-center text-xl font-bold transition-transform duration-200 transform ${isAdmin ? 'bg-blue-600 text-white hover:scale-110' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
+                        onClick={() => isAdmin && setShowPotentialForm('fees')}
+                        disabled={!isAdmin}
+                        title="Add Potential Fee"
+                    >
+                        +
+                    </button>
+                </div>
+                {potentialFees.length > 0 ? (
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm text-sm">
+                            <thead className="bg-red-50">
+                                <tr>
+                                    <th className="py-2 px-3 text-left">Description</th>
+                                    <th className="py-2 px-3 text-center">Amount</th>
+                                    <th className="py-2 px-3 text-center">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {potentialFees.map(item => (
+                                    <tr key={item.id} className="even:bg-gray-50">
+                                        <td className="py-2 px-3 font-semibold text-gray-800 whitespace-nowrap">{item.description}</td>
+                                        <td className="py-2 px-3 text-center">${Number(item.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                        <td className="py-2 px-3 text-center">
+                                            <button
+                                                className="text-red-600 hover:text-red-800 font-bold text-lg"
+                                                onClick={() => handleDeletePotentialTransaction(item.id, 'fees')}
+                                                disabled={!isAdmin}
+                                            >
+                                                &#10006;
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                ) : (
+                    <div className="text-center text-gray-500 py-4 italic">No potential fees for this year.</div>
+                )}
+            </div>
+
+            <div className="mb-10 bg-white rounded-lg shadow-md p-6 border border-gray-100">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-semibold text-green-800">Potential Payouts ({selectedYear})</h3>
+                    <button
+                        className={`rounded-full w-8 h-8 flex items-center justify-center text-xl font-bold transition-transform duration-200 transform ${isAdmin ? 'bg-blue-600 text-white hover:scale-110' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
+                        onClick={() => isAdmin && setShowPotentialForm('payouts')}
+                        disabled={!isAdmin}
+                        title="Add Potential Payout"
+                    >
+                        +
+                    </button>
+                </div>
+                {potentialPayouts.length > 0 ? (
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm text-sm">
+                            <thead className="bg-green-50">
+                                <tr>
+                                    <th className="py-2 px-3 text-left">Description</th>
+                                    <th className="py-2 px-3 text-center">Amount</th>
+                                    <th className="py-2 px-3 text-center">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {potentialPayouts.map(item => (
+                                    <tr key={item.id} className="even:bg-gray-50">
+                                        <td className="py-2 px-3 font-semibold text-gray-800 whitespace-nowrap">{item.description}</td>
+                                        <td className="py-2 px-3 text-center">${Number(item.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                        <td className="py-2 px-3 text-center">
+                                            <button
+                                                className="text-red-600 hover:text-red-800 font-bold text-lg"
+                                                onClick={() => handleDeletePotentialTransaction(item.id, 'payouts')}
+                                                disabled={!isAdmin}
+                                            >
+                                                &#10006;
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                ) : (
+                    <div className="text-center text-gray-500 py-4 italic">No potential payouts for this year.</div>
+                )}
+            </div>
+
+			{/* Modal for adding potential transaction */}
+            {showPotentialForm && (
+                <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg p-6 shadow-xl w-full max-w-sm mx-auto">
+                        <h3 className="text-xl font-bold mb-4">Add Potential {showPotentialForm === 'fees' ? 'Fee' : 'Payout'}</h3>
+                        <form onSubmit={(e) => handleAddPotentialTransaction(e, showPotentialForm)}>
+                            <div className="mb-4">
+                                <label className="block text-gray-700 text-sm font-bold mb-2">Description</label>
+                                <input
+                                    type="text"
+                                    className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                                    value={potentialFormInput.description}
+                                    onChange={(e) => setPotentialFormInput(p => ({ ...p, description: e.target.value }))}
+                                    required
+                                />
+                            </div>
+                            <div className="mb-4">
+                                <label className="block text-gray-700 text-sm font-bold mb-2">Amount ($)</label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                                    value={potentialFormInput.amount}
+                                    onChange={(e) => setPotentialFormInput(p => ({ ...p, amount: e.target.value }))}
+                                    required
+                                />
+                            </div>
+                            <div className="flex justify-end gap-2">
+                                <button
+                                    type="button"
+                                    className="bg-gray-400 text-white font-bold py-2 px-4 rounded hover:bg-gray-500 transition duration-200"
+                                    onClick={() => {
+                                        setShowPotentialForm(null);
+                                        setPotentialFormInput({ description: '', amount: '' });
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="bg-green-500 text-white font-bold py-2 px-4 rounded hover:bg-green-600 transition duration-200"
+                                >
+                                    Save
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 		</div>
 	);
 };
