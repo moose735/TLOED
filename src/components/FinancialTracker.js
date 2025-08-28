@@ -2,8 +2,8 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useSleeperData } from '../contexts/SleeperDataContext';
 import { getAuth, signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
+import { getFirestore, doc, getDoc, setDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 
 // Your Firebase Config (should be replaced by env vars in a real app)
 const firebaseConfig = {
@@ -223,11 +223,25 @@ const FinancialTracker = () => {
 		return () => unsub();
 	}, [selectedYear]);
 
+	// --- NEW HELPER FUNCTION TO GET TRANSACTION TOTAL ---
+	// This function calculates the total value of a transaction,
+	// which is amount * number of teams for trade fees, and just amount otherwise.
+	const getTransactionTotal = (transaction) => {
+		if (transaction.category === 'Trade Fee' && Array.isArray(transaction.team)) {
+			return Number(transaction.amount || 0) * transaction.team.length;
+		}
+		return Number(transaction.amount || 0);
+	};
+	// --------------------------------------------------
+
 	// Summary calculations for the selected year's data
 	const transactionBank = currentYearData.transactions
 		.filter(t => t.type === 'Fee' && (t.category === 'Trade Fee' || t.category === 'Waiver/FA Fee'))
-		.reduce((sum, t) => sum + Number(t.amount || 0), 0);
-	const totalFees = currentYearData.transactions.filter(t => t.type === 'Fee').reduce((sum, t) => sum + Number(t.amount || 0), 0);
+		// --- UPDATED: Use the new helper function to get the correct total for each transaction. ---
+		.reduce((sum, t) => sum + getTransactionTotal(t), 0);
+	const totalFees = currentYearData.transactions.filter(t => t.type === 'Fee')
+		// --- UPDATED: Use the new helper function to get the correct total for all fees. ---
+		.reduce((sum, t) => sum + getTransactionTotal(t), 0);
 	const totalPayouts = currentYearData.transactions.filter(t => t.type === 'Payout').reduce((sum, t) => sum + Number(t.amount || 0), 0);
 	const leagueBank = totalFees - totalPayouts;
 
