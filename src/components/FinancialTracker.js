@@ -7,7 +7,7 @@ import { getFirestore, doc, getDoc, setDoc, onSnapshot } from 'firebase/firestor
 
 // Your Firebase Config (should be replaced by env vars in a real app)
 const firebaseConfig = {
-	apiKey: 'AIzaSyDcuPXsRPIdX-NYblBqQkdXqrGiD6yobcA',
+	apiKey: 'AIzaSyDcuPXgRPIdX-NYblBqQkdXqrGiD6yobcA',
 	authDomain: 'tloed-finance-tracker.firebaseapp.com',
 	projectId: 'tloed-finance-tracker',
 	storageBucket: 'tloed-finance-tracker.appspot.com',
