@@ -1,4 +1,4 @@
-//src/components/FinancialTracker.js
+// src/components/FinancialTracker.js
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useSleeperData } from '../contexts/SleeperDataContext';
 import { getAuth, signInWithEmailAndPassword, signOut } from 'firebase/auth';
@@ -176,7 +176,7 @@ const FinancialTracker = () => {
 				}
 				
 				if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
-				if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+				if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : 1;
 				return 0;
 			});
 		}
@@ -307,24 +307,35 @@ const FinancialTracker = () => {
 		let messageText;
 	
 		if (editingTransaction) {
+			// **FIX:** Now using the unique 'id' for editing.
 			newTransactions = currentYearData.transactions.map(t =>
-				t.date === editingTransaction.date ? { ...transaction, date: editingTransaction.date } : t
+				t.id === editingTransaction.id ? { ...transaction, id: editingTransaction.id, date: new Date().toISOString() } : t
 			);
 			messageText = 'Transaction updated successfully!';
 			setEditingTransaction(null);
 		} else {
-			const baseTransaction = { ...transaction, date: new Date().toISOString() };
 			const transactionsToAdd = [];
+			// **FIX:** Generate a unique ID for the base transaction.
+			const baseTransaction = { ...transaction, id: crypto.randomUUID(), date: new Date().toISOString() };
 	
-			transaction.team.forEach(teamId => {
-				if (baseTransaction.category === 'Waiver/FA Fee' && baseTransaction.quantity > 1) {
+			// **FIX:** Corrected logic to handle Waiver/FA fees and ensure unique IDs for each.
+			// This now correctly creates multiple transactions, each with a unique ID and date.
+			if (baseTransaction.category === 'Waiver/FA Fee' && baseTransaction.quantity > 1) {
+				baseTransaction.team.forEach(teamId => {
 					for (let i = 0; i < baseTransaction.quantity; i++) {
-						transactionsToAdd.push({ ...baseTransaction, quantity: 1, description: `Waiver/FA Fee #${i + 1}`, team: teamId });
+						transactionsToAdd.push({
+							...baseTransaction,
+							id: crypto.randomUUID(), // Each transaction gets a unique ID
+							quantity: 1, // Set quantity to 1 for individual transactions
+							description: `Waiver/FA Fee #${i + 1}`,
+							team: [teamId], // Ensure team is an array
+							date: new Date().toISOString() // Each transaction gets a unique date
+						});
 					}
-				} else {
-					transactionsToAdd.push({ ...baseTransaction, team: teamId });
-				}
-			});
+				});
+			} else {
+				transactionsToAdd.push({ ...baseTransaction, team: baseTransaction.team }); // Ensure team is the array from state
+			}
 	
 			newTransactions = [...currentYearData.transactions, ...transactionsToAdd];
 			messageText = 'Transaction saved successfully!';
@@ -359,8 +370,9 @@ const FinancialTracker = () => {
 	const handleDeleteTransaction = async (transactionsToDelete) => {
 		if (!isAdmin) return;
 		
-		const transactionDatesToDelete = new Set(transactionsToDelete.map(t => t.date));
-		const newTransactions = currentYearData.transactions.filter(t => !transactionDatesToDelete.has(t.date));
+		// **FIX:** Use a unique ID set instead of a date set for filtering.
+		const transactionIdsToDelete = new Set(transactionsToDelete.map(t => t.id));
+		const newTransactions = currentYearData.transactions.filter(t => !transactionIdsToDelete.has(t.id));
 
 		try {
 			const docRef = doc(db, 'league_finances', selectedYear);
@@ -378,7 +390,8 @@ const FinancialTracker = () => {
 		if (isChecked) {
 			setSelectedTransactions(prev => [...prev, transaction]);
 		} else {
-			setSelectedTransactions(prev => prev.filter(t => t.date !== transaction.date));
+			// **FIX:** Use the unique ID for filtering when deselecting.
+			setSelectedTransactions(prev => prev.filter(t => t.id !== transaction.id));
 		}
 	};
 	
@@ -969,12 +982,14 @@ const FinancialTracker = () => {
 									allMembers.find(m => m.userId === t.team)?.displayName || t.team;
 								const displayDate = t.date ? (isNaN(new Date(t.date)) ? 'Invalid Date' : new Date(t.date).toLocaleString()) : '';
 								return (
-									<tr key={t.date} className="even:bg-gray-50">
+									// **FIX:** Use the unique 'id' as the key for React's rendering to prevent duplication.
+									<tr key={t.id} className="even:bg-gray-50">
 										{isAdmin && <td className="py-2 px-3 text-center">
 											<input 
 												type="checkbox" 
 												className="form-checkbox" 
-												checked={selectedTransactions.some(selT => selT.date === t.date)}
+												// **FIX:** Use 'id' for comparison
+												checked={selectedTransactions.some(selT => selT.id === t.id)}
 												onChange={(e) => handleSelectTransaction(t, e.target.checked)}
 											/>
 										</td>}
