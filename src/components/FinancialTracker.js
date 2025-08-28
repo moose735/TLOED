@@ -1033,12 +1033,12 @@ const FinancialTracker = () => {
 			{/* New Fees & Payouts Summary Section */}
             <div className="mb-10 bg-white rounded-lg shadow-md p-6 border border-gray-100">
                 <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-semibold text-red-800">Potential Fees ({selectedYear})</h3>
+                    <h3 className="text-xl font-semibold text-red-800">Fees ({selectedYear})</h3>
                     <button
                         className={`rounded-full w-8 h-8 flex items-center justify-center text-xl font-bold transition-transform duration-200 transform ${isAdmin ? 'bg-blue-600 text-white hover:scale-110' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
                         onClick={() => isAdmin && setShowPotentialForm('fees')}
                         disabled={!isAdmin}
-                        title="Add Potential Fee"
+                        title="Add Fee"
                     >
                         +
                     </button>
@@ -1073,18 +1073,18 @@ const FinancialTracker = () => {
                         </table>
                     </div>
                 ) : (
-                    <div className="text-center text-gray-500 py-4 italic">No potential fees for this year.</div>
+                    <div className="text-center text-gray-500 py-4 italic">No fees for this year.</div>
                 )}
             </div>
 
             <div className="mb-10 bg-white rounded-lg shadow-md p-6 border border-gray-100">
                 <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-semibold text-green-800">Potential Payouts ({selectedYear})</h3>
+                    <h3 className="text-xl font-semibold text-green-800">Payouts ({selectedYear})</h3>
                     <button
                         className={`rounded-full w-8 h-8 flex items-center justify-center text-xl font-bold transition-transform duration-200 transform ${isAdmin ? 'bg-blue-600 text-white hover:scale-110' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
                         onClick={() => isAdmin && setShowPotentialForm('payouts')}
                         disabled={!isAdmin}
-                        title="Add Potential Payout"
+                        title="Add Payout"
                     >
                         +
                     </button>
@@ -1119,7 +1119,7 @@ const FinancialTracker = () => {
                         </table>
                     </div>
                 ) : (
-                    <div className="text-center text-gray-500 py-4 italic">No potential payouts for this year.</div>
+                    <div className="text-center text-gray-500 py-4 italic">No payouts for this year.</div>
                 )}
             </div>
 
@@ -1127,7 +1127,7 @@ const FinancialTracker = () => {
             {showPotentialForm && (
                 <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
                     <div className="bg-white rounded-lg p-6 shadow-xl w-full max-w-sm mx-auto">
-                        <h3 className="text-xl font-bold mb-4">Add Potential {showPotentialForm === 'fees' ? 'Fee' : 'Payout'}</h3>
+                        <h3 className="text-xl font-bold mb-4">Add {showPotentialForm === 'fees' ? 'Fee' : 'Payout'}</h3>
                         <form onSubmit={(e) => handleAddPotentialTransaction(e, showPotentialForm)}>
                             <div className="mb-4">
                                 <label className="block text-gray-700 text-sm font-bold mb-2">Description</label>
