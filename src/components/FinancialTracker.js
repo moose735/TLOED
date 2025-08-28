@@ -360,26 +360,27 @@ const FinancialTracker = () => {
 			setEditingTransaction(null);
 		} else {
 			const transactionsToAdd = [];
-			// **FIX:** Generate a unique ID for the base transaction.
-			const baseTransaction = { ...transaction, id: crypto.randomUUID(), date: new Date().toISOString() };
 	
-			// **FIX:** Corrected logic to handle Waiver/FA fees and ensure unique IDs for each.
-			// This now correctly creates multiple transactions, each with a unique ID and date.
-			if (baseTransaction.category === 'Waiver/FA Fee' && baseTransaction.quantity > 1) {
-				baseTransaction.team.forEach(teamId => {
-					for (let i = 0; i < baseTransaction.quantity; i++) {
-						transactionsToAdd.push({
-							...baseTransaction,
-							id: crypto.randomUUID(), // Each transaction gets a unique ID
-							quantity: 1, // Set quantity to 1 for individual transactions
-							description: `Waiver/FA Fee #${i + 1}`,
-							team: [teamId], // Ensure team is an array
-							date: new Date().toISOString() // Each transaction gets a unique date
-						});
-					}
+			// **FIX:** Corrected logic to handle Entry Fee and Waiver/FA Fee correctly
+			if (transaction.category === 'Waiver/FA Fee' || transaction.category === 'Entry Fee') {
+				// Iterate over each selected team and create a separate transaction
+				transaction.team.forEach(teamId => {
+					transactionsToAdd.push({
+						...transaction,
+						id: crypto.randomUUID(), // Each transaction gets a unique ID
+						quantity: 1, // Quantity is 1 for each individual transaction
+						team: [teamId], // Ensure team is an array with a single ID
+						date: new Date().toISOString()
+					});
 				});
 			} else {
-				transactionsToAdd.push({ ...baseTransaction, team: baseTransaction.team }); // Ensure team is the array from state
+				// For other categories, add a single transaction with all selected teams
+				transactionsToAdd.push({
+					...transaction,
+					id: crypto.randomUUID(),
+					team: transaction.team,
+					date: new Date().toISOString()
+				});
 			}
 	
 			newTransactions = [...currentYearData.transactions, ...transactionsToAdd];
