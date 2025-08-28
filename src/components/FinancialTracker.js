@@ -7,7 +7,7 @@ import { getFirestore, doc, getDoc, setDoc, onSnapshot } from 'firebase/firestor
 
 // Your Firebase Config (should be replaced by env vars in a real app)
 const firebaseConfig = {
-	apiKey: 'AIzaSyDcuPXgRPIdX-NYblBqQkdXqrGiD6yobcA',
+	apiKey: 'AIzaSyDcuPXsRPIdX-NYblBqQkdXqrGiD6yobcA',
 	authDomain: 'tloed-finance-tracker.firebaseapp.com',
 	projectId: 'tloed-finance-tracker',
 	storageBucket: 'tloed-finance-tracker.appspot.com',
@@ -883,22 +883,37 @@ const FinancialTracker = () => {
 							<tr>
 								<th className="py-2 px-3 text-left">Member</th>
 								<th className="py-2 px-3 text-center">Total Fees</th>
+								<th className="py-2 px-3 text-center">Transaction Fees</th>
 								<th className="py-2 px-3 text-center">Total Payouts</th>
 								<th className="py-2 px-3 text-center">Net Total</th>
+								{/* --- NEW: Added new column for final dues (payouts - transaction fees) --- */}
+								<th className="py-2 px-3 text-center">Final Dues</th>
+								{/* -------------------------------------------------------------------------- */}
 							</tr>
 						</thead>
 						<tbody>
 							{allMembers.map(member => {
 								const memberFees = currentYearData.transactions.filter(t => t.type === 'Fee' && (Array.isArray(t.team) ? t.team.includes(member.userId) : t.team === member.userId)).reduce((sum, t) => sum + Number(t.amount || 0), 0);
+								const memberTransactionFees = currentYearData.transactions.filter(t => t.type === 'Fee' && (t.category === 'Trade Fee' || t.category === 'Waiver/FA Fee') && (Array.isArray(t.team) ? t.team.includes(member.userId) : t.team === member.userId)).reduce((sum, t) => sum + Number(t.amount || 0), 0);
 								const memberPayouts = currentYearData.transactions.filter(t => t.type === 'Payout' && (Array.isArray(t.team) ? t.team.includes(member.userId) : t.team === member.userId)).reduce((sum, t) => sum + Number(t.amount || 0), 0);
 								const netTotal = memberPayouts - memberFees;
 								const netColor = netTotal < 0 ? 'text-red-600' : 'text-green-600';
+
+								// --- NEW: Calculate the final dues excluding the entry fee ---
+								const finalDues = memberPayouts - memberTransactionFees;
+								const finalDuesColor = finalDues < 0 ? 'text-red-600' : 'text-green-600';
+								// --------------------------------------------------------------
+
 								return (
 									<tr key={member.userId} className="even:bg-gray-50">
 										<td className="py-2 px-3 font-semibold text-gray-800 whitespace-nowrap">{member.displayName}</td>
 										<td className="py-2 px-3 text-center">${memberFees.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+										<td className="py-2 px-3 text-center">${memberTransactionFees.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
 										<td className="py-2 px-3 text-center">${memberPayouts.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
 										<td className={`py-2 px-3 text-center font-bold ${netColor}`}>${netTotal.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+										{/* --- NEW: Display the calculated final dues amount --- */}
+										<td className={`py-2 px-3 text-center font-bold ${finalDuesColor}`}>${finalDues.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+										{/* ------------------------------------------------------ */}
 									</tr>
 								);
 							})}
