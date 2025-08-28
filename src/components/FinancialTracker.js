@@ -255,6 +255,12 @@ const FinancialTracker = () => {
 	const totalPayouts = transactions.filter(t => t.type === 'Payout').reduce((sum, t) => sum + Number(t.amount || 0), 0);
 	const leagueBank = totalFees - totalPayouts;
 
+	// NOTE: Removed useMemo for this calculation to resolve the React Hook error.
+	// The calculation is simple and doesn't require memoization for performance.
+	const transactionBank = transactions
+		.filter(t => t.type === 'Fee' && (t.category === 'Trade Fee' || t.category === 'Waiver/FA Fee'))
+		.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+
 	// New function to handle CSV export
 	const handleExport = () => {
 		// Define columns for the CSV
@@ -296,7 +302,7 @@ const FinancialTracker = () => {
 
 		setTransactionsByYear(prev => {
 			const prevYearTx = prev[selectedYear] || [];
-			const now = new Date().toISOString();
+			
 			let newTxs = [...prevYearTx];
 
 			// If editing, find and replace the transaction
@@ -313,19 +319,19 @@ const FinancialTracker = () => {
 					if (transaction.team1 && transaction.team2) {
 						newTxs = [
 							...newTxs,
-							{ ...transaction, team: transaction.team1, date: now + '-1' },
-							{ ...transaction, team: transaction.team2, date: now + '-2' }
+							{ ...transaction, team: transaction.team1, date: new Date().toISOString() },
+							{ ...transaction, team: transaction.team2, date: new Date().toISOString() }
 						];
 					}
 				} else if (transaction.team === 'ALL') {
 					// Add one transaction per team
 					newTxs = [
 						...newTxs,
-						...allMembers.map((m, i) => ({ ...transaction, team: m.userId, date: now + '-' + i }))
+						...allMembers.map((m) => ({ ...transaction, team: m.userId, date: new Date().toISOString() }))
 					];
 				} else {
 					// Add a single transaction
-					newTxs = [...newTxs, { ...transaction, date: now }];
+					newTxs = [...newTxs, { ...transaction, date: new Date().toISOString() }];
 				}
 			}
 
@@ -410,13 +416,20 @@ const FinancialTracker = () => {
 					<span className="text-xs font-semibold uppercase tracking-wide">League Bank</span>
 					<span className="text-2xl font-bold">${leagueBank.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
 				</div>
-				<div className="flex flex-col items-center bg-green-50 rounded-lg px-6 py-3 shadow-md text-green-800 min-w-[120px]">
+				{/* The color of the Total Fees card is now red */}
+				<div className="flex flex-col items-center bg-red-50 rounded-lg px-6 py-3 shadow-md text-red-800 min-w-[120px]">
 					<span className="text-xs font-semibold uppercase tracking-wide">Total Fees</span>
 					<span className="text-2xl font-bold">${totalFees.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
 				</div>
-				<div className="flex flex-col items-center bg-red-50 rounded-lg px-6 py-3 shadow-md text-red-800 min-w-[120px]">
+				{/* The color of the Total Payouts card is now green */}
+				<div className="flex flex-col items-center bg-green-50 rounded-lg px-6 py-3 shadow-md text-green-800 min-w-[120px]">
 					<span className="text-xs font-semibold uppercase tracking-wide">Total Payouts</span>
 					<span className="text-2xl font-bold">${totalPayouts.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
+				</div>
+				{/* New Transaction Bank card */}
+				<div className="flex flex-col items-center bg-yellow-50 rounded-lg px-6 py-3 shadow-md text-yellow-800 min-w-[120px]">
+					<span className="text-xs font-semibold uppercase tracking-wide">Transaction Bank</span>
+					<span className="text-2xl font-bold">${transactionBank.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
 				</div>
 			</div>
 			<div className="flex flex-col md:flex-row md:justify-between md:items-center mb-6 gap-4">
