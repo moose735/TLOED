@@ -152,6 +152,37 @@ const FinancialTracker = () => {
         });
         return result;
     }, [historicalData]);
+    
+    // Helper function for sorting
+    const sortData = (data, key, direction, allMembers) => {
+        const sortedData = [...data].sort((a, b) => {
+            let aValue = a[key];
+            let bValue = b[key];
+
+            // Handle specific data types for sorting
+            if (key === 'amount') {
+                aValue = Number(aValue);
+                bValue = Number(bValue);
+            } else if (key === 'date') {
+                aValue = new Date(aValue);
+                bValue = new Date(bValue);
+            } else if (key === 'team') {
+                const getTeamDisplayName = (teamId) => allMembers.find(m => m.userId === teamId)?.displayName || teamId;
+                aValue = Array.isArray(a.team) ? a.team.map(getTeamDisplayName).join(', ') : getTeamDisplayName(a.team);
+                bValue = Array.isArray(b.team) ? b.team.map(getTeamDisplayName).join(', ') : getTeamDisplayName(b.team);
+            }
+
+            // Corrected comparison logic
+            if (aValue < bValue) {
+                return direction === 'asc' ? -1 : 1;
+            }
+            if (aValue > bValue) {
+                return direction === 'asc' ? 1 : -1;
+            }
+            return 0;
+        });
+        return sortedData;
+    };
 
 	// Filter and sort transactions
 	const filteredAndSortedTransactions = useMemo(() => {
@@ -162,21 +193,7 @@ const FinancialTracker = () => {
 		});
 
 		if (sortConfig.key) {
-			filtered.sort((a, b) => {
-				let aValue = a[sortConfig.key];
-				let bValue = b[sortConfig.key];
-				if (sortConfig.key === 'amount') { aValue = Number(aValue); bValue = Number(bValue); }
-				if (sortConfig.key === 'date') { aValue = new Date(aValue); bValue = new Date(bValue); }
-				if (sortConfig.key === 'team') {
-					const getTeamDisplayName = (teamId) => allMembers.find(m => m.userId === teamId)?.displayName || teamId;
-					aValue = Array.isArray(a.team) ? a.team.map(getTeamDisplayName).join(', ') : getTeamDisplayName(a.team);
-					bValue = Array.isArray(b.team) ? b.team.map(getTeamDisplayName).join(', ') : getTeamDisplayName(b.team);
-				}
-				
-				if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
-				if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : 1;
-				return 0;
-			});
+			filtered = sortData(filtered, sortConfig.key, sortConfig.direction, allMembers);
 		}
 		
 		return filtered;
@@ -858,7 +875,7 @@ const FinancialTracker = () => {
 				</div>
 			)}
 			<div className="mb-10 bg-white rounded-lg shadow-md p-6 border border-gray-100">
-				<h3 className="text-xl font-semibold text-blue-800 mb-4">League Members & Dues</h3>
+				<h3 className="text-xl font-semibold text-blue-800">League Members & Dues</h3>
 				<div className="overflow-x-auto">
 					<table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm text-sm">
 						<thead className="bg-blue-50">
