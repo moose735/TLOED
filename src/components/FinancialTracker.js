@@ -1,9 +1,9 @@
 // src/components/FinancialTracker.js
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useSleeperData } from '../contexts/SleeperDataContext';
-import { getAuth, signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
-import { getFirestore, doc, getDoc, setDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
+import { initializeApp } from 'firebase/app';
+import { getFirestore, doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 
 // Your Firebase Config (should be replaced by env vars in a real app)
 const firebaseConfig = {
@@ -19,16 +19,11 @@ const firebaseConfig = {
 // Commissioner's UID for admin access
 const COMMISH_UID = 'QzIJSZWBHgSzhmC6pOOiuJNxbI83';
 
-// Initialize Firebase only once
-if (!window._firebaseInitialized) {
-	initializeApp(firebaseConfig);
-	window._firebaseInitialized = true;
-}
-const db = getFirestore();
-
 const FinancialTracker = () => {
 	const { loading, error, usersData, historicalData } = useSleeperData();
 	const [authUser, setAuthUser] = useState(null);
+	const [db, setDb] = useState(null);
+	const [auth, setAuth] = useState(null);
 	const [login, setLogin] = useState({ email: '', password: '' });
 	const [authError, setAuthError] = useState('');
 	const [showCommishLogin, setShowCommishLogin] = useState(false);
@@ -56,6 +51,9 @@ const FinancialTracker = () => {
 	// State to hold data for the selected year only
 	const [currentYearData, setCurrentYearData] = useState({ transactions: [], potentialFees: [], potentialPayouts: [] });
 	const [firestoreLoading, setFirestoreLoading] = useState(true);
+    
+    // New state to manage the expanded state of team lists in the table
+    const [expandedTransactionId, setExpandedTransactionId] = useState(null);
 
 	// Fee and payout description options
 	const FEE_DESCRIPTIONS = [
@@ -188,13 +186,29 @@ const FinancialTracker = () => {
 	const totalPages = Math.ceil(filteredAndSortedTransactions.length / transactionsPerPage);
 	const paginatedTransactions = filteredAndSortedTransactions.slice((currentPage - 1) * transactionsPerPage, currentPage * transactionsPerPage);
 
-	// Firebase Auth state listener
+	// --- FIX: Correct Firebase Initialization and Auth Logic ---
 	useEffect(() => {
-		const auth = getAuth();
-		const unsub = auth.onAuthStateChanged(user => setAuthUser(user));
-		return () => unsub();
-	}, []);
+		// Only initialize Firebase once, even with hot reloads
+		if (!window.firebaseApp) {
+			window.firebaseApp = initializeApp(firebaseConfig);
+		}
+		const app = window.firebaseApp;
+		
+		const authInstance = getAuth(app);
+		const dbInstance = getFirestore(app);
 
+		setAuth(authInstance);
+		setDb(dbInstance);
+
+		const unsubAuth = onAuthStateChanged(authInstance, user => {
+			setAuthUser(user);
+		});
+
+		return () => {
+			unsubAuth();
+		};
+	}, []);
+	
 	useEffect(() => {
 		if (allSeasons.length > 0 && !selectedYear) {
 			setSelectedYear(allSeasons[0]);
@@ -203,7 +217,7 @@ const FinancialTracker = () => {
 
 	// Firestore: Real-time updates for the selected year only
 	useEffect(() => {
-		if (!selectedYear) return;
+		if (!selectedYear || !db) return; // Add a check for db to prevent the error
 
 		setFirestoreLoading(true);
 		const docRef = doc(db, 'league_finances', selectedYear);
@@ -221,7 +235,7 @@ const FinancialTracker = () => {
         });
 
 		return () => unsub();
-	}, [selectedYear]);
+	}, [selectedYear, db]);
 
 	// --- NEW HELPER FUNCTION TO GET TRANSACTION TOTAL ---
 	// This function calculates the total value of a transaction,
@@ -252,9 +266,9 @@ const FinancialTracker = () => {
 	// Login form handler
 	const handleLogin = async e => {
 		e.preventDefault();
+		if (!auth) return;
 		setAuthError('');
 		try {
-			const auth = getAuth();
 			await signInWithEmailAndPassword(auth, login.email, login.password);
 		} catch (err) {
 			setAuthError('Login failed. Please check your credentials.');
@@ -263,7 +277,7 @@ const FinancialTracker = () => {
 
 	// Logout handler
 	const handleLogout = () => {
-		const auth = getAuth();
+		if (!auth) return;
 		signOut(auth);
 	};
 
@@ -311,7 +325,7 @@ const FinancialTracker = () => {
 	// Handle saving a new transaction or updating an existing one
 	const handleAddOrUpdateTransaction = async (e) => {
 		e.preventDefault();
-		if (!isAdmin) return;
+		if (!isAdmin || !db) return;
 		if (transaction.team.length === 0) {
 			setTransactionMessage({ text: 'Please select at least one team.', type: 'error' });
 			return;
@@ -382,7 +396,7 @@ const FinancialTracker = () => {
 
 	// Delete transaction handler (commish only)
 	const handleDeleteTransaction = async (transactionsToDelete) => {
-		if (!isAdmin) return;
+		if (!isAdmin || !db) return;
 		
 		// **FIX:** Use a unique ID set instead of a date set for filtering.
 		const transactionIdsToDelete = new Set(transactionsToDelete.map(t => t.id));
@@ -420,7 +434,7 @@ const FinancialTracker = () => {
 	// Handle adding/deleting potential transactions
 	const handleAddPotentialTransaction = async (e, type) => {
 		e.preventDefault();
-		if (!isAdmin) return;
+		if (!isAdmin || !db) return;
 		const newPotentialTx = {
 			id: new Date().toISOString(),
 			...potentialFormInput,
@@ -449,7 +463,7 @@ const FinancialTracker = () => {
 	};
 
 	const handleDeletePotentialTransaction = async (id, type) => {
-		if (!isAdmin) return;
+		if (!isAdmin || !db) return;
 		
 		const newPotentialArray = currentYearData[type === 'fees' ? 'potentialFees' : 'potentialPayouts'].filter(t => t.id !== id);
 
@@ -465,6 +479,41 @@ const FinancialTracker = () => {
 			setTransactionMessage({ text: `Error deleting potential ${type.slice(0, -1)}.`, type: 'error' });
 		}
 	};
+
+	// Helper function to render the truncated or full list of teams
+	const renderTeams = (transactionId, teams, allMembers, expandedId, setExpandedId) => {
+        const teamNames = Array.isArray(teams) ?
+            teams.map(id => allMembers.find(m => m.userId === id)?.displayName || id) :
+            [allMembers.find(m => m.userId === teams)?.displayName || teams];
+        
+        if (teamNames.length > 3 && expandedId !== transactionId) {
+            return (
+                <div className="flex flex-col items-start">
+                    <span>{teamNames.slice(0, 3).join(', ')} ...</span>
+                    <button 
+                        onClick={() => setExpandedId(transactionId)}
+                        className="text-blue-500 hover:text-blue-700 text-xs mt-1"
+                    >
+                        (+{teamNames.length - 3} more)
+                    </button>
+                </div>
+            );
+        }
+
+        return (
+            <div className="flex flex-col items-start">
+                <span>{teamNames.join(', ')}</span>
+                {teamNames.length > 3 && (
+                    <button
+                        onClick={() => setExpandedId(null)}
+                        className="text-gray-500 hover:text-gray-700 text-xs mt-1"
+                    >
+                        Show less
+                    </button>
+                )}
+            </div>
+        );
+    };
 
 	return (
 		<div className="p-4 max-w-5xl mx-auto font-sans">
@@ -664,7 +713,8 @@ const FinancialTracker = () => {
 								onClick={() => setShowTeamDropdown(!showTeamDropdown)}
 								className="w-full border rounded-lg px-2 py-2 text-left bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
 							>
-								{transaction.team.length === allMembers.length ? 'All Teams' :
+                                {transaction.team.length === allMembers.length ? 'All Teams' :
+                                transaction.team.length > 3 ? `${allMembers.find(m => m.userId === transaction.team[0])?.displayName || 'Team'}, ${allMembers.find(m => m.userId === transaction.team[1])?.displayName || 'Team'}, ${allMembers.find(m => m.userId === transaction.team[2])?.displayName || 'Team'}... (+${transaction.team.length - 3} more)` :
 								transaction.team.length > 0 ? transaction.team.map(id => allMembers.find(m => m.userId === id)?.displayName).join(', ') : 'Select Team(s)'}
 							</button>
 							{showTeamDropdown && (
@@ -675,11 +725,12 @@ const FinancialTracker = () => {
 											className="form-checkbox"
 											checked={transaction.team.length === allMembers.length}
 											onChange={e => {
-												if (e.target.checked) {
-													setTransaction(t => ({ ...t, team: allMembers.map(m => m.userId) }));
-												} else {
-													setTransaction(t => ({ ...t, team: [] }));
-												}
+												const isChecked = e.target.checked;
+												// FIX: Ensure the entire transaction object is spread correctly before updating the team property.
+												setTransaction(t => ({
+													...t,
+													team: isChecked ? allMembers.map(m => m.userId) : [],
+												}));
 											}}
 										/>
 										<span>All Teams</span>
@@ -692,13 +743,12 @@ const FinancialTracker = () => {
 												checked={transaction.team.includes(m.userId)}
 												onChange={e => {
 													const isChecked = e.target.checked;
+													// FIX: Ensure the entire transaction object is spread correctly before updating the team property.
 													setTransaction(t => {
-														const currentTeams = t.team;
-														if (isChecked) {
-															return { ...t, team: [...currentTeams, m.userId] };
-														} else {
-															return { ...t, team: currentTeams.filter(id => id !== m.userId) };
-														}
+														const newTeams = isChecked
+															? [...t.team, m.userId]
+															: t.team.filter(id => id !== m.userId);
+														return { ...t, team: newTeams };
 													});
 												}}
 											/>
@@ -991,9 +1041,6 @@ const FinancialTracker = () => {
 						</thead>
 						<tbody>
 							{paginatedTransactions.map((t) => {
-								const teamName = Array.isArray(t.team) ?
-									t.team.map(id => allMembers.find(m => m.userId === id)?.displayName || id).join(', ') :
-									allMembers.find(m => m.userId === t.team)?.displayName || t.team;
 								const displayDate = t.date ? (isNaN(new Date(t.date)) ? 'Invalid Date' : new Date(t.date).toLocaleString()) : '';
 								return (
 									// **FIX:** Use the unique 'id' as the key for React's rendering to prevent duplication.
@@ -1008,7 +1055,9 @@ const FinancialTracker = () => {
 											/>
 										</td>}
 										<td className="py-2 px-3 whitespace-nowrap">{displayDate}</td>
-										<td className="py-2 px-3 whitespace-nowrap">{teamName}</td>
+										<td className="py-2 px-3">
+											{renderTeams(t.id, t.team, allMembers, expandedTransactionId, setExpandedTransactionId)}
+										</td>
 										<td className="py-2 px-3 text-center">{t.type}</td>
 										<td className="py-2 px-3 text-center">${Number(t.amount || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
 										<td className="py-2 px-3 text-center">{t.category}</td>
