@@ -225,7 +225,7 @@ const FinancialTracker = () => {
 					return sortConfig.direction === 'asc' ? -1 : 1;
 				}
 				if (aValue > bValue) {
-					return sortConfig.direction === 'asc' ? 1 : -1;
+					return sortConfig.direction === 'asc' ? 1 : 1;
 				}
 				return 0;
 			});
@@ -261,7 +261,8 @@ const FinancialTracker = () => {
 		const columns = ["Date", "Team", "Type", "Amount", "Category", "Description", "Week"];
 		// Map transactions to a CSV-friendly format
 		const csvData = filteredAndSortedTransactions.map(t => [
-			t.date ? new Date(t.date).toLocaleString() : '',
+			// FIX: Ensure date is a valid object before formatting
+			t.date ? (isNaN(new Date(t.date)) ? 'Invalid Date' : new Date(t.date).toLocaleString()) : '',
 			allMembers.find(m => m.userId === t.team)?.displayName || t.team,
 			t.type,
 			Number(t.amount || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}),
@@ -295,8 +296,8 @@ const FinancialTracker = () => {
 
 		setTransactionsByYear(prev => {
 			const prevYearTx = prev[selectedYear] || [];
-			let newTxs = [...prevYearTx];
 			const now = new Date().toISOString();
+			let newTxs = [...prevYearTx];
 
 			// If editing, find and replace the transaction
 			if (editingTransaction) {
@@ -708,7 +709,7 @@ const FinancialTracker = () => {
 
 			{/* Member Dues & Transaction Table */}
 			<div className="mb-10 bg-white rounded-lg shadow-md p-6 border border-gray-100">
-				<h3 className="text-xl font-semibold mb-4 text-blue-800">League Members & Dues</h3>
+				<h3 className="text-xl font-semibold text-blue-800 mb-4">League Members & Dues</h3>
 				<div className="overflow-x-auto">
 					<table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm text-sm">
 						<thead className="bg-blue-50">
@@ -892,6 +893,8 @@ const FinancialTracker = () => {
 						<tbody>
 							{paginatedTransactions.map((t) => {
 								const teamName = allMembers.find(m => m.userId === t.team)?.displayName || t.team;
+								// FIX: Add a defensive check for the date to prevent "Invalid Date" errors
+								const displayDate = t.date ? (isNaN(new Date(t.date)) ? 'Invalid Date' : new Date(t.date).toLocaleString()) : '';
 								return (
 									<tr key={t.date} className="even:bg-gray-50">
 										<td className="py-2 px-3 text-center">
@@ -902,7 +905,7 @@ const FinancialTracker = () => {
 												onChange={(e) => handleSelectTransaction(t, e.target.checked)}
 											/>
 										</td>
-										<td className="py-2 px-3 whitespace-nowrap">{t.date ? new Date(t.date).toLocaleString() : ''}</td>
+										<td className="py-2 px-3 whitespace-nowrap">{displayDate}</td>
 										<td className="py-2 px-3 whitespace-nowrap">{teamName}</td>
 										<td className="py-2 px-3 text-center">{t.type}</td>
 										<td className="py-2 px-3 text-center">${Number(t.amount || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
