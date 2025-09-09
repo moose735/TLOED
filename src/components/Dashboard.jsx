@@ -1,10 +1,9 @@
-// src/components/Dashboard.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { CURRENT_LEAGUE_ID } from '../config'; // Only CURRENT_LEAGUE_ID comes from config
+import { CURRENT_LEAGUE_ID } from '../config';
 import {
     fetchTransactionsForWeek,
     getSleeperPlayerHeadshotUrl,
-} from '../utils/sleeperApi'; // Only fetchTransactionsForWeek is needed here now
+} from '../utils/sleeperApi';
 
 // Import the custom hook from your SleeperDataContext
 import { useSleeperData } from '../contexts/SleeperDataContext';
@@ -14,12 +13,12 @@ const Dashboard = () => {
     const {
         loading,
         error,
-        leagueData, // Renamed from leagueInfo
-        usersData,  // Renamed from users
-        rostersBySeason, // Renamed from rosters (now contains data for all seasons, but we'll use current season's)
+        leagueData,
+        usersData,
+        rostersBySeason,
         nflPlayers,
-        allDraftHistory, // Renamed from fetchedLeagueDrafts
-        getTeamName, // This replaces getDisplayTeamName
+        allDraftHistory,
+        getTeamName,
     } = useSleeperData();
 
     // Internal state for transactions and draft countdown
@@ -27,49 +26,48 @@ const Dashboard = () => {
     const [draftStartTime, setDraftStartTime] = useState(null);
     const [timeRemaining, setTimeRemaining] = useState(null);
 
-    // Effect to fetch transactions and set draft start time
+    // New, dedicated effect for fetching transactions.
+    // This runs as soon as leagueData is available.
     useEffect(() => {
-        const loadDashboardSpecificData = async () => {
-            // Only proceed if core league data is loaded from context
-            if (!leagueData || !allDraftHistory || !usersData || !rostersBySeason) {
-                // This shouldn't happen if App.js waits for loading, but good for safety
-                console.warn("Sleeper context data not fully loaded in Dashboard.");
+        const loadTransactions = async () => {
+            if (!leagueData || leagueData.status === 'pre_draft') {
+                setTransactions([]);
                 return;
             }
 
             const currentWeek = leagueData.settings?.week;
-            const season = leagueData.season;
-
-            try {
-                const fetchedTransactions = currentWeek
-                    ? await fetchTransactionsForWeek(CURRENT_LEAGUE_ID, currentWeek)
-                    : [];
-                setTransactions(fetchedTransactions);
-            } catch (err) {
-                console.error('Error fetching transactions:', err);
-                // Don't set global error, just log for transactions
-            }
-
-            // Check for pre-draft status and set draft start time from allDraftHistory
-            if (allDraftHistory && allDraftHistory.length > 0) {
-                const currentSeasonDraft = allDraftHistory.find(d => d.season === season && d.status === 'pre_draft' && d.start_time);
-                if (currentSeasonDraft) {
-                    setDraftStartTime(currentSeasonDraft.start_time);
-                } else {
-                    setDraftStartTime(null);
+            if (currentWeek !== null && currentWeek !== undefined) {
+                try {
+                    const fetchedTransactions = await fetchTransactionsForWeek(CURRENT_LEAGUE_ID, currentWeek);
+                    setTransactions(fetchedTransactions);
+                } catch (err) {
+                    console.error('Error fetching transactions:', err);
+                    setTransactions([]);
                 }
             } else {
-                setDraftStartTime(null);
+                setTransactions([]);
             }
         };
 
-        // This effect should re-run if leagueData or allDraftHistory changes (i.e., when context loads)
-        loadDashboardSpecificData();
-    }, [leagueData, allDraftHistory, usersData, rostersBySeason]); // Dependencies to re-run when context data changes
+        loadTransactions();
+    }, [leagueData]); // Only re-run when leagueData changes
 
-    // Effect for countdown timer (remains largely the same)
+    // Existing effect for draft countdown. This is separate now.
     useEffect(() => {
         let timerInterval;
+
+        // FIX: Added Array.isArray() check to prevent the TypeError.
+        if (leagueData && Array.isArray(allDraftHistory)) {
+            const season = leagueData.season;
+            const currentSeasonDraft = allDraftHistory.find(d => d.season === season && d.status === 'pre_draft' && d.start_time);
+            if (currentSeasonDraft) {
+                setDraftStartTime(currentSeasonDraft.start_time);
+            } else {
+                setDraftStartTime(null);
+            }
+        } else {
+            setDraftStartTime(null);
+        }
 
         if (draftStartTime) {
             const calculateTimeRemaining = () => {
@@ -78,6 +76,7 @@ const Dashboard = () => {
 
                 if (distance < 0) {
                     clearInterval(timerInterval);
+                    setDraftStartTime(null);
                     setTimeRemaining('Draft has started!');
                 } else {
                     const days = Math.floor(distance / (1000 * 60 * 60 * 24));
@@ -100,19 +99,26 @@ const Dashboard = () => {
                 clearInterval(timerInterval);
             }
         };
-    }, [draftStartTime]);
+    }, [draftStartTime, allDraftHistory, leagueData]);
+
 
     // Helper to get user display name from owner_id using context's getTeamName
     const getUserDisplayName = useCallback((userId) => {
-        // getTeamName from context handles mapping user_id to display name
         return getTeamName(userId);
-    }, [getTeamName]); // Dependency on getTeamName from context
+    }, [getTeamName]);
 
     // Helper to get player name from player_id using NFL players data from context
     const getPlayerName = useCallback((playerId) => {
         const player = nflPlayers[playerId];
         return player ? `${player.first_name} ${player.last_name}` : `Unknown Player (${playerId})`;
-    }, [nflPlayers]); // Dependency on nflPlayers from context
+    }, [nflPlayers]);
+
+    // A new helper function to get the ownerId from a rosterId
+    const getOwnerIdFromRosterId = useCallback((rosterId) => {
+        const currentSeasonRosters = leagueData?.season ? rostersBySeason[leagueData.season] : [];
+        const roster = currentSeasonRosters.find(r => r.roster_id === rosterId);
+        return roster ? roster.owner_id : null;
+    }, [leagueData, rostersBySeason]);
 
     // Display loading and error states from the SleeperDataContext
     if (loading) {
@@ -136,7 +142,6 @@ const Dashboard = () => {
         );
     }
 
-    // Get rosters for the current season from rostersBySeason (which is an object of season -> [rosters])
     const currentSeasonRosters = leagueData?.season ? rostersBySeason[leagueData.season] : [];
 
     // Sort rosters by fpts_against (lowest is best) for standings display
@@ -201,7 +206,6 @@ const Dashboard = () => {
                             {sortedRosters.length > 0 ? sortedRosters.map((roster, index) => (
                                 <tr key={roster.roster_id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                                     <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">{index + 1}</td>
-                                    {/* Use getUserDisplayName (which uses getTeamName from context) */}
                                     <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-700">{getUserDisplayName(roster.owner_id)}</td>
                                     <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-700">
                                         {roster.settings?.wins || 0}-{roster.settings?.losses || 0}
@@ -245,7 +249,7 @@ const Dashboard = () => {
                                                         className="w-6 h-6 rounded-full mr-1"
                                                         onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/150x150/cccccc/000000?text=No+Headshot'; }}
                                                     />
-                                                    {getPlayerName(playerId)} ({getUserDisplayName(usersData.find(u => u.roster_id === rosterId)?.userId)})
+                                                    {getPlayerName(playerId)} ({getUserDisplayName(getOwnerIdFromRosterId(rosterId))})
                                                 </div>
                                             ))}
                                         </div>
@@ -263,7 +267,7 @@ const Dashboard = () => {
                                                         className="w-6 h-6 rounded-full mr-1"
                                                         onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/150x150/cccccc/000000?text=No+Headshot'; }}
                                                     />
-                                                    {getPlayerName(playerId)} ({getUserDisplayName(usersData.find(u => u.roster_id === rosterId)?.userId)})
+                                                    {getPlayerName(playerId)} ({getUserDisplayName(getOwnerIdFromRosterId(rosterId))})
                                                 </div>
                                             ))}
                                         </div>
@@ -271,7 +275,7 @@ const Dashboard = () => {
                                     {/* Display Trades (simplified) */}
                                     {transaction.type === 'trade' && transaction.roster_ids && (
                                         <p className="text-sm text-gray-800 mt-2">
-                                            Involved: {transaction.roster_ids.map(rosterId => getUserDisplayName(rostersBySeason[leagueData.season]?.find(r => r.roster_id === rosterId)?.owner_id)).join(' and ')}
+                                            Involved: {transaction.roster_ids.map(rosterId => getUserDisplayName(getOwnerIdFromRosterId(rosterId))).join(' and ')}
                                             {transaction.draft_picks && transaction.draft_picks.length > 0 && (
                                                 <span className="ml-2 italic">(Draft picks involved)</span>
                                             )}

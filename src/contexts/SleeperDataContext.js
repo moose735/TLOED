@@ -1,4 +1,3 @@
-// src/contexts/SleeperDataContext.js
 import React, { createContext, useState, useEffect, useContext, useMemo } from 'react';
 import {
     fetchLeagueData,
@@ -7,7 +6,7 @@ import {
     fetchNFLPlayers,
     fetchNFLState,
     fetchAllHistoricalMatchups,
-    fetchAllDraftHistory, // NEW: Import the comprehensive draft history function
+    fetchAllDraftHistory, // Import the comprehensive draft history function
 } from '../utils/sleeperApi';
 import { CURRENT_LEAGUE_ID } from '../config'; // Importing CURRENT_LEAGUE_ID from config.js
 
@@ -26,6 +25,22 @@ const SleeperDataContext = createContext();
 // If CURRENT_LEAGUE_ID from config.js is undefined, this ID will be used.
 const FALLBACK_LEAGUE_ID = '1074092015093413888'; // Example ID, replace with a valid one if needed
 
+// --- NEW UTILITY FUNCTION TO FETCH TRANSACTIONS ---
+// This function fetches transactions for a specific league and week.
+const fetchTransactions = async (leagueId, week) => {
+    const url = `https://api.sleeper.app/v1/league/${leagueId}/transactions/${week}`;
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch transactions for week ${week}. Status: ${response.status}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.error(`Error fetching transactions for week ${week}:`, error);
+        return [];
+    }
+};
+
 // 2. Create the Provider Component
 export const SleeperDataProvider = ({ children }) => {
     // State to hold all the fetched data
@@ -43,6 +58,9 @@ export const SleeperDataProvider = ({ children }) => {
     // NEW STATE FOR PROCESSED SEASONAL RECORDS
     const [processedSeasonalRecords, setProcessedSeasonalRecords] = useState({});
     const [careerDPRData, setCareerDPRData] = useState(null);
+    
+    // --- NEW: State for storing transactions ---
+    const [transactions, setTransactions] = useState([]);
 
     // State for loading and error handling
     const [loading, setLoading] = useState(true);
@@ -416,6 +434,20 @@ export const SleeperDataProvider = ({ children }) => {
                 setNflPlayers(players);
                 setNflState(state);
 
+                // --- NEW: FETCH TRANSACTIONS ---
+                let allTransactions = [];
+                // Only fetch transactions if nflState and its week property are available
+                if (state && state.week) {
+                    // Loop from week 1 up to the current week
+                    for (let i = 1; i <= state.week; i++) {
+                        const weeklyTransactions = await fetchTransactions(leagueIdToFetch, i);
+                        allTransactions = [...allTransactions, ...weeklyTransactions];
+                    }
+                }
+                setTransactions(allTransactions);
+                console.log("SleeperDataContext: Fetched transactions:", allTransactions);
+                // --- END: FETCH TRANSACTIONS ---
+
                 // --- START: Process Draft Data for DraftAnalysis Component ---
                 // allHistoricalDraftsRaw is structured as { [season]: { drafts: [{ draft_object, picks: [...] }], tradedPicks: [...] } }
                 const processedDraftsBySeason = {};
@@ -566,6 +598,7 @@ export const SleeperDataProvider = ({ children }) => {
         allDraftHistory, // <-- Expose merged draft data for all consumers
         processedSeasonalRecords,
         careerDPRData,
+        transactions, // --- NEW: Expose transactions data in the context ---
         loading,
         error,
         getTeamName,
@@ -580,6 +613,7 @@ export const SleeperDataProvider = ({ children }) => {
         allDraftHistory,
         processedSeasonalRecords,
         careerDPRData,
+        transactions, // --- NEW: Add transactions as a dependency for the context value ---
         loading,
         error,
         getTeamName,

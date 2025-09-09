@@ -13,7 +13,7 @@ export const calculateRawDPR = (averageScore, teamHighScore, teamLowScore, teamW
     const pointsComponent = averageScore * 6;
     const deviationComponent = (teamHighScore + teamLowScore) * 2;
     const winPercentageComponent = (teamWinPercentage * 200) * 2;
-    const rawDPR = (pointsComponent + deviationComponent + winPercentageComponent) / 10;
+    const rawDPR = (pointsComponent + deviationComponent) / 10;
     return rawDPR;
 };
 
@@ -41,8 +41,11 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
         return { seasonalMetrics: {}, careerDPRData: [] };
     }
 
-    // Get the current NFL season from nflState, default to current year if not available
+    // Get the current NFL season and week from nflState
     const currentNFLSeason = nflState?.season ? parseInt(nflState.season) : new Date().getFullYear();
+    // Default to a safe value (1) if current week is not available.
+    const currentNFLWeek = nflState?.week ? parseInt(nflState.week) : 1;
+
 
     // Determine if the latest season's playoffs are complete
     // This is used for conditional aggregation of career awards, not for seasonal awards
@@ -132,7 +135,7 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
                 isThirdPlace: false,
                 isPointsChampion: false, // Initialize points award flags
                 isPointsRunnerUp: false,
-                isThirdPlacePoints: false,
+                isThirdPlacePoints: false, // Initialized
             };
 
             // Initialize career stats for each owner if not already present
@@ -283,78 +286,82 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
                     careerTeamStatsRaw[ownerId].careerWeeklyScores.push(scoreToAdd);
                 }
 
+                // Only count wins/losses for weeks that are completely over.
+                // A week is "over" if the current NFL week is greater than the week being processed.
+                const isWeekOver = year < currentNFLSeason || (year === currentNFLSeason && week < currentNFLWeek);
 
-                // Only update wins/losses/ties, pointsAgainst, and totalGames if there was an actual opponent
-                // MODIFIED CONDITION: Use hasOpponent flag
-                if (hasOpponent) {
-                    currentTeamStats.pointsAgainst += opponentScore;
-                    currentTeamStats.totalGames++; // Increment total games played (with an opponent)
+                if (isWeekOver) {
+                    // Only count the game if at least one team has a score greater than zero and there was an opponent
+                    if (hasOpponent && (currentTeamScoreInWeek > 0 || opponentScore > 0)) {
+                        currentTeamStats.pointsAgainst += opponentScore;
+                        currentTeamStats.totalGames++; // Increment total games played (with an opponent)
 
-                    // Accumulate wins/losses/ties
-                    if (currentTeamScoreInWeek > opponentScore) {
-                        currentTeamStats.wins++;
-                    } else if (currentTeamScoreInWeek < opponentScore) {
-                        currentTeamStats.losses++;
-                    } else {
-                        currentTeamStats.ties++;
-                    }
+                        // Accumulate wins/losses/ties
+                        if (currentTeamScoreInWeek > opponentScore) {
+                            currentTeamStats.wins++;
+                        } else if (currentTeamScoreInWeek < opponentScore) {
+                            currentTeamStats.losses++;
+                        } else {
+                            currentTeamStats.ties++;
+                        }
 
-                    // Regular season specific stats (all-play, blowout/slim, top score weeks)
-                    if (isRegularSeasonMatch) {
-                        const weekScoresForAllTeams = allScoresInSeasonByWeek.get(week) || [];
-                        let weeklyAllPlayWinsCount = 0;
-                        let weeklyAllPlayTiesCount = 0;
-                        let opponentsCount = 0; // Count of actual opponents for this week
+                        // Regular season specific stats (all-play, blowout/slim, top score weeks)
+                        if (isRegularSeasonMatch) {
+                            const weekScoresForAllTeams = allScoresInSeasonByWeek.get(week) || [];
+                            let weeklyAllPlayWinsCount = 0;
+                            let weeklyAllPlayTiesCount = 0;
+                            let opponentsCount = 0; // Count of actual opponents for this week
 
-                        weekScoresForAllTeams.forEach(otherTeamScore => {
-                            if (String(otherTeamScore.roster_id) !== String(rosterId)) {
-                                opponentsCount++; // Increment for each actual opponent
-                                if (currentTeamScoreInWeek > otherTeamScore.score) {
-                                    currentTeamStats.allPlayWins++;
-                                    if (careerTeamStatsRaw[ownerId]) careerTeamStatsRaw[ownerId].allPlayWins++;
-                                    weeklyAllPlayWinsCount++;
-                                } else if (currentTeamScoreInWeek < otherTeamScore.score) {
-                                    currentTeamStats.allPlayLosses++;
-                                    if (careerTeamStatsRaw[ownerId]) careerTeamStatsRaw[ownerId].allPlayLosses++;
-                                } else {
-                                    currentTeamStats.allPlayTies++;
-                                    if (careerTeamStatsRaw[ownerId]) careerTeamStatsRaw[ownerId].allPlayTies++;
-                                    weeklyAllPlayTiesCount++;
+                            weekScoresForAllTeams.forEach(otherTeamScore => {
+                                if (String(otherTeamScore.roster_id) !== String(rosterId)) {
+                                    opponentsCount++; // Increment for each actual opponent
+                                    if (currentTeamScoreInWeek > otherTeamScore.score) {
+                                        currentTeamStats.allPlayWins++;
+                                        if (careerTeamStatsRaw[ownerId]) careerTeamStatsRaw[ownerId].allPlayWins++;
+                                        weeklyAllPlayWinsCount++;
+                                    } else if (currentTeamScoreInWeek < otherTeamScore.score) {
+                                        currentTeamStats.allPlayLosses++;
+                                        if (careerTeamStatsRaw[ownerId]) careerTeamStatsRaw[ownerId].allPlayLosses++;
+                                    } else {
+                                        currentTeamStats.allPlayTies++;
+                                        if (careerTeamStatsRaw[ownerId]) careerTeamStatsRaw[ownerId].allPlayTies++;
+                                        weeklyAllPlayTiesCount++;
+                                    }
                                 }
+                            });
+
+                            // Calculate weeklyExpectedWins based on the new formula: (wins + 0.5 * ties) / total opponents
+                            if (opponentsCount > 0) {
+                                currentTeamStats.seasonalExpectedWinsSum += (weeklyAllPlayWinsCount + 0.5 * weeklyAllPlayTiesCount) / opponentsCount;
                             }
-                        });
 
-                        // Calculate weeklyExpectedWins based on the new formula: (wins + 0.5 * ties) / total opponents
-                        if (opponentsCount > 0) {
-                            currentTeamStats.seasonalExpectedWinsSum += (weeklyAllPlayWinsCount + 0.5 * weeklyAllPlayTiesCount) / opponentsCount;
-                        }
+                            currentTeamStats.actualWinsRecord += (currentTeamScoreInWeek > opponentScore ? 1 : (currentTeamScoreInWeek === opponentScore ? 0.5 : 0));
 
-                        currentTeamStats.actualWinsRecord += (currentTeamScoreInWeek > opponentScore ? 1 : (currentTeamScoreInWeek === opponentScore ? 0.5 : 0));
+                            // Weekly High Score / Top 2 Score (only for regular season)
+                            const highestScoreInWeek = weekScoresForAllTeams.reduce((max, team) => Math.max(max, team.score), -Infinity);
+                            const sortedWeekScores = [...weekScoresForAllTeams].sort((a, b) => b.score - a.score);
+                            const top2ScoresValues = [];
+                            if (sortedWeekScores[0]) top2ScoresValues.push(sortedWeekScores[0].score);
+                            if (sortedWeekScores[1]) top2ScoresValues.push(sortedWeekScores[1].score);
 
-                        // Weekly High Score / Top 2 Score (only for regular season)
-                        const highestScoreInWeek = weekScoresForAllTeams.reduce((max, team) => Math.max(max, team.score), -Infinity);
-                        const sortedWeekScores = [...weekScoresForAllTeams].sort((a, b) => b.score - a.score);
-                        const top2ScoresValues = [];
-                        if (sortedWeekScores[0]) top2ScoresValues.push(sortedWeekScores[0].score);
-                        if (sortedWeekScores[1]) top2ScoresValues.push(sortedWeekScores[1].score);
+                            if (currentTeamScoreInWeek === highestScoreInWeek) {
+                                currentTeamStats.topScoreWeeksCount++;
+                            }
+                            if (top2ScoresValues.includes(currentTeamScoreInWeek)) {
+                                currentTeamStats.weeklyTop2ScoresCount++;
+                            }
 
-                        if (currentTeamScoreInWeek === highestScoreInWeek) {
-                            currentTeamStats.topScoreWeeksCount++;
-                        }
-                        if (top2ScoresValues.includes(currentTeamScoreInWeek)) {
-                            currentTeamStats.weeklyTop2ScoresCount++;
-                        }
-
-                        // Blowout/Slim logic
-                        if (opponentScore > 0) {
-                            if (currentTeamScoreInWeek > (opponentScore * 1.40)) {
-                                currentTeamStats.blowoutWins++;
-                            } else if (currentTeamScoreInWeek < (opponentScore * 0.60)) {
-                                currentTeamStats.blowoutLosses++;
-                            } else if (currentTeamScoreInWeek > opponentScore && (currentTeamScoreInWeek - opponentScore) < (opponentScore * 0.025)) {
-                                currentTeamStats.slimWins++;
-                            } else if (currentTeamScoreInWeek < opponentScore && (opponentScore - currentTeamScoreInWeek) < (opponentScore * 0.025)) {
-                                currentTeamStats.slimLosses++;
+                            // Blowout/Slim logic
+                            if (opponentScore > 0) {
+                                if (currentTeamScoreInWeek > (opponentScore * 1.40)) {
+                                    currentTeamStats.blowoutWins++;
+                                } else if (currentTeamScoreInWeek < (opponentScore * 0.60)) {
+                                    currentTeamStats.blowoutLosses++;
+                                } else if (currentTeamScoreInWeek > opponentScore && (currentTeamScoreInWeek - opponentScore) < (opponentScore * 0.025)) {
+                                    currentTeamStats.slimWins++;
+                                } else if (currentTeamScoreInWeek < opponentScore && (opponentScore - currentTeamScoreInWeek) < (opponentScore * 0.025)) {
+                                    currentTeamStats.slimLosses++;
+                                }
                             }
                         }
                     }

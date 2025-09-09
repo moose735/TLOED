@@ -254,13 +254,19 @@ const FinancialTracker = () => {
 		return () => unsub();
 	}, [selectedYear, db]);
 
-	// --- NEW HELPER FUNCTION TO GET TRANSACTION TOTAL ---
-	// This function calculates the total value of a transaction,
-	// which is amount * number of teams for trade fees, and just amount otherwise.
+	// --- UPDATED HELPER FUNCTION TO GET TRANSACTION TOTAL ---
+	// This function calculates the total value of a transaction.
+	// It now correctly handles Waiver/FA fees by multiplying amount by quantity.
 	const getTransactionTotal = (transaction) => {
+		// If the category is Waiver/FA Fee, multiply amount by the quantity.
+		if (transaction.category === 'Waiver/FA Fee') {
+			return Number(transaction.amount || 0) * Number(transaction.quantity || 1);
+		}
+		// If the category is Trade Fee, multiply amount by the number of teams.
 		if (transaction.category === 'Trade Fee' && Array.isArray(transaction.team)) {
 			return Number(transaction.amount || 0) * transaction.team.length;
 		}
+		// For all other cases, the total is just the amount.
 		return Number(transaction.amount || 0);
 	};
 	// --------------------------------------------------
@@ -268,10 +274,8 @@ const FinancialTracker = () => {
 	// Summary calculations for the selected year's data
 	const transactionBank = currentYearData.transactions
 		.filter(t => t.type === 'Fee' && (t.category === 'Trade Fee' || t.category === 'Waiver/FA Fee'))
-		// --- UPDATED: Use the new helper function to get the correct total for each transaction. ---
 		.reduce((sum, t) => sum + getTransactionTotal(t), 0);
 	const totalFees = currentYearData.transactions.filter(t => t.type === 'Fee')
-		// --- UPDATED: Use the new helper function to get the correct total for all fees. ---
 		.reduce((sum, t) => sum + getTransactionTotal(t), 0);
 	const totalPayouts = currentYearData.transactions.filter(t => t.type === 'Payout').reduce((sum, t) => sum + Number(t.amount || 0), 0);
 	const leagueBank = totalFees - totalPayouts;
@@ -308,7 +312,7 @@ const FinancialTracker = () => {
 
 	// New function to handle CSV export
 	const handleExport = () => {
-		const columns = ["Date", "Team", "Type", "Amount", "Category", "Description", "Week"];
+		const columns = ["Date", "Team", "Type", "Amount", "Category", "Description", "Week", "Quantity"];
 		const csvData = filteredAndSortedTransactions.map(t => {
 			const teamNames = Array.isArray(t.team) ?
 				t.team.map(id => allMembers.find(m => m.userId === id)?.displayName || id).join(', ') :
@@ -322,6 +326,7 @@ const FinancialTracker = () => {
 				t.category,
 				t.description,
 				t.week,
+				t.quantity || 1, // Add quantity to CSV export
 			];
 		});
 		const csvContent = [
@@ -361,9 +366,10 @@ const FinancialTracker = () => {
 		} else {
 			const transactionsToAdd = [];
 	
-			// **FIX:** Corrected logic to handle Entry Fee and Waiver/FA Fee correctly
-			if (transaction.category === 'Waiver/FA Fee' || transaction.category === 'Entry Fee') {
-				// Iterate over each selected team and create a separate transaction
+			// **FIXED:** Adjusted logic to handle Waiver/FA Fee as a single transaction with a quantity.
+			// Entry Fee will still be split per team.
+			if (transaction.category === 'Entry Fee') {
+				// Create a separate transaction for each selected team.
 				transaction.team.forEach(teamId => {
 					transactionsToAdd.push({
 						...transaction,
@@ -374,7 +380,7 @@ const FinancialTracker = () => {
 					});
 				});
 			} else {
-				// For other categories, add a single transaction with all selected teams
+				// For Waiver/FA, Trade Fee, and other categories, add a single transaction with all selected teams.
 				transactionsToAdd.push({
 					...transaction,
 					id: crypto.randomUUID(),
@@ -407,7 +413,7 @@ const FinancialTracker = () => {
 		setTransaction({
 			...transactionToEdit,
 			team: Array.isArray(transactionToEdit.team) ? transactionToEdit.team : [transactionToEdit.team],
-			quantity: transactionToEdit.category === 'Waiver/FA Fee' ? transactionToEdit.quantity : 1,
+			quantity: transactionToEdit.quantity || 1, // Use existing quantity or default to 1
 		});
 		setTransactionMessage({ text: 'Editing transaction...', type: 'info' });
 	};
@@ -894,7 +900,7 @@ const FinancialTracker = () => {
 						<tbody>
 							{allMembers.map(member => {
 								const memberFees = currentYearData.transactions.filter(t => t.type === 'Fee' && (Array.isArray(t.team) ? t.team.includes(member.userId) : t.team === member.userId)).reduce((sum, t) => sum + Number(t.amount || 0), 0);
-								const memberTransactionFees = currentYearData.transactions.filter(t => t.type === 'Fee' && (t.category === 'Trade Fee' || t.category === 'Waiver/FA Fee') && (Array.isArray(t.team) ? t.team.includes(member.userId) : t.team === member.userId)).reduce((sum, t) => sum + Number(t.amount || 0), 0);
+								const memberTransactionFees = currentYearData.transactions.filter(t => t.type === 'Fee' && (t.category === 'Trade Fee' || t.category === 'Waiver/FA Fee') && (Array.isArray(t.team) ? t.team.includes(member.userId) : t.team === member.userId)).reduce((sum, t) => sum + getTransactionTotal(t), 0);
 								const memberPayouts = currentYearData.transactions.filter(t => t.type === 'Payout' && (Array.isArray(t.team) ? t.team.includes(member.userId) : t.team === member.userId)).reduce((sum, t) => sum + Number(t.amount || 0), 0);
 								const netTotal = memberPayouts - memberFees;
 								const netColor = netTotal < 0 ? 'text-red-600' : 'text-green-600';
@@ -1029,6 +1035,9 @@ const FinancialTracker = () => {
 										)}
 									</div>
 								</th>
+								{/* NEW Qty Column */}
+								<th className="py-2 px-3 text-center">Qty</th>
+								{/* End NEW Qty Column */}
 								<th className="py-2 px-3 text-center cursor-pointer hover:bg-blue-100" onClick={() => requestSort('amount')}>
 									<div className="flex items-center justify-center">
 										Amount
@@ -1092,6 +1101,9 @@ const FinancialTracker = () => {
 											{renderTeams(t.id, t.team, allMembers, expandedTransactionId, setExpandedTransactionId)}
 										</td>
 										<td className="py-2 px-3 text-center">{t.type}</td>
+										{/* NEW Qty Cell */}
+										<td className="py-2 px-3 text-center">{t.category === 'Waiver/FA Fee' ? t.quantity : ''}</td>
+										{/* End NEW Qty Cell */}
 										<td className="py-2 px-3 text-center">${Number(t.amount || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
 										<td className="py-2 px-3 text-center">{t.category}</td>
 										<td className="py-2 px-3 text-center">{t.description}</td>

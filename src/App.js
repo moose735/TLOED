@@ -10,10 +10,10 @@ import TeamDetailPage from './lib/TeamDetailPage';
 import Head2HeadGrid from './lib/Head2HeadGrid';
 import FinancialTracker from './components/FinancialTracker';
 import Dashboard from './components/Dashboard';
-// Removed: import MatchupHistory from './lib/MatchupHistory';
 import TeamsOverviewPage from './lib/TeamsOverviewPage';
 import SeasonBreakdown from './lib/SeasonBreakdown';
 import DraftAnalysis from './lib/DraftAnalysis'; // Import the new DraftAnalysis component
+import HallOfChampions from './lib/HallOfChampions'; // Import the new HallOfChampions component
 
 // Import the custom hook from your SleeperDataContext
 import { SleeperDataProvider, useSleeperData } from './contexts/SleeperDataContext';
@@ -26,11 +26,11 @@ const NAV_CATEGORIES = {
         label: 'League Data',
         subTabs: [
             { label: 'League History', tab: 'leagueHistory' },
+            { label: 'Hall of Champions', tab: 'hallOfChampions' }, // New Hall of Champions sub-tab
             { label: 'Record Book', tab: 'recordBook' },
             { label: 'Head-to-Head', tab: 'headToHead' },
             { label: 'DPR Analysis', tab: 'dprAnalysis' },
             { label: 'Luck Rating', tab: 'luckRating' },
-            // Removed: { label: 'Matchup History', tab: 'matchupHistory' },
         ]
     },
     TEAMS: {
@@ -47,13 +47,13 @@ const TABS = {
     DASHBOARD: 'dashboard',
     POWER_RANKINGS: 'powerRankings',
     LEAGUE_HISTORY: 'leagueHistory',
+    HALL_OF_CHAMPIONS: 'hallOfChampions', // New Hall of Champions tab
     RECORD_BOOK: 'recordBook',
     HEAD_TO_HEAD: 'headToHead',
     DPR_ANALYSIS: 'dprAnalysis',
     LUCK_RATING: 'luckRating',
     TEAM_DETAIL: 'teamDetail',
     FINANCIALS: 'financials',
-    // Removed: MATCHUP_HISTORY: 'matchupHistory',
     TEAMS_OVERVIEW: 'teamsOverview',
     SEASON_BREAKDOWN: 'seasonBreakdown',
     DRAFT_ANALYSIS: 'draftAnalysis', // New tab for Draft Analysis
@@ -66,7 +66,6 @@ const AppContent = () => {
         error,
         historicalData,
         usersData // Make sure usersData is available here
-        // Removed rostersBySeason from direct destructuring as it's inside historicalData
     } = useSleeperData();
 
     const [activeTab, setActiveTab] = useState(TABS.DASHBOARD);
@@ -244,6 +243,8 @@ const AppContent = () => {
                 return <PowerRankings />;
             case TABS.LEAGUE_HISTORY:
                 return <LeagueHistory />;
+            case TABS.HALL_OF_CHAMPIONS: // New case for Hall of Champions
+                return <HallOfChampions />;
             case TABS.RECORD_BOOK:
                 return <RecordBook historicalMatchups={allMatchups} />;
             case TABS.HEAD_TO_HEAD:
@@ -256,8 +257,6 @@ const AppContent = () => {
                 return <TeamsOverviewPage />;
             case TABS.FINANCIALS:
                 return <FinancialTracker />;
-            // Removed: case TABS.MATCHUP_HISTORY:
-            // Removed:    return <MatchupHistory />;
             case TABS.SEASON_BREAKDOWN:
                 return <SeasonBreakdown />;
             case TABS.DRAFT_ANALYSIS: // New case for Draft Analysis
