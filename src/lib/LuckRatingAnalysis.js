@@ -7,7 +7,7 @@ const LuckRatingAnalysis = () => {
   // Consume necessary data from context
   const {
     loading: contextLoading, // Rename to avoid conflict with local loading state
-    error: contextError,    // Rename to avoid conflict with local error state
+    error: contextError,     // Rename to avoid conflict with local error state
     historicalData,
     allDraftHistory, // Get allDraftHistory from context
     getTeamName,
@@ -103,12 +103,12 @@ const LuckRatingAnalysis = () => {
             typeof careerStats.actualCareerWinsRecord === 'number' && !isNaN(careerStats.actualCareerWinsRecord) &&
             typeof careerStats.careerExpectedWinsSum === 'number' && !isNaN(careerStats.careerExpectedWinsSum)
         ) {
-            allCareerLuckRatings.push({
-                team: getTeamName(careerStats.ownerId, null), // Get current display name for career
-                luckRating: careerStats.totalLuckRating,
-                actualWins: careerStats.actualCareerWinsRecord,
-                projectedWins: careerStats.careerExpectedWinsSum
-            });
+          allCareerLuckRatings.push({
+              team: getTeamName(careerStats.ownerId, null), // Get current display name for career
+              luckRating: careerStats.totalLuckRating,
+              actualWins: careerStats.actualCareerWinsRecord,
+              projectedWins: careerStats.careerExpectedWinsSum
+          });
         }
     });
 
@@ -128,6 +128,7 @@ const LuckRatingAnalysis = () => {
   };
 
   const displayedSeasonalLuckData = showAllSeasonal ? seasonalLuckData : seasonalLuckData.slice(0, 20);
+  const currentNFLSeason = nflState?.season ? parseInt(nflState.season) : new Date().getFullYear();
 
   return (
     <div className="w-full">
@@ -196,7 +197,7 @@ const LuckRatingAnalysis = () => {
                   </thead>
                   <tbody>
                     {displayedSeasonalLuckData.map((data, index) => (
-                      <tr key={`${data.team}-${data.year}`} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                      <tr key={`${data.team}-${data.year}`} className={`${index % 2 === 0 ? 'bg-gray-50' : 'bg-white'} ${data.year === currentNFLSeason ? 'font-bold' : ''}`}>
                         <td className="py-2 px-3 text-sm text-gray-800">{index + 1}</td>
                         <td className="py-2 px-3 text-sm text-gray-800">{data.year}</td>
                         <td className="py-2 px-3 text-sm text-gray-800">{data.team}</td>
