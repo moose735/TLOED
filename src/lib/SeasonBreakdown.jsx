@@ -298,6 +298,9 @@ const SeasonBreakdown = () => {
         };
     }
 
+    // Determine if any podium results exist
+    const hasPodiumResults = seasonChampion !== 'N/A' || seasonRunnerUp !== 'N/A' || seasonThirdPlace !== 'N/A';
+
     return (
         <div className="p-4 bg-white rounded-lg shadow-md">
             <h2 className="text-3xl font-bold text-gray-800 mb-6 text-center">Season Breakdown</h2>
@@ -323,8 +326,8 @@ const SeasonBreakdown = () => {
                 <div className="mt-8">
                     <h3 className="text-2xl font-bold text-gray-800 mb-20 text-center">{selectedSeason} Season Summary</h3>
 
-                    {/* Podium Section */}
-                    {(seasonChampion !== 'N/A' || seasonRunnerUp !== 'N/A' || seasonThirdPlace !== 'N/A') ? (
+                    {/* Podium Section - Now only renders if results exist */}
+                    {hasPodiumResults && (
                         <div className="relative flex justify-center items-end h-56 gap-2 md:gap-4 mb-8">
                             {/* 2nd Place */}
                             {seasonRunnerUp !== 'N/A' && (
@@ -359,8 +362,6 @@ const SeasonBreakdown = () => {
                                 </div>
                             )}
                         </div>
-                    ) : (
-                        <p className="text-center text-gray-600">No playoff results available for this season to determine podium.</p>
                     )}
 
                     {/* Season Stats Summary Section */}

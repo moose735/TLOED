@@ -900,7 +900,9 @@ const FinancialTracker = () => {
 						<tbody>
 							{allMembers.map(member => {
 								const memberFees = currentYearData.transactions.filter(t => t.type === 'Fee' && (Array.isArray(t.team) ? t.team.includes(member.userId) : t.team === member.userId)).reduce((sum, t) => sum + Number(t.amount || 0), 0);
-								const memberTransactionFees = currentYearData.transactions.filter(t => t.type === 'Fee' && (t.category === 'Trade Fee' || t.category === 'Waiver/FA Fee') && (Array.isArray(t.team) ? t.team.includes(member.userId) : t.team === member.userId)).reduce((sum, t) => sum + getTransactionTotal(t), 0);
+								// FIX: Corrected the calculation for `memberTransactionFees` to use the per-person amount (t.amount)
+								// instead of the total transaction value.
+								const memberTransactionFees = currentYearData.transactions.filter(t => t.type === 'Fee' && (t.category === 'Trade Fee' || t.category === 'Waiver/FA Fee') && (Array.isArray(t.team) ? t.team.includes(member.userId) : t.team === member.userId)).reduce((sum, t) => sum + Number(t.amount || 0), 0);
 								const memberPayouts = currentYearData.transactions.filter(t => t.type === 'Payout' && (Array.isArray(t.team) ? t.team.includes(member.userId) : t.team === member.userId)).reduce((sum, t) => sum + Number(t.amount || 0), 0);
 								const netTotal = memberPayouts - memberFees;
 								const netColor = netTotal < 0 ? 'text-red-600' : 'text-green-600';
