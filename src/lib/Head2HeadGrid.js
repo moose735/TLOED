@@ -1,6 +1,6 @@
 // src/lib/Head2HeadGrid.js
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Area, ResponsiveContainer, Customized } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Area, ResponsiveContainer, Customized, ComposedChart, BarChart, Bar, Cell } from 'recharts';
 import { useSleeperData } from '../contexts/SleeperDataContext';
 
 // Helper function to render record (W-L-T)
@@ -69,10 +69,22 @@ const Head2HeadGrid = () => {
         const highScoreCounts = {};
 
         // Calculate weekly high score counts
-        Object.entries(historicalData.matchupsBySeason).forEach(([year, matchupsArray]) => {
+    // Current season/week for filtering future matchups
+    const currentSeason = nflState?.season ? parseInt(nflState.season) : null;
+    const currentWeek = nflState?.week ? parseInt(nflState.week) : null;
+
+    Object.entries(historicalData.matchupsBySeason).forEach(([year, matchupsArray]) => {
             // Group matchups by week
             const matchupsByWeek = {};
             matchupsArray.forEach(matchup => {
+                // Skip future matchups: if this matchup is in the current season
+                // and its week is greater than the current week, ignore it.
+                const matchupWeek = parseInt(matchup.week);
+                const matchYear = parseInt(year);
+                if (currentSeason) {
+                    if (matchYear > currentSeason) return;
+                    if (matchYear === currentSeason && currentWeek && matchupWeek > currentWeek) return;
+                }
                 if (!matchup.week) return;
                 if (!matchupsByWeek[matchup.week]) matchupsByWeek[matchup.week] = [];
                 matchupsByWeek[matchup.week].push(matchup);
@@ -113,6 +125,14 @@ const Head2HeadGrid = () => {
             const losersBracketForYear = historicalData.losersBracketBySeason?.[year] || [];
 
             matchupsArray.forEach(matchup => {
+                // Skip future matchups: same logic as weekly high score calculation
+                const matchupWeek = parseInt(matchup.week);
+                const matchYear = parseInt(year);
+                if (currentSeason) {
+                    if (matchYear > currentSeason) return; // Skip future seasons
+                    if (matchYear === currentSeason && currentWeek && matchupWeek > currentWeek) return; // Skip future weeks in current season
+                }
+
                 const team1RosterId = String(matchup.team1_roster_id);
                 const team2RosterId = String(matchup.team2_roster_id);
                 const team1Score = parseFloat(matchup.team1_score);
@@ -146,7 +166,7 @@ const Head2HeadGrid = () => {
                 let matchType = 'Reg. Season';
                 const team1RosterIdStr = String(matchup.team1_roster_id);
                 const team2RosterIdStr = String(matchup.team2_roster_id);
-                const matchupWeek = parseInt(matchup.week);
+                // matchupWeek already declared earlier in the scope
 
                 // Helper to find a bracket match for these two teams in the same week
                 const findBracketMatch = (bracket) => {
@@ -375,8 +395,8 @@ const Head2HeadGrid = () => {
                     name: `${match.year} W${match.week}`,
                     netPoints: currentMatchNetPoints,
                     cumulativeNetPoints: cumulativeNetPoints,
-                    positiveCumulativeNetPoints: cumulativeNetPoints >= 0 ? cumulativeNetPoints : null,
-                    negativeCumulativeNetPoints: cumulativeNetPoints < 0 ? cumulativeNetPoints : null,
+                    positiveCumulativeNetPoints: cumulativeNetPoints >= 0 ? cumulativeNetPoints : 0,
+                    negativeCumulativeNetPoints: cumulativeNetPoints < 0 ? cumulativeNetPoints : 0,
                     mainTeamScore,
                     oppTeamScore,
                     week: match.week,
@@ -489,7 +509,7 @@ const Head2HeadGrid = () => {
 
 
                 {/* Main Teams Cards and VERSUS section in a 3-column grid */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 items-center">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-6 items-center">
                     {/* Main Team Card (vertical/row axis, ownerA) */}
                     {(() => {
                         const currentOwnerId = ownerA;
@@ -769,7 +789,7 @@ const Head2HeadGrid = () => {
                 <h4 className="text-xl font-bold text-gray-800 mt-6 mb-2 border-b pb-2">Net Points Over Time</h4>
                 <div className="w-full h-64 mb-8">
                     <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={netPointsData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                        <BarChart data={netPointsData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis
                                 dataKey="name"
@@ -782,73 +802,14 @@ const Head2HeadGrid = () => {
                                 ticks={netPointsData.map(d => d.name)}
                             />
                             <YAxis domain={['auto', 'auto']} fontSize={12} />
-                            <Tooltip formatter={(value, name) => [typeof value === 'number' ? value.toFixed(2) : value, name === 'netPoints' ? 'Net Points' : name]} />
-                            <ReferenceLine y={0} stroke="#888" strokeDasharray="3 3" />
-                            {/* Dots for each matchup, colored by net points (updated colors) */}
-                            <Line
-                                type="linear"
-                                dataKey="netPoints"
-                                stroke="#2563eb" // blue-600
-                                strokeWidth={2}
-                                dot={(props) => {
-                                    const point = props.payload;
-                                    let color = '#888';
-                                    if (point.netPoints > 0) color = '#22c55e';
-                                    else if (point.netPoints < 0) color = '#ef4444';
-                                    else color = '#eab308';
-                                    return (
-                                        <circle cx={props.cx} cy={props.cy} r={3} fill={color} stroke={color} />
-                                    );
-                                }}
-                                activeDot={(props) => {
-                                    const point = props.payload;
-                                    let color = '#888';
-                                    if (point.netPoints > 0) color = '#22c55e';
-                                    else if (point.netPoints < 0) color = '#ef4444';
-                                    else color = '#eab308';
-                                    return (
-                                        <circle cx={props.cx} cy={props.cy} r={6} fill={color} stroke={color} />
-                                    );
-                                }}
-                                isAnimationActive={false}
-                                connectNulls={true}
-                            />
-                            {/* Custom SVG overlay for colored segments */}
-                            <Customized
-                                component={({ points }) => {
-                                    if (!points || points.length < 2) return null;
-                                    // Defensive: filter out points with undefined coordinates
-                                    const validPoints = points.filter(p => typeof p.x === 'number' && typeof p.y === 'number');
-                                    return (
-                                        <g>
-                                            {validPoints.slice(1).map((curr, i) => {
-                                                const prev = validPoints[i];
-                                                if (!prev || !curr) return null;
-                                                // Use the sign of netPoints for the segment (i+1)
-                                                const segmentData = netPointsData[i+1];
-                                                let color = '#888';
-                                                if (segmentData) {
-                                                    if (segmentData.netPoints > 0) color = '#22c55e'; // green
-                                                    else if (segmentData.netPoints < 0) color = '#ef4444'; // red
-                                                    else color = '#eab308'; // yellow
-                                                }
-                                                return (
-                                                    <line
-                                                        key={i}
-                                                        x1={prev.x}
-                                                        y1={prev.y}
-                                                        x2={curr.x}
-                                                        y2={curr.y}
-                                                        stroke={color}
-                                                        strokeWidth={3}
-                                                    />
-                                                );
-                                            })}
-                                        </g>
-                                    );
-                                }}
-                            />
-                        </LineChart>
+                            <Tooltip formatter={(value, name) => [typeof value === 'number' ? value.toFixed(2) : value, 'Cumulative Net Points']} />
+                            <ReferenceLine y={0} stroke="#374151" strokeWidth={2} />
+                            <Bar dataKey="cumulativeNetPoints">
+                                {netPointsData.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.cumulativeNetPoints >= 0 ? '#10b981' : '#ef4444'} />
+                                ))}
+                            </Bar>
+                        </BarChart>
                     </ResponsiveContainer>
                     <div className="text-xs text-center mt-2 text-gray-600">
                         Green area: {teamADisplayName} outscored {teamBDisplayName}. Red area: {teamBDisplayName} outscored {teamADisplayName}.
