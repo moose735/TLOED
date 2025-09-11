@@ -41,7 +41,8 @@ const Head2HeadGrid = () => {
         error: contextError,
         historicalData,
         getTeamName,
-        careerDPRData // Use careerDPRData directly from context
+        careerDPRData,
+        nflState // Use nflState from context
     } = useSleeperData();
 
     const [headToHeadRecords, setHeadToHeadRecords] = useState({});
@@ -339,32 +340,49 @@ const Head2HeadGrid = () => {
             return a.week - b.week;
         });
 
-        // Prepare net points data for line graph, with split for positive/negative fill and zero-crossing points
-        let cumulativeNetPoints = 0; // Initialize cumulative points
-        const netPointsData = sortedMatches.map((match) => {
-            let mainTeamScore, oppTeamScore;
-            if (match.team1OwnerId === ownerA) {
-                mainTeamScore = match.team1Score;
-                oppTeamScore = match.team2Score;
-            } else {
-                mainTeamScore = match.team2Score;
-                oppTeamScore = match.team1Score;
-            }
-        const currentMatchNetPoints = mainTeamScore - oppTeamScore; // Calculate net points
-            cumulativeNetPoints += currentMatchNetPoints; // CRITICAL FIX: Accumulate net points
+        // Get current NFL season and week from nflState
+        const currentSeason = nflState?.season ? parseInt(nflState.season) : null;
+        const currentWeek = nflState?.week ? parseInt(nflState.week) : null;
 
-            return {
-                name: `${match.year} W${match.week}`,
-                netPoints: currentMatchNetPoints, // Keep individual net points for tooltip if needed
-                cumulativeNetPoints: cumulativeNetPoints, // The actual cumulative value
-                positiveCumulativeNetPoints: cumulativeNetPoints >= 0 ? cumulativeNetPoints : null, // For green area
-                negativeCumulativeNetPoints: cumulativeNetPoints < 0 ? cumulativeNetPoints : null,   // For red area
-                mainTeamScore,
-                oppTeamScore,
-                week: match.week,
-                year: match.year,
-            };
-        });
+        // Prepare net points data for line graph, showing cumulative net points and excluding unplayed/future games
+        let cumulativeNetPoints = 0;
+        const netPointsData = sortedMatches
+            .filter(match => {
+                // Only include games that have been played (both scores are valid numbers and not in the future)
+                const matchYear = parseInt(match.year);
+                const matchWeek = parseInt(match.week);
+                const isPlayed = typeof match.team1Score === 'number' && !isNaN(match.team1Score) &&
+                                 typeof match.team2Score === 'number' && !isNaN(match.team2Score);
+                // Exclude future matchups: if match is in current season and week > currentWeek, or if both scores are 0
+                if (currentSeason && matchYear > currentSeason) return false;
+                if (currentSeason && matchYear === currentSeason && currentWeek && matchWeek > currentWeek) return false;
+                if (match.team1Score === 0 && match.team2Score === 0) return false;
+                return isPlayed;
+            })
+            .map((match) => {
+                let mainTeamScore, oppTeamScore;
+                if (match.team1OwnerId === ownerA) {
+                    mainTeamScore = match.team1Score;
+                    oppTeamScore = match.team2Score;
+                } else {
+                    mainTeamScore = match.team2Score;
+                    oppTeamScore = match.team1Score;
+                }
+                // Calculate cumulative net points for ownerA (Y axis team)
+                const currentMatchNetPoints = mainTeamScore - oppTeamScore;
+                cumulativeNetPoints += currentMatchNetPoints;
+                return {
+                    name: `${match.year} W${match.week}`,
+                    netPoints: currentMatchNetPoints,
+                    cumulativeNetPoints: cumulativeNetPoints,
+                    positiveCumulativeNetPoints: cumulativeNetPoints >= 0 ? cumulativeNetPoints : null,
+                    negativeCumulativeNetPoints: cumulativeNetPoints < 0 ? cumulativeNetPoints : null,
+                    mainTeamScore,
+                    oppTeamScore,
+                    week: match.week,
+                    year: match.year,
+                };
+            });
 
         console.log('Net Points Data for chart:', netPointsData); // Debugging: Check data before chart
 

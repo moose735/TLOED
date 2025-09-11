@@ -588,8 +588,22 @@ export const SleeperDataProvider = ({ children }) => {
         draftPicksBySeason
     }), [draftsBySeason, draftPicksBySeason]);
 
+    // Helper: Get scheduled matchups for the upcoming week in the current season
+    const getUpcomingWeekMatchups = (season, week) => {
+        if (!historicalMatchups || !historicalMatchups.matchupsBySeason || !historicalMatchups.matchupsBySeason[season]) return [];
+        return historicalMatchups.matchupsBySeason[season].filter(m => parseInt(m.week) === week);
+    };
+
+    // Helper: Get the most recent/current league object and season string
+    const currentLeagueData = Array.isArray(leagueData) && leagueData.length > 0
+        ? leagueData[0]
+        : leagueData;
+    const currentSeason = currentLeagueData?.season || (Array.isArray(leagueData) && leagueData.length > 0 ? leagueData[0]?.season : null);
+
     const contextValue = useMemo(() => ({
         leagueData,
+        currentLeagueData,
+        currentSeason,
         usersData,
         rostersWithDetails,
         nflPlayers,
@@ -603,6 +617,7 @@ export const SleeperDataProvider = ({ children }) => {
         error,
         getTeamName,
         getWeeklyHighScores,
+        getUpcomingWeekMatchups, // <-- Expose helper for scheduled matchups
     }), [
         leagueData,
         usersData,
@@ -632,5 +647,9 @@ export const useSleeperData = () => {
     if (context === undefined) {
         throw new Error('useSleeperData must be used within a SleeperDataProvider');
     }
-    return context;
+    // Expose nflState explicitly for consumers
+    return {
+        ...context,
+        nflState: context.nflState,
+    };
 };

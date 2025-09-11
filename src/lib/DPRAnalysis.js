@@ -1,7 +1,13 @@
 // src/lib/DPRAnalysis.js
+
 import React, { useState, useEffect } from 'react';
 import { calculateAllLeagueMetrics } from '../utils/calculations'; // Import the new utility
 import { useSleeperData } from '../contexts/SleeperDataContext'; // Import the custom hook
+
+// Always define metrics at the top level so it's available everywhere
+let metricsResult = {};
+let seasonalMetrics = {};
+let calculatedCareerDPRs = [];
 
 const DPRAnalysis = () => { // Removed props as data will come from context
   const {
@@ -18,6 +24,11 @@ const DPRAnalysis = () => { // Removed props as data will come from context
   const [showAllSeasonal, setShowAllSeasonal] = useState(false); // New state for "Show More"
 
   useEffect(() => {
+    // Always define metrics before any other logic
+    metricsResult = calculateAllLeagueMetrics(historicalData, allDraftHistory, getTeamName);
+    seasonalMetrics = metricsResult?.seasonalMetrics || {};
+    calculatedCareerDPRs = metricsResult?.careerDPRData || [];
+
     // If context is still loading or has an error, set local loading/error states accordingly
     if (contextLoading) {
       setLoading(true);
@@ -51,101 +62,113 @@ const DPRAnalysis = () => { // Removed props as data will come from context
 
     setLoading(true);
 
-    // Use the centralized calculation logic to get seasonal and career metrics
-    // Pass historicalData, allDraftHistory, and the getTeamName function from context
-    // FIXED: Pass allDraftHistory as the second argument
-    const { seasonalMetrics, careerDPRData: calculatedCareerDPRs } = calculateAllLeagueMetrics(historicalData, allDraftHistory, getTeamName);
-
-    // Enhance careerDPRData with additional metrics
-    const enhancedCareerDPRs = calculatedCareerDPRs.map(teamData => {
-        const totalGames = teamData.wins + teamData.losses + teamData.ties;
-        const winPercentage = totalGames > 0 ? ((teamData.wins + (0.5 * teamData.ties)) / totalGames) : 0;
-        const pointsPerGame = totalGames > 0 ? (teamData.pointsFor / totalGames) : 0;
-
-        let highestSeasonalPointsAvg = 0;
-        let lowestSeasonalPointsAvg = Infinity;
-        let seasonsPlayedCount = 0;
-
-        // Iterate through seasonal metrics to find highest and lowest seasonal points average for this team
-        // Use teamData.rosterId to correctly access seasonalMetrics
-        // Note: teamData.rosterId here refers to the last known rosterId for the owner in calculations.js
-        // For seasonalMetrics lookup, it's better to use teamData.ownerId and iterate through all rosters for that owner.
-        // However, given the structure, we'll try to use ownerId for lookup where possible.
-        Object.keys(seasonalMetrics).forEach(year => {
-            // Find the team's seasonal stats using ownerId
-            const teamSeasonalStats = Object.values(seasonalMetrics[year]).find(
-                (seasonalTeam) => seasonalTeam.ownerId === teamData.ownerId
-            );
-
-            if (teamSeasonalStats) {
-                const seasonalGames = teamSeasonalStats.totalGames;
-
-                if (seasonalGames > 0) {
-                    const seasonalAvg = teamSeasonalStats.pointsFor / seasonalGames;
-                    if (seasonalAvg > highestSeasonalPointsAvg) {
-                        highestSeasonalPointsAvg = seasonalAvg;
-                    }
-                    if (seasonalAvg < lowestSeasonalPointsAvg) {
-                        lowestSeasonalPointsAvg = seasonalAvg;
-                    }
-                    seasonsPlayedCount++;
-                }
-            }
-        });
-
-        // If no seasons with games played, set lowest average to 0 instead of Infinity
-        if (seasonsPlayedCount === 0) {
-            lowestSeasonalPointsAvg = 0;
-        }
-
-        return {
-            ...teamData, // This already includes teamName and ownerId
-            winPercentage: winPercentage,
-            pointsPerGame: pointsPerGame,
-            highestSeasonalPointsAvg: highestSeasonalPointsAvg,
-            lowestSeasonalPointsAvg: lowestSeasonalPointsAvg // Will be 0 if no games played, otherwise actual lowest
-        };
-    });
-
-    // Flatten seasonalMetrics into an array for display in the table
     let allSeasonalDPRs = [];
-    Object.keys(seasonalMetrics).sort((a, b) => parseInt(b) - parseInt(a)).forEach(year => { // Sort years descending
-      Object.keys(seasonalMetrics[year]).forEach(rosterId => { // Use rosterId as key
+    // Find all years present in any data source (seasonalMetrics, matchupsBySeason, rostersBySeason)
+    const allYearsSet = new Set([
+      ...Object.keys(seasonalMetrics || {}),
+      ...Object.keys(historicalData?.matchupsBySeason || {}),
+      ...Object.keys(historicalData?.rostersBySeason || {})
+    ].map(Number));
+    // Always use the max year found as the current season (matches LuckAnalysis logic)
+    let currentSeason = null;
+    if (allYearsSet.size > 0) {
+      currentSeason = Math.max(...Array.from(allYearsSet));
+    }
+
+    // For each season, calculate raw DPRs and adjusted DPRs
+    Object.keys(seasonalMetrics).sort((a, b) => parseInt(b) - parseInt(a)).forEach(year => {
+      const teamRawDPRs = [];
+      Object.keys(seasonalMetrics[year]).forEach(rosterId => {
         const teamSeasonalData = seasonalMetrics[year][rosterId];
-
-        // Ensure teamSeasonalData exists and has totalGames > 0 to avoid irrelevant entries
         if (teamSeasonalData && teamSeasonalData.totalGames > 0) {
-            // FIXED: Determine the ownerId for this seasonal entry
-            let currentOwnerId = teamSeasonalData.ownerId; // Try to get it directly from seasonalMetrics first
-
-            // If ownerId is missing in seasonalMetrics, try to find it from historicalData.rostersBySeason
-            if (!currentOwnerId && historicalData?.rostersBySeason?.[year]) {
-                const rosterInHistoricalData = historicalData.rostersBySeason[year].find(
-                    (r) => String(r.roster_id) === String(rosterId)
-                );
-                if (rosterInHistoricalData) {
-                    currentOwnerId = rosterInHistoricalData.owner_id;
-                }
+          let currentOwnerId = teamSeasonalData.ownerId;
+          if (!currentOwnerId && historicalData?.rostersBySeason?.[year]) {
+            const rosterInHistoricalData = historicalData.rostersBySeason[year].find(
+              (r) => String(r.roster_id) === String(rosterId)
+            );
+            if (rosterInHistoricalData) {
+              currentOwnerId = rosterInHistoricalData.owner_id;
             }
-
-            allSeasonalDPRs.push({
-              year: parseInt(year),
-              // Use the resolved ownerId for getTeamName
-              team: getTeamName(currentOwnerId, year),
-              rosterId: rosterId, // Keep rosterId for potential future use
-              ownerId: currentOwnerId, // Add ownerId to the seasonal data for consistency
-              dpr: teamSeasonalData.adjustedDPR,
-              wins: teamSeasonalData.wins,
-              losses: teamSeasonalData.losses,
-              ties: teamSeasonalData.ties,
-              winPercentage: teamSeasonalData.winPercentage,
-              pointsPerGame: teamSeasonalData.averageScore, // 'averageScore' in seasonalMetrics is points per game
-              highestPointsGame: teamSeasonalData.highScore, // Use highScore from seasonalMetrics
-              lowestPointsGame: teamSeasonalData.lowScore // Use lowScore from seasonalMetrics
-            });
+          }
+          // Calculate Raw DPR
+          const avgScore = teamSeasonalData.averageScore || 0;
+          const highScore = teamSeasonalData.highScore || 0;
+          const lowScore = teamSeasonalData.lowScore || 0;
+          const winPct = teamSeasonalData.winPercentage || 0;
+          const rawDPR = (((avgScore * 6) + ((highScore + lowScore) * 2) + ((winPct * 200) * 2)) / 10);
+          teamRawDPRs.push(rawDPR);
+          allSeasonalDPRs.push({
+            year: parseInt(year),
+            team: getTeamName(currentOwnerId, year),
+            rosterId: rosterId,
+            ownerId: currentOwnerId,
+            rawDPR,
+            wins: teamSeasonalData.wins,
+            losses: teamSeasonalData.losses,
+            ties: teamSeasonalData.ties,
+            winPercentage: winPct,
+            pointsPerGame: avgScore,
+            highestPointsGame: highScore,
+            lowestPointsGame: lowScore,
+            isCurrentSeason: currentSeason !== null && parseInt(year) === currentSeason
+          });
+        }
+      });
+      // Calculate league average Raw DPR for this season
+      const leagueAvgRawDPR = teamRawDPRs.length > 0 ? (teamRawDPRs.reduce((a, b) => a + b, 0) / teamRawDPRs.length) : 1;
+      // Assign adjusted DPR for each team in this season
+      allSeasonalDPRs.forEach((row) => {
+        if (row.year === parseInt(year)) {
+          row.dpr = leagueAvgRawDPR > 0 ? (row.rawDPR / leagueAvgRawDPR) : 1.0;
         }
       });
     });
+
+    // Ensure current season is always included, even if only partial weeks are completed
+    if (currentSeason !== null) {
+      const hasCurrentSeason = allSeasonalDPRs.some(row => row.year === currentSeason);
+      if (!hasCurrentSeason && seasonalMetrics[currentSeason]) {
+        Object.keys(seasonalMetrics[currentSeason]).forEach(rosterId => {
+          const teamSeasonalData = seasonalMetrics[currentSeason][rosterId];
+          if (teamSeasonalData && teamSeasonalData.totalGames > 0) {
+            let currentOwnerId = teamSeasonalData.ownerId;
+            if (!currentOwnerId && historicalData?.rostersBySeason?.[currentSeason]) {
+              const rosterInHistoricalData = historicalData.rostersBySeason[currentSeason].find(
+                (r) => String(r.roster_id) === String(rosterId)
+              );
+              if (rosterInHistoricalData) {
+                currentOwnerId = rosterInHistoricalData.owner_id;
+              }
+            }
+            const avgScore = teamSeasonalData.averageScore || 0;
+            const highScore = teamSeasonalData.highScore || 0;
+            const lowScore = teamSeasonalData.lowScore || 0;
+            const winPct = teamSeasonalData.winPercentage || 0;
+            const rawDPR = (((avgScore * 6) + ((highScore + lowScore) * 2) + ((winPct * 200) * 2)) / 10);
+            // Calculate league average Raw DPR for current season
+            const teamRawDPRs = Object.values(seasonalMetrics[currentSeason]).map(tsd => (((tsd.averageScore || 0) * 6) + (((tsd.highScore || 0) + (tsd.lowScore || 0)) * 2) + (((tsd.winPercentage || 0) * 200) * 2)) / 10);
+            const leagueAvgRawDPR = teamRawDPRs.length > 0 ? (teamRawDPRs.reduce((a, b) => a + b, 0) / teamRawDPRs.length) : 1;
+            const adjustedDPR = leagueAvgRawDPR > 0 ? (rawDPR / leagueAvgRawDPR) : 1.0;
+            allSeasonalDPRs.push({
+              year: currentSeason,
+              team: getTeamName(currentOwnerId, currentSeason),
+              rosterId: rosterId,
+              ownerId: currentOwnerId,
+              rawDPR,
+              dpr: adjustedDPR,
+              wins: teamSeasonalData.wins,
+              losses: teamSeasonalData.losses,
+              ties: teamSeasonalData.ties,
+              winPercentage: winPct,
+              pointsPerGame: avgScore,
+              highestPointsGame: highScore,
+              lowestPointsGame: lowScore,
+              isCurrentSeason: true
+            });
+          }
+        });
+      }
+    }
 
     // Sort the consolidated seasonal DPR data by DPR descending
     allSeasonalDPRs.sort((a, b) => b.dpr - a.dpr);
@@ -174,6 +197,50 @@ const DPRAnalysis = () => { // Removed props as data will come from context
     } else {
       allSeasonalDPRs.splice(insertIndex, 0, averageSeasonRow);
     }
+
+    // --- Career DPR Calculation (unchanged, but could be updated to use new formula if needed) ---
+    const enhancedCareerDPRs = calculatedCareerDPRs.map(teamData => {
+        const totalGames = teamData.wins + teamData.losses + teamData.ties;
+        const winPercentage = totalGames > 0 ? ((teamData.wins + (0.5 * teamData.ties)) / totalGames) : 0;
+        const pointsPerGame = totalGames > 0 ? (teamData.pointsFor / totalGames) : 0;
+
+        let highestSeasonalPointsAvg = 0;
+        let lowestSeasonalPointsAvg = Infinity;
+        let seasonsPlayedCount = 0;
+
+        Object.keys(seasonalMetrics).forEach(year => {
+            const teamSeasonalStats = Object.values(seasonalMetrics[year]).find(
+                (seasonalTeam) => seasonalTeam.ownerId === teamData.ownerId
+            );
+
+            if (teamSeasonalStats) {
+                const seasonalGames = teamSeasonalStats.totalGames;
+
+                if (seasonalGames > 0) {
+                    const seasonalAvg = teamSeasonalStats.pointsFor / seasonalGames;
+                    if (seasonalAvg > highestSeasonalPointsAvg) {
+                        highestSeasonalPointsAvg = seasonalAvg;
+                    }
+                    if (seasonalAvg < lowestSeasonalPointsAvg) {
+                        lowestSeasonalPointsAvg = seasonalAvg;
+                    }
+                    seasonsPlayedCount++;
+                }
+            }
+        });
+
+        if (seasonsPlayedCount === 0) {
+            lowestSeasonalPointsAvg = 0;
+        }
+
+        return {
+            ...teamData,
+            winPercentage: winPercentage,
+            pointsPerGame: pointsPerGame,
+            highestSeasonalPointsAvg: highestSeasonalPointsAvg,
+            lowestSeasonalPointsAvg: lowestSeasonalPointsAvg
+        };
+    });
 
     setCareerDPRData(enhancedCareerDPRs);
     setSeasonalDPRData(allSeasonalDPRs);
@@ -223,6 +290,17 @@ const DPRAnalysis = () => { // Removed props as data will come from context
   };
 
   const displayedSeasonalDPRData = showAllSeasonal ? seasonalDPRData : seasonalDPRData.slice(0, 20);
+  // Find current season for highlighting
+  // Highlight the latest season found in any data source (matches LuckAnalysis logic)
+  let highlightCurrentSeasonYear = null;
+  const highlightYearsSet = new Set([
+    ...Object.keys(seasonalMetrics || {}),
+    ...Object.keys(historicalData?.matchupsBySeason || {}),
+    ...Object.keys(historicalData?.rostersBySeason || {})
+  ].map(Number));
+  if (highlightYearsSet.size > 0) {
+    highlightCurrentSeasonYear = Math.max(...Array.from(highlightYearsSet));
+  }
 
   // Determine the number of columns for the colSpan
   const numberOfSeasonalColumns = 9; // Rank, Team, Season, Season DPR, Win %, Record, Points Avg, Highest Points, Lowest Points
@@ -304,13 +382,22 @@ const DPRAnalysis = () => { // Removed props as data will come from context
                   <tbody>
                     {/* The initialization of actualRank needs to be here, but not rendered directly */}
                     {displayedSeasonalDPRData.map((data) => {
-                      // This conditional block is crucial. It's executed for each item in the map.
-                      // `actualRank` is outside the map, so its value persists across iterations.
                       if (!data.isAverageRow) {
-                        actualRank++; // Increment rank only for non-average rows
+                        actualRank++;
                       }
+                      // Highlight current season row
+                      const isCurrentSeasonRow = data.isCurrentSeason && data.year === highlightCurrentSeasonYear;
                       return (
-                        <tr key={`${data.rosterId}-${data.year}`} className={data.isAverageRow ? 'bg-yellow-100 font-bold' : (actualRank % 2 === 0 ? 'bg-gray-50' : 'bg-white')}>
+                        <tr
+                          key={`${data.rosterId}-${data.year}`}
+                          className={
+                            data.isAverageRow
+                              ? 'bg-yellow-100 font-bold'
+                              : isCurrentSeasonRow
+                                ? 'bg-green-200 font-bold'
+                                : (actualRank % 2 === 0 ? 'bg-gray-50' : 'bg-white')
+                          }
+                        >
                           {data.isAverageRow ? (
                             <td colSpan={numberOfSeasonalColumns} className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap text-center">
                               {data.team}
@@ -318,7 +405,7 @@ const DPRAnalysis = () => { // Removed props as data will come from context
                           ) : (
                             <>
                               <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{actualRank}</td>
-                              <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{getTeamName(data.ownerId, data.year)}</td> {/* FIXED: Use getTeamName with ownerId and year */}
+                              <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{getTeamName(data.ownerId, data.year)}</td>
                               <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.year}</td>
                               <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatDPR(data.dpr)}</td>
                               <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPercentage(data.winPercentage)}</td>

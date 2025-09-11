@@ -14,6 +14,9 @@ const DPRHistory = ({ historicalMatchups, getDisplayTeamName }) => {
     const seasonalTeamStats = {}; // { year: { teamName: { totalPointsFor, wins, losses, ties, totalGames, weeklyScores: [] } } }
     const seasonLeagueScores = {}; // { year: { allGameScores: [] } }
 
+    // Track all years present
+    let allYears = new Set();
+
     historicalMatchups.forEach(match => {
       const team1 = getDisplayTeamName(String(match.team1 || '').trim());
       const team2 = getDisplayTeamName(String(match.team2 || '').trim());
@@ -24,6 +27,8 @@ const DPRHistory = ({ historicalMatchups, getDisplayTeamName }) => {
       if (!team1 || !team2 || isNaN(year) || isNaN(team1Score) || isNaN(team2Score)) {
         return; // Skip invalid matchups
       }
+
+      allYears.add(year);
 
       const isTie = team1Score === team2Score;
       const team1Won = team1Score > team2Score;
@@ -92,7 +97,9 @@ const DPRHistory = ({ historicalMatchups, getDisplayTeamName }) => {
     };
 
     // Calculate Raw DPR and Adjusted DPR for each team per season
-    Object.keys(seasonalTeamStats).forEach(year => {
+    // Sort years so newest is always included and processed
+    const sortedYears = Array.from(allYears).sort((a, b) => b - a);
+    sortedYears.forEach(year => {
       const teamsInSeason = Object.keys(seasonalTeamStats[year]);
       if (teamsInSeason.length === 0) return;
 
@@ -106,7 +113,7 @@ const DPRHistory = ({ historicalMatchups, getDisplayTeamName }) => {
         const stats = seasonalTeamStats[year][team];
         const totalGames = stats.totalGames;
 
-        if (totalGames === 0) { // Skip teams with no games
+        if (totalGames === 0) {
           stats.rawDPR = 0;
           stats.adjustedDPR = 0;
           return;
@@ -114,7 +121,6 @@ const DPRHistory = ({ historicalMatchups, getDisplayTeamName }) => {
 
         const seasonWinPercentage = (stats.wins + 0.5 * stats.ties) / totalGames;
 
-        // Raw DPR Calculation: ((Points Scored * 6) + ((Points Scored Max + Points Scored Min) * 2) + ((Win% * 200) * 2)) / 10
         stats.rawDPR = (
           (stats.totalPointsFor * 6) +
           ((maxScoreInSeason + minScoreInSeason) * 2) +
@@ -132,11 +138,10 @@ const DPRHistory = ({ historicalMatchups, getDisplayTeamName }) => {
         if (avgRawDPRForSeason > 0) {
           stats.adjustedDPR = stats.rawDPR / avgRawDPRForSeason;
         } else {
-          stats.adjustedDPR = 0; // Avoid division by zero
+          stats.adjustedDPR = 0;
         }
 
-        // Update overall highest/lowest adjusted DPR records
-        if (stats.adjustedDPR !== 0) { // Only consider if DPR is actually calculated
+        if (stats.adjustedDPR !== 0) {
           updateRecord(newAggregatedDPRRecords.highestAdjustedDPRSeason, stats.adjustedDPR, { team, year: parseInt(year), dpr: stats.adjustedDPR });
           updateRecord(newAggregatedDPRRecords.lowestAdjustedDPRSeason, stats.adjustedDPR, { team, year: parseInt(year), dpr: stats.adjustedDPR }, true);
         }
