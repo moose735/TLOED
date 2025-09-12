@@ -1,29 +1,39 @@
 import React, { useState, useEffect } from 'react';
 import { useSleeperData } from '../contexts/SleeperDataContext';
 
+// Import champion images (you can add these)
+// Example: import champion2024 from '../assets/images/champions/2024-champion.jpg';
+
 const HallOfChampions = () => {
     // Consume historical data and user information from the context
-    const { historicalData, usersData } = useSleeperData();
+    const { historicalData, getTeamName, getTeamDetails } = useSleeperData();
     const [championsByYear, setChampionsByYear] = useState([]);
     const [isDataReady, setIsDataReady] = useState(false);
 
-    // Helper function to get the team name from a user ID
-    const getUserDisplayName = (userId) => {
-        if (!userId || !usersData) {
-            return 'Unknown Champion';
+    // Static champion images mapping (add your images here)
+    const championImages = {
+        2024: '/assets/images/champions/2024-champion.jpg', // Example path
+        2023: '/assets/images/champions/2023-champion.jpg',
+        2022: '/assets/images/champions/2022-champion.jpg',
+        2021: '/assets/images/champions/2021-champion.jpg',
+        // Add more years as needed
+    };
+
+    // Trophy variations for different achievements
+    const getTrophyIcon = (year, isRecent = false) => {
+        if (isRecent && year >= 2023) {
+            return '🏆'; // Gold trophy for recent champions
+        } else if (year >= 2020) {
+            return '🥇'; // Gold medal for modern era
+        } else {
+            return '🏅'; // Medal for historical champions
         }
-        const user = usersData.find(u => u.user_id === userId);
-        if (user) {
-            // Prioritize team_name from metadata, otherwise use display_name
-            return user.metadata?.team_name || user.display_name;
-        }
-        return 'Unknown Champion';
     };
 
     // Effect to process historical data and build the list of champions
     useEffect(() => {
         // Ensure all necessary data is available before processing
-        const allDataPresent = historicalData && usersData && historicalData.winnersBracketBySeason && historicalData.rostersBySeason;
+        const allDataPresent = historicalData && historicalData.winnersBracketBySeason && historicalData.rostersBySeason;
         setIsDataReady(allDataPresent);
 
         if (allDataPresent) {

@@ -40,6 +40,52 @@ const Gamecenter = () => {
         }
     }, [selectedSeason, selectedWeek, historicalData]); // Runs only when season or week changes
 
+    // Helper function to calculate correct average points excluding incomplete weeks
+    const getCorrectAveragePoints = useMemo(() => {
+        return (rosterId, season) => {
+            if (!historicalData?.matchupsBySeason?.[season] || !nflState) {
+                return processedSeasonalRecords?.[season]?.[rosterId]?.averageScore ?? 0;
+            }
+
+            const currentNFLSeason = parseInt(nflState.season);
+            const currentNFLWeek = parseInt(nflState.week);
+            const seasonInt = parseInt(season);
+
+            // For historical seasons, use the processed average as-is
+            if (seasonInt < currentNFLSeason) {
+                return processedSeasonalRecords?.[season]?.[rosterId]?.averageScore ?? 0;
+            }
+
+            // For current season, recalculate excluding incomplete weeks
+            const matchupsForTeam = historicalData.matchupsBySeason[season].filter(m => 
+                String(m.team1_roster_id) === String(rosterId) || String(m.team2_roster_id) === String(rosterId)
+            );
+
+            let totalPoints = 0;
+            let completedGames = 0;
+
+            matchupsForTeam.forEach(matchup => {
+                const week = parseInt(matchup.week);
+                const isTeam1 = String(matchup.team1_roster_id) === String(rosterId);
+                const teamScore = isTeam1 ? matchup.team1_score : matchup.team2_score;
+                const opponentScore = isTeam1 ? matchup.team2_score : matchup.team1_score;
+
+                // Only include completed weeks (either historical season or current season with week < current NFL week)
+                const isWeekComplete = seasonInt < currentNFLSeason || (seasonInt === currentNFLSeason && week < currentNFLWeek);
+                
+                // Also check if the game actually has scores (completed)
+                const isGameCompleted = (teamScore > 0 || opponentScore > 0);
+
+                if (isWeekComplete && isGameCompleted) {
+                    totalPoints += teamScore;
+                    completedGames++;
+                }
+            });
+
+            return completedGames > 0 ? totalPoints / completedGames : 0;
+        };
+    }, [historicalData, processedSeasonalRecords, nflState]);
+
     // --- Data Calculation (Memoized) ---
     const availableSeasons = useMemo(() => 
         historicalData?.matchupsBySeason ? Object.keys(historicalData.matchupsBySeason).sort((a, b) => b - a) : [],
@@ -119,26 +165,40 @@ const Gamecenter = () => {
         try {
             setMatchupRosterData(null); // Reset data
             
-            // Get league ID for the season - for current season use leagueData, for historical we'd need the league ID
+            // Get league ID for the season
             let leagueId = null;
-            if (season === (leagueData && Array.isArray(leagueData) ? leagueData[0].season : leagueData?.season)) {
+            const currentSeason = leagueData && Array.isArray(leagueData) ? leagueData[0].season : leagueData?.season;
+            
+            if (season === currentSeason) {
+                // Use current season's league ID
                 leagueId = leagueData && Array.isArray(leagueData) ? leagueData[0].league_id : leagueData?.league_id;
             } else {
-                // For historical seasons, we'd need to store league IDs in historical data
-                // For now, let's try to use the current league ID as fallback
-                leagueId = leagueData && Array.isArray(leagueData) ? leagueData[0].league_id : leagueData?.league_id;
+                // For historical seasons, get the league ID from historical metadata
+                const historicalLeagueData = historicalData?.leaguesMetadataBySeason?.[season];
+                leagueId = historicalLeagueData?.league_id;
             }
 
             if (!leagueId) {
-                console.error('No league ID available for roster data fetch');
+                console.error(`No league ID available for season ${season}`);
+                // Set a fallback message for years without detailed roster data (like Yahoo years)
+                setMatchupRosterData({ 
+                    error: true, 
+                    message: `Detailed roster data is not available for the ${season} season. This may be from a previous platform or the data is no longer accessible.` 
+                });
                 return;
             }
 
-            // Fetch detailed matchup data from Sleeper API
+            // Fetch detailed matchup data from Sleeper API for the specific season and week
+            console.log(`Fetching roster data for season ${season}, week ${week}, league ${leagueId}`);
             const rosterResponse = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/matchups/${week}`);
+            
+            if (!rosterResponse.ok) {
+                throw new Error(`API request failed with status ${rosterResponse.status}`);
+            }
+            
             const rosterData = await rosterResponse.json();
 
-            if (rosterData && Array.isArray(rosterData)) {
+            if (rosterData && Array.isArray(rosterData) && rosterData.length > 0) {
                 // Find the specific matchups for our teams
                 const team1Roster = rosterData.find(r => r.roster_id === parseInt(matchup.team1_roster_id));
                 const team2Roster = rosterData.find(r => r.roster_id === parseInt(matchup.team2_roster_id));
@@ -150,11 +210,26 @@ const Gamecenter = () => {
                         team2: await processRosterLineup(team2Roster, matchup.team2_roster_id)
                     };
                     setMatchupRosterData(processedData);
+                } else {
+                    console.warn(`Could not find roster data for teams ${matchup.team1_roster_id} and ${matchup.team2_roster_id} in week ${week} of season ${season}`);
+                    setMatchupRosterData({ 
+                        error: true, 
+                        message: `Roster details for this matchup are not available. The teams may not have been active in week ${week} of the ${season} season.` 
+                    });
                 }
+            } else {
+                console.warn(`No roster data returned for season ${season}, week ${week}`);
+                setMatchupRosterData({ 
+                    error: true, 
+                    message: `No roster data available for week ${week} of the ${season} season. The data may not be accessible or this week may not have occurred yet.` 
+                });
             }
         } catch (error) {
             console.error('Error fetching matchup roster data:', error);
-            setMatchupRosterData(null);
+            setMatchupRosterData({ 
+                error: true, 
+                message: `Failed to load detailed roster data: ${error.message}. This may be due to data not being available for historical seasons or network issues.` 
+            });
         }
     };
 
@@ -282,7 +357,7 @@ const Gamecenter = () => {
 
     const getHeadToHeadRecord = (ownerId1, ownerId2) => {
         const history1 = teamMatchupHistory[ownerId1];
-        if (!history1 || !ownerId1 || !ownerId2) return "0-0-0";
+        if (!history1 || !ownerId1 || !ownerId2) return "0-0";
     
         let wins = 0;
         let losses = 0;
@@ -296,7 +371,8 @@ const Gamecenter = () => {
             }
         });
     
-        return `${wins}-${losses}-${ties}`;
+        // Only show ties if there are any
+        return ties > 0 ? `${wins}-${losses}-${ties}` : `${wins}-${losses}`;
     };
 
     // --- Render Logic ---
@@ -376,8 +452,8 @@ const Gamecenter = () => {
                         const team1Luck = weeklyLuckData[team1RosterId]?.[selectedWeek - 1] ?? 0;
                         const team2Luck = weeklyLuckData[team2RosterId]?.[selectedWeek - 1] ?? 0;
 
-                        const team1AvgPts = processedSeasonalRecords?.[selectedSeason]?.[team1RosterId]?.averageScore ?? 0;
-                        const team2AvgPts = processedSeasonalRecords?.[selectedSeason]?.[team2RosterId]?.averageScore ?? 0;
+                        const team1AvgPts = getCorrectAveragePoints(team1RosterId, selectedSeason);
+                        const team2AvgPts = getCorrectAveragePoints(team2RosterId, selectedSeason);
 
                         const h2h = getHeadToHeadRecord(team1OwnerId, team2OwnerId);
                         const team1Streak = getWinLossStreak(team1OwnerId, selectedSeason);
@@ -389,50 +465,139 @@ const Gamecenter = () => {
                                 className={`bg-white rounded-xl shadow-md overflow-hidden transition-shadow duration-300 hover:shadow-lg ${isCompleted ? 'cursor-pointer hover:bg-gray-50' : ''}`}
                                 onClick={() => handleMatchupClick(matchup)}
                             >
-                                <div className="p-5">
-                                    <div className="flex flex-col space-y-4">
+                                <div className="p-4">
+                                    {/* Teams side by side layout with vertical team cards */}
+                                    <div className="flex items-center justify-between gap-3">
                                         {/* Team 1 */}
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-3">
-                                                <img className="w-10 h-10 rounded-full" src={team1Details.avatar} alt={`${team1Details.name} avatar`} />
-                                                <span className="font-semibold text-gray-700 text-lg">{team1Details.name}</span>
-                                            </div>
-                                            <div className={`font-bold text-xl ${isCompleted && matchup.team1_score > matchup.team2_score ? 'text-green-600' : 'text-gray-800'}`}>
-                                                {isCompleted ? matchup.team1_score.toFixed(2) : '-'}
+                                        <div className="flex flex-col items-center flex-1 min-w-0">
+                                            <img className="w-12 h-12 rounded-full mb-2" src={team1Details.avatar} alt={`${team1Details.name} avatar`} />
+                                            <div className="text-center w-full">
+                                                <div className="font-semibold text-gray-700 text-sm leading-tight break-words mb-1">
+                                                    {team1Details.name}
+                                                </div>
+                                                <div className={`font-bold text-lg ${isCompleted && matchup.team1_score > matchup.team2_score ? 'text-green-600' : 'text-gray-800'}`}>
+                                                    {isCompleted ? matchup.team1_score.toFixed(2) : '-'}
+                                                </div>
                                             </div>
                                         </div>
+
+                                        {/* VS indicator */}
+                                        <div className="flex-shrink-0 text-gray-400 font-medium text-sm px-2">
+                                            vs
+                                        </div>
+
                                         {/* Team 2 */}
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-3">
-                                                <img className="w-10 h-10 rounded-full" src={team2Details.avatar} alt={`${team2Details.name} avatar`} />
-                                                <span className="font-semibold text-gray-700 text-lg">{team2Details.name}</span>
-                                            </div>
-                                            <div className={`font-bold text-xl ${isCompleted && matchup.team2_score > matchup.team1_score ? 'text-green-600' : 'text-gray-800'}`}>
-                                                {isCompleted ? matchup.team2_score.toFixed(2) : '-'}
+                                        <div className="flex flex-col items-center flex-1 min-w-0">
+                                            <img className="w-12 h-12 rounded-full mb-2" src={team2Details.avatar} alt={`${team2Details.name} avatar`} />
+                                            <div className="text-center w-full">
+                                                <div className="font-semibold text-gray-700 text-sm leading-tight break-words mb-1">
+                                                    {team2Details.name}
+                                                </div>
+                                                <div className={`font-bold text-lg ${isCompleted && matchup.team2_score > matchup.team1_score ? 'text-green-600' : 'text-gray-800'}`}>
+                                                    {isCompleted ? matchup.team2_score.toFixed(2) : '-'}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
 
-                                    <div className="border-t border-gray-200 mt-4 pt-4">
+                                    <div className="border-t border-gray-200 mt-3 pt-3">
                                         {!isCompleted ? (
-                                            <div className="text-sm text-gray-600 space-y-2">
-                                                <div className="flex justify-between"><span>H2H Record:</span> <span className="font-medium">{h2h}</span></div>
-                                                <div className="flex justify-between"><span>{team1Details.name} Streak:</span> <span className="font-medium">{team1Streak}</span></div>
-                                                <div className="flex justify-between"><span>{team2Details.name} Streak:</span> <span className="font-medium">{team2Streak}</span></div>
-                                                <div className="flex justify-between"><span>{team1Details.name} Avg Pts:</span> <span className="font-medium">{team1AvgPts.toFixed(2)}</span></div>
-                                                <div className="flex justify-between"><span>{team2Details.name} Avg Pts:</span> <span className="font-medium">{team2AvgPts.toFixed(2)}</span></div>
+                                            <div className="text-xs text-gray-600">
+                                                {/* Stats labels centered under "vs" */}
+                                                <div className="text-center mb-2">
+                                                    <div className="text-xs text-gray-500 font-medium">H2H: {h2h}</div>
+                                                </div>
+                                                
+                                                {/* Team stats in columns */}
+                                                <div className="grid grid-cols-3 gap-2 items-center">
+                                                    {/* Team 1 stats */}
+                                                    <div className="text-center space-y-1">
+                                                        <div className="text-xs font-semibold">{team1Streak}</div>
+                                                        <div className="text-xs font-semibold">{team1AvgPts.toFixed(1)}</div>
+                                                    </div>
+                                                    
+                                                    {/* Center labels */}
+                                                    <div className="text-center space-y-1">
+                                                        <div className="text-xs text-gray-500 font-medium">Streak</div>
+                                                        <div className="text-xs text-gray-500 font-medium">Avg Pts</div>
+                                                    </div>
+                                                    
+                                                    {/* Team 2 stats */}
+                                                    <div className="text-center space-y-1">
+                                                        <div className="text-xs font-semibold">{team2Streak}</div>
+                                                        <div className="text-xs font-semibold">{team2AvgPts.toFixed(1)}</div>
+                                                    </div>
+                                                </div>
                                             </div>
                                         ) : (
-                                            <div className="text-sm text-gray-600 space-y-2">
-                                                <div className="flex justify-between">
-                                                    <span>{team1Details.name} Luck:</span>
-                                                    <span className={`font-medium ${team1Luck > 0 ? 'text-green-500' : 'text-red-500'}`}>{team1Luck.toFixed(2)}</span>
-                                                </div>
-                                                <div className="flex justify-between">
-                                                    <span>{team2Details.name} Luck:</span>
-                                                    <span className={`font-medium ${team2Luck > 0 ? 'text-green-500' : 'text-red-500'}`}>{team2Luck.toFixed(2)}</span>
-                                                </div>
-                                            </div>
+                                            <>
+                                                {/* Check if week is actually complete (not just if teams have scored) */}
+                                                {(() => {
+                                                    const currentNFLSeason = parseInt(nflState?.season || new Date().getFullYear());
+                                                    const currentNFLWeek = parseInt(nflState?.week || 1);
+                                                    const selectedSeasonInt = parseInt(selectedSeason);
+                                                    const selectedWeekInt = parseInt(selectedWeek);
+                                                    
+                                                    // Week is complete if it's a historical season OR current season with week < current NFL week
+                                                    const isWeekComplete = selectedSeasonInt < currentNFLSeason || 
+                                                                         (selectedSeasonInt === currentNFLSeason && selectedWeekInt < currentNFLWeek);
+                                                    
+                                                    const gameHasScores = matchup.team1_score > 0 && matchup.team2_score > 0;
+                                                    
+                                                    return isWeekComplete && gameHasScores ? (
+                                                        <div className="text-xs text-gray-600">
+                                                            {/* Luck stats for completed weeks only */}
+                                                            <div className="grid grid-cols-3 gap-2 items-center">
+                                                                {/* Team 1 luck */}
+                                                                <div className="text-center">
+                                                                    <span className={`font-semibold text-sm ${team1Luck > 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                                                        {team1Luck.toFixed(2)}
+                                                                    </span>
+                                                                </div>
+                                                                
+                                                                {/* Center label */}
+                                                                <div className="text-center">
+                                                                    <div className="text-xs text-gray-500 font-medium">Luck</div>
+                                                                </div>
+                                                                
+                                                                {/* Team 2 luck */}
+                                                                <div className="text-center">
+                                                                    <span className={`font-semibold text-sm ${team2Luck > 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                                                        {team2Luck.toFixed(2)}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-xs text-gray-600">
+                                                            {/* Show pregame stats for incomplete weeks or games in progress */}
+                                                            <div className="text-center mb-2">
+                                                                <div className="text-xs text-gray-500 font-medium">H2H: {h2h}</div>
+                                                            </div>
+                                                            
+                                                            <div className="grid grid-cols-3 gap-2 items-center">
+                                                                {/* Team 1 stats */}
+                                                                <div className="text-center space-y-1">
+                                                                    <div className="text-xs font-semibold">{team1Streak}</div>
+                                                                    <div className="text-xs font-semibold">{team1AvgPts.toFixed(1)}</div>
+                                                                </div>
+                                                                
+                                                                {/* Center labels */}
+                                                                <div className="text-center space-y-1">
+                                                                    <div className="text-xs text-gray-500 font-medium">Streak</div>
+                                                                    <div className="text-xs text-gray-500 font-medium">Avg Pts</div>
+                                                                </div>
+                                                                
+                                                                {/* Team 2 stats */}
+                                                                <div className="text-center space-y-1">
+                                                                    <div className="text-xs font-semibold">{team2Streak}</div>
+                                                                    <div className="text-xs font-semibold">{team2AvgPts.toFixed(1)}</div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </>
                                         )}
                                     </div>
                                 </div>
@@ -443,21 +608,21 @@ const Gamecenter = () => {
 
                 {/* Detailed Matchup Modal */}
                 {selectedMatchup && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                        <div className="bg-white rounded-xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
-                            <div className="p-6 border-b border-gray-200 flex justify-between items-center">
-                                <h2 className="text-2xl font-bold text-gray-800">
-                                    {selectedSeason} Week {selectedWeek} Matchup Details
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
+                        <div className="bg-white rounded-xl max-w-6xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+                            <div className="p-4 sm:p-6 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white z-10">
+                                <h2 className="text-lg sm:text-2xl font-bold text-gray-800">
+                                    {selectedSeason} Week {selectedWeek} Details
                                 </h2>
                                 <button 
                                     onClick={closeMatchupModal}
-                                    className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
+                                    className="text-gray-500 hover:text-gray-700 text-xl sm:text-2xl font-bold p-1"
                                 >
                                     ×
                                 </button>
                             </div>
                             
-                            <div className="p-6">
+                            <div className="p-4 sm:p-6">
                                 {(() => {
                                     const team1RosterId = String(selectedMatchup.team1_roster_id);
                                     const team2RosterId = String(selectedMatchup.team2_roster_id);
@@ -473,8 +638,8 @@ const Gamecenter = () => {
                                     const team1Luck = weeklyLuckData[team1RosterId]?.[selectedWeek - 1] ?? 0;
                                     const team2Luck = weeklyLuckData[team2RosterId]?.[selectedWeek - 1] ?? 0;
                                     
-                                    const team1AvgPts = processedSeasonalRecords?.[selectedSeason]?.[team1RosterId]?.averageScore ?? 0;
-                                    const team2AvgPts = processedSeasonalRecords?.[selectedSeason]?.[team2RosterId]?.averageScore ?? 0;
+                                    const team1AvgPts = getCorrectAveragePoints(team1RosterId, selectedSeason);
+                                    const team2AvgPts = getCorrectAveragePoints(team2RosterId, selectedSeason);
                                     
                                     const h2h = getHeadToHeadRecord(team1OwnerId, team2OwnerId);
                                     const team1Streak = getWinLossStreak(team1OwnerId, selectedSeason);
@@ -484,44 +649,44 @@ const Gamecenter = () => {
                                     const team2Won = selectedMatchup.team2_score > selectedMatchup.team1_score;
                                     
                                     return (
-                                        <div className="space-y-8">
+                                        <div className="space-y-6 sm:space-y-8">
                                             {/* Header with team names and scores */}
-                                            <div className="grid grid-cols-2 gap-8">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-8">
                                                 <div className="text-center">
                                                     <div className="flex items-center justify-center gap-3 mb-2">
-                                                        <img className="w-16 h-16 rounded-full" src={team1Details.avatar} alt={`${team1Details.name} avatar`} />
+                                                        <img className="w-12 h-12 sm:w-16 sm:h-16 rounded-full" src={team1Details.avatar} alt={`${team1Details.name} avatar`} />
                                                         <div>
-                                                            <h3 className="text-2xl font-bold text-gray-800">{team1Details.name}</h3>
-                                                            <p className="text-sm text-gray-500">{selectedSeason} Week {selectedWeek}</p>
+                                                            <h3 className="text-lg sm:text-2xl font-bold text-gray-800">{team1Details.name}</h3>
+                                                            <p className="text-xs sm:text-sm text-gray-500">{selectedSeason} Week {selectedWeek}</p>
                                                         </div>
                                                     </div>
-                                                    <div className={`text-4xl font-bold ${team1Won ? 'text-green-600' : 'text-gray-600'}`}>
+                                                    <div className={`text-2xl sm:text-4xl font-bold ${team1Won ? 'text-green-600' : 'text-gray-600'}`}>
                                                         {selectedMatchup.team1_score.toFixed(2)}
                                                     </div>
-                                                    <div className="text-sm text-gray-500 mt-1">POINTS</div>
+                                                    <div className="text-xs sm:text-sm text-gray-500 mt-1">POINTS</div>
                                                 </div>
                                                 
                                                 <div className="text-center">
                                                     <div className="flex items-center justify-center gap-3 mb-2">
-                                                        <img className="w-16 h-16 rounded-full" src={team2Details.avatar} alt={`${team2Details.name} avatar`} />
+                                                        <img className="w-12 h-12 sm:w-16 sm:h-16 rounded-full" src={team2Details.avatar} alt={`${team2Details.name} avatar`} />
                                                         <div>
-                                                            <h3 className="text-2xl font-bold text-gray-800">{team2Details.name}</h3>
-                                                            <p className="text-sm text-gray-500">{selectedSeason} Week {selectedWeek}</p>
+                                                            <h3 className="text-lg sm:text-2xl font-bold text-gray-800">{team2Details.name}</h3>
+                                                            <p className="text-xs sm:text-sm text-gray-500">{selectedSeason} Week {selectedWeek}</p>
                                                         </div>
                                                     </div>
-                                                    <div className={`text-4xl font-bold ${team2Won ? 'text-green-600' : 'text-gray-600'}`}>
+                                                    <div className={`text-2xl sm:text-4xl font-bold ${team2Won ? 'text-green-600' : 'text-gray-600'}`}>
                                                         {selectedMatchup.team2_score.toFixed(2)}
                                                     </div>
-                                                    <div className="text-sm text-gray-500 mt-1">POINTS</div>
+                                                    <div className="text-xs sm:text-sm text-gray-500 mt-1">POINTS</div>
                                                 </div>
                                             </div>
                                             
                                             {/* Stats Grid */}
-                                            <div className="grid grid-cols-2 gap-8">
+                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
                                                 <div className="space-y-4">
-                                                    <div className="bg-gray-50 p-4 rounded-lg">
-                                                        <h4 className="font-semibold text-gray-700 mb-3">Team Stats</h4>
-                                                        <div className="space-y-2 text-sm">
+                                                    <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                                                        <h4 className="font-semibold text-gray-700 mb-3 text-sm sm:text-base">{team1Details.name} Stats</h4>
+                                                        <div className="space-y-2 text-xs sm:text-sm">
                                                             <div className="flex justify-between">
                                                                 <span>Season Record:</span>
                                                                 <span className="font-medium">{processedSeasonalRecords?.[selectedSeason]?.[team1RosterId]?.wins || 0}-{processedSeasonalRecords?.[selectedSeason]?.[team1RosterId]?.losses || 0}</span>
@@ -543,19 +708,9 @@ const Gamecenter = () => {
                                                         </div>
                                                     </div>
                                                     
-                                                    <div className="bg-gray-50 p-4 rounded-lg">
-                                                        <h4 className="font-semibold text-gray-700 mb-3">Versus Record</h4>
-                                                        <div className="text-center">
-                                                            <div className="text-2xl font-bold text-gray-800">{h2h}</div>
-                                                            <div className="text-sm text-gray-500">All-time H2H</div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                
-                                                <div className="space-y-4">
-                                                    <div className="bg-gray-50 p-4 rounded-lg">
-                                                        <h4 className="font-semibold text-gray-700 mb-3">Team Stats</h4>
-                                                        <div className="space-y-2 text-sm">
+                                                    <div className="bg-gray-50 p-3 sm:p-4 rounded-lg lg:hidden">
+                                                        <h4 className="font-semibold text-gray-700 mb-3 text-sm sm:text-base">{team2Details.name} Stats</h4>
+                                                        <div className="space-y-2 text-xs sm:text-sm">
                                                             <div className="flex justify-between">
                                                                 <span>Season Record:</span>
                                                                 <span className="font-medium">{processedSeasonalRecords?.[selectedSeason]?.[team2RosterId]?.wins || 0}-{processedSeasonalRecords?.[selectedSeason]?.[team2RosterId]?.losses || 0}</span>
@@ -576,45 +731,85 @@ const Gamecenter = () => {
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    
-                                                    <div className="bg-gray-50 p-4 rounded-lg">
-                                                        <h4 className="font-semibold text-gray-700 mb-3">Game Info</h4>
-                                                        <div className="space-y-2 text-sm">
+                                                </div>
+                                                
+                                                <div className="space-y-4 hidden lg:block">
+                                                    <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                                                        <h4 className="font-semibold text-gray-700 mb-3 text-sm sm:text-base">{team2Details.name} Stats</h4>
+                                                        <div className="space-y-2 text-xs sm:text-sm">
                                                             <div className="flex justify-between">
-                                                                <span>Matchup Type:</span>
-                                                                <span className="font-medium">Regular Season</span>
+                                                                <span>Season Record:</span>
+                                                                <span className="font-medium">{processedSeasonalRecords?.[selectedSeason]?.[team2RosterId]?.wins || 0}-{processedSeasonalRecords?.[selectedSeason]?.[team2RosterId]?.losses || 0}</span>
                                                             </div>
                                                             <div className="flex justify-between">
-                                                                <span>Point Difference:</span>
-                                                                <span className="font-medium">{Math.abs(selectedMatchup.team1_score - selectedMatchup.team2_score).toFixed(2)}</span>
+                                                                <span>Current Streak:</span>
+                                                                <span className="font-medium">{team2Streak}</span>
+                                                            </div>
+                                                            <div className="flex justify-between">
+                                                                <span>Season Avg:</span>
+                                                                <span className="font-medium">{team2AvgPts.toFixed(2)}</span>
+                                                            </div>
+                                                            <div className="flex justify-between">
+                                                                <span>Luck Factor:</span>
+                                                                <span className={`font-medium ${team2Luck > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                                    {team2Luck > 0 ? '+' : ''}{team2Luck.toFixed(2)}
+                                                                </span>
                                                             </div>
                                                         </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Game Info Section */}
+                                            <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-center">
+                                                    <div>
+                                                        <div className="text-xs sm:text-sm text-gray-500">H2H Record</div>
+                                                        <div className="text-lg sm:text-2xl font-bold text-gray-800">{h2h}</div>
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-xs sm:text-sm text-gray-500">Point Difference</div>
+                                                        <div className="text-lg sm:text-2xl font-bold text-gray-800">{Math.abs(selectedMatchup.team1_score - selectedMatchup.team2_score).toFixed(2)}</div>
+                                                    </div>
+                                                    <div className="col-span-2 sm:col-span-1">
+                                                        <div className="text-xs sm:text-sm text-gray-500">Matchup Type</div>
+                                                        <div className="text-sm sm:text-base font-bold text-gray-800">Regular Season</div>
                                                     </div>
                                                 </div>
                                             </div>
                                             
                                             {/* Roster Breakdown */}
                                             {matchupRosterData ? (
-                                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                                matchupRosterData.error ? (
+                                                    <div className="text-center py-6 sm:py-8">
+                                                        <div className="text-gray-500 mb-2">
+                                                            <svg className="mx-auto h-8 w-8 sm:h-12 sm:w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                            </svg>
+                                                        </div>
+                                                        <p className="text-gray-600 max-w-md mx-auto text-sm sm:text-base">{matchupRosterData.message}</p>
+                                                    </div>
+                                                ) : (
+                                                <div className="space-y-6">
                                                     {/* Team 1 Roster */}
-                                                    <div className="space-y-4">
-                                                        <h4 className="text-xl font-bold text-gray-800 border-b pb-2">{team1Details.name} Roster</h4>
+                                                    <div className="space-y-3 sm:space-y-4">
+                                                        <h4 className="text-lg sm:text-xl font-bold text-gray-800 border-b pb-2">{team1Details.name} Roster</h4>
                                                         
                                                         {/* Starting Lineup */}
-                                                        <div className="bg-gray-50 rounded-lg p-4">
-                                                            <h5 className="font-semibold text-gray-700 mb-3">Starting Lineup</h5>
-                                                            <div className="space-y-2">
+                                                        <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
+                                                            <h5 className="font-semibold text-gray-700 mb-3 text-sm sm:text-base">Starting Lineup</h5>
+                                                            <div className="space-y-1 sm:space-y-2">
                                                                 {matchupRosterData.team1.lineup.map((player, index) => (
-                                                                    <div key={player.playerId} className="flex justify-between items-center py-2 border-b border-gray-200 last:border-b-0">
-                                                                        <div className="flex items-center space-x-3">
-                                                                            <span className="w-8 text-xs font-medium text-gray-500">{player.lineupPosition}</span>
-                                                                            <div>
-                                                                                <div className="font-medium text-gray-800">{player.name}</div>
+                                                                    <div key={player.playerId} className="flex justify-between items-center py-1 sm:py-2 border-b border-gray-200 last:border-b-0">
+                                                                        <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
+                                                                            <span className="w-6 sm:w-8 text-xs font-medium text-gray-500 flex-shrink-0">{player.lineupPosition}</span>
+                                                                            <div className="min-w-0 flex-1">
+                                                                                <div className="font-medium text-gray-800 text-sm sm:text-base truncate">{player.name}</div>
                                                                                 <div className="text-xs text-gray-500">{player.position} · {player.team || 'FA'}</div>
                                                                             </div>
                                                                         </div>
-                                                                        <div className="text-right">
-                                                                            <div className="font-semibold text-gray-800">{player.points.toFixed(2)}</div>
+                                                                        <div className="text-right flex-shrink-0">
+                                                                            <div className="font-semibold text-gray-800 text-sm sm:text-base">{player.points.toFixed(2)}</div>
                                                                         </div>
                                                                     </div>
                                                                 ))}
@@ -622,19 +817,19 @@ const Gamecenter = () => {
                                                         </div>
 
                                                         {/* Bench */}
-                                                        <div className="bg-gray-50 rounded-lg p-4">
-                                                            <h5 className="font-semibold text-gray-700 mb-3">Bench</h5>
-                                                            <div className="space-y-2">
+                                                        <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
+                                                            <h5 className="font-semibold text-gray-700 mb-3 text-sm sm:text-base">Bench</h5>
+                                                            <div className="space-y-1">
                                                                 {matchupRosterData.team1.bench.map((player, index) => (
                                                                     <div key={player.playerId} className="flex justify-between items-center py-1">
-                                                                        <div className="flex items-center space-x-3">
-                                                                            <span className="w-8 text-xs font-medium text-gray-400">BN</span>
-                                                                            <div>
-                                                                                <div className="text-sm text-gray-600">{player.name}</div>
+                                                                        <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
+                                                                            <span className="w-6 sm:w-8 text-xs font-medium text-gray-400 flex-shrink-0">BN</span>
+                                                                            <div className="min-w-0 flex-1">
+                                                                                <div className="text-sm text-gray-600 truncate">{player.name}</div>
                                                                                 <div className="text-xs text-gray-400">{player.position} · {player.team || 'FA'}</div>
                                                                             </div>
                                                                         </div>
-                                                                        <div className="text-right">
+                                                                        <div className="text-right flex-shrink-0">
                                                                             <div className="text-sm text-gray-600">{player.points > 0 ? player.points.toFixed(2) : '---'}</div>
                                                                         </div>
                                                                     </div>
@@ -644,24 +839,24 @@ const Gamecenter = () => {
                                                     </div>
 
                                                     {/* Team 2 Roster */}
-                                                    <div className="space-y-4">
-                                                        <h4 className="text-xl font-bold text-gray-800 border-b pb-2">{team2Details.name} Roster</h4>
+                                                    <div className="space-y-3 sm:space-y-4">
+                                                        <h4 className="text-lg sm:text-xl font-bold text-gray-800 border-b pb-2">{team2Details.name} Roster</h4>
                                                         
                                                         {/* Starting Lineup */}
-                                                        <div className="bg-gray-50 rounded-lg p-4">
-                                                            <h5 className="font-semibold text-gray-700 mb-3">Starting Lineup</h5>
-                                                            <div className="space-y-2">
+                                                        <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
+                                                            <h5 className="font-semibold text-gray-700 mb-3 text-sm sm:text-base">Starting Lineup</h5>
+                                                            <div className="space-y-1 sm:space-y-2">
                                                                 {matchupRosterData.team2.lineup.map((player, index) => (
-                                                                    <div key={player.playerId} className="flex justify-between items-center py-2 border-b border-gray-200 last:border-b-0">
-                                                                        <div className="flex items-center space-x-3">
-                                                                            <span className="w-8 text-xs font-medium text-gray-500">{player.lineupPosition}</span>
-                                                                            <div>
-                                                                                <div className="font-medium text-gray-800">{player.name}</div>
+                                                                    <div key={player.playerId} className="flex justify-between items-center py-1 sm:py-2 border-b border-gray-200 last:border-b-0">
+                                                                        <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
+                                                                            <span className="w-6 sm:w-8 text-xs font-medium text-gray-500 flex-shrink-0">{player.lineupPosition}</span>
+                                                                            <div className="min-w-0 flex-1">
+                                                                                <div className="font-medium text-gray-800 text-sm sm:text-base truncate">{player.name}</div>
                                                                                 <div className="text-xs text-gray-500">{player.position} · {player.team || 'FA'}</div>
                                                                             </div>
                                                                         </div>
-                                                                        <div className="text-right">
-                                                                            <div className="font-semibold text-gray-800">{player.points.toFixed(2)}</div>
+                                                                        <div className="text-right flex-shrink-0">
+                                                                            <div className="font-semibold text-gray-800 text-sm sm:text-base">{player.points.toFixed(2)}</div>
                                                                         </div>
                                                                     </div>
                                                                 ))}
@@ -669,19 +864,19 @@ const Gamecenter = () => {
                                                         </div>
 
                                                         {/* Bench */}
-                                                        <div className="bg-gray-50 rounded-lg p-4">
-                                                            <h5 className="font-semibold text-gray-700 mb-3">Bench</h5>
-                                                            <div className="space-y-2">
+                                                        <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
+                                                            <h5 className="font-semibold text-gray-700 mb-3 text-sm sm:text-base">Bench</h5>
+                                                            <div className="space-y-1">
                                                                 {matchupRosterData.team2.bench.map((player, index) => (
                                                                     <div key={player.playerId} className="flex justify-between items-center py-1">
-                                                                        <div className="flex items-center space-x-3">
-                                                                            <span className="w-8 text-xs font-medium text-gray-400">BN</span>
-                                                                            <div>
-                                                                                <div className="text-sm text-gray-600">{player.name}</div>
+                                                                        <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
+                                                                            <span className="w-6 sm:w-8 text-xs font-medium text-gray-400 flex-shrink-0">BN</span>
+                                                                            <div className="min-w-0 flex-1">
+                                                                                <div className="text-sm text-gray-600 truncate">{player.name}</div>
                                                                                 <div className="text-xs text-gray-400">{player.position} · {player.team || 'FA'}</div>
                                                                             </div>
                                                                         </div>
-                                                                        <div className="text-right">
+                                                                        <div className="text-right flex-shrink-0">
                                                                             <div className="text-sm text-gray-600">{player.points > 0 ? player.points.toFixed(2) : '---'}</div>
                                                                         </div>
                                                                     </div>
@@ -690,9 +885,10 @@ const Gamecenter = () => {
                                                         </div>
                                                     </div>
                                                 </div>
+                                                )
                                             ) : (
-                                                <div className="text-center py-8">
-                                                    <div className="text-gray-500">Loading roster details...</div>
+                                                <div className="text-center py-6 sm:py-8">
+                                                    <div className="text-gray-500 text-sm sm:text-base">Loading roster details...</div>
                                                 </div>
                                             )}
                                         </div>

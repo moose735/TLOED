@@ -402,7 +402,8 @@ export const SleeperDataProvider = ({ children }) => {
             if (user) {
                 return {
                     name: user.metadata?.team_name || user.display_name,
-                    avatar: user.avatar ? `https://sleepercdn.com/avatars/${user.avatar}` : `https://sleepercdn.com/avatars/default_avatar.png`
+                    // Use team logo from metadata.avatar if available, otherwise fallback to profile avatar
+                    avatar: user.metadata?.avatar || (user.avatar ? `https://sleepercdn.com/avatars/${user.avatar}` : `https://sleepercdn.com/avatars/default_avatar.png`)
                 };
             }
 
@@ -646,6 +647,7 @@ export const SleeperDataProvider = ({ children }) => {
         transactions,
         loading,
         error,
+        currentSeason, // EXPORT THE CURRENT SEASON
         getTeamName,
         getTeamDetails, // EXPORT THE NEW FUNCTION
     }), [
@@ -662,6 +664,7 @@ export const SleeperDataProvider = ({ children }) => {
         transactions,
         loading,
         error,
+        currentSeason, // ADD TO DEPENDENCY ARRAY
         getTeamName,
         getTeamDetails, // ADD TO DEPENDENCY ARRAY
     ]);

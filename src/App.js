@@ -15,6 +15,7 @@ import SeasonBreakdown from './lib/SeasonBreakdown';
 import DraftAnalysis from './lib/DraftAnalysis'; // Import the new DraftAnalysis component
 import HallOfChampions from './lib/HallOfChampions'; // Import the new HallOfChampions component
 import Gamecenter from './components/Gamecenter'; // Import the new Gamecenter component
+import Sportsbook from './components/Sportsbook'; // Import the new Sportsbook component
 
 // Import the custom hook from your SleeperDataContext
 import { SleeperDataProvider, useSleeperData } from './contexts/SleeperDataContext';
@@ -24,6 +25,7 @@ const NAV_CATEGORIES = {
     HOME: { label: 'Dashboard', tab: 'dashboard' },
     POWER_RANKINGS: { label: 'Power Rankings', tab: 'powerRankings' },
     GAMECENTER: { label: 'Gamecenter', tab: 'gamecenter' },
+    SPORTSBOOK: { label: 'Sportsbook', tab: 'sportsbook' },
     LEAGUE_DATA: {
         label: 'League Data',
         subTabs: [
@@ -49,6 +51,7 @@ const TABS = {
     DASHBOARD: 'dashboard',
     POWER_RANKINGS: 'powerRankings',
     GAMECENTER: 'gamecenter',
+    SPORTSBOOK: 'sportsbook',
     LEAGUE_HISTORY: 'leagueHistory',
     HALL_OF_CHAMPIONS: 'hallOfChampions', // New Hall of Champions tab
     RECORD_BOOK: 'recordBook',
@@ -246,6 +249,8 @@ const AppContent = () => {
                 return <PowerRankings />;
             case TABS.GAMECENTER:
                 return <Gamecenter />;
+            case TABS.SPORTSBOOK:
+                return <Sportsbook />;
             case TABS.LEAGUE_HISTORY:
                 return <LeagueHistory />;
             case TABS.HALL_OF_CHAMPIONS: // New case for Hall of Champions
@@ -318,6 +323,11 @@ const AppContent = () => {
                     <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-0.5 my-0.5 md:mx-1 md:my-0 text-base md:text-lg text-center"
                         onClick={() => handleTabClick(NAV_CATEGORIES.GAMECENTER.tab)}>
                         {NAV_CATEGORIES.GAMECENTER.label}
+                    </li>
+                    {/* Sportsbook Tab */}
+                    <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-0.5 my-0.5 md:mx-1 md:my-0 text-base md:text-lg text-center"
+                        onClick={() => handleTabClick(NAV_CATEGORIES.SPORTSBOOK.tab)}>
+                        {NAV_CATEGORIES.SPORTSBOOK.label}
                     </li>
                     {/* League Data Submenu */}
                     <li className="relative px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-0.5 my-0.5 md:mx-1 md:my-0 text-base md:text-lg text-center"

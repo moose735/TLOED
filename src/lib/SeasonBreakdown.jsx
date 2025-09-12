@@ -7,8 +7,9 @@ const SeasonBreakdown = () => {
         loading,
         error,
         historicalData,
-        usersData,
-        allDraftHistory,
+        getTeamName,
+        getTeamDetails,
+        currentSeason,
         nflState
     } = useSleeperData();
 
@@ -19,63 +20,26 @@ const SeasonBreakdown = () => {
     const [seasonRunnerUp, setSeasonRunnerUp] = useState('N/A');
     const [seasonThirdPlace, setSeasonThirdPlace] = useState('N/A');
 
-    // Helper function to get user display name (reused from App.js)
-    // Now accepts an optional 'year' to look up historical team names
-    const getUserDisplayName = useCallback((userId, currentUsersData, year = null) => {
-        if (!userId || !currentUsersData) {
-            return 'Unknown User';
-        }
-
-        let usersSource = currentUsersData;
-        // If a year is provided and historicalData has users for that year, use that specific year's users
-        if (year && historicalData && historicalData.usersBySeason && historicalData.usersBySeason[year]) {
-            usersSource = historicalData.usersBySeason[year];
-        }
-
-        let usersArray = [];
-        if (Array.isArray(usersSource)) {
-            usersArray = usersSource;
-        } else if (typeof usersSource === 'object' && usersSource !== null) {
-            // If usersSource is an object (e.g., {userId: userObject}), convert its values to an array
-            usersArray = Object.values(usersSource);
-        } else {
-            return 'Unknown User'; // usersSource is neither an array nor a valid object
-        }
-
-        const user = usersArray.find(u => u.user_id === userId);
-        if (user) {
-            return user.metadata?.team_name || user.display_name;
-        } else {
-            // If user is not found by ID, check if userId itself is a display name (e.g., from Google Sheet)
-            // This is a fallback and assumes the userId might directly be the team name if not found in users.
-            // This is less robust but handles cases where IDs might not map perfectly.
-            // A more robust solution would involve a comprehensive mapping.
-            return userId; // Return the userId itself as a last resort
-        }
-    }, [historicalData]); // Add historicalData to dependency array for useCallback
-
     // Memoize the result of calculateAllLeagueMetrics
     const { seasonalMetrics, careerDPRData } = useMemo(() => {
-        if (!historicalData || !allDraftHistory || !nflState || !usersData || loading || error) {
+        if (!historicalData || !nflState || loading || error) {
             return { seasonalMetrics: {}, careerDPRData: [] };
         }
-        // Pass a year-aware getTeamName function to calculateAllLeagueMetrics
-        // This function will be called by calculateAllLeagueMetrics with ownerId and year
-        const getTeamNameForCalculations = (ownerId, year) => getUserDisplayName(ownerId, usersData, year);
 
-        return calculateAllLeagueMetrics(historicalData, allDraftHistory, getTeamNameForCalculations, nflState);
-    }, [historicalData, allDraftHistory, nflState, usersData, loading, error, getUserDisplayName]);
+        return calculateAllLeagueMetrics(historicalData, null, getTeamName, nflState);
+    }, [historicalData, nflState, loading, error, getTeamName]);
 
 
     // Effect to populate seasons dropdown and set default selected season
     useEffect(() => {
         if (!loading && !error && historicalData) {
             const allYears = new Set();
+            
             // Use seasonalMetrics keys as the primary source for available years
-            if (seasonalMetrics) {
+            if (seasonalMetrics && Object.keys(seasonalMetrics).length > 0) {
                 Object.keys(seasonalMetrics).forEach(year => allYears.add(Number(year)));
             } else {
-                // Fallback to other historicalData keys if seasonalMetrics isn't ready
+                // Fallback to historicalData.matchupsBySeason as primary source
                 if (historicalData.matchupsBySeason) {
                     Object.keys(historicalData.matchupsBySeason).forEach(year => allYears.add(Number(year)));
                 }
@@ -90,16 +54,19 @@ const SeasonBreakdown = () => {
             const sortedYears = Array.from(allYears).sort((a, b) => b - a);
             setSeasons(sortedYears);
 
-            // Set the most recent year as default
+            // Set the most recent year or currentSeason as default
             if (sortedYears.length > 0) {
-                setSelectedSeason(sortedYears[0]);
+                const defaultSeason = currentSeason && sortedYears.includes(Number(currentSeason)) 
+                    ? Number(currentSeason) 
+                    : sortedYears[0];
+                setSelectedSeason(defaultSeason);
             }
         }
-    }, [loading, error, historicalData, seasonalMetrics]); // Added seasonalMetrics to dependency array
+    }, [loading, error, historicalData, seasonalMetrics, currentSeason]);
 
     // Effect to calculate standings and champion for the selected season
     useEffect(() => {
-        if (selectedSeason && historicalData && usersData && seasonalMetrics[selectedSeason]) {
+        if (selectedSeason && historicalData && seasonalMetrics[selectedSeason]) {
             const currentSeasonMetrics = seasonalMetrics[selectedSeason];
             const currentSeasonRosters = historicalData.rostersBySeason[selectedSeason]; // Still need rosters for owner_id mapping
 
@@ -152,10 +119,10 @@ const SeasonBreakdown = () => {
                     const runnerUpRoster = currentSeasonRosters.find(r => String(r.roster_id) === runnerUpRosterId);
 
                     if (winningRoster && winningRoster.owner_id) {
-                        champion = getUserDisplayName(winningRoster.owner_id, usersData, selectedSeason);
+                        champion = getTeamName(winningRoster.owner_id, selectedSeason);
                     }
                     if (runnerUpRoster && runnerUpRoster.owner_id) {
-                        runnerUp = getUserDisplayName(runnerUpRoster.owner_id, usersData, selectedSeason);
+                        runnerUp = getTeamName(runnerUpRoster.owner_id, selectedSeason);
                     }
                 }
 
@@ -166,7 +133,7 @@ const SeasonBreakdown = () => {
                     const thirdPlaceRoster = currentSeasonRosters.find(r => String(r.roster_id) === thirdPlaceRosterId);
 
                     if (thirdPlaceRoster && thirdPlaceRoster.owner_id) {
-                        thirdPlace = getUserDisplayName(thirdPlaceRoster.owner_id, usersData, selectedSeason);
+                        thirdPlace = getTeamName(thirdPlaceRoster.owner_id, selectedSeason);
                     }
                 }
             }
@@ -176,8 +143,8 @@ const SeasonBreakdown = () => {
                 const summary = historicalData.seasonAwardsSummary[selectedSeason];
                 if (summary.champion && summary.champion !== 'N/A' && summary.champion.trim() !== '') {
                     const potentialChampionValue = summary.champion.trim();
-                    const resolvedName = getUserDisplayName(potentialChampionValue, usersData, selectedSeason);
-                    if (resolvedName !== 'Unknown User') {
+                    const resolvedName = getTeamName(potentialChampionValue, selectedSeason);
+                    if (resolvedName !== 'Unknown Team') {
                         champion = resolvedName;
                     } else {
                         champion = potentialChampionValue;
@@ -189,8 +156,8 @@ const SeasonBreakdown = () => {
                 const champKey = summary.champion || summary["Champion"];
                 if (champKey && champKey !== 'N/A' && String(champKey).trim() !== '') {
                     const potentialChampionValue = String(champKey).trim();
-                    const resolvedName = getUserDisplayName(potentialChampionValue, usersData, selectedSeason);
-                    if (resolvedName !== 'Unknown User') {
+                    const resolvedName = getTeamName(potentialChampionValue, selectedSeason);
+                    if (resolvedName !== 'Unknown Team') {
                         champion = resolvedName;
                     } else {
                         champion = potentialChampionValue;
@@ -207,7 +174,7 @@ const SeasonBreakdown = () => {
             setSeasonRunnerUp('N/A');
             setSeasonThirdPlace('N/A');
         }
-    }, [selectedSeason, historicalData, usersData, seasonalMetrics, getUserDisplayName]);
+    }, [selectedSeason, historicalData, seasonalMetrics, getTeamName]);
 
     if (loading) {
         return (

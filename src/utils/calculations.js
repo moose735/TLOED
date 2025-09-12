@@ -527,10 +527,7 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
                         }
                     }
                 });
-                console.log(`calculations.js: Playoff/Points Award Flags for year ${year}:`); // NEW LOG
-                Object.values(seasonalMetrics[year]).forEach(teamStats => {
-                    console.log(`  Team: ${teamStats.teamName}, Champion: ${teamStats.isChampion}, RunnerUp: ${teamStats.isRunnerUp}, ThirdPlace: ${teamStats.isThirdPlace}, PointsChamp: ${teamStats.isPointsChampion}, PointsRunnerUp: ${teamStats.isPointsRunnerUp}, PointsThird: ${teamStats.isThirdPlacePoints}`);
-                });
+                // Removed debug logging for performance
             } else {
                 Object.keys(seasonalMetrics[year]).forEach(rosterId => {
                     seasonalMetrics[year][rosterId].isChampion = false;

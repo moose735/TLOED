@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { getSleeperAvatarUrl } from '../utils/sleeperApi';
 import { useSleeperData } from '../contexts/SleeperDataContext';
 import { calculateAllLeagueMetrics } from '../utils/calculations';
 
@@ -124,16 +123,15 @@ const CustomDPRRankTooltip = ({ active, payload, label }) => {
 };
 
 const PowerRankings = () => {
-  const {
-    historicalData,
-    getTeamName,
-    loading: contextLoading,
-    error: contextError,
-    currentSeason,
-    nflState
-  } = useSleeperData();
-  
-  const [powerRankings, setPowerRankings] = useState([]);
+  const {
+    historicalData,
+    getTeamName,
+    getTeamDetails,
+    loading: contextLoading,
+    error: contextError,
+    currentSeason,
+    nflState
+  } = useSleeperData();  const [powerRankings, setPowerRankings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentWeek, setCurrentWeek] = useState(0);
@@ -223,7 +221,14 @@ const PowerRankings = () => {
         tier: tiers[idx]
       }));
 
-      setPowerRankings(rankedTeams);
+            setPowerRankings(rankedTeams);
+      
+      // Debug: Log team details for the first team
+      if (rankedTeams.length > 0) {
+        const firstTeam = rankedTeams[0];
+        const teamDetails = getTeamDetails(firstTeam.ownerId, season);
+        console.log('First team details:', firstTeam.ownerId, teamDetails);
+      }
       setLoading(false);
       setError(null);
     } catch (err) {
@@ -259,8 +264,8 @@ const PowerRankings = () => {
   };
 
 		return (
-			<div className="w-full max-w-4xl mx-auto p-4 md:p-8">
-				<h2 className="text-3xl font-extrabold text-blue-800 mb-6 text-center tracking-tight">
+			<div className="w-full max-w-5xl mx-auto p-4 md:p-8 font-inter">
+				<h2 className="text-3xl font-bold text-blue-800 mb-8 text-center tracking-tight">
 					{powerRankings.length > 0
 						? `Power Rankings (DPR) - ${powerRankings[0].year} Season (Week ${currentWeek})`
 						: 'Current Power Rankings'}
@@ -274,39 +279,63 @@ const PowerRankings = () => {
 						<span className="text-lg text-red-500 font-semibold">{error}</span>
 					</div>
 				) : powerRankings.length > 0 ? (
-					<div className="overflow-x-auto">
-						<table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-md">
+					<div className="overflow-x-auto shadow-lg rounded-lg">
+						<table className="min-w-full bg-white border border-gray-200 rounded-lg">
 							<thead className="bg-blue-100 sticky top-0 z-10">
 								<tr>
-									<th className="py-3 px-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Rank</th>
-									<th className="py-3 px-4 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
-									<th className="py-3 px-4 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">DPR</th>
-									<th className="py-3 px-4 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record</th>
-									<th className="py-3 px-4 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">PF</th>
-									<th className="py-3 px-4 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">PA</th>
-									<th className="py-3 px-4 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Luck</th>
+									<th className="py-4 px-4 text-left text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Rank</th>
+									<th className="py-4 px-4 text-left text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
+									<th className="py-4 px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">DPR</th>
+									<th className="py-4 px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record</th>
+									<th className="py-4 px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">PF</th>
+									<th className="py-4 px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">PA</th>
+									<th className="py-4 px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Luck</th>
 								</tr>
 							</thead>
 							<tbody>
-								{powerRankings.map((row, idx) => (
-									<tr key={row.ownerId} className={`${TIER_COLORS[(row.tier - 1) % TIER_COLORS.length]} ${idx % 2 === 0 ? '' : 'opacity-90'}`}>
-										<td className="py-2 px-4 text-sm text-blue-700 font-bold border-b border-gray-200">{row.rank}</td>
-										<td className="py-2 px-4 text-sm text-gray-800 font-semibold border-b border-gray-200 flex items-center gap-2">
-											<img
-												src={getSleeperAvatarUrl(row.ownerId)}
-												alt={getTeamName(row.ownerId, row.year)}
-												className="w-7 h-7 rounded-full border border-blue-300 mr-2"
-												onError={e => { e.target.style.display = 'none'; }}
-											/>
-											<span className="truncate">{getTeamName(row.ownerId, row.year)}</span>
-										</td>
-										<td className="py-2 px-4 text-sm text-center border-b border-gray-200 font-mono">{formatDPR(row.dpr)}</td>
-										<td className="py-2 px-4 text-sm text-center border-b border-gray-200 font-mono">{`${row.wins}-${row.losses}-${row.ties}`}</td>
-										<td className="py-2 px-4 text-sm text-center border-b border-gray-200 font-mono text-green-700">{formatPoints(row.pointsFor)}</td>
-										<td className="py-2 px-4 text-sm text-center border-b border-gray-200 font-mono text-red-700">{formatPoints(row.pointsAgainst)}</td>
-										<td className={`py-2 px-4 text-sm text-center border-b border-gray-200 font-mono ${row.luckRating > 0 ? 'text-green-600' : row.luckRating < 0 ? 'text-red-600' : 'text-gray-700'}`}>{formatLuckRating(row.luckRating)}</td>
-									</tr>
-								))}
+								{powerRankings.map((row, idx) => {
+									// Check if this is the start of a new tier
+									const isNewTier = idx > 0 && powerRankings[idx - 1].tier !== row.tier;
+									
+									return (
+										<React.Fragment key={row.ownerId}>
+											{isNewTier && (
+												<tr className="bg-blue-50">
+													<td colSpan="7" className="py-1 px-4 text-center">
+														<div className="flex items-center justify-center">
+															<div className="flex-1 h-px bg-blue-300"></div>
+															<span className="px-3 text-xs font-semibold text-blue-600 uppercase tracking-wide">
+																Tier {row.tier}
+															</span>
+															<div className="flex-1 h-px bg-blue-300"></div>
+														</div>
+													</td>
+												</tr>
+											)}
+											<tr className="hover:bg-gray-50 transition-colors">
+												<td className="py-3 px-4 text-sm text-blue-700 font-bold border-b border-gray-200">{row.rank}</td>
+												<td className="py-3 px-4 text-sm text-gray-800 font-medium border-b border-gray-200">
+													<div className="flex items-center gap-3">
+														<img
+															src={getTeamDetails(row.ownerId, row.year)?.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
+															alt={getTeamName(row.ownerId, row.year)}
+															className="w-8 h-8 rounded-full border-2 border-blue-300 shadow-sm object-cover flex-shrink-0"
+															onError={(e) => { 
+																e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`;
+															}}
+														/>
+														<span className="truncate font-semibold">{getTeamName(row.ownerId, row.year)}</span>
+													</div>
+												</td>
+												<td className="py-3 px-4 text-sm text-center border-b border-gray-200 font-semibold text-blue-800">{formatDPR(row.dpr)}</td>
+												<td className="py-3 px-4 text-sm text-center border-b border-gray-200 font-semibold">{`${row.wins}-${row.losses}-${row.ties}`}</td>
+												<td className="py-3 px-4 text-sm text-center border-b border-gray-200 font-semibold text-green-700">{formatPoints(row.pointsFor)}</td>
+												<td className="py-3 px-4 text-sm text-center border-b border-gray-200 font-semibold text-red-700">{formatPoints(row.pointsAgainst)}</td>
+												<td className={`py-3 px-4 text-sm text-center border-b border-gray-200 font-semibold ${row.luckRating > 0 ? 'text-green-600' : row.luckRating < 0 ? 'text-red-600' : 'text-gray-700'}`}>{formatLuckRating(row.luckRating)}</td>
+											</tr>
+										</React.Fragment>
+									);
+								})}
 							</tbody>
 						</table>
 					</div>
@@ -316,7 +345,8 @@ const PowerRankings = () => {
 					</div>
 				)}
 				<p className="mt-8 text-sm text-gray-500 text-center">
-					Power Rankings are calculated based on DPR (Dominance Power Ranking) for the newest season available.
+					Power Rankings are calculated based on DPR (Dominance Power Ranking) for the newest season available. 
+					Teams are automatically grouped into tiers based on significant performance gaps.
 				</p>
 			</div>
 		);
