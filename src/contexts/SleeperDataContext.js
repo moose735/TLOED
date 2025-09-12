@@ -385,6 +385,37 @@ export const SleeperDataProvider = ({ children }) => {
     }, [usersData, historicalMatchups, careerDPRData]);
 
 
+    // This function now returns both team name and avatar URL
+    const getTeamDetails = useMemo(() => {
+        return (ownerId, year) => {
+            let user = null;
+            // Prefer historical data for the specific year if available
+            if (historicalMatchups && historicalMatchups.usersBySeason && historicalMatchups.usersBySeason[year] && ownerId) {
+                user = historicalMatchups.usersBySeason[year].find(u => u.user_id === ownerId);
+            }
+
+            // Fallback to current league's user data if no specific year data is found
+            if (!user && usersData && ownerId) {
+                user = usersData.find(u => u.user_id === ownerId);
+            }
+
+            if (user) {
+                return {
+                    name: user.metadata?.team_name || user.display_name,
+                    avatar: user.avatar ? `https://sleepercdn.com/avatars/${user.avatar}` : `https://sleepercdn.com/avatars/default_avatar.png`
+                };
+            }
+
+            // Fallback for hardcoded data or missing users
+            if (typeof ownerId === 'string' && !/^\d+$/.test(ownerId)) {
+                return { name: ownerId, avatar: `https://sleepercdn.com/avatars/default_avatar.png` };
+            }
+
+            return { name: `Team (ID: ${ownerId})`, avatar: `https://sleepercdn.com/avatars/default_avatar.png` };
+        };
+    }, [usersData, historicalMatchups]);
+
+
     useEffect(() => {
         const loadAllSleeperData = async () => {
             setLoading(true);
@@ -600,38 +631,39 @@ export const SleeperDataProvider = ({ children }) => {
         : leagueData;
     const currentSeason = currentLeagueData?.season || (Array.isArray(leagueData) && leagueData.length > 0 ? leagueData[0]?.season : null);
 
+    // The context value that will be supplied to any descendants of this provider
     const contextValue = useMemo(() => ({
         leagueData,
-        currentLeagueData,
-        currentSeason,
         usersData,
         rostersWithDetails,
         nflPlayers,
         nflState,
-        historicalData: historicalMatchups, // This now contains draftsBySeason and draftPicksBySeason
-        allDraftHistory, // <-- Expose merged draft data for all consumers
+        historicalData: historicalMatchups,
+        draftsBySeason,
+        draftPicksBySeason,
         processedSeasonalRecords,
         careerDPRData,
-        transactions, // --- NEW: Expose transactions data in the context ---
+        transactions,
         loading,
         error,
         getTeamName,
-        getWeeklyHighScores,
-        getUpcomingWeekMatchups, // <-- Expose helper for scheduled matchups
+        getTeamDetails, // EXPORT THE NEW FUNCTION
     }), [
         leagueData,
         usersData,
         rostersWithDetails,
         nflPlayers,
         nflState,
-        historicalMatchups, // Dependency for merged data (now includes drafts)
-        allDraftHistory,
+        historicalMatchups,
+        draftsBySeason,
+        draftPicksBySeason,
         processedSeasonalRecords,
         careerDPRData,
-        transactions, // --- NEW: Add transactions as a dependency for the context value ---
+        transactions,
         loading,
         error,
         getTeamName,
+        getTeamDetails, // ADD TO DEPENDENCY ARRAY
     ]);
 
     return (
@@ -647,9 +679,5 @@ export const useSleeperData = () => {
     if (context === undefined) {
         throw new Error('useSleeperData must be used within a SleeperDataProvider');
     }
-    // Expose nflState explicitly for consumers
-    return {
-        ...context,
-        nflState: context.nflState,
-    };
+    return context;
 };

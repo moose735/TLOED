@@ -118,6 +118,7 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
                 allPlayLosses: 0,
                 allPlayTies: 0,
                 weeklyScores: [], // Store all weekly scores for this roster for seasonal high/low/avg
+                weeklyLuck: [], // ADD THIS: To store weekly luck values
                 highScore: -Infinity,
                 lowScore: Infinity,
                 topScoreWeeksCount: 0, // Regular season only
@@ -331,11 +332,18 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
                             });
 
                             // Calculate weeklyExpectedWins based on the new formula: (wins + 0.5 * ties) / total opponents
+                            let weeklyExpectedWins = 0;
                             if (opponentsCount > 0) {
-                                currentTeamStats.seasonalExpectedWinsSum += (weeklyAllPlayWinsCount + 0.5 * weeklyAllPlayTiesCount) / opponentsCount;
+                                weeklyExpectedWins = (weeklyAllPlayWinsCount + 0.5 * weeklyAllPlayTiesCount) / opponentsCount;
+                                currentTeamStats.seasonalExpectedWinsSum += weeklyExpectedWins;
                             }
 
-                            currentTeamStats.actualWinsRecord += (currentTeamScoreInWeek > opponentScore ? 1 : (currentTeamScoreInWeek === opponentScore ? 0.5 : 0));
+                            const actualWeeklyResult = (currentTeamScoreInWeek > opponentScore ? 1 : (currentTeamScoreInWeek === opponentScore ? 0.5 : 0));
+                            currentTeamStats.actualWinsRecord += actualWeeklyResult;
+
+                            // Calculate and store weekly luck
+                            const weeklyLuck = actualWeeklyResult - weeklyExpectedWins;
+                            currentTeamStats.weeklyLuck.push(weeklyLuck);
 
                             // Weekly High Score / Top 2 Score (only for regular season)
                             const highestScoreInWeek = weekScoresForAllTeams.reduce((max, team) => Math.max(max, team.score), -Infinity);
@@ -425,6 +433,7 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
                 slimWins: stats.slimWins,
                 slimLosses: stats.slimLosses,
                 weeklyTop2ScoresCount: stats.weeklyTop2ScoresCount,
+                weeklyLuck: stats.weeklyLuck, // ADD THIS
                 adjustedDPR: 0, // Calculated after all raw DPRs for the season are known
                 totalGames: stats.totalGames, // Now includes playoffs
                 highScore: stats.highScore, // Now includes playoffs

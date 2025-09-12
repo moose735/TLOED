@@ -14,6 +14,7 @@ import TeamsOverviewPage from './lib/TeamsOverviewPage';
 import SeasonBreakdown from './lib/SeasonBreakdown';
 import DraftAnalysis from './lib/DraftAnalysis'; // Import the new DraftAnalysis component
 import HallOfChampions from './lib/HallOfChampions'; // Import the new HallOfChampions component
+import Gamecenter from './components/Gamecenter'; // Import the new Gamecenter component
 
 // Import the custom hook from your SleeperDataContext
 import { SleeperDataProvider, useSleeperData } from './contexts/SleeperDataContext';
@@ -22,6 +23,7 @@ import { SleeperDataProvider, useSleeperData } from './contexts/SleeperDataConte
 const NAV_CATEGORIES = {
     HOME: { label: 'Dashboard', tab: 'dashboard' },
     POWER_RANKINGS: { label: 'Power Rankings', tab: 'powerRankings' },
+    GAMECENTER: { label: 'Gamecenter', tab: 'gamecenter' },
     LEAGUE_DATA: {
         label: 'League Data',
         subTabs: [
@@ -46,6 +48,7 @@ const NAV_CATEGORIES = {
 const TABS = {
     DASHBOARD: 'dashboard',
     POWER_RANKINGS: 'powerRankings',
+    GAMECENTER: 'gamecenter',
     LEAGUE_HISTORY: 'leagueHistory',
     HALL_OF_CHAMPIONS: 'hallOfChampions', // New Hall of Champions tab
     RECORD_BOOK: 'recordBook',
@@ -241,6 +244,8 @@ const AppContent = () => {
                 return <Dashboard />;
             case TABS.POWER_RANKINGS:
                 return <PowerRankings />;
+            case TABS.GAMECENTER:
+                return <Gamecenter />;
             case TABS.LEAGUE_HISTORY:
                 return <LeagueHistory />;
             case TABS.HALL_OF_CHAMPIONS: // New case for Hall of Champions
@@ -308,6 +313,11 @@ const AppContent = () => {
                     <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-0.5 my-0.5 md:mx-1 md:my-0 text-base md:text-lg text-center"
                         onClick={() => handleTabClick(NAV_CATEGORIES.POWER_RANKINGS.tab)}>
                         {NAV_CATEGORIES.POWER_RANKINGS.label}
+                    </li>
+                    {/* Gamecenter Tab */}
+                    <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-0.5 my-0.5 md:mx-1 md:my-0 text-base md:text-lg text-center"
+                        onClick={() => handleTabClick(NAV_CATEGORIES.GAMECENTER.tab)}>
+                        {NAV_CATEGORIES.GAMECENTER.label}
                     </li>
                     {/* League Data Submenu */}
                     <li className="relative px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-0.5 my-0.5 md:mx-1 md:my-0 text-base md:text-lg text-center"

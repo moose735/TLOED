@@ -272,57 +272,126 @@ const SeasonRecords = () => {
     );
 
     return (
-        <div className="w-full">
-            <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">SEASON RECORDS HIGHLIGHTS</h3>
-            <p className="text-sm text-gray-600 mb-6">Highlight records achieved in a single season. The current {new Date().getFullYear()} season is not included.</p>
-            <div className="overflow-x-auto">
-                <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
-                    <thead className="bg-gray-100">
-                        <tr>
-                            <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/3">Record</th>
-                            <th className="py-2 px-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/3">Value</th>
-                            <th className="py-2 px-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/3">Team</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {highlightRecords.map((record, recordGroupIndex) => {
-                            return record.entries.map((entry, entryIndex) => {
-                                const teamDisplayName = entry.teamName || getTeamName(entry.ownerId, entry.year);
-                                let valueDisplay = '';
-                                
-                                // Only display the value for the first entry in a group
-                                if (entryIndex === 0) {
-                                    if (typeof entry.value === 'number') {
-                                        if ([
-                                            'wins', 'losses', 'topScoreWeeksCount', 'weeklyTop2ScoresCount',
-                                            'blowoutWins', 'blowoutLosses', 'slimWins', 'slimLosses'
-                                        ].includes(record.key)) {
-                                            valueDisplay = Math.round(entry.value).toLocaleString('en-US', { maximumFractionDigits: 0 });
-                                        } else if (['luckRating', 'highestDPR', 'lowestDPR'].includes(record.key)) {
-                                            valueDisplay = entry.value.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
-                                        } else if (record.key === 'pointsFor') {
-                                            valueDisplay = entry.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                                        } else if (record.key === 'winPercentage' || record.key === 'allPlayWinPercentage') {
-                                            valueDisplay = entry.value.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + '%';
-                                        } else {
-                                            valueDisplay = entry.value;
+        <div className="p-8">
+            {/* Header Section */}
+            <div className="mb-8">
+                <div className="flex items-center gap-3 mb-4">
+                    <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-green-600 rounded-xl flex items-center justify-center text-white text-xl font-bold">
+                        📅
+                    </div>
+                    <div>
+                        <h3 className="text-3xl font-bold text-gray-900">Season Records Highlights</h3>
+                        <p className="text-gray-600 mt-1">
+                            Outstanding records achieved in a single season • Excludes current {new Date().getFullYear()} season
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            {/* Records Table */}
+            <div className="bg-gradient-to-r from-gray-50 to-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                    <table className="min-w-full">
+                        <thead>
+                            <tr className="bg-gradient-to-r from-gray-100 to-gray-50 border-b border-gray-200">
+                                <th className="py-4 px-6 text-left text-sm font-bold text-gray-800 uppercase tracking-wide">
+                                    <div className="flex items-center gap-2">
+                                        🏆 Record Achievement
+                                    </div>
+                                </th>
+                                <th className="py-4 px-6 text-center text-sm font-bold text-gray-800 uppercase tracking-wide">
+                                    <div className="flex items-center justify-center gap-2">
+                                        📊 Value
+                                    </div>
+                                </th>
+                                <th className="py-4 px-6 text-center text-sm font-bold text-gray-800 uppercase tracking-wide">
+                                    <div className="flex items-center justify-center gap-2">
+                                        👑 Team (Season)
+                                    </div>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {highlightRecords.map((record, recordGroupIndex) => {
+                                return record.entries.map((entry, entryIndex) => {
+                                    const teamDisplayName = entry.teamName || getTeamName(entry.ownerId, entry.year);
+                                    let valueDisplay = '';
+                                    
+                                    // Only display the value for the first entry in a group
+                                    if (entryIndex === 0) {
+                                        if (typeof entry.value === 'number') {
+                                            if ([
+                                                'wins', 'losses', 'topScoreWeeksCount', 'weeklyTop2ScoresCount',
+                                                'blowoutWins', 'blowoutLosses', 'slimWins', 'slimLosses'
+                                            ].includes(record.key)) {
+                                                valueDisplay = Math.round(entry.value).toLocaleString('en-US', { maximumFractionDigits: 0 });
+                                            } else if (['luckRating', 'highestDPR', 'lowestDPR'].includes(record.key)) {
+                                                valueDisplay = entry.value.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+                                            } else if (record.key === 'pointsFor') {
+                                                valueDisplay = entry.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                                            } else if (record.key === 'winPercentage' || record.key === 'allPlayWinPercentage') {
+                                                valueDisplay = (entry.value * 100).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + '%';
+                                            } else {
+                                                valueDisplay = entry.value;
+                                            }
                                         }
                                     }
-                                }
-                                
-                                const label = entryIndex === 0 ? getRecordLabel(record.key, record) : '';
+                                    
+                                    const label = entryIndex === 0 ? getRecordLabel(record.key, record) : '';
 
-                                return (
-                                    <tr key={`${record.key}-${teamDisplayName}-${entryIndex}`} className={recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                        <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{label}</td>
-                                        <td className="py-2 px-3 text-sm text-gray-800 text-center">{valueDisplay}</td>
-                                        <td className="py-2 px-3 text-sm text-gray-700 text-center">{teamDisplayName}{entry.year ? ` (${entry.year})` : ''}</td>
-                                    </tr>
-                                );
-                            });
-                        })}
-                    </tbody>
-                </table>
+                                    return (
+                                        <tr 
+                                            key={`${record.key}-${teamDisplayName}-${entryIndex}`}
+                                            className={`
+                                                transition-all duration-200 hover:bg-blue-50 hover:shadow-sm
+                                                ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}
+                                                ${entryIndex === record.entries.length - 1 ? 'border-b-2 border-gray-200' : ''}
+                                            `}
+                                        >
+                                            <td className="py-4 px-6">
+                                                {entryIndex === 0 ? (
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg flex items-center justify-center text-white text-sm font-bold">
+                                                            {recordGroupIndex + 1}
+                                                        </div>
+                                                        <span className="font-semibold text-gray-900 text-sm">
+                                                            {label}
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="ml-11">
+                                                        <span className="text-gray-400 text-sm">• Tied Record</span>
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td className="py-4 px-6 text-center">
+                                                {entryIndex === 0 ? (
+                                                    <div className="inline-flex items-center px-3 py-1 rounded-full bg-gradient-to-r from-green-100 to-blue-100 border border-green-200">
+                                                        <span className="font-bold text-gray-900 text-sm">
+                                                            {valueDisplay}
+                                                        </span>
+                                                    </div>
+                                                ) : ''}
+                                            </td>
+                                            <td className="py-4 px-6 text-center">
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <span className="font-medium text-gray-900 text-sm">
+                                                        {teamDisplayName}
+                                                    </span>
+                                                    {entry.year && (
+                                                        <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-lg text-xs font-medium">
+                                                            {entry.year}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                });
+                            })}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     );

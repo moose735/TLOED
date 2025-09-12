@@ -185,136 +185,157 @@ const RecordBook = () => {
 
 
     return (
-        <div className="container mx-auto px-4 py-8">
-            <h1 className="text-4xl font-extrabold text-gray-900 mb-6 text-center">League Record Book</h1>
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+            <div className="container mx-auto px-4 py-12 max-w-7xl">
+                {/* Header Section */}
+                <div className="text-center mb-12">
+                    <h1 className="text-5xl font-black text-gray-900 mb-4 tracking-tight">
+                        🏆 League Record Book
+                    </h1>
+                    <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+                        Discover the greatest achievements and records in our league's history
+                    </p>
+                </div>
 
-            {/* Tab Navigation */}
-            <nav className="mb-8 border-b border-gray-200">
-                <ul className="flex flex-wrap -mb-px">
-                    <li className="mr-2">
-                        <button
-                            className={`inline-block py-3 px-6 text-sm font-medium text-center rounded-t-lg border-b-2 ${
-                                activeTab === 'overall'
-                                    ? 'text-blue-600 border-blue-600 active'
-                                    : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
-                            }`}
-                            onClick={() => setActiveTab('overall')}
-                            aria-current={activeTab === 'overall' ? 'page' : undefined}
-                        >
-                            Overall League Records
-                        </button>
-                    </li>
-                    <li className="mr-2">
-                        <button
-                            className={`inline-block py-3 px-6 text-sm font-medium text-center rounded-t-lg border-b-2 ${
-                                activeTab === 'seasonal'
-                                    ? 'text-blue-600 border-blue-600 active'
-                                    : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
-                            }`}
-                            onClick={() => setActiveTab('seasonal')}
-                            aria-current={activeTab === 'seasonal' ? 'page' : undefined}
-                        >
-                            Seasonal Records
-                        </button>
-                    </li>
-                    {/* Streaks Records Tab */}
-                    <li className="mr-2">
-                        <button
-                            className={`inline-block py-3 px-6 text-sm font-medium text-center rounded-t-lg border-b-2 ${
-                                activeTab === 'streaks'
-                                    ? 'text-blue-600 border-blue-600 active'
-                                    : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
-                            }`}
-                            onClick={() => setActiveTab('streaks')}
-                            aria-current={activeTab === 'streaks' ? 'page' : undefined}
-                        >
-                            Streaks Records
-                        </button>
-                    </li>
-                    {/* Matchup Records Tab */}
-                    <li className="mr-2">
-                        <button
-                            className={`inline-block py-3 px-6 text-sm font-medium text-center rounded-t-lg border-b-2 ${
-                                activeTab === 'matchup'
-                                    ? 'text-blue-600 border-blue-600 active'
-                                    : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
-                            }`}
-                            onClick={() => setActiveTab('matchup')}
-                            aria-current={activeTab === 'matchup' ? 'page' : undefined}
-                        >
-                            Matchup Records
-                        </button>
-                    </li>
-                    {/* Playoff Records Tab */}
-                    <li className="mr-2">
-                        <button
-                            className={`inline-block py-3 px-6 text-sm font-medium text-center rounded-t-lg border-b-2 ${
-                                activeTab === 'playoffs'
-                                    ? 'text-blue-600 border-blue-600 active'
-                                    : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
-                            }`}
-                            onClick={() => setActiveTab('playoffs')}
-                            aria-current={activeTab === 'playoffs' ? 'page' : undefined}
-                        >
-                            Playoff Records
-                        </button>
-                    </li>
-                </ul>
-            </nav>
+                {/* Modern Tab Navigation */}
+                <div className="mb-10">
+                    <div className="bg-white rounded-2xl shadow-lg p-2 border border-gray-200">
+                        <nav className="flex flex-wrap gap-1">
+                            <button
+                                className={`flex-1 min-w-0 py-4 px-6 text-sm font-semibold rounded-xl transition-all duration-200 ${
+                                    activeTab === 'overall'
+                                        ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg transform scale-[1.02]'
+                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                }`}
+                                onClick={() => setActiveTab('overall')}
+                                aria-current={activeTab === 'overall' ? 'page' : undefined}
+                            >
+                                <span className="block text-center">Overall Records</span>
+                                <span className="block text-xs opacity-80 mt-1">Career Leaders</span>
+                            </button>
+                            <button
+                                className={`flex-1 min-w-0 py-4 px-6 text-sm font-semibold rounded-xl transition-all duration-200 ${
+                                    activeTab === 'seasonal'
+                                        ? 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg transform scale-[1.02]'
+                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                }`}
+                                onClick={() => setActiveTab('seasonal')}
+                                aria-current={activeTab === 'seasonal' ? 'page' : undefined}
+                            >
+                                <span className="block text-center">Seasonal Records</span>
+                                <span className="block text-xs opacity-80 mt-1">Single Season</span>
+                            </button>
+                            <button
+                                className={`flex-1 min-w-0 py-4 px-6 text-sm font-semibold rounded-xl transition-all duration-200 ${
+                                    activeTab === 'streaks'
+                                        ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg transform scale-[1.02]'
+                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                }`}
+                                onClick={() => setActiveTab('streaks')}
+                                aria-current={activeTab === 'streaks' ? 'page' : undefined}
+                            >
+                                <span className="block text-center">Streak Records</span>
+                                <span className="block text-xs opacity-80 mt-1">Consecutive</span>
+                            </button>
+                            <button
+                                className={`flex-1 min-w-0 py-4 px-6 text-sm font-semibold rounded-xl transition-all duration-200 ${
+                                    activeTab === 'matchup'
+                                        ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg transform scale-[1.02]'
+                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                }`}
+                                onClick={() => setActiveTab('matchup')}
+                                aria-current={activeTab === 'matchup' ? 'page' : undefined}
+                            >
+                                <span className="block text-center">Game Records</span>
+                                <span className="block text-xs opacity-80 mt-1">Single Game</span>
+                            </button>
+                            <button
+                                className={`flex-1 min-w-0 py-4 px-6 text-sm font-semibold rounded-xl transition-all duration-200 ${
+                                    activeTab === 'playoffs'
+                                        ? 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg transform scale-[1.02]'
+                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                }`}
+                                onClick={() => setActiveTab('playoffs')}
+                                aria-current={activeTab === 'playoffs' ? 'page' : undefined}
+                            >
+                                <span className="block text-center">Playoff Records</span>
+                                <span className="block text-xs opacity-80 mt-1">Postseason</span>
+                            </button>
+                        </nav>
+                    </div>
+                </div>
 
-            {/* Conditional Rendering of Tab Content */}
-            <div className="tab-content">
-                {activeTab === 'overall' && (
-                    hasOverallData ? (
-                        <LeagueRecords
-                            historicalData={historicalData}
-                            getTeamName={getTeamName}
-                            calculateAllLeagueMetrics={calculateAllLeagueMetrics}
-                        />
-                    ) : (
-                        <div className="text-center py-8 text-gray-600">No overall league data available.</div>
-                    )
-                )}
+                {/* Tab Content */}
+                <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
+                    {activeTab === 'overall' && (
+                        hasOverallData ? (
+                            <LeagueRecords
+                                historicalData={historicalData}
+                                getTeamName={getTeamName}
+                                calculateAllLeagueMetrics={calculateAllLeagueMetrics}
+                            />
+                        ) : (
+                            <div className="text-center py-16 px-6">
+                                <div className="text-6xl mb-4">📊</div>
+                                <h3 className="text-xl font-semibold text-gray-700 mb-2">No Overall Data</h3>
+                                <p className="text-gray-500">No overall league data available yet.</p>
+                            </div>
+                        )
+                    )}
 
-                {activeTab === 'seasonal' && (
-                    hasSeasonalData ? (
-                        <SeasonRecords />
-                    ) : (
-                        <div className="text-center py-8 text-gray-600">No seasonal data available for display.</div>
-                    )
-                )}
+                    {activeTab === 'seasonal' && (
+                        hasSeasonalData ? (
+                            <SeasonRecords />
+                        ) : (
+                            <div className="text-center py-16 px-6">
+                                <div className="text-6xl mb-4">📅</div>
+                                <h3 className="text-xl font-semibold text-gray-700 mb-2">No Seasonal Data</h3>
+                                <p className="text-gray-500">No seasonal data available for display.</p>
+                            </div>
+                        )
+                    )}
 
-                {/* Streaks Records Content */}
-                {activeTab === 'streaks' && (
-                    hasStreaksAndMatchupData ? (
-                        <StreaksRecords
-                            historicalMatchups={allHistoricalMatchupsFlat} // Pass the correctly flattened array
-                        />
-                    ) : (
-                        <div className="text-center py-8 text-gray-600">No historical matchup data available to calculate streaks.</div>
-                    )
-                )}
+                    {activeTab === 'streaks' && (
+                        hasStreaksAndMatchupData ? (
+                            <StreaksRecords
+                                historicalMatchups={allHistoricalMatchupsFlat} // Pass the correctly flattened array
+                            />
+                        ) : (
+                            <div className="text-center py-16 px-6">
+                                <div className="text-6xl mb-4">🔥</div>
+                                <h3 className="text-xl font-semibold text-gray-700 mb-2">No Streak Data</h3>
+                                <p className="text-gray-500">No historical matchup data available to calculate streaks.</p>
+                            </div>
+                        )
+                    )}
 
-                {/* Matchup Records Content */}
-                {activeTab === 'matchup' && (
-                    hasStreaksAndMatchupData ? (
-                        <MatchupRecords />
-                    ) : (
-                        <div className="text-center py-8 text-gray-600">No historical matchup data available to calculate matchup records.</div>
-                    )
-                )}
+                    {activeTab === 'matchup' && (
+                        hasStreaksAndMatchupData ? (
+                            <MatchupRecords />
+                        ) : (
+                            <div className="text-center py-16 px-6">
+                                <div className="text-6xl mb-4">⚔️</div>
+                                <h3 className="text-xl font-semibold text-gray-700 mb-2">No Matchup Data</h3>
+                                <p className="text-gray-500">No historical matchup data available to calculate matchup records.</p>
+                            </div>
+                        )
+                    )}
 
-                {/* Playoff Records Content */}
-                {activeTab === 'playoffs' && (
-                    hasPlayoffData ? (
-                        <PlayoffRecords
-                            historicalMatchups={allHistoricalMatchupsFlat} // Pass the now fully flattened matchups
-                            getDisplayTeamName={getTeamName} // Pass the team name resolver
-                        />
-                    ) : (
-                        <div className="text-center py-8 text-gray-600">No historical playoff data available.</div>
-                    )
-                )}
+                    {activeTab === 'playoffs' && (
+                        hasPlayoffData ? (
+                            <PlayoffRecords
+                                historicalMatchups={allHistoricalMatchupsFlat} // Pass the now fully flattened matchups
+                                getDisplayTeamName={getTeamName} // Pass the team name resolver
+                            />
+                        ) : (
+                            <div className="text-center py-16 px-6">
+                                <div className="text-6xl mb-4">🏆</div>
+                                <h3 className="text-xl font-semibold text-gray-700 mb-2">No Playoff Data</h3>
+                                <p className="text-gray-500">No historical playoff data available.</p>
+                            </div>
+                        )
+                    )}
+                </div>
             </div>
         </div>
     );

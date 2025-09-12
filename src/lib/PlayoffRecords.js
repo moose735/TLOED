@@ -244,11 +244,16 @@ const PlayoffRecords = ({ historicalMatchups }) => { // Removed getDisplayTeamNa
 
   // Helper to format values for display
   const formatDisplayValue = (value, recordKey) => {
-    if (value === 'N/A') return value;
-    if (recordKey.includes('points') || recordKey === 'totalPlayoffPoints' || recordKey === 'mostPlayoffPointsAgainst') {
-      return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (typeof value === 'number') {
+      if (recordKey === 'mostPlayoffAppearances' || recordKey === 'mostPlayoffWins') {
+        return value; // Whole number for counts
+      } else if (recordKey === 'totalPlayoffPoints' || recordKey === 'mostPlayoffPointsAgainst') {
+        return value.toFixed(2); // Two decimal places for points
+      } else {
+        return value; // Default fallback
+      }
     }
-    return value;
+    return value; // For non-numeric values, return as is
   };
 
   const recordsToDisplay = [
@@ -261,58 +266,108 @@ const PlayoffRecords = ({ historicalMatchups }) => { // Removed getDisplayTeamNa
     { key: 'most3rdPlaceFinishes', label: 'Most 3rd Place Finishes' },
   ];
 
+  // Render component
   return (
-    <div className="w-full">
-      <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">ALL-TIME PLAYOFF RECORD HOLDERS</h3>
-      <p className="text-sm text-gray-600 mb-6">Historical playoff performance records.</p>
-
-      {Object.keys(aggregatedPlayoffRecords).length === 0 || recordsToDisplay.every(r => aggregatedPlayoffRecords[r.key]?.entries.length === 0) ? (
-        <p className="text-center text-gray-600">No playoff data available to display records.</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/4">Record</th>
-                <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/6">Value</th>
-                <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/2">Team</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recordsToDisplay.map((recordDef, recordGroupIndex) => {
-                const recordData = aggregatedPlayoffRecords[recordDef.key];
-                if (!recordData || recordData.entries.length === 0) {
-                  return (
-                    <tr key={recordDef.key} className={recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                      <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{recordDef.label}</td>
-                      <td colSpan="2" className="py-2 px-3 text-sm text-gray-500 text-center">N/A</td>
-                    </tr>
-                  );
-                }
-                return recordData.entries.map((entry, entryIndex) => (
-                  <tr
-                    key={`${recordDef.key}-${entry.team}-${entryIndex}`}
-                    className={`
-                      ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
-                      ${entryIndex === recordData.entries.length - 1 ? 'border-b border-gray-100' : ''}
-                    `}
-                  >
-                    <td className="py-2 px-3 text-sm text-gray-800 font-semibold">
-                      {entryIndex === 0 ? recordDef.label : ''}
-                    </td>
-                    <td className="py-2 px-3 text-sm text-gray-800">
-                      {entryIndex === 0 ? formatDisplayValue(recordData.value, recordDef.key) : ''}
-                    </td>
-                    <td className="py-2 px-3 text-sm text-gray-700">{entry.team}</td>
-                  </tr>
-                ));
-              })}
-            </tbody>
-          </table>
+    <div className="p-8">
+        {/* Header Section */}
+        <div className="mb-8">
+            <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center text-white text-xl font-bold">
+                    🏆
+                </div>
+                <div>
+                    <h3 className="text-3xl font-bold text-gray-900">All-Time Playoff Records</h3>
+                    <p className="text-gray-600 mt-1">
+                        Historical playoff performance and championship accolades.
+                    </p>
+                </div>
+            </div>
         </div>
-      )}
+
+        {/* Records Table */}
+        {Object.keys(aggregatedPlayoffRecords).length === 0 || recordsToDisplay.every(r => aggregatedPlayoffRecords[r.key]?.entries.length === 0) ? (
+            <div className="text-center py-12 bg-gray-50 rounded-2xl border border-gray-200">
+                <div className="text-4xl mb-4">🤷‍♂️</div>
+                <h4 className="text-xl font-semibold text-gray-800">No Playoff Data Available</h4>
+                <p className="text-gray-500">Cannot display records without historical playoff data.</p>
+            </div>
+        ) : (
+            <div className="bg-gradient-to-r from-gray-50 to-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                    <table className="min-w-full">
+                        <thead>
+                            <tr className="bg-gradient-to-r from-gray-100 to-gray-50 border-b border-gray-200">
+                                <th className="py-4 px-6 text-left text-sm font-bold text-gray-800 uppercase tracking-wide">
+                                    <div className="flex items-center gap-2">
+                                        🏅 Record
+                                    </div>
+                                </th>
+                                <th className="py-4 px-6 text-center text-sm font-bold text-gray-800 uppercase tracking-wide">
+                                    <div className="flex items-center justify-center gap-2">
+                                        📊 Value
+                                    </div>
+                                </th>
+                                <th className="py-4 px-6 text-left text-sm font-bold text-gray-800 uppercase tracking-wide">
+                                    <div className="flex items-center gap-2">
+                                        👑 Holder(s)
+                                    </div>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {recordsToDisplay.map((recordDef, recordGroupIndex) => {
+                                const recordData = aggregatedPlayoffRecords[recordDef.key];
+                                if (!recordData || recordData.entries.length === 0) {
+                                    return (
+                                        <tr key={recordDef.key} className={`transition-all duration-200 hover:bg-blue-50 ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}>
+                                            <td className="py-4 px-6">
+                                                <div className="flex items-center gap-3">
+                                                    <span className="font-semibold text-gray-900 text-sm">{recordDef.label}</span>
+                                                </div>
+                                            </td>
+                                            <td colSpan="2" className="py-4 px-6 text-center">
+                                                <span className="text-gray-500 text-sm italic">No data available</span>
+                                            </td>
+                                        </tr>
+                                    );
+                                }
+
+                                return (
+                                    <tr
+                                        key={recordDef.key}
+                                        className={`transition-all duration-200 hover:bg-blue-50 hover:shadow-sm ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}
+                                    >
+                                        <td className="py-4 px-6">
+                                            <div className="flex items-center gap-3">
+                                                <span className="font-semibold text-gray-900 text-sm">{recordDef.label}</span>
+                                            </div>
+                                        </td>
+                                        <td className="py-4 px-6 text-center">
+                                            <div className="inline-flex items-center px-3 py-1 rounded-full bg-gradient-to-r from-blue-100 to-indigo-100 border border-blue-200">
+                                                <span className="font-bold text-gray-900 text-sm">
+                                                    {formatDisplayValue(recordData.value, recordDef.key)}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="py-4 px-6">
+                                            <div className="flex flex-col space-y-2">
+                                                {recordData.entries.map((entry, index) => (
+                                                    <div key={index} className="flex items-center gap-3 bg-gray-100 rounded-lg p-2 border border-gray-200">
+                                                        <span className="font-medium text-gray-800 text-sm">{entry.team}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        )}
     </div>
-  );
+);
 };
 
 export default PlayoffRecords;

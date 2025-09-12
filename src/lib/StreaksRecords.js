@@ -395,66 +395,133 @@ const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is no
     }
 
     return (
-        <div className="w-full">
-            <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">STREAK RECORDS - ( CONSECUTIVE )</h3>
-            <p className="text-sm text-gray-600 mb-6">Longest historical streaks for teams.</p>
+        <div className="p-8">
+            {/* Header Section */}
+            <div className="mb-8">
+                <div className="flex items-center gap-3 mb-4">
+                    <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl flex items-center justify-center text-white text-xl font-bold">
+                        🔥
+                    </div>
+                    <div>
+                        <h3 className="text-3xl font-bold text-gray-900">Streak Records</h3>
+                        <p className="text-gray-600 mt-1">
+                            Longest consecutive achievements in league history
+                        </p>
+                    </div>
+                </div>
+            </div>
 
-            <div className="overflow-x-auto">
-                <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
-                    <thead className="bg-gray-100">
-                        <tr>
-                            <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/4">Record</th>
-                            <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/6">Value</th>
-                            <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/4">Team</th>
-                            <th className="py-2 px-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/6">Start</th>
-                            <th className="py-2 px-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/6">End</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {recordsToDisplay.map((recordDef, recordGroupIndex) => {
-                            const recordData = aggregatedStreaks[recordDef.key];
-                            if (!recordData || recordData.entries.length === 0) {
-                                return (
-                                    <tr key={recordDef.key} className={recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                        <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{recordDef.label}</td>
-                                        <td colSpan="4" className="py-2 px-3 text-sm text-gray-500 text-center">N/A</td>
+            {/* Records Table */}
+            <div className="bg-gradient-to-r from-gray-50 to-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                    <table className="min-w-full">
+                        <thead>
+                            <tr className="bg-gradient-to-r from-gray-100 to-gray-50 border-b border-gray-200">
+                                <th className="py-4 px-6 text-left text-sm font-bold text-gray-800 uppercase tracking-wide">
+                                    <div className="flex items-center gap-2">
+                                        🏆 Streak Type
+                                    </div>
+                                </th>
+                                <th className="py-4 px-6 text-center text-sm font-bold text-gray-800 uppercase tracking-wide">
+                                    <div className="flex items-center justify-center gap-2">
+                                        📊 Length
+                                    </div>
+                                </th>
+                                <th className="py-4 px-6 text-left text-sm font-bold text-gray-800 uppercase tracking-wide">
+                                    <div className="flex items-center gap-2">
+                                        👑 Team
+                                    </div>
+                                </th>
+                                <th className="py-4 px-6 text-center text-sm font-bold text-gray-800 uppercase tracking-wide">
+                                    <div className="flex items-center justify-center gap-2">
+                                        🎯 Started
+                                    </div>
+                                </th>
+                                <th className="py-4 px-6 text-center text-sm font-bold text-gray-800 uppercase tracking-wide">
+                                    <div className="flex items-center justify-center gap-2">
+                                        🏁 Ended
+                                    </div>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {recordsToDisplay.map((recordDef, recordGroupIndex) => {
+                                const recordData = aggregatedStreaks[recordDef.key];
+                                if (!recordData || recordData.entries.length === 0) {
+                                    return (
+                                        <tr key={recordDef.key} className={`transition-all duration-200 hover:bg-blue-50 ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}>
+                                            <td className="py-4 px-6">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 bg-gray-300 rounded-lg flex items-center justify-center text-white text-sm font-bold">
+                                                        {recordGroupIndex + 1}
+                                                    </div>
+                                                    <span className="font-semibold text-gray-900 text-sm">{recordDef.label}</span>
+                                                </div>
+                                            </td>
+                                            <td colSpan="4" className="py-4 px-6 text-center">
+                                                <span className="text-gray-500 text-sm italic">No data available</span>
+                                            </td>
+                                        </tr>
+                                    );
+                                }
+                                return recordData.entries.map((entry, entryIndex) => (
+                                    <tr
+                                        key={`${recordDef.key}-${entry.team}-${entry.startYear}-${entry.startWeek}-${entryIndex}`}
+                                        className={`
+                                            transition-all duration-200 hover:bg-blue-50 hover:shadow-sm
+                                            ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}
+                                            ${entryIndex === recordData.entries.length - 1 ? 'border-b-2 border-gray-200' : ''}
+                                        `}
+                                    >
+                                        <td className="py-4 px-6">
+                                            {entryIndex === 0 ? (
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center text-white text-sm font-bold">
+                                                        {recordGroupIndex + 1}
+                                                    </div>
+                                                    <span className="font-semibold text-gray-900 text-sm">
+                                                        {recordDef.label}
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <div className="ml-11">
+                                                    <span className="text-gray-400 text-sm">• Tied Record</span>
+                                                </div>
+                                            )}
+                                        </td>
+                                        <td className="py-4 px-6 text-center">
+                                            {entryIndex === 0 ? (
+                                                <div className="inline-flex items-center px-4 py-2 rounded-full bg-gradient-to-r from-purple-100 to-pink-100 border border-purple-200">
+                                                    <span className="font-bold text-gray-900 text-lg">
+                                                        {entry.streak}
+                                                    </span>
+                                                    <span className="text-gray-600 text-sm ml-1">games</span>
+                                                </div>
+                                            ) : ''}
+                                        </td>
+                                        <td className="py-4 px-6">
+                                            <span className="font-medium text-gray-900 text-sm">{entry.team}</span>
+                                        </td>
+                                        <td className="py-4 px-6 text-center">
+                                            <div className="inline-flex items-center gap-1 px-3 py-1 bg-green-100 text-green-800 rounded-lg text-xs font-medium">
+                                                <span>{entry.startYear}</span>
+                                                <span className="text-green-600">•</span>
+                                                <span>Week {entry.startWeek}</span>
+                                            </div>
+                                        </td>
+                                        <td className="py-4 px-6 text-center">
+                                            <div className="inline-flex items-center gap-1 px-3 py-1 bg-red-100 text-red-800 rounded-lg text-xs font-medium">
+                                                <span>{entry.endYear}</span>
+                                                <span className="text-red-600">•</span>
+                                                <span>Week {entry.endWeek}</span>
+                                            </div>
+                                        </td>
                                     </tr>
-                                );
-                            }
-                            return recordData.entries.map((entry, entryIndex) => (
-                                <tr
-                                    key={`${recordDef.key}-${entry.team}-${entry.startYear}-${entry.startWeek}-${entryIndex}`}
-                                    className={`
-                                        ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
-                                        ${entryIndex === recordData.entries.length - 1 ? 'border-b border-gray-100' : ''}
-                                    `}
-                                >
-                                    <td className="py-2 px-3 text-sm text-gray-800 font-semibold">
-                                        {entryIndex === 0 ? recordDef.label : ''}
-                                    </td>
-                                    <td className="py-2 px-3 text-sm text-gray-800">
-                                        {entryIndex === 0 ? entry.streak : ''}
-                                    </td>
-                                    <td className="py-2 px-3 text-sm text-gray-700">{entry.team}</td>
-                                    <td className="py-2 px-3 text-sm text-gray-700 text-center">
-                                        <div className="flex items-center justify-center">
-                                            <span>{entry.startYear}</span>
-                                            <span>-</span>
-                                            <span>Week {entry.startWeek}</span>
-                                        </div>
-                                    </td>
-                                    <td className="py-2 px-3 text-sm text-gray-700 text-center">
-                                        <div className="flex items-center justify-center">
-                                            <span>{entry.endYear}</span>
-                                            <span>-</span>
-                                            <span>Week {entry.endWeek}</span>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ));
-                        })}
-                    </tbody>
-                </table>
+                                ));
+                            })}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     );

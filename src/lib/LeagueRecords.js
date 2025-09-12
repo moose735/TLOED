@@ -181,49 +181,102 @@ const LeagueRecords = () => {
     };
 
     return (
-        <div className="w-full">
-            <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">ALL-TIME LEAGUE RECORD HOLDERS</h3>
-            <p className="text-sm text-gray-600 mb-6">Historical league performance records.</p>
-            <div className="overflow-x-auto">
-                <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
-                    <thead className="bg-gray-100">
-                        <tr>
-                            <th className="py-2 px-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/4">Record</th>
-                            <th className="py-2 px-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/6">Value</th>
-                            <th className="py-2 px-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200 w-1/2">Team</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {Object.entries(allTimeRecords).map(([key, record], recordGroupIndex) => {
-                            const config = formatConfig[record.key] || { decimals: 2, type: 'default' };
-                            const getLabel = () => {
-                                let label = record.key.replace(/([A-Z])/g, ' $1').trim();
-                                if (label.length > 0) {
-                                    label = label.charAt(0).toUpperCase() + label.slice(1);
+        <div className="p-8">
+            {/* Header Section */}
+            <div className="mb-8">
+                <div className="flex items-center gap-3 mb-4">
+                    <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-teal-600 rounded-xl flex items-center justify-center text-white text-xl font-bold">
+                        🌍
+                    </div>
+                    <div>
+                        <h3 className="text-3xl font-bold text-gray-900">All-Time League Records</h3>
+                        <p className="text-gray-600 mt-1">
+                            Career-spanning achievements and historical league data.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            {/* Records Table */}
+            <div className="bg-gradient-to-r from-gray-50 to-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                    <table className="min-w-full">
+                        <thead>
+                            <tr className="bg-gradient-to-r from-gray-100 to-gray-50 border-b border-gray-200">
+                                <th className="py-4 px-6 text-left text-sm font-bold text-gray-800 uppercase tracking-wide">
+                                    <div className="flex items-center gap-2">
+                                        🏆 Record
+                                    </div>
+                                </th>
+                                <th className="py-4 px-6 text-center text-sm font-bold text-gray-800 uppercase tracking-wide">
+                                    <div className="flex items-center justify-center gap-2">
+                                        📊 Value
+                                    </div>
+                                </th>
+                                <th className="py-4 px-6 text-left text-sm font-bold text-gray-800 uppercase tracking-wide">
+                                    <div className="flex items-center gap-2">
+                                        👑 Holder(s)
+                                    </div>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {Object.entries(allTimeRecords).map(([key, record], recordGroupIndex) => {
+                                const config = formatConfig[record.key] || { decimals: 2, type: 'default' };
+                                const getLabel = () => {
+                                    let label = record.key.replace(/([A-Z])/g, ' $1').trim();
+                                    return label.charAt(0).toUpperCase() + label.slice(1);
+                                };
+
+                                if (!record || record.value === -Infinity || record.value === Infinity || !record.teams || record.teams.length === 0) {
+                                    return (
+                                        <tr key={key} className={`transition-all duration-200 hover:bg-blue-50 ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}>
+                                            <td className="py-4 px-6">
+                                                <div className="flex items-center gap-3">
+                                                    <span className="font-semibold text-gray-900 text-sm">{getLabel()}</span>
+                                                </div>
+                                            </td>
+                                            <td colSpan="2" className="py-4 px-6 text-center">
+                                                <span className="text-gray-500 text-sm italic">No data available</span>
+                                            </td>
+                                        </tr>
+                                    );
                                 }
-                                return label;
-                            };
-                            if (!record || record.value === -Infinity || record.value === Infinity || !record.teams || record.teams.length === 0) {
+
                                 return (
-                                    <tr key={key} className={recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                        <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{getLabel()}</td>
-                                        <td className="py-2 px-3 text-sm text-gray-800 text-center">N/A</td>
-                                        <td className="py-2 px-3 text-sm text-gray-700"></td>
+                                    <tr
+                                        key={key}
+                                        className={`transition-all duration-200 hover:bg-blue-50 hover:shadow-sm ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}
+                                    >
+                                        <td className="py-4 px-6">
+                                            <div className="flex items-center gap-3">
+                                                <span className="font-semibold text-gray-900 text-sm">{getLabel()}</span>
+                                            </div>
+                                        </td>
+                                        <td className="py-4 px-6 text-center">
+                                            <div className="inline-flex items-center px-3 py-1 rounded-full bg-gradient-to-r from-green-100 to-teal-100 border border-green-200">
+                                                <span className="font-bold text-gray-900 text-sm">
+                                                    {config.type === 'percentage'
+                                                        ? (record.value * 100).toLocaleString('en-US', { minimumFractionDigits: config.decimals, maximumFractionDigits: config.decimals }) + '%'
+                                                        : record.value.toLocaleString('en-US', { minimumFractionDigits: config.decimals, maximumFractionDigits: config.decimals })}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="py-4 px-6">
+                                            <div className="flex flex-col space-y-2">
+                                                {record.teams.map((team, index) => (
+                                                    <div key={index} className="flex items-center gap-3 bg-gray-100 rounded-lg p-2 border border-gray-200">
+                                                        <span className="font-medium text-gray-800 text-sm">{getDisplayTeamName(team)}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </td>
                                     </tr>
                                 );
-                            }
-                            return record.teams.map((team, entryIndex) => (
-                                <tr key={`${key}-${getDisplayTeamName(team)}-${entryIndex}`} className={recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                    <td className="py-2 px-3 text-sm text-gray-800 font-semibold">{entryIndex === 0 ? getLabel() : ''}</td>
-                                    <td className="py-2 px-3 text-sm text-gray-800 text-center">
-                                        {entryIndex === 0 ? (config.type === 'percentage' ? (team.value * 100).toLocaleString('en-US', { minimumFractionDigits: config.decimals, maximumFractionDigits: config.decimals }) + '%' : team.value.toLocaleString('en-US', { minimumFractionDigits: config.decimals, maximumFractionDigits: config.decimals })) : ''}
-                                    </td>
-                                    <td className="py-2 px-3 text-sm text-gray-700 text-center">{getDisplayTeamName(team)}</td>
-                                </tr>
-                            ));
-                        })}
-                    </tbody>
-                </table>
+                            })}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     );
