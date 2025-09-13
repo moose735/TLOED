@@ -28,12 +28,19 @@ import {
         rostersWithDetails 
     } = useSleeperData();
 
-    const [selectedBetType, setSelectedBetType] = useState('matchups'); // 'matchups', 'playoffs', 'championship'
+    const [selectedBetType, setSelectedBetType] = useState('gameLines'); // 'gameLines', 'futures'
+    const [selectedFuturesTab, setSelectedFuturesTab] = useState('playoffs'); // 'playoffs', 'championship'
     const [selectedWeek, setSelectedWeek] = useState(null);
     const [matchupOdds, setMatchupOdds] = useState([]);
     const [playoffOdds, setPlayoffOdds] = useState([]);
     const [championshipOdds, setChampionshipOdds] = useState([]);
     const [eloRatings, setEloRatings] = useState({});
+
+    // Bet Slip State
+    const [betSlip, setBetSlip] = useState([]);
+    const [betAmount, setBetAmount] = useState('');
+    const [notifications, setNotifications] = useState([]);
+    const [isBetSlipExpanded, setIsBetSlipExpanded] = useState(false);
 
     // Current season
     const currentSeason = useMemo(() => {
@@ -51,6 +58,109 @@ import {
             setEloRatings(ratings);
         }
     }, [nflState, selectedWeek, currentSeason, historicalData]);
+
+    // Notification functions
+    const addNotification = (message, type = 'info') => {
+        const id = Date.now();
+        setNotifications(prev => [...prev, { id, message, type }]);
+        setTimeout(() => {
+            setNotifications(prev => prev.filter(n => n.id !== id));
+        }, 3000);
+    };
+
+    // Bet slip functions
+    const addBetToSlip = (bet) => {
+        const betId = `${bet.matchupId}-${bet.type}-${bet.selection}`;
+        
+        // Check if bet already exists (toggle functionality)
+        const existingBetIndex = betSlip.findIndex(b => b.id === betId);
+        
+        if (existingBetIndex >= 0) {
+            // Remove bet if it exists
+            setBetSlip(prev => prev.filter(b => b.id !== betId));
+            addNotification('Bet removed from slip', 'info');
+            return;
+        }
+
+        // Check for conflicts only when adding new bets
+        const conflicts = betSlip.filter(existingBet => {
+            // Same game restrictions
+            if (existingBet.matchupId === bet.matchupId) {
+                // Can't bet both sides of spread
+                if (bet.type === 'spread' && existingBet.type === 'spread') {
+                    return true;
+                }
+                // Can't bet both over/under
+                if (bet.type === 'total' && existingBet.type === 'total') {
+                    return true;
+                }
+                // Can't bet both moneylines
+                if (bet.type === 'moneyline' && existingBet.type === 'moneyline') {
+                    return true;
+                }
+                // Can't bet same team's spread and moneyline
+                if ((bet.type === 'spread' && existingBet.type === 'moneyline') ||
+                    (bet.type === 'moneyline' && existingBet.type === 'spread')) {
+                    if (bet.team === existingBet.team) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        });
+
+        if (conflicts.length > 0) {
+            addNotification('Cannot add conflicting bets from the same game', 'error');
+            return;
+        }
+
+        // Add new bet
+        setBetSlip(prev => [...prev, { ...bet, id: betId }]);
+        addNotification('Bet added to slip', 'success');
+    };
+
+    const removeBetFromSlip = (betId) => {
+        setBetSlip(prev => prev.filter(b => b.id !== betId));
+        addNotification('Bet removed from slip', 'info');
+    };
+
+    const clearBetSlip = () => {
+        setBetSlip([]);
+        setBetAmount('');
+        addNotification('Bet slip cleared', 'info');
+    };
+
+    const calculateParlayOdds = (bets) => {
+        if (bets.length === 0) return 0;
+        let totalOdds = 1;
+        
+        bets.forEach(bet => {
+            const decimalOdds = bet.odds > 0 ? (bet.odds / 100) + 1 : (100 / Math.abs(bet.odds)) + 1;
+            totalOdds *= decimalOdds;
+        });
+        
+        const americanOdds = totalOdds >= 2 ? (totalOdds - 1) * 100 : -100 / (totalOdds - 1);
+        return Math.round(americanOdds);
+    };
+
+    const calculatePayout = () => {
+        if (!betAmount || betSlip.length === 0) return 0;
+        
+        const amount = parseFloat(betAmount);
+        if (isNaN(amount) || amount <= 0) return 0;
+        
+        if (betSlip.length === 1) {
+            // Single bet
+            const odds = betSlip[0].odds;
+            const winAmount = odds > 0 ? (amount * odds / 100) : (amount * 100 / Math.abs(odds));
+            return amount + winAmount;
+        } else {
+            // Parlay
+            const parlayOdds = calculateParlayOdds(betSlip);
+            const winAmount = parlayOdds > 0 ? (amount * parlayOdds / 100) : (amount * 100 / Math.abs(parlayOdds));
+            return amount + winAmount;
+        }
+    };
 
     // Calculate team power score based on multiple factors
     const calculateTeamPowerScore = (teamStats, rosterId, season) => {
@@ -407,14 +517,14 @@ import {
 
     // Update odds when dependencies change
     useEffect(() => {
-        if (selectedBetType === 'matchups' && selectedWeek && teamPowerRankings && Object.keys(teamPowerRankings).length > 0) {
+        if (selectedBetType === 'gameLines' && selectedWeek && teamPowerRankings && Object.keys(teamPowerRankings).length > 0) {
             setMatchupOdds(generateMatchupOdds(selectedWeek));
-        } else if (selectedBetType === 'playoffs' && teamPowerRankings && Object.keys(teamPowerRankings).length > 0) {
+        } else if (selectedBetType === 'futures' && selectedFuturesTab === 'playoffs' && teamPowerRankings && Object.keys(teamPowerRankings).length > 0) {
             setPlayoffOdds(generatePlayoffOdds());
-        } else if (selectedBetType === 'championship' && teamPowerRankings && Object.keys(teamPowerRankings).length > 0) {
+        } else if (selectedBetType === 'futures' && selectedFuturesTab === 'championship' && teamPowerRankings && Object.keys(teamPowerRankings).length > 0) {
             setChampionshipOdds(generateChampionshipOdds());
         }
-    }, [selectedBetType, selectedWeek, teamPowerRankings, currentSeason, eloRatings, historicalData]);
+    }, [selectedBetType, selectedFuturesTab, selectedWeek, teamPowerRankings, currentSeason, eloRatings, historicalData]);
 
     if (loading) {
         return (
@@ -425,7 +535,7 @@ import {
     }
 
     return (
-        <div className="p-4 bg-gray-50 min-h-screen">
+        <div className={`p-4 bg-gray-50 min-h-screen ${betSlip.length > 0 ? 'pb-24' : ''}`}>
             <div className="max-w-7xl mx-auto">
                 <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 rounded-lg mb-6">
                     <h1 className="text-3xl font-bold mb-2">Fantasy Sportsbook</h1>
@@ -437,38 +547,28 @@ import {
                     <div className="flex border-b">
                         <button
                             className={`flex-1 py-4 px-6 text-center font-medium ${
-                                selectedBetType === 'matchups' 
+                                selectedBetType === 'gameLines' 
                                     ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600' 
                                     : 'text-gray-600 hover:text-gray-800'
                             }`}
-                            onClick={() => setSelectedBetType('matchups')}
+                            onClick={() => setSelectedBetType('gameLines')}
                         >
-                            Matchups
+                            Game Lines
                         </button>
                         <button
                             className={`flex-1 py-4 px-6 text-center font-medium ${
-                                selectedBetType === 'playoffs' 
+                                selectedBetType === 'futures' 
                                     ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600' 
                                     : 'text-gray-600 hover:text-gray-800'
                             }`}
-                            onClick={() => setSelectedBetType('playoffs')}
+                            onClick={() => setSelectedBetType('futures')}
                         >
-                            Playoff Odds
-                        </button>
-                        <button
-                            className={`flex-1 py-4 px-6 text-center font-medium ${
-                                selectedBetType === 'championship' 
-                                    ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600' 
-                                    : 'text-gray-600 hover:text-gray-800'
-                            }`}
-                            onClick={() => setSelectedBetType('championship')}
-                        >
-                            Championship
+                            Futures
                         </button>
                     </div>
 
-                    {/* Week selector for matchups */}
-                    {selectedBetType === 'matchups' && (
+                    {/* Week selector for game lines */}
+                    {selectedBetType === 'gameLines' && (
                         <div className="p-4 border-b flex flex-wrap gap-4">
                             <div>
                                 <label htmlFor="week-select" className="block text-sm font-medium text-gray-700 mb-2">
@@ -492,7 +592,7 @@ import {
                 </div>
 
                 {/* Content based on selected bet type */}
-                {selectedBetType === 'matchups' && (
+                {selectedBetType === 'gameLines' && (
                     <div className="space-y-4">
                         <h2 className="text-2xl font-bold text-gray-800 mb-4">
                             Week {selectedWeek} {selectedWeek >= 15 ? 'Playoffs' : 'Betting Odds'}
@@ -527,23 +627,19 @@ import {
                                                     </div>
                                                     <div className="space-y-2">
                                                         {/* Team 1 */}
-                                                        <div className="p-3 bg-gray-50 rounded-lg h-16 flex items-center">
-                                                            <div className="flex items-center gap-2 w-full">
-                                                                <img className="w-6 h-6 rounded-full" src={matchup.team1.avatar} alt={matchup.team1.name} />
-                                                                <div className="flex-1">
-                                                                    <div className="font-medium text-gray-800 text-sm">{matchup.team1.name}</div>
-                                                                    <div className="text-xs text-gray-600">{matchup.team1.record}</div>
-                                                                </div>
+                                                        <div className="h-20 flex items-center justify-center">
+                                                            <div className="flex flex-col items-center gap-1">
+                                                                <img className="w-8 h-8 rounded-full" src={matchup.team1.avatar} alt={matchup.team1.name} />
+                                                                <div className="font-medium text-gray-800 text-lg text-center">{matchup.team1.name}</div>
+                                                                <div className="text-sm text-gray-500">{matchup.team1.record}</div>
                                                             </div>
                                                         </div>
                                                         {/* Team 2 */}
-                                                        <div className="p-3 bg-gray-50 rounded-lg h-16 flex items-center">
-                                                            <div className="flex items-center gap-2 w-full">
-                                                                <img className="w-6 h-6 rounded-full" src={matchup.team2.avatar} alt={matchup.team2.name} />
-                                                                <div className="flex-1">
-                                                                    <div className="font-medium text-gray-800 text-sm">{matchup.team2.name}</div>
-                                                                    <div className="text-xs text-gray-600">{matchup.team2.record}</div>
-                                                                </div>
+                                                        <div className="h-20 flex items-center justify-center">
+                                                            <div className="flex flex-col items-center gap-1">
+                                                                <img className="w-8 h-8 rounded-full" src={matchup.team2.avatar} alt={matchup.team2.name} />
+                                                                <div className="font-medium text-gray-800 text-lg text-center">{matchup.team2.name}</div>
+                                                                <div className="text-sm text-gray-500">{matchup.team2.record}</div>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -557,13 +653,26 @@ import {
                                                     {matchup.markets?.spread ? (
                                                         <div className="space-y-2">
                                                             {/* Team 1 Spread */}
-                                                            <div className={`p-3 rounded-lg text-center transition-colors cursor-pointer h-20 flex flex-col justify-center ${
-                                                                matchup.isCompleted && matchup.actualScores?.team1CoveredSpread !== null
-                                                                    ? (matchup.actualScores.team1CoveredSpread 
-                                                                        ? 'bg-green-100 border-2 border-green-500' 
-                                                                        : 'bg-red-100 border-2 border-red-300')
-                                                                    : 'bg-gray-100 hover:bg-gray-200 border border-gray-300'
-                                                            }`}>
+                                                            <div 
+                                                                className={`p-3 rounded-lg text-center transition-colors cursor-pointer h-20 flex flex-col justify-center ${
+                                                                    matchup.isCompleted && matchup.actualScores?.team1CoveredSpread !== null
+                                                                        ? (matchup.actualScores.team1CoveredSpread 
+                                                                            ? 'bg-green-100 border-2 border-green-500' 
+                                                                            : 'bg-red-100 border-2 border-red-300')
+                                                                        : betSlip.some(bet => bet.id === `${matchup.matchupId}-spread-team1`)
+                                                                            ? 'bg-blue-100 border-2 border-blue-500'
+                                                                            : 'bg-gray-100 hover:bg-gray-200 border border-gray-300'
+                                                                }`}
+                                                                onClick={() => !matchup.isCompleted && addBetToSlip({
+                                                                    matchupId: matchup.matchupId,
+                                                                    type: 'spread',
+                                                                    selection: 'team1',
+                                                                    team: matchup.team1.name,
+                                                                    line: matchup.markets.spread.team1.line,
+                                                                    odds: matchup.markets.spread.team1.odds,
+                                                                    description: `${matchup.team1.name} ${matchup.markets.spread.team1.line}`
+                                                                })}
+                                                            >
                                                                 <div className={`text-lg font-bold mb-1 ${
                                                                     matchup.isCompleted && matchup.actualScores?.team1CoveredSpread !== null
                                                                         ? (matchup.actualScores.team1CoveredSpread ? 'text-green-600' : 'text-red-600')
@@ -575,13 +684,26 @@ import {
                                                                 )}
                                                             </div>
                                                             {/* Team 2 Spread */}
-                                                            <div className={`p-3 rounded-lg text-center transition-colors cursor-pointer h-20 flex flex-col justify-center ${
-                                                                matchup.isCompleted && matchup.actualScores?.team1CoveredSpread !== null
-                                                                    ? (!matchup.actualScores.team1CoveredSpread 
-                                                                        ? 'bg-green-100 border-2 border-green-500' 
-                                                                        : 'bg-red-100 border-2 border-red-300')
-                                                                    : 'bg-gray-100 hover:bg-gray-200 border border-gray-300'
-                                                            }`}>
+                                                            <div 
+                                                                className={`p-3 rounded-lg text-center transition-colors cursor-pointer h-20 flex flex-col justify-center ${
+                                                                    matchup.isCompleted && matchup.actualScores?.team1CoveredSpread !== null
+                                                                        ? (!matchup.actualScores.team1CoveredSpread 
+                                                                            ? 'bg-green-100 border-2 border-green-500' 
+                                                                            : 'bg-red-100 border-2 border-red-300')
+                                                                        : betSlip.some(bet => bet.id === `${matchup.matchupId}-spread-team2`)
+                                                                            ? 'bg-blue-100 border-2 border-blue-500'
+                                                                            : 'bg-gray-100 hover:bg-gray-200 border border-gray-300'
+                                                                }`}
+                                                                onClick={() => !matchup.isCompleted && addBetToSlip({
+                                                                    matchupId: matchup.matchupId,
+                                                                    type: 'spread',
+                                                                    selection: 'team2',
+                                                                    team: matchup.team2.name,
+                                                                    line: matchup.markets.spread.team2.line,
+                                                                    odds: matchup.markets.spread.team2.odds,
+                                                                    description: `${matchup.team2.name} ${matchup.markets.spread.team2.line}`
+                                                                })}
+                                                            >
                                                                 <div className={`text-lg font-bold mb-1 ${
                                                                     matchup.isCompleted && matchup.actualScores?.team1CoveredSpread !== null
                                                                         ? (!matchup.actualScores.team1CoveredSpread ? 'text-green-600' : 'text-red-600')
@@ -609,13 +731,26 @@ import {
                                                     {matchup.markets?.total ? (
                                                         <div className="space-y-2">
                                                             {/* Over */}
-                                                            <div className={`p-3 rounded-lg text-center transition-colors cursor-pointer h-20 flex flex-col justify-center ${
-                                                                matchup.isCompleted && matchup.actualScores?.overHit !== null
-                                                                    ? (matchup.actualScores.overHit
-                                                                        ? 'bg-green-100 border-2 border-green-500' 
-                                                                        : 'bg-red-100 border-2 border-red-300') 
-                                                                    : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
-                                                            }`}>
+                                                            <div 
+                                                                className={`p-3 rounded-lg text-center transition-colors cursor-pointer h-20 flex flex-col justify-center ${
+                                                                    matchup.isCompleted && matchup.actualScores?.overHit !== null
+                                                                        ? (matchup.actualScores.overHit
+                                                                            ? 'bg-green-100 border-2 border-green-500' 
+                                                                            : 'bg-red-100 border-2 border-red-300') 
+                                                                        : betSlip.some(bet => bet.id === `${matchup.matchupId}-total-over`)
+                                                                            ? 'bg-blue-100 border-2 border-blue-500'
+                                                                            : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
+                                                                }`}
+                                                                onClick={() => !matchup.isCompleted && addBetToSlip({
+                                                                    matchupId: matchup.matchupId,
+                                                                    type: 'total',
+                                                                    selection: 'over',
+                                                                    team: `${matchup.team1.name} vs ${matchup.team2.name}`,
+                                                                    line: matchup.markets.total.over.line,
+                                                                    odds: matchup.markets.total.over.odds,
+                                                                    description: `Over ${matchup.markets.total.over.line}`
+                                                                })}
+                                                            >
                                                                 <div className="text-xs text-gray-600 mb-1">OVER</div>
                                                                 <div className={`text-lg font-bold mb-1 ${
                                                                     matchup.isCompleted && matchup.actualScores?.overHit !== null
@@ -627,13 +762,26 @@ import {
                                                                 <div className="text-sm text-gray-600">{formatOdds(matchup.markets.total.over.odds)}</div>
                                                             </div>
                                                             {/* Under */}
-                                                            <div className={`p-3 rounded-lg text-center transition-colors cursor-pointer h-20 flex flex-col justify-center ${
-                                                                matchup.isCompleted && matchup.actualScores?.overHit !== null
-                                                                    ? (!matchup.actualScores.overHit
-                                                                        ? 'bg-green-100 border-2 border-green-500' 
-                                                                        : 'bg-red-100 border-2 border-red-300') 
-                                                                    : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
-                                                            }`}>
+                                                            <div 
+                                                                className={`p-3 rounded-lg text-center transition-colors cursor-pointer h-20 flex flex-col justify-center ${
+                                                                    matchup.isCompleted && matchup.actualScores?.overHit !== null
+                                                                        ? (!matchup.actualScores.overHit
+                                                                            ? 'bg-green-100 border-2 border-green-500' 
+                                                                            : 'bg-red-100 border-2 border-red-300') 
+                                                                        : betSlip.some(bet => bet.id === `${matchup.matchupId}-total-under`)
+                                                                            ? 'bg-blue-100 border-2 border-blue-500'
+                                                                            : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
+                                                                }`}
+                                                                onClick={() => !matchup.isCompleted && addBetToSlip({
+                                                                    matchupId: matchup.matchupId,
+                                                                    type: 'total',
+                                                                    selection: 'under',
+                                                                    team: `${matchup.team1.name} vs ${matchup.team2.name}`,
+                                                                    line: matchup.markets.total.under.line,
+                                                                    odds: matchup.markets.total.under.odds,
+                                                                    description: `Under ${matchup.markets.total.under.line}`
+                                                                })}
+                                                            >
                                                                 <div className="text-xs text-gray-600 mb-1">UNDER</div>
                                                                 <div className={`text-lg font-bold mb-1 ${
                                                                     matchup.isCompleted && matchup.actualScores?.overHit !== null
@@ -660,13 +808,26 @@ import {
                                                     </div>
                                                     <div className="space-y-2">
                                                         {/* Team 1 Moneyline */}
-                                                        <div className={`p-3 rounded-lg text-center transition-colors cursor-pointer h-20 flex flex-col justify-center ${
-                                                            matchup.isCompleted && matchup.actualScores?.team1Won !== null
-                                                                ? (matchup.actualScores.team1Won 
-                                                                    ? 'bg-green-100 border-2 border-green-500' 
-                                                                    : 'bg-red-100 border-2 border-red-300') 
-                                                                : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
-                                                        }`}>
+                                                        <div 
+                                                            className={`p-3 rounded-lg text-center transition-colors cursor-pointer h-20 flex flex-col justify-center ${
+                                                                matchup.isCompleted && matchup.actualScores?.team1Won !== null
+                                                                    ? (matchup.actualScores.team1Won 
+                                                                        ? 'bg-green-100 border-2 border-green-500' 
+                                                                        : 'bg-red-100 border-2 border-red-300') 
+                                                                    : betSlip.some(bet => bet.id === `${matchup.matchupId}-moneyline-team1`)
+                                                                        ? 'bg-blue-100 border-2 border-blue-500'
+                                                                        : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
+                                                            }`}
+                                                            onClick={() => !matchup.isCompleted && addBetToSlip({
+                                                                matchupId: matchup.matchupId,
+                                                                type: 'moneyline',
+                                                                selection: 'team1',
+                                                                team: matchup.team1.name,
+                                                                line: 'ML',
+                                                                odds: matchup.markets?.moneyline?.team1?.odds || matchup.team1.odds,
+                                                                description: `${matchup.team1.name} ML`
+                                                            })}
+                                                        >
                                                             <div className={`text-lg font-bold ${
                                                                 matchup.isCompleted && matchup.actualScores?.team1Won !== null
                                                                     ? (matchup.actualScores.team1Won ? 'text-green-600' : 'text-red-600')
@@ -676,13 +837,26 @@ import {
                                                             </div>
                                                         </div>
                                                         {/* Team 2 Moneyline */}
-                                                        <div className={`p-3 rounded-lg text-center transition-colors cursor-pointer h-20 flex flex-col justify-center ${
-                                                            matchup.isCompleted && matchup.actualScores?.team1Won !== null
-                                                                ? (!matchup.actualScores.team1Won 
-                                                                    ? 'bg-green-100 border-2 border-green-500' 
-                                                                    : 'bg-red-100 border-2 border-red-300') 
-                                                                : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
-                                                        }`}>
+                                                        <div 
+                                                            className={`p-3 rounded-lg text-center transition-colors cursor-pointer h-20 flex flex-col justify-center ${
+                                                                matchup.isCompleted && matchup.actualScores?.team1Won !== null
+                                                                    ? (!matchup.actualScores.team1Won 
+                                                                        ? 'bg-green-100 border-2 border-green-500' 
+                                                                        : 'bg-red-100 border-2 border-red-300') 
+                                                                    : betSlip.some(bet => bet.id === `${matchup.matchupId}-moneyline-team2`)
+                                                                        ? 'bg-blue-100 border-2 border-blue-500'
+                                                                        : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
+                                                            }`}
+                                                            onClick={() => !matchup.isCompleted && addBetToSlip({
+                                                                matchupId: matchup.matchupId,
+                                                                type: 'moneyline',
+                                                                selection: 'team2',
+                                                                team: matchup.team2.name,
+                                                                line: 'ML',
+                                                                odds: matchup.markets?.moneyline?.team2?.odds || matchup.team2.odds,
+                                                                description: `${matchup.team2.name} ML`
+                                                            })}
+                                                        >
                                                             <div className={`text-lg font-bold ${
                                                                 matchup.isCompleted && matchup.actualScores?.team1Won !== null
                                                                     ? (!matchup.actualScores.team1Won ? 'text-green-600' : 'text-red-600')
@@ -808,104 +982,276 @@ import {
                     </div>
                 )}
 
-                {selectedBetType === 'playoffs' && (
+                {selectedBetType === 'futures' && (
                     <div className="space-y-4">
-                        <h2 className="text-2xl font-bold text-gray-800 mb-4">Playoff Odds</h2>
-                        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full">
-                                    <thead className="bg-gray-50">
-                                        <tr>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rank</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Team</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Record</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Probability</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Odds</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-200">
-                                        {playoffOdds.map((team, index) => (
-                                            <tr key={team.rosterId} className={index < 6 ? 'bg-green-50' : ''}>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                                    #{team.rank}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="flex items-center">
-                                                        <img className="h-8 w-8 rounded-full mr-3" src={team.avatar} alt={team.name} />
-                                                        <div className="text-sm font-medium text-gray-900">{team.name}</div>
+                        {/* Futures sub-tabs */}
+                        <div className="flex border-b mb-4">
+                            <button
+                                className={`flex-1 py-2 px-4 text-center font-medium ${
+                                    selectedFuturesTab === 'playoffs'
+                                        ? 'bg-gray-900 text-white border-b-2 border-yellow-400'
+                                        : 'text-gray-600 hover:text-gray-800'
+                                }`}
+                                onClick={() => setSelectedFuturesTab('playoffs')}
+                            >
+                                Playoff Appearance
+                            </button>
+                            <button
+                                className={`flex-1 py-2 px-4 text-center font-medium ${
+                                    selectedFuturesTab === 'championship'
+                                        ? 'bg-gray-900 text-white border-b-2 border-yellow-400'
+                                        : 'text-gray-600 hover:text-gray-800'
+                                }`}
+                                onClick={() => setSelectedFuturesTab('championship')}
+                            >
+                                Championship
+                            </button>
+                        </div>
+
+                        {/* Futures content */}
+                        {selectedFuturesTab === 'playoffs' && (
+                            <div className="space-y-4">
+                                <h2 className="text-2xl font-bold text-gray-800 mb-4">Playoff Appearance Odds</h2>
+                                <div className="grid gap-4">
+                                    {playoffOdds.map((team, index) => (
+                                        <div key={team.rosterId} className="bg-white rounded-lg shadow-md p-4">
+                                            <div className="flex items-center justify-between">
+                                                {/* Team Info */}
+                                                <div className="flex items-center gap-3 flex-1">
+                                                    <img className="h-10 w-10 rounded-full" src={team.avatar} alt={team.name} />
+                                                    <div>
+                                                        <div className="font-medium text-gray-800">{team.name}</div>
+                                                        <div className="text-sm text-gray-600">#{team.rank} • {team.record}</div>
                                                     </div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{team.record}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-sm font-medium text-gray-900">{(team.probability * 100).toFixed(1)}%</div>
+                                                </div>
+                                                
+                                                {/* Probability */}
+                                                <div className="text-center mx-4">
+                                                    <div className="text-lg font-bold text-gray-800">{(team.probability * 100).toFixed(1)}%</div>
                                                     <div className="w-24 bg-gray-200 rounded-full h-2 mt-1">
                                                         <div 
-                                                            className="bg-blue-600 h-2 rounded-full" 
+                                                            className="bg-blue-500 h-2 rounded-full" 
                                                             style={{width: `${team.probability * 100}%`}}
                                                         ></div>
                                                     </div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <span className={`text-lg font-bold ${team.odds > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                                </div>
+                                                
+                                                {/* Clickable Odds */}
+                                                <div 
+                                                    className={`p-3 rounded-lg text-center transition-colors cursor-pointer min-w-[80px] ${
+                                                        betSlip.some(bet => bet.id === `playoff-${team.rosterId}`)
+                                                            ? 'bg-blue-100 border-2 border-blue-500'
+                                                            : 'bg-gray-100 hover:bg-gray-200 border border-gray-300'
+                                                    }`}
+                                                    onClick={() => addBetToSlip({
+                                                        matchupId: `playoff-${team.rosterId}`,
+                                                        type: 'futures',
+                                                        selection: 'playoffs',
+                                                        team: team.name,
+                                                        line: 'Make Playoffs',
+                                                        odds: team.odds,
+                                                        description: `${team.name} Make Playoffs`
+                                                    })}
+                                                >
+                                                    <div className="text-lg font-bold text-gray-500">
                                                         {formatOdds(team.odds)}
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
+                        )}
+
+                        {selectedFuturesTab === 'championship' && (
+                            <div className="space-y-4">
+                                <h2 className="text-2xl font-bold text-gray-800 mb-4">Championship Odds</h2>
+                                <div className="grid gap-4">
+                                    {championshipOdds.map((team, index) => (
+                                        <div key={team.rosterId} className="bg-white rounded-lg shadow-md p-4">
+                                            <div className="flex items-center justify-between">
+                                                {/* Team Info */}
+                                                <div className="flex items-center gap-3 flex-1">
+                                                    <img className="h-10 w-10 rounded-full" src={team.avatar} alt={team.name} />
+                                                    <div>
+                                                        <div className="font-medium text-gray-800">{team.name}</div>
+                                                        <div className="text-sm text-gray-600">#{team.rank} • {team.record}</div>
+                                                        {team.isWildcardContender && (
+                                                            <div className="text-xs text-blue-600">🎯 Wildcard Contender</div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                
+                                                {/* Probability */}
+                                                <div className="text-center mx-4">
+                                                    <div className="text-lg font-bold text-gray-800">{(team.probability * 100).toFixed(1)}%</div>
+                                                    <div className="w-24 bg-gray-200 rounded-full h-2 mt-1">
+                                                        <div 
+                                                            className="bg-blue-500 h-2 rounded-full" 
+                                                            style={{width: `${team.probability * 100}%`}}
+                                                        ></div>
+                                                    </div>
+                                                    {team.playoffProb && (
+                                                        <div className="text-xs text-gray-600 mt-1">
+                                                            Playoff: {(team.playoffProb * 100).toFixed(1)}%
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                
+                                                {/* Clickable Odds */}
+                                                <div 
+                                                    className={`p-3 rounded-lg text-center transition-colors cursor-pointer min-w-[80px] ${
+                                                        betSlip.some(bet => bet.id === `championship-${team.rosterId}`)
+                                                            ? 'bg-blue-100 border-2 border-blue-500'
+                                                            : 'bg-gray-100 hover:bg-gray-200 border border-gray-300'
+                                                    }`}
+                                                    onClick={() => addBetToSlip({
+                                                        matchupId: `championship-${team.rosterId}`,
+                                                        type: 'futures',
+                                                        selection: 'championship',
+                                                        team: team.name,
+                                                        line: 'Win Championship',
+                                                        odds: team.odds,
+                                                        description: `${team.name} Win Championship`
+                                                    })}
+                                                >
+                                                    <div className="text-lg font-bold text-gray-500">
+                                                        {formatOdds(team.odds)}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 
-                {selectedBetType === 'championship' && (
-                    <div className="space-y-4">
-                        <h2 className="text-2xl font-bold text-gray-800 mb-4">Championship Odds</h2>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {championshipOdds.map((team, index) => (
-                                <div key={team.rosterId} className={`bg-white rounded-lg shadow-md p-6 ${index < 3 ? 'ring-2 ring-yellow-400' : ''}`}>
-                                    {index < 3 && (
-                                        <div className="text-center mb-3">
-                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                                                {index === 0 ? 'Favorite' : index === 1 ? 'Second' : 'Third'}
-                                            </span>
+
+
+                {/* Notifications */}
+                {notifications.length > 0 && (
+                    <div className="fixed top-4 right-4 space-y-2 z-50">
+                        {notifications.map(notification => (
+                            <div
+                                key={notification.id}
+                                className={`px-4 py-2 rounded-lg shadow-lg text-white ${
+                                    notification.type === 'success' ? 'bg-green-500' :
+                                    notification.type === 'error' ? 'bg-red-500' :
+                                    'bg-blue-500'
+                                }`}
+                            >
+                                {notification.message}
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {/* Mobile Bet Slip Overlay */}
+                {betSlip.length > 0 && (
+                    <div className={`fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg transform transition-transform duration-300 z-40 ${
+                        isBetSlipExpanded ? 'translate-y-0' : 'translate-y-[calc(100%-60px)]'
+                    }`}>
+                        {/* Bet Slip Header */}
+                        <div 
+                            className="px-4 py-3 border-b cursor-pointer flex justify-between items-center bg-gray-50"
+                            onClick={() => setIsBetSlipExpanded(!isBetSlipExpanded)}
+                        >
+                            <div className="flex items-center gap-3">
+                                <span className="font-bold text-gray-800">Bet Slip ({betSlip.length})</span>
+                                {betAmount && parseFloat(betAmount) > 0 && (
+                                    <span className="text-green-600 font-semibold text-sm">
+                                        ${calculatePayout().toFixed(2)}
+                                    </span>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        clearBetSlip();
+                                    }}
+                                    className="text-red-500 hover:text-red-700 text-sm font-medium px-2 py-1"
+                                >
+                                    Clear
+                                </button>
+                                <svg 
+                                    className={`w-4 h-4 text-gray-500 transform transition-transform ${
+                                        isBetSlipExpanded ? 'rotate-180' : ''
+                                    }`} 
+                                    fill="none" 
+                                    stroke="currentColor" 
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </div>
+                        </div>
+
+                        {/* Bet Content */}
+                        <div className="max-h-[50vh] overflow-y-auto">
+                            {/* Bets List */}
+                            <div className="p-3 space-y-2">
+                                {betSlip.map(bet => (
+                                    <div key={bet.id} className="flex justify-between items-center py-2 px-3 bg-gray-50 rounded">
+                                        <div>
+                                            <div className="text-sm font-medium text-gray-800">{bet.description}</div>
+                                            <div className="text-xs text-gray-600">{formatOdds(bet.odds)}</div>
+                                        </div>
+                                        <button
+                                            onClick={() => removeBetFromSlip(bet.id)}
+                                            className="text-red-500 hover:text-red-700 text-lg leading-none"
+                                        >
+                                            ×
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Bet Controls */}
+                            <div className="p-3 border-t bg-gray-50 space-y-3">
+                                {/* Amount & Parlay Info */}
+                                <div className="flex gap-3 items-center">
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        step="1"
+                                        value={betAmount}
+                                        onChange={(e) => setBetAmount(e.target.value)}
+                                        className="flex-1 px-3 py-2 border rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
+                                        placeholder="Bet $"
+                                    />
+                                    {betSlip.length > 1 && (
+                                        <div className="text-xs text-blue-600 font-medium">
+                                            {betSlip.length}-leg parlay
                                         </div>
                                     )}
-                                    <div className="text-center">
-                                        <img className="w-16 h-16 rounded-full mx-auto mb-3" src={team.avatar} alt={team.name} />
-                                        <h3 className="text-lg font-bold text-gray-800 mb-1">{team.name}</h3>
-                                        <p className="text-sm text-gray-600 mb-2">#{team.rank} • {team.record}</p>
-                                        
-                                        {/* Wildcard Contender Badge */}
-                                        {team.isWildcardContender && (
-                                            <div className="mb-3">
-                                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                                    🎯 Wildcard Contender
-                                                </span>
-                                                <p className="text-xs text-gray-500 mt-1">High scoring, playoff hopes via points</p>
-                                            </div>
-                                        )}
-                                        
-                                        {/* Expected Playoff Seed */}
-                                        {team.expectedSeed && (
-                                            <div className="mb-3">
-                                                <span className="text-xs text-gray-600">
-                                                    Expected Seed: #{team.expectedSeed.toFixed(1)}
-                                                </span>
-                                            </div>
-                                        )}
-                                        
-                                        <div className="bg-gradient-to-r from-yellow-50 to-yellow-100 p-4 rounded-lg">
-                                            <div className="text-3xl font-bold text-yellow-600 mb-1">{formatOdds(team.odds)}</div>
-                                            <div className="text-sm text-gray-600">{(team.probability * 100).toFixed(1)}% chance</div>
-                                            <div className="text-xs text-gray-500 mt-1">
-                                                Playoff: {(team.playoffProb * 100).toFixed(1)}%
-                                            </div>
-                                        </div>
-                                    </div>
                                 </div>
-                            ))}
+
+                                {/* Payout & Button */}
+                                {betAmount && parseFloat(betAmount) > 0 && (
+                                    <div className="flex justify-between items-center">
+                                        <div className="text-sm">
+                                            <span className="text-gray-600">To Win: </span>
+                                            <span className="font-semibold text-green-600">
+                                                ${(calculatePayout() - parseFloat(betAmount)).toFixed(2)}
+                                            </span>
+                                        </div>
+                                        <button
+                                            className="bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition-colors text-sm font-medium"
+                                            onClick={() => {
+                                                addNotification(`Bet placed: $${betAmount} to win $${(calculatePayout() - parseFloat(betAmount)).toFixed(2)}`, 'success');
+                                                clearBetSlip();
+                                                setIsBetSlipExpanded(false);
+                                            }}
+                                        >
+                                            Place Bet
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 )}

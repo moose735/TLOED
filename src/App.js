@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 
 // Import all your components
-import PowerRankings from './lib/PowerRankings';
 import LeagueHistory from './lib/LeagueHistory';
 import RecordBook from './lib/RecordBook';
 import DPRAnalysis from './lib/DPRAnalysis';
@@ -23,7 +22,6 @@ import { SleeperDataProvider, useSleeperData } from './contexts/SleeperDataConte
 // Define the available tabs and their categories
 const NAV_CATEGORIES = {
     HOME: { label: 'Dashboard', tab: 'dashboard' },
-    POWER_RANKINGS: { label: 'Power Rankings', tab: 'powerRankings' },
     GAMECENTER: { label: 'Gamecenter', tab: 'gamecenter' },
     SPORTSBOOK: { label: 'Sportsbook', tab: 'sportsbook' },
     LEAGUE_DATA: {
@@ -48,21 +46,19 @@ const NAV_CATEGORIES = {
 
 // Flattened list of all possible tabs
 const TABS = {
-    DASHBOARD: 'dashboard',
-    POWER_RANKINGS: 'powerRankings',
+    HOME: 'dashboard',
     GAMECENTER: 'gamecenter',
     SPORTSBOOK: 'sportsbook',
     LEAGUE_HISTORY: 'leagueHistory',
-    HALL_OF_CHAMPIONS: 'hallOfChampions', // New Hall of Champions tab
+    HALL_OF_CHAMPIONS: 'hallOfChampions',
     RECORD_BOOK: 'recordBook',
     HEAD_TO_HEAD: 'headToHead',
     DPR_ANALYSIS: 'dprAnalysis',
     LUCK_RATING: 'luckRating',
-    TEAM_DETAIL: 'teamDetail',
+    TEAMS: 'teams',
+    ROSTER: 'roster',
     FINANCIALS: 'financials',
-    TEAMS_OVERVIEW: 'teamsOverview',
-    SEASON_BREAKDOWN: 'seasonBreakdown',
-    DRAFT_ANALYSIS: 'draftAnalysis', // New tab for Draft Analysis
+    TRANSACTIONS: 'transactions',
 };
 
 const AppContent = () => {
@@ -245,8 +241,6 @@ const AppContent = () => {
         switch (activeTab) {
             case TABS.DASHBOARD:
                 return <Dashboard />;
-            case TABS.POWER_RANKINGS:
-                return <PowerRankings />;
             case TABS.GAMECENTER:
                 return <Gamecenter />;
             case TABS.SPORTSBOOK:
@@ -345,14 +339,6 @@ const AppContent = () => {
                         <li>
                             <button 
                                 className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600"
-                                onClick={() => handleTabClick(NAV_CATEGORIES.POWER_RANKINGS.tab)}
-                            >
-                                <span className="text-base font-medium">⚡ {NAV_CATEGORIES.POWER_RANKINGS.label}</span>
-                            </button>
-                        </li>
-                        <li>
-                            <button 
-                                className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600"
                                 onClick={() => handleTabClick(NAV_CATEGORIES.GAMECENTER.tab)}
                             >
                                 <span className="text-base font-medium">🎮 {NAV_CATEGORIES.GAMECENTER.label}</span>
@@ -434,11 +420,6 @@ const AppContent = () => {
                         <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 text-lg text-center touch-friendly"
                             onClick={() => handleTabClick(NAV_CATEGORIES.HOME.tab)}>
                             {NAV_CATEGORIES.HOME.label}
-                        </li>
-                        {/* Power Rankings Tab */}
-                        <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 text-lg text-center touch-friendly"
-                            onClick={() => handleTabClick(NAV_CATEGORIES.POWER_RANKINGS.tab)}>
-                            {NAV_CATEGORIES.POWER_RANKINGS.label}
                         </li>
                         {/* Gamecenter Tab */}
                         <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 text-lg text-center touch-friendly"

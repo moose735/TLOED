@@ -1,7 +1,7 @@
 
 import React, { useCallback, useMemo } from 'react';
 import { useSleeperData } from '../contexts/SleeperDataContext';
-import { calculateAllLeagueMetrics } from '../utils/calculations';
+import PowerRankings from '../lib/PowerRankings';
 
 const Dashboard = () => {
     const {
@@ -15,67 +15,6 @@ const Dashboard = () => {
         currentSeason,
         nflState
     } = useSleeperData();
-
-    // Calculate current standings
-    const currentStandings = useMemo(() => {
-        if (!historicalData || !currentSeason || !nflState) return [];
-        
-        try {
-            const metricsResult = calculateAllLeagueMetrics(historicalData, null, getTeamName, nflState);
-            const seasonalMetrics = metricsResult?.seasonalMetrics || {};
-            
-            // Determine the current season, same logic as PowerRankings
-            let season = currentSeason;
-            if (!season) {
-                const years = Object.keys(historicalData.matchupsBySeason || {});
-                if (years.length > 0) {
-                    season = Math.max(...years.map(Number)).toString();
-                }
-            }
-            
-            const seasonMetrics = seasonalMetrics[season] || {};
-            
-            if (!seasonMetrics || Object.keys(seasonMetrics).length === 0) {
-                // Fallback: try to get roster data directly and create basic standings
-                const rosters = historicalData.rostersBySeason?.[season] || [];
-                if (rosters.length > 0) {
-                    return rosters.map((roster, idx) => ({
-                        ownerId: roster.owner_id,
-                        teamName: getTeamName(roster.owner_id, season),
-                        wins: 0,
-                        losses: 0,
-                        ties: 0,
-                        pointsFor: 0,
-                        pointsAgainst: 0,
-                        dpr: 0
-                    }));
-                }
-                return [];
-            }
-            
-            return Object.keys(seasonMetrics)
-                .map(rosterId => {
-                    const team = seasonMetrics[rosterId];
-                    return {
-                        ownerId: team.ownerId,
-                        teamName: getTeamName(team.ownerId, season),
-                        wins: team.wins,
-                        losses: team.losses,
-                        ties: team.ties,
-                        pointsFor: team.pointsFor,
-                        pointsAgainst: team.pointsAgainst,
-                        dpr: team.adjustedDPR
-                    };
-                })
-                .sort((a, b) => {
-                    if (b.wins !== a.wins) return b.wins - a.wins;
-                    return b.pointsFor - a.pointsFor;
-                });
-        } catch (err) {
-            console.error("Error calculating standings:", err);
-            return [];
-        }
-    }, [historicalData, currentSeason, nflState, getTeamName]);
 
     // Get current week matchups
     const currentWeekMatchups = useMemo(() => {
@@ -310,9 +249,9 @@ const Dashboard = () => {
                 </p>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
                 {/* Current Week Matchups */}
-                <div className="lg:col-span-2">
+                <div className="xl:col-span-3">
                     <div className="bg-white rounded-lg shadow-lg mobile-card p-4 sm:p-6">
                         <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-blue-800 mb-4 sm:mb-6 flex items-center">
                             <svg className="w-5 h-5 sm:w-6 sm:h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -406,43 +345,11 @@ const Dashboard = () => {
                         </div>
                     </div>
                 </div>
+            </div>
 
-                {/* Current Standings */}
-                <div>
-                    <div className="bg-white rounded-lg shadow-lg mobile-card p-4 sm:p-6">
-                        <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-blue-800 mb-4 sm:mb-6 flex items-center">
-                            <svg className="w-5 h-5 sm:w-6 sm:h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                            </svg>
-                            <span className="mobile-text-lg">Standings</span>
-                        </h2>
-                        <div className="space-y-2 sm:space-y-3">
-                            {currentStandings.map((team, idx) => (
-                                <div key={team.ownerId} className="flex items-center justify-between p-2 sm:p-3 rounded hover:bg-gray-50 touch-friendly">
-                                    <div className="flex items-center space-x-2 sm:space-x-3 flex-1 min-w-0">
-                                        <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-blue-600 text-white text-xs sm:text-sm font-bold flex items-center justify-center flex-shrink-0">
-                                            {idx + 1}
-                                        </div>
-                                        <img
-                                            src={getTeamDetails(team.ownerId, currentSeason)?.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
-                                            alt={team.teamName}
-                                            className="w-6 h-6 sm:w-8 sm:h-8 rounded-full border border-gray-300 flex-shrink-0"
-                                            onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
-                                        />
-                                        <div className="min-w-0 flex-1">
-                                            <div className="font-semibold text-xs sm:text-sm text-gray-800 truncate">{team.teamName}</div>
-                                            <div className="text-xs text-gray-500">{team.wins}-{team.losses}-{team.ties}</div>
-                                        </div>
-                                    </div>
-                                    <div className="text-right flex-shrink-0">
-                                        <div className="text-sm sm:text-base font-semibold text-blue-600">{team.pointsFor.toFixed(0)}</div>
-                                        <div className="text-xs text-gray-500">PF</div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
+            {/* Power Rankings Section */}
+            <div className="bg-white rounded-lg shadow-lg mobile-card">
+                <PowerRankings />
             </div>
 
             {/* Recent Transactions */}
@@ -455,14 +362,14 @@ const Dashboard = () => {
                 </h2>
                 <div className="space-y-4">
                     {recentTransactions.length > 0 ? recentTransactions.map((transaction, idx) => (
-                        <div key={transaction.id} className="bg-gray-50 border rounded-lg p-4 sm:p-6 hover:bg-gray-100 transition-colors">
+                        <div key={transaction.id} className="bg-gray-50 border rounded-lg p-4 hover:bg-gray-100 transition-colors">
                             {/* Header */}
-                            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-4 gap-2 sm:gap-0">
+                            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-3 gap-2 sm:gap-0">
                                 <div className="flex items-center space-x-2 flex-wrap">
-                                    <span className="px-3 py-1 text-sm font-semibold rounded-full bg-blue-100 text-blue-800">
+                                    <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
                                         {formatTransactionType(transaction.type)}
                                     </span>
-                                    <span className={`px-3 py-1 text-sm font-semibold rounded-full ${
+                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
                                         transaction.status === 'complete' ? 'bg-green-100 text-green-800' : 
                                         'bg-yellow-100 text-yellow-800'
                                     }`}>
@@ -470,7 +377,7 @@ const Dashboard = () => {
                                     </span>
                                 </div>
                                 <div className="text-left sm:text-right">
-                                    <div className="text-sm text-gray-600">
+                                    <div className="text-xs text-gray-600">
                                         {transaction.created.toLocaleDateString()}
                                     </div>
                                     <div className="text-xs text-gray-400">
@@ -481,45 +388,44 @@ const Dashboard = () => {
                             
                             {/* Trade Layout */}
                             {transaction.type === 'trade' && transaction.tradeDetails ? (
-                                <div className="space-y-4">
+                                <div className="space-y-3">
                                     {transaction.tradeDetails.map((team, teamIdx) => (
-                                        <div key={teamIdx} className="bg-white rounded-lg p-4 border">
+                                        <div key={teamIdx} className="bg-white rounded-lg p-3 border">
                                             {/* Team Header */}
-                                            <div className="flex items-center space-x-3 mb-4 pb-3 border-b">
+                                            <div className="flex items-center space-x-3 mb-3 pb-2 border-b">
                                                 <img
                                                     src={team.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
                                                     alt={team.name}
-                                                    className="w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 border-blue-300"
+                                                    className="w-8 h-8 rounded-full border border-gray-300"
                                                     onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
                                                 />
                                                 <div>
-                                                    <h4 className="font-bold text-lg text-gray-800">{team.name}</h4>
-                                                    <p className="text-sm text-gray-500">Team {teamIdx === 0 ? 'A' : 'B'}</p>
+                                                    <h4 className="font-semibold text-gray-800">{team.name}</h4>
                                                 </div>
                                             </div>
                                             
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                 {/* Sends */}
                                                 {team.sends && team.sends.length > 0 && (
                                                     <div>
-                                                        <div className="flex items-center space-x-2 mb-3">
-                                                            <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <div className="flex items-center space-x-2 mb-2">
+                                                            <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
                                                             </svg>
-                                                            <span className="font-semibold text-red-700">Sends</span>
+                                                            <span className="font-medium text-red-700 text-sm">Sends</span>
                                                         </div>
                                                         <div className="space-y-2">
                                                             {team.sends.map((player, playerIdx) => (
-                                                                <div key={playerIdx} className="flex items-center space-x-3 bg-red-50 rounded-lg p-3">
+                                                                <div key={playerIdx} className="flex items-center space-x-2 bg-red-50 rounded p-2">
                                                                     <img
                                                                         src={player.headshot}
                                                                         alt={player.name}
-                                                                        className="w-10 h-10 rounded-full border"
+                                                                        className="w-8 h-8 rounded-full border object-cover"
                                                                         onError={(e) => { e.target.style.display = 'none'; }}
                                                                     />
-                                                                    <div className="flex-1">
-                                                                        <div className="font-medium text-gray-800">{player.name}</div>
-                                                                        <div className="text-sm text-gray-500">{player.position} • {player.team}</div>
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <div className="font-medium text-gray-800 text-sm truncate">{player.name}</div>
+                                                                        <div className="text-xs text-gray-500">{player.position} • {player.team}</div>
                                                                     </div>
                                                                 </div>
                                                             ))}
@@ -530,24 +436,24 @@ const Dashboard = () => {
                                                 {/* Receives */}
                                                 {team.receives && team.receives.length > 0 && (
                                                     <div>
-                                                        <div className="flex items-center space-x-2 mb-3">
-                                                            <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <div className="flex items-center space-x-2 mb-2">
+                                                            <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16l-4-4m0 0l4-4m-4 4h18" />
                                                             </svg>
-                                                            <span className="font-semibold text-green-700">Receives</span>
+                                                            <span className="font-medium text-green-700 text-sm">Receives</span>
                                                         </div>
                                                         <div className="space-y-2">
                                                             {team.receives.map((player, playerIdx) => (
-                                                                <div key={playerIdx} className="flex items-center space-x-3 bg-green-50 rounded-lg p-3">
+                                                                <div key={playerIdx} className="flex items-center space-x-2 bg-green-50 rounded p-2">
                                                                     <img
                                                                         src={player.headshot}
                                                                         alt={player.name}
-                                                                        className="w-10 h-10 rounded-full border"
+                                                                        className="w-8 h-8 rounded-full border object-cover"
                                                                         onError={(e) => { e.target.style.display = 'none'; }}
                                                                     />
-                                                                    <div className="flex-1">
-                                                                        <div className="font-medium text-gray-800">{player.name}</div>
-                                                                        <div className="text-sm text-gray-500">{player.position} • {player.team}</div>
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <div className="font-medium text-gray-800 text-sm truncate">{player.name}</div>
+                                                                        <div className="text-xs text-gray-500">{player.position} • {player.team}</div>
                                                                     </div>
                                                                 </div>
                                                             ))}
@@ -560,46 +466,46 @@ const Dashboard = () => {
                                 </div>
                             ) : (
                                 /* Non-Trade Layout (Waiver/Free Agent) */
-                                <div className="space-y-4">
+                                <div className="space-y-3">
                                     {/* Team */}
                                     {transaction.teamDetails && transaction.teamDetails.length > 0 && (
-                                        <div className="flex items-center space-x-3 mb-4">
+                                        <div className="flex items-center space-x-3 mb-3">
                                             <img
                                                 src={transaction.teamDetails[0].avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
                                                 alt={transaction.teamDetails[0].name}
-                                                className="w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 border-blue-300"
+                                                className="w-10 h-10 rounded-full border border-gray-300"
                                                 onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
                                             />
                                             <div>
-                                                <h4 className="font-bold text-xl text-gray-800">{transaction.teamDetails[0].name}</h4>
+                                                <h4 className="font-semibold text-gray-800">{transaction.teamDetails[0].name}</h4>
                                                 <p className="text-sm text-gray-500">{formatTransactionDescription(transaction)}</p>
                                             </div>
                                         </div>
                                     )}
                                     
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         {/* Added Players */}
                                         {transaction.addedPlayers.length > 0 && (
                                             <div>
-                                                <div className="flex items-center space-x-2 mb-4">
-                                                    <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <div className="flex items-center space-x-2 mb-2">
+                                                    <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                                                     </svg>
-                                                    <span className="font-bold text-lg text-green-700">Added</span>
+                                                    <span className="font-medium text-green-700">Added</span>
                                                 </div>
-                                                <div className="space-y-3">
+                                                <div className="space-y-2">
                                                     {transaction.addedPlayers.map((player, playerIdx) => (
-                                                        <div key={playerIdx} className="flex items-center space-x-4 bg-green-50 rounded-xl p-4 border border-green-200">
+                                                        <div key={playerIdx} className="flex items-center space-x-3 bg-green-50 rounded-lg p-3 border border-green-200">
                                                             <img
                                                                 src={player.headshot}
                                                                 alt={player.name}
-                                                                className="w-16 h-16 sm:w-20 sm:h-20 rounded-full border-2 border-green-300"
+                                                                className="w-10 h-10 rounded-full border border-green-300 object-cover"
                                                                 onError={(e) => { e.target.style.display = 'none'; }}
                                                             />
-                                                            <div className="flex-1">
-                                                                <div className="font-bold text-lg text-gray-800">{player.name}</div>
-                                                                <div className="text-sm font-medium text-green-700">{player.position}</div>
-                                                                <div className="text-sm text-gray-500">{player.team}</div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="font-semibold text-gray-800">{player.name}</div>
+                                                                <div className="text-sm text-green-700">{player.position}</div>
+                                                                <div className="text-xs text-gray-500">{player.team}</div>
                                                             </div>
                                                         </div>
                                                     ))}
@@ -610,25 +516,25 @@ const Dashboard = () => {
                                         {/* Dropped Players */}
                                         {transaction.droppedPlayers.length > 0 && (
                                             <div>
-                                                <div className="flex items-center space-x-2 mb-4">
-                                                    <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <div className="flex items-center space-x-2 mb-2">
+                                                    <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 12H4" />
                                                     </svg>
-                                                    <span className="font-bold text-lg text-red-700">Dropped</span>
+                                                    <span className="font-medium text-red-700">Dropped</span>
                                                 </div>
-                                                <div className="space-y-3">
+                                                <div className="space-y-2">
                                                     {transaction.droppedPlayers.map((player, playerIdx) => (
-                                                        <div key={playerIdx} className="flex items-center space-x-4 bg-red-50 rounded-xl p-4 border border-red-200">
+                                                        <div key={playerIdx} className="flex items-center space-x-3 bg-red-50 rounded-lg p-3 border border-red-200">
                                                             <img
                                                                 src={player.headshot}
                                                                 alt={player.name}
-                                                                className="w-16 h-16 sm:w-20 sm:h-20 rounded-full border-2 border-red-300"
+                                                                className="w-10 h-10 rounded-full border border-red-300 object-cover"
                                                                 onError={(e) => { e.target.style.display = 'none'; }}
                                                             />
-                                                            <div className="flex-1">
-                                                                <div className="font-bold text-lg text-gray-800">{player.name}</div>
-                                                                <div className="text-sm font-medium text-red-700">{player.position}</div>
-                                                                <div className="text-sm text-gray-500">{player.team}</div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="font-semibold text-gray-800">{player.name}</div>
+                                                                <div className="text-sm text-red-700">{player.position}</div>
+                                                                <div className="text-xs text-gray-500">{player.team}</div>
                                                             </div>
                                                         </div>
                                                     ))}
