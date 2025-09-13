@@ -55,10 +55,13 @@ const TABS = {
     HEAD_TO_HEAD: 'headToHead',
     DPR_ANALYSIS: 'dprAnalysis',
     LUCK_RATING: 'luckRating',
+    TEAMS_OVERVIEW: 'teamsOverview',
     TEAMS: 'teams',
     ROSTER: 'roster',
     FINANCIALS: 'financials',
     TRANSACTIONS: 'transactions',
+    SEASON_BREAKDOWN: 'seasonBreakdown',
+    DRAFT_ANALYSIS: 'draftAnalysis',
 };
 
 const AppContent = () => {
@@ -70,7 +73,7 @@ const AppContent = () => {
         usersData // Make sure usersData is available here
     } = useSleeperData();
 
-    const [activeTab, setActiveTab] = useState(TABS.DASHBOARD);
+    const [activeTab, setActiveTab] = useState(TABS.HOME);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [openSubMenu, setOpenSubMenu] = useState(null);
 

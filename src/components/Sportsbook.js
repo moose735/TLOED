@@ -59,6 +59,79 @@ import {
         }
     }, [nflState, selectedWeek, currentSeason, historicalData]);
 
+    // Helper function to get abbreviated team name for mobile
+    const getAbbreviatedTeamName = (teamName) => {
+        if (!teamName) return '';
+        
+        // Common abbreviation patterns
+        const abbreviations = {
+            'The ': '',
+            'Team ': '',
+            ' FC': '',
+            ' United': '',
+            ' City': '',
+            'Dynasty': 'Dyn',
+            'Champions': 'Champs',
+            'Destroyers': 'Dest',
+            'Crushers': 'Crush',
+            'Warriors': 'War',
+            'Titans': 'Tit',
+            'Thunder': 'Thund',
+            'Lightning': 'Light',
+            'Hurricanes': 'Hurr',
+            'Tornadoes': 'Torn',
+            'Blizzard': 'Bliz',
+            'Avalanche': 'Aval',
+            'Storm': 'Storm',
+            'Fire': 'Fire',
+            'Ice': 'Ice',
+            'Steel': 'Steel',
+            'Iron': 'Iron',
+            'Gold': 'Gold',
+            'Silver': 'Silv',
+            'Diamond': 'Diam',
+            'Platinum': 'Plat',
+            'Elite': 'Elite',
+            'Power': 'Pow',
+            'Force': 'Force',
+            'Impact': 'Imp',
+            'Explosion': 'Exp',
+            'Revolution': 'Rev',
+            'Evolution': 'Evo',
+            'Domination': 'Dom',
+            'Destruction': 'Dest',
+            'Annihilation': 'Ann',
+            'Obliteration': 'Obl',
+            'Decimation': 'Dec',
+            'Devastation': 'Dev'
+        };
+        
+        let abbreviated = teamName;
+        
+        // Apply common abbreviations
+        Object.entries(abbreviations).forEach(([full, abbr]) => {
+            abbreviated = abbreviated.replace(new RegExp(full, 'gi'), abbr);
+        });
+        
+        // If still too long, try more aggressive abbreviation
+        if (abbreviated.length > 12) {
+            // Take first word and first letter of remaining words
+            const words = abbreviated.split(' ');
+            if (words.length > 1) {
+                const firstWord = words[0];
+                const otherInitials = words.slice(1).map(word => word.charAt(0)).join('');
+                abbreviated = firstWord + otherInitials;
+            }
+        }
+        
+        // Final fallback - truncate if still too long
+        if (abbreviated.length > 12) {
+            abbreviated = abbreviated.substring(0, 10) + '...';
+        }
+        
+        return abbreviated;
+    };
+
     // Notification functions
     const addNotification = (message, type = 'info') => {
         const id = Date.now();
@@ -519,12 +592,16 @@ import {
     useEffect(() => {
         if (selectedBetType === 'gameLines' && selectedWeek && teamPowerRankings && Object.keys(teamPowerRankings).length > 0) {
             setMatchupOdds(generateMatchupOdds(selectedWeek));
-        } else if (selectedBetType === 'futures' && selectedFuturesTab === 'playoffs' && teamPowerRankings && Object.keys(teamPowerRankings).length > 0) {
-            setPlayoffOdds(generatePlayoffOdds());
-        } else if (selectedBetType === 'futures' && selectedFuturesTab === 'championship' && teamPowerRankings && Object.keys(teamPowerRankings).length > 0) {
-            setChampionshipOdds(generateChampionshipOdds());
+        } else if (selectedBetType === 'futures' && teamPowerRankings && Object.keys(teamPowerRankings).length > 0) {
+            // Only generate odds once when switching to futures, not when switching between tabs
+            if (!playoffOdds || playoffOdds.length === 0) {
+                setPlayoffOdds(generatePlayoffOdds());
+            }
+            if (!championshipOdds || championshipOdds.length === 0) {
+                setChampionshipOdds(generateChampionshipOdds());
+            }
         }
-    }, [selectedBetType, selectedFuturesTab, selectedWeek, teamPowerRankings, currentSeason, eloRatings, historicalData]);
+    }, [selectedBetType, selectedWeek, teamPowerRankings, currentSeason, eloRatings, historicalData]);
 
     if (loading) {
         return (
@@ -630,16 +707,22 @@ import {
                                                         <div className="h-20 flex items-center justify-center">
                                                             <div className="flex flex-col items-center gap-1">
                                                                 <img className="w-8 h-8 rounded-full" src={matchup.team1.avatar} alt={matchup.team1.name} />
-                                                                <div className="font-medium text-gray-800 text-lg text-center">{matchup.team1.name}</div>
-                                                                <div className="text-sm text-gray-500">{matchup.team1.record}</div>
+                                                                <div className="font-medium text-gray-800 text-center">
+                                                                    <span className="hidden sm:inline text-lg">{matchup.team1.name}</span>
+                                                                    <span className="sm:hidden text-sm">{getAbbreviatedTeamName(matchup.team1.name)}</span>
+                                                                </div>
+                                                                <div className="text-xs sm:text-sm text-gray-500">{matchup.team1.record}</div>
                                                             </div>
                                                         </div>
                                                         {/* Team 2 */}
                                                         <div className="h-20 flex items-center justify-center">
                                                             <div className="flex flex-col items-center gap-1">
                                                                 <img className="w-8 h-8 rounded-full" src={matchup.team2.avatar} alt={matchup.team2.name} />
-                                                                <div className="font-medium text-gray-800 text-lg text-center">{matchup.team2.name}</div>
-                                                                <div className="text-sm text-gray-500">{matchup.team2.record}</div>
+                                                                <div className="font-medium text-gray-800 text-center">
+                                                                    <span className="hidden sm:inline text-lg">{matchup.team2.name}</span>
+                                                                    <span className="sm:hidden text-sm">{getAbbreviatedTeamName(matchup.team2.name)}</span>
+                                                                </div>
+                                                                <div className="text-xs sm:text-sm text-gray-500">{matchup.team2.record}</div>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -661,9 +744,9 @@ import {
                                                                             : 'bg-red-100 border-2 border-red-300')
                                                                         : betSlip.some(bet => bet.id === `${matchup.matchupId}-spread-team1`)
                                                                             ? 'bg-blue-100 border-2 border-blue-500'
-                                                                            : 'bg-gray-100 hover:bg-gray-200 border border-gray-300'
+                                                                            : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
                                                                 }`}
-                                                                onClick={() => !matchup.isCompleted && addBetToSlip({
+                                                                onClick={() => !matchup.isCompleted && matchup.markets.spread.team1.line !== "PK" && addBetToSlip({
                                                                     matchupId: matchup.matchupId,
                                                                     type: 'spread',
                                                                     selection: 'team1',
@@ -676,11 +759,11 @@ import {
                                                                 <div className={`text-lg font-bold mb-1 ${
                                                                     matchup.isCompleted && matchup.actualScores?.team1CoveredSpread !== null
                                                                         ? (matchup.actualScores.team1CoveredSpread ? 'text-green-600' : 'text-red-600')
-                                                                        : 'text-gray-500'
+                                                                        : 'text-blue-600'
                                                                 }`}>{matchup.markets.spread.team1.line}</div>
                                                                 {/* Only show odds for non-pick'em games */}
                                                                 {matchup.markets.spread.team1.line !== "PK" && (
-                                                                    <div className="text-sm text-gray-500">{formatOdds(matchup.markets.spread.team1.odds)}</div>
+                                                                    <div className="text-sm text-blue-600">{formatOdds(matchup.markets.spread.team1.odds)}</div>
                                                                 )}
                                                             </div>
                                                             {/* Team 2 Spread */}
@@ -692,9 +775,9 @@ import {
                                                                             : 'bg-red-100 border-2 border-red-300')
                                                                         : betSlip.some(bet => bet.id === `${matchup.matchupId}-spread-team2`)
                                                                             ? 'bg-blue-100 border-2 border-blue-500'
-                                                                            : 'bg-gray-100 hover:bg-gray-200 border border-gray-300'
+                                                                            : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
                                                                 }`}
-                                                                onClick={() => !matchup.isCompleted && addBetToSlip({
+                                                                onClick={() => !matchup.isCompleted && matchup.markets.spread.team2.line !== "PK" && addBetToSlip({
                                                                     matchupId: matchup.matchupId,
                                                                     type: 'spread',
                                                                     selection: 'team2',
@@ -707,11 +790,11 @@ import {
                                                                 <div className={`text-lg font-bold mb-1 ${
                                                                     matchup.isCompleted && matchup.actualScores?.team1CoveredSpread !== null
                                                                         ? (!matchup.actualScores.team1CoveredSpread ? 'text-green-600' : 'text-red-600')
-                                                                        : 'text-gray-500'
+                                                                        : 'text-blue-600'
                                                                 }`}>{matchup.markets.spread.team2.line}</div>
                                                                 {/* Only show odds for non-pick'em games */}
                                                                 {matchup.markets.spread.team2.line !== "PK" && (
-                                                                    <div className="text-sm text-gray-500">{formatOdds(matchup.markets.spread.team2.odds)}</div>
+                                                                    <div className="text-sm text-blue-600">{formatOdds(matchup.markets.spread.team2.odds)}</div>
                                                                 )}
                                                             </div>
                                                         </div>
@@ -755,11 +838,11 @@ import {
                                                                 <div className={`text-lg font-bold mb-1 ${
                                                                     matchup.isCompleted && matchup.actualScores?.overHit !== null
                                                                         ? (matchup.actualScores.overHit ? 'text-green-600' : 'text-red-600')
-                                                                        : 'text-purple-600'
+                                                                        : 'text-blue-600'
                                                                 }`}>
                                                                     {matchup.markets.total.over.line}
                                                                 </div>
-                                                                <div className="text-sm text-gray-600">{formatOdds(matchup.markets.total.over.odds)}</div>
+                                                                <div className="text-sm text-blue-600">{formatOdds(matchup.markets.total.over.odds)}</div>
                                                             </div>
                                                             {/* Under */}
                                                             <div 
@@ -786,11 +869,11 @@ import {
                                                                 <div className={`text-lg font-bold mb-1 ${
                                                                     matchup.isCompleted && matchup.actualScores?.overHit !== null
                                                                         ? (!matchup.actualScores.overHit ? 'text-green-600' : 'text-red-600')
-                                                                        : 'text-purple-600'
+                                                                        : 'text-blue-600'
                                                                 }`}>
                                                                     {matchup.markets.total.under.line}
                                                                 </div>
-                                                                <div className="text-sm text-gray-600">{formatOdds(matchup.markets.total.under.odds)}</div>
+                                                                <div className="text-sm text-blue-600">{formatOdds(matchup.markets.total.under.odds)}</div>
                                                             </div>
                                                         </div>
                                                     ) : (
@@ -879,7 +962,10 @@ import {
                                                     <div className="bg-white p-3 rounded-lg">
                                                         <div className="flex items-center gap-2 mb-2">
                                                             <img className="w-5 h-5 rounded-full" src={matchup.team1.avatar} alt={matchup.team1.name} />
-                                                            <span className="font-medium text-sm">{matchup.team1.name}</span>
+                                                            <span className="font-medium">
+                                                                <span className="hidden sm:inline text-sm">{matchup.team1.name}</span>
+                                                                <span className="sm:hidden text-xs">{getAbbreviatedTeamName(matchup.team1.name)}</span>
+                                                            </span>
                                                         </div>
                                                         <div className="space-y-1 text-xs">
                                                             <div className="flex justify-between">
@@ -916,7 +1002,10 @@ import {
                                                     <div className="bg-white p-3 rounded-lg">
                                                         <div className="flex items-center gap-2 mb-2">
                                                             <img className="w-5 h-5 rounded-full" src={matchup.team2.avatar} alt={matchup.team2.name} />
-                                                            <span className="font-medium text-sm">{matchup.team2.name}</span>
+                                                            <span className="font-medium">
+                                                                <span className="hidden sm:inline text-sm">{matchup.team2.name}</span>
+                                                                <span className="sm:hidden text-xs">{getAbbreviatedTeamName(matchup.team2.name)}</span>
+                                                            </span>
                                                         </div>
                                                         <div className="space-y-1 text-xs">
                                                             <div className="flex justify-between">
@@ -1020,19 +1109,11 @@ import {
                                                 <div className="flex items-center gap-3 flex-1">
                                                     <img className="h-10 w-10 rounded-full" src={team.avatar} alt={team.name} />
                                                     <div>
-                                                        <div className="font-medium text-gray-800">{team.name}</div>
-                                                        <div className="text-sm text-gray-600">#{team.rank} • {team.record}</div>
-                                                    </div>
-                                                </div>
-                                                
-                                                {/* Probability */}
-                                                <div className="text-center mx-4">
-                                                    <div className="text-lg font-bold text-gray-800">{(team.probability * 100).toFixed(1)}%</div>
-                                                    <div className="w-24 bg-gray-200 rounded-full h-2 mt-1">
-                                                        <div 
-                                                            className="bg-blue-500 h-2 rounded-full" 
-                                                            style={{width: `${team.probability * 100}%`}}
-                                                        ></div>
+                                                        <div className="font-medium text-gray-800">
+                                                            <span className="hidden sm:inline">{team.name}</span>
+                                                            <span className="sm:hidden">{getAbbreviatedTeamName(team.name)}</span>
+                                                        </div>
+                                                        <div className="text-xs sm:text-sm text-gray-600">{team.record}</div>
                                                     </div>
                                                 </div>
                                                 
@@ -1053,7 +1134,7 @@ import {
                                                         description: `${team.name} Make Playoffs`
                                                     })}
                                                 >
-                                                    <div className="text-lg font-bold text-gray-500">
+                                                    <div className="text-lg font-bold text-blue-600">
                                                         {formatOdds(team.odds)}
                                                     </div>
                                                 </div>
@@ -1075,28 +1156,15 @@ import {
                                                 <div className="flex items-center gap-3 flex-1">
                                                     <img className="h-10 w-10 rounded-full" src={team.avatar} alt={team.name} />
                                                     <div>
-                                                        <div className="font-medium text-gray-800">{team.name}</div>
-                                                        <div className="text-sm text-gray-600">#{team.rank} • {team.record}</div>
+                                                        <div className="font-medium text-gray-800">
+                                                            <span className="hidden sm:inline">{team.name}</span>
+                                                            <span className="sm:hidden">{getAbbreviatedTeamName(team.name)}</span>
+                                                        </div>
+                                                        <div className="text-xs sm:text-sm text-gray-600">{team.record}</div>
                                                         {team.isWildcardContender && (
                                                             <div className="text-xs text-blue-600">🎯 Wildcard Contender</div>
                                                         )}
                                                     </div>
-                                                </div>
-                                                
-                                                {/* Probability */}
-                                                <div className="text-center mx-4">
-                                                    <div className="text-lg font-bold text-gray-800">{(team.probability * 100).toFixed(1)}%</div>
-                                                    <div className="w-24 bg-gray-200 rounded-full h-2 mt-1">
-                                                        <div 
-                                                            className="bg-blue-500 h-2 rounded-full" 
-                                                            style={{width: `${team.probability * 100}%`}}
-                                                        ></div>
-                                                    </div>
-                                                    {team.playoffProb && (
-                                                        <div className="text-xs text-gray-600 mt-1">
-                                                            Playoff: {(team.playoffProb * 100).toFixed(1)}%
-                                                        </div>
-                                                    )}
                                                 </div>
                                                 
                                                 {/* Clickable Odds */}
@@ -1116,7 +1184,7 @@ import {
                                                         description: `${team.name} Win Championship`
                                                     })}
                                                 >
-                                                    <div className="text-lg font-bold text-gray-500">
+                                                    <div className="text-lg font-bold text-blue-600">
                                                         {formatOdds(team.odds)}
                                                     </div>
                                                 </div>

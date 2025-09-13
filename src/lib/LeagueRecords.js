@@ -3,9 +3,11 @@ import { useSleeperData } from '../contexts/SleeperDataContext';
 import { calculateAllLeagueMetrics } from '../utils/calculations';
 
 const LeagueRecords = () => {
-    const { historicalData, allDraftHistory, getTeamName, loading, error } = useSleeperData();
+    const { historicalData, allDraftHistory, getTeamName, getTeamDetails, currentSeason, loading, error } = useSleeperData();
     const [allTimeRecords, setAllTimeRecords] = useState({});
+    const [recordHistory, setRecordHistory] = useState({});
     const [isLoading, setIsLoading] = useState(true);
+    const [viewMode, setViewMode] = useState('table'); // 'table' or 'detailed'
 
     const formatConfig = {
         highestDPR: { decimals: 3, type: 'decimal' },
@@ -62,17 +64,103 @@ const LeagueRecords = () => {
         }
     };
 
+    // Calculate historical record progression
+    const calculateRecordHistory = (seasonalMetrics) => {
+        const history = {};
+        const years = Object.keys(seasonalMetrics).sort((a, b) => Number(a) - Number(b));
+        
+        // Initialize record tracking objects
+        const recordTrackers = {
+            mostWeeklyHighScores: { value: -Infinity, holders: [], history: [] },
+            mostWins: { value: -Infinity, holders: [], history: [] },
+            bestWinPct: { value: -Infinity, holders: [], history: [] },
+            mostTotalPoints: { value: -Infinity, holders: [], history: [] },
+        };
+
+        // Process each year chronologically
+        years.forEach(year => {
+            const seasonData = seasonalMetrics[year];
+            
+            Object.entries(recordTrackers).forEach(([recordKey, tracker]) => {
+                let recordBroken = false;
+                
+                Object.values(seasonData).forEach(teamData => {
+                    if (!teamData.ownerId || teamData.totalGames === 0) return;
+                    
+                    let currentValue = 0;
+                    switch (recordKey) {
+                        case 'mostWeeklyHighScores':
+                            currentValue = teamData.topScoreWeeksCount || 0;
+                            break;
+                        case 'mostWins':
+                            currentValue = teamData.wins || 0;
+                            break;
+                        case 'bestWinPct':
+                            currentValue = teamData.winPercentage || 0;
+                            break;
+                        case 'mostTotalPoints':
+                            currentValue = teamData.pointsFor || 0;
+                            break;
+                    }
+                    
+                    // Check if this breaks the record
+                    if (currentValue > tracker.value) {
+                        const teamName = getTeamName(teamData.ownerId, year);
+                        
+                        // Record was broken
+                        tracker.history.push({
+                            year: year,
+                            week: 'End of Season',
+                            previousValue: tracker.value === -Infinity ? 0 : tracker.value,
+                            newValue: currentValue,
+                            previousHolder: tracker.holders.length > 0 ? tracker.holders[tracker.holders.length - 1].name : 'N/A',
+                            newHolder: teamName,
+                            ownerId: teamData.ownerId
+                        });
+                        
+                        tracker.value = currentValue;
+                        tracker.holders.push({
+                            name: teamName,
+                            ownerId: teamData.ownerId,
+                            year: year,
+                            value: currentValue,
+                            startYear: year
+                        });
+                        recordBroken = true;
+                    }
+                });
+            });
+        });
+
+        // Convert to final format
+        Object.entries(recordTrackers).forEach(([key, tracker]) => {
+            history[key] = {
+                currentValue: tracker.value,
+                currentHolders: tracker.holders.slice(-1), // Most recent holder(s)
+                allTimeHolders: tracker.holders,
+                recordHistory: tracker.history
+            };
+        });
+
+        return history;
+    };
+
     useEffect(() => {
         setIsLoading(true);
 
         if (loading || error || !historicalData || !historicalData.matchupsBySeason || Object.keys(historicalData.matchupsBySeason).length === 0) {
             setAllTimeRecords({});
+            setRecordHistory({});
             setIsLoading(false);
             return;
         }
 
         try {
             const { seasonalMetrics, careerDPRData: calculatedCareerDPRs } = calculateAllLeagueMetrics(historicalData, allDraftHistory, getTeamName);
+            
+            // Calculate historical progression
+            const history = calculateRecordHistory(seasonalMetrics);
+            setRecordHistory(history);
             
             let highestDPR = { value: -Infinity, teams: [], key: 'highestDPR' };
             let lowestDPR = { value: Infinity, teams: [], key: 'lowestDPR' };
@@ -155,6 +243,7 @@ const LeagueRecords = () => {
         } catch (error) {
             console.error("Error calculating league records:", error);
             setAllTimeRecords({});
+            setRecordHistory({});
         } finally {
             setIsLoading(false);
         }
@@ -195,11 +284,37 @@ const LeagueRecords = () => {
                         </p>
                     </div>
                 </div>
+                
+                {/* View Toggle */}
+                <div className="flex items-center justify-center gap-2">
+                    <button
+                        onClick={() => setViewMode('table')}
+                        className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                            viewMode === 'table' 
+                                ? 'bg-blue-600 text-white shadow-md' 
+                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        }`}
+                    >
+                        Table View
+                    </button>
+                    <button
+                        onClick={() => setViewMode('detailed')}
+                        className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                            viewMode === 'detailed' 
+                                ? 'bg-blue-600 text-white shadow-md' 
+                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        }`}
+                    >
+                        Detailed View
+                    </button>
+                </div>
             </div>
 
-            {/* Records Table */}
-            <div className="bg-gradient-to-r from-gray-50 to-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-                <div className="overflow-x-auto">
+            {/* Records Display */}
+            {viewMode === 'table' ? (
+                /* Table View */
+                <div className="bg-gradient-to-r from-gray-50 to-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                    <div className="overflow-x-auto">
                     <table className="min-w-full">
                         <thead>
                             <tr className="bg-gradient-to-r from-gray-100 to-gray-50 border-b border-gray-200">
@@ -278,6 +393,175 @@ const LeagueRecords = () => {
                     </table>
                 </div>
             </div>
+            ) : (
+                /* Detailed View */
+                <div className="space-y-8">
+                    {Object.entries(allTimeRecords).map(([key, record], recordGroupIndex) => {
+                        const config = formatConfig[record.key] || { decimals: 2, type: 'default' };
+                        const getLabel = () => {
+                            let label = record.key.replace(/([A-Z])/g, ' $1').trim();
+                            return label.charAt(0).toUpperCase() + label.slice(1);
+                        };
+
+                        if (!record || record.value === -Infinity || record.value === Infinity || !record.teams || record.teams.length === 0) {
+                            return null;
+                        }
+
+                        return (
+                            <div key={key} className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+                                {/* Record Header */}
+                                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 border-b">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <h3 className="text-2xl font-bold text-gray-900">{getLabel()}</h3>
+                                            <div className="text-4xl font-bold text-blue-600 mt-2">
+                                                {config.type === 'percentage' 
+                                                    ? `${(record.value * 100).toFixed(config.decimals)}%` 
+                                                    : config.type === 'decimal' 
+                                                    ? record.value.toFixed(config.decimals) 
+                                                    : config.type === 'points' 
+                                                    ? record.value.toFixed(config.decimals) 
+                                                    : Math.round(record.value).toLocaleString()}
+                                            </div>
+                                            <div className="text-sm text-gray-600 mt-1">{getLabel()}</div>
+                                        </div>
+                                        <div className="text-right">
+                                            <div className="text-sm text-gray-500">Current Holder</div>
+                                            <div className="font-semibold text-gray-900">
+                                                {record.teams[0] ? getTeamName(record.teams[0].ownerId, record.teams[0].year || currentSeason) : 'Unknown'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Current Rankings */}
+                                <div className="p-6">
+                                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Current Rankings</h4>
+                                    <div className="space-y-3">
+                                        {record.teams.slice(0, 10).map((team, index) => {
+                                            const teamName = getTeamName(team.ownerId, team.year || currentSeason);
+                                            const teamDetails = getTeamDetails ? getTeamDetails(team.ownerId, currentSeason || team.year) : null;
+                                            
+                                            return (
+                                                <div key={`${team.ownerId}-${index}`} className="flex items-center justify-between py-3 px-4 bg-gray-50 rounded-lg">
+                                                    <div className="flex items-center space-x-3">
+                                                        <div className="w-8 h-8 bg-blue-100 text-blue-800 rounded-full flex items-center justify-center text-sm font-bold">
+                                                            #{index + 1}
+                                                        </div>
+                                                        {teamDetails?.avatar && (
+                                                            <img 
+                                                                src={teamDetails.avatar}
+                                                                alt={teamName}
+                                                                className="w-8 h-8 rounded-full"
+                                                                onError={(e) => { 
+                                                                    e.target.src = 'https://sleepercdn.com/avatars/default_avatar.png'; 
+                                                                }}
+                                                            />
+                                                        )}
+                                                        <span className="font-medium text-gray-900">{teamName}</span>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <div className="font-semibold text-gray-900">
+                                                            {config.type === 'percentage' 
+                                                                ? `${(record.value * 100).toFixed(config.decimals)}%` 
+                                                                : config.type === 'decimal' 
+                                                                ? record.value.toFixed(config.decimals) 
+                                                                : config.type === 'points' 
+                                                                ? record.value.toFixed(config.decimals) 
+                                                                : Math.round(record.value).toLocaleString()}
+                                                        </div>
+                                                        <div className="text-sm text-gray-500">
+                                                            {index === 0 ? '---' : `${index === 1 ? '-1' : index === 2 ? '1' : '---'}`}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Record Description */}
+                                    <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+                                        <p className="text-sm text-gray-700">
+                                            This record honors the team with the {getLabel().toLowerCase()} in league history. 
+                                            It reflects sustained excellence and competitive performance across multiple seasons.
+                                        </p>
+                                    </div>
+
+                                    {/* Record Statistics */}
+                                    <div className="mt-6 grid grid-cols-3 gap-4">
+                                        <div className="text-center">
+                                            <div className="text-lg font-bold text-gray-900">
+                                                {record.teams[0] ? getTeamName(record.teams[0].ownerId, record.teams[0].year || currentSeason) : 'Unknown'}
+                                            </div>
+                                            <div className="text-sm text-gray-500">Current Holder Since</div>
+                                            <div className="text-xl font-semibold text-blue-600">
+                                                {recordHistory[record.key]?.allTimeHolders?.length > 0 
+                                                    ? `${recordHistory[record.key].allTimeHolders[recordHistory[record.key].allTimeHolders.length - 1].year || 'Unknown'}`
+                                                    : 'Unknown'
+                                                }
+                                            </div>
+                                        </div>
+                                        <div className="text-center">
+                                            <div className="text-xl font-semibold text-blue-600">
+                                                {recordHistory[record.key]?.recordHistory?.length || 0}
+                                            </div>
+                                            <div className="text-sm text-gray-500">Times Record Broken</div>
+                                        </div>
+                                        <div className="text-center">
+                                            <div className="text-xl font-semibold text-blue-600">{record.teams.length}</div>
+                                            <div className="text-sm text-gray-500"># All-Time Holders</div>
+                                        </div>
+                                    </div>
+
+                                    {/* All-Time Holders History */}
+                                    <div className="mt-6">
+                                        <h4 className="text-lg font-semibold text-gray-900 mb-4">All-Time Holders History</h4>
+                                        {recordHistory[record.key]?.allTimeHolders?.length > 0 ? (
+                                            <div className="space-y-2">
+                                                {recordHistory[record.key].allTimeHolders.map((holder, index) => {
+                                                    const isCurrentHolder = index === recordHistory[record.key].allTimeHolders.length - 1;
+                                                    const nextHolder = recordHistory[record.key].allTimeHolders[index + 1];
+                                                    const endYear = nextHolder ? nextHolder.year : 'PRESENT';
+                                                    const years = nextHolder ? (Number(nextHolder.year) - Number(holder.year)) : (Number(currentSeason) - Number(holder.year) + 1);
+                                                    
+                                                    return (
+                                                        <div key={`${holder.ownerId}-${holder.year}-${index}`} className="flex items-center justify-between py-3 px-4 bg-gray-50 rounded-lg">
+                                                            <div>
+                                                                <span className="font-medium text-gray-900">{holder.name}</span>
+                                                                <span className="text-gray-600 ml-2">
+                                                                    {holder.year} - {endYear}
+                                                                </span>
+                                                                <span className="text-gray-500 ml-2">
+                                                                    ({years} {years === 1 ? 'year' : 'years'})
+                                                                </span>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <div className="font-semibold text-gray-900">
+                                                                    {config.type === 'percentage' 
+                                                                        ? `${(holder.value * 100).toFixed(config.decimals)}%` 
+                                                                        : config.type === 'decimal' 
+                                                                        ? holder.value.toFixed(config.decimals) 
+                                                                        : config.type === 'points' 
+                                                                        ? holder.value.toFixed(config.decimals) 
+                                                                        : Math.round(holder.value).toLocaleString()}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : (
+                                            <div className="text-center py-4 text-gray-500">
+                                                No historical data available for this record.
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
         </div>
     );
 };
