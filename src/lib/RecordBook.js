@@ -6,6 +6,7 @@ import SeasonRecords from '../lib/SeasonRecords';
 import StreaksRecords from '../lib/StreaksRecords';
 import MatchupRecords from '../lib/MatchupRecords';
 import PlayoffRecords from '../lib/PlayoffRecords'; // Import the PlayoffRecords component
+import MilestoneRecords from '../lib/MilestoneRecords'; // Import the MilestoneRecords component
 
 // IMPORTANT: This import is absolutely crucial for calculateAllLeagueMetrics to be defined.
 import { calculateAllLeagueMetrics } from '../utils/calculations';
@@ -261,6 +262,18 @@ const RecordBook = () => {
                                 <span className="block text-center">Playoff Records</span>
                                 <span className="block text-xs opacity-80 mt-1">Postseason</span>
                             </button>
+                            <button
+                                className={`flex-1 min-w-0 py-4 px-6 text-sm font-semibold rounded-xl transition-all duration-200 ${
+                                    activeTab === 'milestones'
+                                        ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg transform scale-[1.02]'
+                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                }`}
+                                onClick={() => setActiveTab('milestones')}
+                                aria-current={activeTab === 'milestones' ? 'page' : undefined}
+                            >
+                                <span className="block text-center">Milestones</span>
+                                <span className="block text-xs opacity-80 mt-1">Achievements</span>
+                            </button>
                         </nav>
                     </div>
                 </div>
@@ -332,6 +345,18 @@ const RecordBook = () => {
                                 <div className="text-6xl mb-4">🏆</div>
                                 <h3 className="text-xl font-semibold text-gray-700 mb-2">No Playoff Data</h3>
                                 <p className="text-gray-500">No historical playoff data available.</p>
+                            </div>
+                        )
+                    )}
+
+                    {activeTab === 'milestones' && (
+                        hasOverallData ? (
+                            <MilestoneRecords />
+                        ) : (
+                            <div className="text-center py-16 px-6">
+                                <div className="text-6xl mb-4">🎯</div>
+                                <h3 className="text-xl font-semibold text-gray-700 mb-2">No Milestone Data</h3>
+                                <p className="text-gray-500">No historical data available to calculate milestones.</p>
                             </div>
                         )
                     )}
