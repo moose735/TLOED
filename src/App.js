@@ -327,7 +327,7 @@ const AppContent = () => {
             )}
 
             {/* Navigation - Mobile Optimized */}
-            <nav className={`bg-gray-700 text-white shadow-lg transition-all duration-300 md:block ${
+            <nav className={`bg-gray-700 text-white shadow-lg transition-all duration-300 md:block relative z-50 ${
                 isMobileMenuOpen ? 'block max-h-screen' : 'hidden max-h-0'
             } md:max-h-none`}>
                 <div className="max-w-6xl w-full mx-auto">
@@ -488,14 +488,6 @@ const AppContent = () => {
                     </ul>
                 </div>
             </nav>
-
-            {/* Mobile Menu Overlay */}
-            {isMobileMenuOpen && (
-                <div 
-                    className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-40" 
-                    onClick={toggleMobileMenu}
-                ></div>
-            )}
 
             {/* Main Content Area */}
             <main className="flex-grow w-full max-w-6xl mx-auto p-3 sm:p-4 md:p-6 safe-area-bottom">

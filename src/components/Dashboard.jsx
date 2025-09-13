@@ -166,7 +166,58 @@ const Dashboard = () => {
                     });
                 }
                 
-                // Get player details for adds and drops
+                // Process trade data differently for proper team-by-team breakdown
+                let tradeDetails = null;
+                if (transaction.type === 'trade') {
+                    tradeDetails = teamDetails.map(team => {
+                        const teamRosterId = transaction.roster_ids.find(rosterId => {
+                            const roster = rosters.find(r => String(r.roster_id) === String(rosterId));
+                            return roster?.owner_id === team.ownerId;
+                        });
+                        
+                        const teamAdds = [];
+                        const teamDrops = [];
+                        
+                        // For trades, adds are what the team receives, drops are what they send
+                        if (transaction.adds) {
+                            Object.keys(transaction.adds).forEach(playerId => {
+                                if (String(transaction.adds[playerId]) === String(teamRosterId)) {
+                                    const player = nflPlayers?.[playerId];
+                                    teamAdds.push({
+                                        id: playerId,
+                                        name: player ? `${player.first_name} ${player.last_name}` : `Player ${playerId}`,
+                                        position: player?.position || 'N/A',
+                                        team: player?.team || 'FA',
+                                        headshot: player ? `https://sleepercdn.com/content/nfl/players/thumb/${playerId}.jpg` : null
+                                    });
+                                }
+                            });
+                        }
+                        
+                        if (transaction.drops) {
+                            Object.keys(transaction.drops).forEach(playerId => {
+                                if (String(transaction.drops[playerId]) === String(teamRosterId)) {
+                                    const player = nflPlayers?.[playerId];
+                                    teamDrops.push({
+                                        id: playerId,
+                                        name: player ? `${player.first_name} ${player.last_name}` : `Player ${playerId}`,
+                                        position: player?.position || 'N/A',
+                                        team: player?.team || 'FA',
+                                        headshot: player ? `https://sleepercdn.com/content/nfl/players/thumb/${playerId}.jpg` : null
+                                    });
+                                }
+                            });
+                        }
+                        
+                        return {
+                            ...team,
+                            receives: teamAdds,
+                            sends: teamDrops
+                        };
+                    });
+                }
+                
+                // Get player details for adds and drops (for non-trade transactions)
                 const addedPlayers = Object.keys(transaction.adds || {}).map(playerId => {
                     const player = nflPlayers?.[playerId];
                     return {
@@ -197,6 +248,7 @@ const Dashboard = () => {
                     teamDetails,
                     addedPlayers,
                     droppedPlayers,
+                    tradeDetails,
                     waiver_budget: transaction.waiver_budget || []
                 };
             });
@@ -401,15 +453,16 @@ const Dashboard = () => {
                     </svg>
                     <span className="mobile-text-lg">Recent Transactions</span>
                 </h2>
-                <div className="space-y-3">
+                <div className="space-y-4">
                     {recentTransactions.length > 0 ? recentTransactions.map((transaction, idx) => (
-                        <div key={transaction.id} className="bg-gray-50 border rounded-lg p-3 sm:p-4 hover:bg-gray-100 transition-colors">
-                            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-3 gap-2 sm:gap-0">
+                        <div key={transaction.id} className="bg-gray-50 border rounded-lg p-4 sm:p-6 hover:bg-gray-100 transition-colors">
+                            {/* Header */}
+                            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-4 gap-2 sm:gap-0">
                                 <div className="flex items-center space-x-2 flex-wrap">
-                                    <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                                    <span className="px-3 py-1 text-sm font-semibold rounded-full bg-blue-100 text-blue-800">
                                         {formatTransactionType(transaction.type)}
                                     </span>
-                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                                    <span className={`px-3 py-1 text-sm font-semibold rounded-full ${
                                         transaction.status === 'complete' ? 'bg-green-100 text-green-800' : 
                                         'bg-yellow-100 text-yellow-800'
                                     }`}>
@@ -417,7 +470,7 @@ const Dashboard = () => {
                                     </span>
                                 </div>
                                 <div className="text-left sm:text-right">
-                                    <div className="text-xs text-gray-500">
+                                    <div className="text-sm text-gray-600">
                                         {transaction.created.toLocaleDateString()}
                                     </div>
                                     <div className="text-xs text-gray-400">
@@ -426,85 +479,168 @@ const Dashboard = () => {
                                 </div>
                             </div>
                             
-                            {/* Team Details */}
-                            <div className="flex items-center space-x-2 sm:space-x-4 mb-3 overflow-x-auto hide-scrollbar">
-                                {transaction.teamDetails.map((team, teamIdx) => (
-                                    <div key={teamIdx} className="flex items-center space-x-2 flex-shrink-0">
-                                        <img
-                                            src={team.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
-                                            alt={team.name}
-                                            className="w-6 h-6 sm:w-8 sm:h-8 rounded-full border border-gray-300"
-                                            onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
-                                        />
-                                        <span className="text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap">{team.name}</span>
-                                        {teamIdx < transaction.teamDetails.length - 1 && transaction.type === 'trade' && (
-                                            <span className="text-xs text-gray-500 mx-2">↔</span>
+                            {/* Trade Layout */}
+                            {transaction.type === 'trade' && transaction.tradeDetails ? (
+                                <div className="space-y-4">
+                                    {transaction.tradeDetails.map((team, teamIdx) => (
+                                        <div key={teamIdx} className="bg-white rounded-lg p-4 border">
+                                            {/* Team Header */}
+                                            <div className="flex items-center space-x-3 mb-4 pb-3 border-b">
+                                                <img
+                                                    src={team.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
+                                                    alt={team.name}
+                                                    className="w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 border-blue-300"
+                                                    onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
+                                                />
+                                                <div>
+                                                    <h4 className="font-bold text-lg text-gray-800">{team.name}</h4>
+                                                    <p className="text-sm text-gray-500">Team {teamIdx === 0 ? 'A' : 'B'}</p>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                {/* Sends */}
+                                                {team.sends && team.sends.length > 0 && (
+                                                    <div>
+                                                        <div className="flex items-center space-x-2 mb-3">
+                                                            <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                                                            </svg>
+                                                            <span className="font-semibold text-red-700">Sends</span>
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            {team.sends.map((player, playerIdx) => (
+                                                                <div key={playerIdx} className="flex items-center space-x-3 bg-red-50 rounded-lg p-3">
+                                                                    <img
+                                                                        src={player.headshot}
+                                                                        alt={player.name}
+                                                                        className="w-10 h-10 rounded-full border"
+                                                                        onError={(e) => { e.target.style.display = 'none'; }}
+                                                                    />
+                                                                    <div className="flex-1">
+                                                                        <div className="font-medium text-gray-800">{player.name}</div>
+                                                                        <div className="text-sm text-gray-500">{player.position} • {player.team}</div>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                
+                                                {/* Receives */}
+                                                {team.receives && team.receives.length > 0 && (
+                                                    <div>
+                                                        <div className="flex items-center space-x-2 mb-3">
+                                                            <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16l-4-4m0 0l4-4m-4 4h18" />
+                                                            </svg>
+                                                            <span className="font-semibold text-green-700">Receives</span>
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            {team.receives.map((player, playerIdx) => (
+                                                                <div key={playerIdx} className="flex items-center space-x-3 bg-green-50 rounded-lg p-3">
+                                                                    <img
+                                                                        src={player.headshot}
+                                                                        alt={player.name}
+                                                                        className="w-10 h-10 rounded-full border"
+                                                                        onError={(e) => { e.target.style.display = 'none'; }}
+                                                                    />
+                                                                    <div className="flex-1">
+                                                                        <div className="font-medium text-gray-800">{player.name}</div>
+                                                                        <div className="text-sm text-gray-500">{player.position} • {player.team}</div>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                /* Non-Trade Layout (Waiver/Free Agent) */
+                                <div className="space-y-4">
+                                    {/* Team */}
+                                    {transaction.teamDetails && transaction.teamDetails.length > 0 && (
+                                        <div className="flex items-center space-x-3 mb-4">
+                                            <img
+                                                src={transaction.teamDetails[0].avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
+                                                alt={transaction.teamDetails[0].name}
+                                                className="w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 border-blue-300"
+                                                onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
+                                            />
+                                            <div>
+                                                <h4 className="font-bold text-xl text-gray-800">{transaction.teamDetails[0].name}</h4>
+                                                <p className="text-sm text-gray-500">{formatTransactionDescription(transaction)}</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {/* Added Players */}
+                                        {transaction.addedPlayers.length > 0 && (
+                                            <div>
+                                                <div className="flex items-center space-x-2 mb-4">
+                                                    <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                                    </svg>
+                                                    <span className="font-bold text-lg text-green-700">Added</span>
+                                                </div>
+                                                <div className="space-y-3">
+                                                    {transaction.addedPlayers.map((player, playerIdx) => (
+                                                        <div key={playerIdx} className="flex items-center space-x-4 bg-green-50 rounded-xl p-4 border border-green-200">
+                                                            <img
+                                                                src={player.headshot}
+                                                                alt={player.name}
+                                                                className="w-16 h-16 sm:w-20 sm:h-20 rounded-full border-2 border-green-300"
+                                                                onError={(e) => { e.target.style.display = 'none'; }}
+                                                            />
+                                                            <div className="flex-1">
+                                                                <div className="font-bold text-lg text-gray-800">{player.name}</div>
+                                                                <div className="text-sm font-medium text-green-700">{player.position}</div>
+                                                                <div className="text-sm text-gray-500">{player.team}</div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        
+                                        {/* Dropped Players */}
+                                        {transaction.droppedPlayers.length > 0 && (
+                                            <div>
+                                                <div className="flex items-center space-x-2 mb-4">
+                                                    <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 12H4" />
+                                                    </svg>
+                                                    <span className="font-bold text-lg text-red-700">Dropped</span>
+                                                </div>
+                                                <div className="space-y-3">
+                                                    {transaction.droppedPlayers.map((player, playerIdx) => (
+                                                        <div key={playerIdx} className="flex items-center space-x-4 bg-red-50 rounded-xl p-4 border border-red-200">
+                                                            <img
+                                                                src={player.headshot}
+                                                                alt={player.name}
+                                                                className="w-16 h-16 sm:w-20 sm:h-20 rounded-full border-2 border-red-300"
+                                                                onError={(e) => { e.target.style.display = 'none'; }}
+                                                            />
+                                                            <div className="flex-1">
+                                                                <div className="font-bold text-lg text-gray-800">{player.name}</div>
+                                                                <div className="text-sm font-medium text-red-700">{player.position}</div>
+                                                                <div className="text-sm text-gray-500">{player.team}</div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
                                         )}
                                     </div>
-                                ))}
-                            </div>
-                            
-                            {/* Player Details */}
-                            <div className="space-y-2">
-                                {transaction.addedPlayers.length > 0 && (
-                                    <div className="flex flex-col xs:flex-row xs:items-center space-y-1 xs:space-y-0 xs:space-x-2">
-                                        <div className="flex items-center space-x-1 flex-shrink-0">
-                                            <svg className="w-3 h-3 sm:w-4 sm:h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                                            </svg>
-                                            <span className="text-xs font-medium text-green-700">Added:</span>
-                                        </div>
-                                        <div className="flex items-center space-x-1 flex-wrap gap-1">
-                                            {transaction.addedPlayers.slice(0, 2).map((player, playerIdx) => (
-                                                <div key={playerIdx} className="flex items-center space-x-1 bg-white rounded-full px-2 py-1 border text-xs">
-                                                    <img
-                                                        src={player.headshot}
-                                                        alt={player.name}
-                                                        className="w-4 h-4 sm:w-5 sm:h-5 rounded-full"
-                                                        onError={(e) => { e.target.style.display = 'none'; }}
-                                                    />
-                                                    <span className="font-medium text-gray-800 truncate max-w-20">{player.name}</span>
-                                                    <span className="text-gray-500">({player.position})</span>
-                                                </div>
-                                            ))}
-                                            {transaction.addedPlayers.length > 2 && (
-                                                <span className="text-xs text-gray-500">+{transaction.addedPlayers.length - 2}</span>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-                                
-                                {transaction.droppedPlayers.length > 0 && (
-                                    <div className="flex flex-col xs:flex-row xs:items-center space-y-1 xs:space-y-0 xs:space-x-2">
-                                        <div className="flex items-center space-x-1 flex-shrink-0">
-                                            <svg className="w-3 h-3 sm:w-4 sm:h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 12H4" />
-                                            </svg>
-                                            <span className="text-xs font-medium text-red-700">Dropped:</span>
-                                        </div>
-                                        <div className="flex items-center space-x-1 flex-wrap gap-1">
-                                            {transaction.droppedPlayers.slice(0, 2).map((player, playerIdx) => (
-                                                <div key={playerIdx} className="flex items-center space-x-1 bg-white rounded-full px-2 py-1 border text-xs">
-                                                    <img
-                                                        src={player.headshot}
-                                                        alt={player.name}
-                                                        className="w-4 h-4 sm:w-5 sm:h-5 rounded-full"
-                                                        onError={(e) => { e.target.style.display = 'none'; }}
-                                                    />
-                                                    <span className="font-medium text-gray-800 truncate max-w-20">{player.name}</span>
-                                                    <span className="text-gray-500">({player.position})</span>
-                                                </div>
-                                            ))}
-                                            {transaction.droppedPlayers.length > 2 && (
-                                                <span className="text-xs text-gray-500">+{transaction.droppedPlayers.length - 2}</span>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
+                                </div>
+                            )}
                         </div>
                     )) : (
-                        <div className="text-center text-gray-500 py-6 sm:py-8 text-sm sm:text-base">No recent transactions</div>
+                        <div className="text-center text-gray-500 py-8 text-base">No recent transactions</div>
                     )}
                 </div>
             </div>
