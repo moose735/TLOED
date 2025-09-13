@@ -277,99 +277,229 @@ const AppContent = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-100 flex flex-col font-inter">
-            {/* Header */}
-            <header className="bg-gray-800 text-white p-3 shadow-md md:p-4">
-                <div className="flex flex-col gap-2 md:flex-row md:justify-between md:items-center max-w-6xl w-full mx-auto">
-                    <div className="flex items-center justify-center md:justify-start">
+        <div className="min-h-screen bg-gray-100 flex flex-col font-inter overflow-x-hidden">
+            {/* Header - Mobile Optimized */}
+            <header className="bg-gray-800 text-white shadow-md safe-area-top relative">
+                <div className="flex items-center justify-between px-4 py-3 md:px-6 md:py-4 max-w-6xl w-full mx-auto">
+                    {/* Logo and Title */}
+                    <div className="flex items-center flex-1 min-w-0">
                         <img
                             src={process.env.PUBLIC_URL + '/LeagueLogoNoBack.PNG'}
                             alt="League Logo"
-                            className="h-12 w-12 md:h-14 md:w-14 mr-3 md:mr-4 object-contain"
+                            className="h-10 w-10 md:h-14 md:w-14 mr-2 md:mr-4 object-contain flex-shrink-0"
                         />
-                        <h1 className="text-lg md:text-2xl font-bold text-center md:text-left">The League of Extraordinary Douchebags</h1>
+                        <h1 className="text-sm sm:text-base md:text-2xl font-bold truncate">
+                            <span className="sm:hidden">TLOED</span>
+                            <span className="hidden sm:inline">The League of Extraordinary Douchebags</span>
+                        </h1>
                     </div>
-                    {/* Gold Trophy and Champion Name (FontAwesome, same as LeagueHistory) */}
-                    <div className="flex items-center gap-1 md:gap-2 justify-center md:justify-end mt-2 md:mt-0">
+
+                    {/* Champion Trophy - Hidden on very small screens */}
+                    <div className="hidden xs:flex items-center gap-1 md:gap-2 mx-2 flex-shrink-0">
                         {reigningChampion && (
-                            <span title="Reigning Champion">
-                                <i className="fas fa-trophy text-[#eab308] text-xl md:text-2xl mr-1"></i>
-                            </span>
+                            <>
+                                <span title="Reigning Champion">
+                                    <i className="fas fa-trophy text-[#eab308] text-lg md:text-2xl"></i>
+                                </span>
+                                <span className="font-semibold text-[#eab308] text-sm md:text-lg max-w-24 sm:max-w-none truncate">
+                                    {reigningChampion}
+                                </span>
+                            </>
                         )}
-                        <span className="font-semibold text-[#eab308] text-base md:text-lg">
-                            {reigningChampion}
-                        </span>
                     </div>
-                    <button className="md:hidden text-white text-2xl ml-2 absolute right-4 top-4" onClick={toggleMobileMenu} aria-label="Open navigation menu">
-                        &#9776;
+
+                    {/* Mobile Menu Button */}
+                    <button 
+                        className="md:hidden text-white text-2xl touch-friendly flex items-center justify-center" 
+                        onClick={toggleMobileMenu} 
+                        aria-label={isMobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+                    >
+                        {isMobileMenuOpen ? '✕' : '☰'}
                     </button>
                 </div>
             </header>
 
-            {/* Navigation */}
-            <nav className={`bg-gray-700 text-white shadow-lg md:block ${isMobileMenuOpen ? 'block' : 'hidden'}`}>
-                <ul className="flex flex-col md:flex-row md:justify-center py-2 max-w-6xl w-full mx-auto">
-                    {/* Home Tab */}
-                    <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-0.5 my-0.5 md:mx-1 md:my-0 text-base md:text-lg text-center"
-                        onClick={() => handleTabClick(NAV_CATEGORIES.HOME.tab)}>
-                        {NAV_CATEGORIES.HOME.label}
-                    </li>
-                    {/* Power Rankings Tab */}
-                    <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-0.5 my-0.5 md:mx-1 md:my-0 text-base md:text-lg text-center"
-                        onClick={() => handleTabClick(NAV_CATEGORIES.POWER_RANKINGS.tab)}>
-                        {NAV_CATEGORIES.POWER_RANKINGS.label}
-                    </li>
-                    {/* Gamecenter Tab */}
-                    <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-0.5 my-0.5 md:mx-1 md:my-0 text-base md:text-lg text-center"
-                        onClick={() => handleTabClick(NAV_CATEGORIES.GAMECENTER.tab)}>
-                        {NAV_CATEGORIES.GAMECENTER.label}
-                    </li>
-                    {/* Sportsbook Tab */}
-                    <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-0.5 my-0.5 md:mx-1 md:my-0 text-base md:text-lg text-center"
-                        onClick={() => handleTabClick(NAV_CATEGORIES.SPORTSBOOK.tab)}>
-                        {NAV_CATEGORIES.SPORTSBOOK.label}
-                    </li>
-                    {/* League Data Submenu */}
-                    <li className="relative px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-0.5 my-0.5 md:mx-1 md:my-0 text-base md:text-lg text-center"
-                        onClick={() => toggleSubMenu('leagueData')}>
-                        {NAV_CATEGORIES.LEAGUE_DATA.label} <span className="ml-1">&#9660;</span>
-                        {openSubMenu === 'leagueData' && (
-                            <ul className="absolute left-0 md:top-full bg-gray-700 shadow-lg rounded-md mt-2 w-44 md:w-48 z-10">
-                                {NAV_CATEGORIES.LEAGUE_DATA.subTabs.map(subTab => (
-                                    <li key={subTab.tab} className="px-4 py-2 hover:bg-gray-600 cursor-pointer rounded-md text-sm md:text-base"
-                                        onClick={(e) => { e.stopPropagation(); handleSubTabClick(subTab.tab); }}>
-                                        {subTab.label}
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </li>
-                    {/* Teams Tab (now a direct link to TeamsOverviewPage) */}
-                    <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-0.5 my-0.5 md:mx-1 md:my-0 text-base md:text-lg text-center"
-                        onClick={() => handleTabClick(NAV_CATEGORIES.TEAMS.tab)}>
-                        {NAV_CATEGORIES.TEAMS.label}
-                    </li>
-                    {/* Season Breakdown Tab */}
-                    <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-0.5 my-0.5 md:mx-1 md:my-0 text-base md:text-lg text-center"
-                        onClick={() => handleTabClick(NAV_CATEGORIES.SEASON_BREAKDOWN.tab)}>
-                        {NAV_CATEGORIES.SEASON_BREAKDOWN.label}
-                    </li>
-                    {/* New Draft Tab */}
-                    <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-0.5 my-0.5 md:mx-1 md:my-0 text-base md:text-lg text-center"
-                        onClick={() => handleTabClick(NAV_CATEGORIES.DRAFT.tab)}>
-                        {NAV_CATEGORIES.DRAFT.label}
-                    </li>
-                    {/* Financials Tab */}
-                    <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-0.5 my-0.5 md:mx-1 md:my-0 text-base md:text-lg text-center"
-                        onClick={() => handleTabClick(NAV_CATEGORIES.FINANCIALS.tab)}>
-                        {NAV_CATEGORIES.FINANCIALS.label}
-                    </li>
-                </ul>
+            {/* Mobile Champion Display - Shows when trophy is hidden */}
+            {reigningChampion && (
+                <div className="xs:hidden bg-yellow-500 text-gray-800 px-4 py-2 text-center text-sm font-semibold">
+                    🏆 {reigningChampion}
+                </div>
+            )}
+
+            {/* Navigation - Mobile Optimized */}
+            <nav className={`bg-gray-700 text-white shadow-lg transition-all duration-300 md:block ${
+                isMobileMenuOpen ? 'block max-h-screen' : 'hidden max-h-0'
+            } md:max-h-none`}>
+                <div className="max-w-6xl w-full mx-auto">
+                    {/* Mobile Navigation */}
+                    <ul className="md:hidden flex flex-col">
+                        {/* Main Nav Items */}
+                        <li>
+                            <button 
+                                className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600"
+                                onClick={() => handleTabClick(NAV_CATEGORIES.HOME.tab)}
+                            >
+                                <span className="text-base font-medium">🏠 {NAV_CATEGORIES.HOME.label}</span>
+                            </button>
+                        </li>
+                        <li>
+                            <button 
+                                className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600"
+                                onClick={() => handleTabClick(NAV_CATEGORIES.POWER_RANKINGS.tab)}
+                            >
+                                <span className="text-base font-medium">⚡ {NAV_CATEGORIES.POWER_RANKINGS.label}</span>
+                            </button>
+                        </li>
+                        <li>
+                            <button 
+                                className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600"
+                                onClick={() => handleTabClick(NAV_CATEGORIES.GAMECENTER.tab)}
+                            >
+                                <span className="text-base font-medium">🎮 {NAV_CATEGORIES.GAMECENTER.label}</span>
+                            </button>
+                        </li>
+                        <li>
+                            <button 
+                                className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600"
+                                onClick={() => handleTabClick(NAV_CATEGORIES.SPORTSBOOK.tab)}
+                            >
+                                <span className="text-base font-medium">💰 {NAV_CATEGORIES.SPORTSBOOK.label}</span>
+                            </button>
+                        </li>
+                        
+                        {/* League Data Submenu */}
+                        <li>
+                            <button 
+                                className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600 flex items-center justify-between"
+                                onClick={() => toggleSubMenu('leagueData')}
+                            >
+                                <span className="text-base font-medium">📊 {NAV_CATEGORIES.LEAGUE_DATA.label}</span>
+                                <span className={`transform transition-transform duration-200 ${openSubMenu === 'leagueData' ? 'rotate-180' : ''}`}>
+                                    ▼
+                                </span>
+                            </button>
+                            {openSubMenu === 'leagueData' && (
+                                <ul className="bg-gray-600">
+                                    {NAV_CATEGORIES.LEAGUE_DATA.subTabs.map(subTab => (
+                                        <li key={subTab.tab}>
+                                            <button 
+                                                className="w-full px-8 py-3 text-left hover:bg-gray-500 active:bg-gray-400 touch-friendly text-sm border-b border-gray-500 last:border-b-0"
+                                                onClick={(e) => { e.stopPropagation(); handleSubTabClick(subTab.tab); }}
+                                            >
+                                                {subTab.label}
+                                            </button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </li>
+                        
+                        <li>
+                            <button 
+                                className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600"
+                                onClick={() => handleTabClick(NAV_CATEGORIES.TEAMS.tab)}
+                            >
+                                <span className="text-base font-medium">👥 {NAV_CATEGORIES.TEAMS.label}</span>
+                            </button>
+                        </li>
+                        <li>
+                            <button 
+                                className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600"
+                                onClick={() => handleTabClick(NAV_CATEGORIES.SEASON_BREAKDOWN.tab)}
+                            >
+                                <span className="text-base font-medium">📈 {NAV_CATEGORIES.SEASON_BREAKDOWN.label}</span>
+                            </button>
+                        </li>
+                        <li>
+                            <button 
+                                className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600"
+                                onClick={() => handleTabClick(NAV_CATEGORIES.DRAFT.tab)}
+                            >
+                                <span className="text-base font-medium">🎯 {NAV_CATEGORIES.DRAFT.label}</span>
+                            </button>
+                        </li>
+                        <li>
+                            <button 
+                                className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly"
+                                onClick={() => handleTabClick(NAV_CATEGORIES.FINANCIALS.tab)}
+                            >
+                                <span className="text-base font-medium">💸 {NAV_CATEGORIES.FINANCIALS.label}</span>
+                            </button>
+                        </li>
+                    </ul>
+
+                    {/* Desktop Navigation */}
+                    <ul className="hidden md:flex md:flex-row md:justify-center py-2">
+                        {/* Home Tab */}
+                        <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 text-lg text-center touch-friendly"
+                            onClick={() => handleTabClick(NAV_CATEGORIES.HOME.tab)}>
+                            {NAV_CATEGORIES.HOME.label}
+                        </li>
+                        {/* Power Rankings Tab */}
+                        <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 text-lg text-center touch-friendly"
+                            onClick={() => handleTabClick(NAV_CATEGORIES.POWER_RANKINGS.tab)}>
+                            {NAV_CATEGORIES.POWER_RANKINGS.label}
+                        </li>
+                        {/* Gamecenter Tab */}
+                        <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 text-lg text-center touch-friendly"
+                            onClick={() => handleTabClick(NAV_CATEGORIES.GAMECENTER.tab)}>
+                            {NAV_CATEGORIES.GAMECENTER.label}
+                        </li>
+                        {/* Sportsbook Tab */}
+                        <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 text-lg text-center touch-friendly"
+                            onClick={() => handleTabClick(NAV_CATEGORIES.SPORTSBOOK.tab)}>
+                            {NAV_CATEGORIES.SPORTSBOOK.label}
+                        </li>
+                        {/* League Data Submenu */}
+                        <li className="relative px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 text-lg text-center touch-friendly"
+                            onClick={() => toggleSubMenu('leagueData')}>
+                            {NAV_CATEGORIES.LEAGUE_DATA.label} <span className="ml-1">▼</span>
+                            {openSubMenu === 'leagueData' && (
+                                <ul className="absolute left-0 top-full bg-gray-700 shadow-lg rounded-md mt-2 w-48 z-10">
+                                    {NAV_CATEGORIES.LEAGUE_DATA.subTabs.map(subTab => (
+                                        <li key={subTab.tab} className="px-4 py-2 hover:bg-gray-600 cursor-pointer rounded-md text-base touch-friendly"
+                                            onClick={(e) => { e.stopPropagation(); handleSubTabClick(subTab.tab); }}>
+                                            {subTab.label}
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </li>
+                        {/* Teams Tab */}
+                        <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 text-lg text-center touch-friendly"
+                            onClick={() => handleTabClick(NAV_CATEGORIES.TEAMS.tab)}>
+                            {NAV_CATEGORIES.TEAMS.label}
+                        </li>
+                        {/* Season Breakdown Tab */}
+                        <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 text-lg text-center touch-friendly"
+                            onClick={() => handleTabClick(NAV_CATEGORIES.SEASON_BREAKDOWN.tab)}>
+                            {NAV_CATEGORIES.SEASON_BREAKDOWN.label}
+                        </li>
+                        {/* Draft Tab */}
+                        <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 text-lg text-center touch-friendly"
+                            onClick={() => handleTabClick(NAV_CATEGORIES.DRAFT.tab)}>
+                            {NAV_CATEGORIES.DRAFT.label}
+                        </li>
+                        {/* Financials Tab */}
+                        <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 text-lg text-center touch-friendly"
+                            onClick={() => handleTabClick(NAV_CATEGORIES.FINANCIALS.tab)}>
+                            {NAV_CATEGORIES.FINANCIALS.label}
+                        </li>
+                    </ul>
+                </div>
             </nav>
 
+            {/* Mobile Menu Overlay */}
+            {isMobileMenuOpen && (
+                <div 
+                    className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-40" 
+                    onClick={toggleMobileMenu}
+                ></div>
+            )}
+
             {/* Main Content Area */}
-            <main className="flex-grow w-full max-w-6xl mx-auto p-2 sm:p-4">
-                <div>
+            <main className="flex-grow w-full max-w-6xl mx-auto p-3 sm:p-4 md:p-6 safe-area-bottom">
+                <div className="mobile-scroll">
                     {renderContent()}
                 </div>
             </main>

@@ -248,65 +248,108 @@ const Dashboard = () => {
     }
 
     return (
-        <div className="w-full max-w-7xl mx-auto p-4 md:p-8 font-inter space-y-8">
+        <div className="w-full max-w-7xl mx-auto p-2 sm:p-4 md:p-8 font-inter space-y-4 sm:space-y-6 md:space-y-8">
             {/* Header */}
-            <div className="text-center">
-                <h1 className="text-4xl font-bold text-blue-800 mb-2">TLOED Dashboard</h1>
-                <p className="text-gray-600">
+            <div className="text-center px-2">
+                <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-blue-800 mb-2">TLOED Dashboard</h1>
+                <p className="text-sm sm:text-base text-gray-600">
                     {currentSeason ? `${currentSeason} Season` : 'Fantasy Football League'} 
                     {nflState?.week ? ` • Week ${nflState.week}` : ''}
                 </p>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
                 {/* Current Week Matchups */}
                 <div className="lg:col-span-2">
-                    <div className="bg-white rounded-lg shadow-lg p-6">
-                        <h2 className="text-2xl font-bold text-blue-800 mb-6 flex items-center">
-                            <svg className="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="bg-white rounded-lg shadow-lg mobile-card p-4 sm:p-6">
+                        <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-blue-800 mb-4 sm:mb-6 flex items-center">
+                            <svg className="w-5 h-5 sm:w-6 sm:h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                             </svg>
-                            Week {nflState?.week || 1} Matchups
+                            <span className="mobile-text-lg">Week {nflState?.week || 1} Matchups</span>
                         </h2>
-                        <div className="space-y-4">
+                        <div className="space-y-3 sm:space-y-4">
                             {currentWeekMatchups.length > 0 ? currentWeekMatchups.map((matchup, idx) => (
-                                <div key={idx} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                                <div key={idx} className="border rounded-lg p-3 sm:p-4 hover:bg-gray-50 transition-colors touch-friendly">
                                     <div className="flex items-center justify-between">
-                                        <div className="flex items-center space-x-4 flex-1">
-                                            <div className="flex items-center space-x-2 flex-1">
-                                                <img
-                                                    src={matchup.team1.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
-                                                    alt={matchup.team1.name}
-                                                    className="w-10 h-10 rounded-full border-2 border-blue-300"
-                                                    onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
-                                                />
-                                                <span className="font-semibold text-gray-800 truncate">{matchup.team1.name}</span>
+                                        {/* Mobile Layout - Stacked */}
+                                        <div className="sm:hidden w-full">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <div className="flex items-center space-x-2 flex-1 min-w-0">
+                                                    <img
+                                                        src={matchup.team1.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
+                                                        alt={matchup.team1.name}
+                                                        className="w-8 h-8 rounded-full border-2 border-blue-300 flex-shrink-0"
+                                                        onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
+                                                    />
+                                                    <span className="font-semibold text-gray-800 text-sm truncate">{matchup.team1.name}</span>
+                                                </div>
+                                                <div className="text-right">
+                                                    {matchup.isCompleted && (
+                                                        <div className={`text-lg font-bold ${matchup.team1.score > matchup.team2.score ? 'text-green-600' : 'text-gray-600'}`}>
+                                                            {matchup.team1.score.toFixed(1)}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <div className="text-center px-4">
-                                                <div className="text-sm text-gray-500">vs</div>
-                                                {matchup.isCompleted && (
-                                                    <div className="text-lg font-bold text-blue-600">
-                                                        {matchup.team1.score.toFixed(1)} - {matchup.team2.score.toFixed(1)}
-                                                    </div>
-                                                )}
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center space-x-2 flex-1 min-w-0">
+                                                    <img
+                                                        src={matchup.team2.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
+                                                        alt={matchup.team2.name}
+                                                        className="w-8 h-8 rounded-full border-2 border-blue-300 flex-shrink-0"
+                                                        onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
+                                                    />
+                                                    <span className="font-semibold text-gray-800 text-sm truncate">{matchup.team2.name}</span>
+                                                </div>
+                                                <div className="text-right">
+                                                    {matchup.isCompleted && (
+                                                        <div className={`text-lg font-bold ${matchup.team2.score > matchup.team1.score ? 'text-green-600' : 'text-gray-600'}`}>
+                                                            {matchup.team2.score.toFixed(1)}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <div className="flex items-center space-x-2 flex-1 justify-end">
-                                                <span className="font-semibold text-gray-800 truncate">{matchup.team2.name}</span>
-                                                <img
-                                                    src={matchup.team2.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
-                                                    alt={matchup.team2.name}
-                                                    className="w-10 h-10 rounded-full border-2 border-blue-300"
-                                                    onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
-                                                />
+                                        </div>
+
+                                        {/* Desktop Layout - Side by Side */}
+                                        <div className="hidden sm:flex items-center justify-between w-full">
+                                            <div className="flex items-center space-x-4 flex-1">
+                                                <div className="flex items-center space-x-2 flex-1">
+                                                    <img
+                                                        src={matchup.team1.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
+                                                        alt={matchup.team1.name}
+                                                        className="w-10 h-10 rounded-full border-2 border-blue-300"
+                                                        onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
+                                                    />
+                                                    <span className="font-semibold text-gray-800 truncate">{matchup.team1.name}</span>
+                                                </div>
+                                                <div className="text-center px-4">
+                                                    <div className="text-sm text-gray-500">vs</div>
+                                                    {matchup.isCompleted && (
+                                                        <div className="text-lg font-bold text-blue-600">
+                                                            {matchup.team1.score.toFixed(1)} - {matchup.team2.score.toFixed(1)}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center space-x-2 flex-1 justify-end">
+                                                    <span className="font-semibold text-gray-800 truncate">{matchup.team2.name}</span>
+                                                    <img
+                                                        src={matchup.team2.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
+                                                        alt={matchup.team2.name}
+                                                        className="w-10 h-10 rounded-full border-2 border-blue-300"
+                                                        onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
+                                                    />
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                     {!matchup.isCompleted && (
-                                        <div className="text-center text-sm text-gray-500 mt-2">Game in progress</div>
+                                        <div className="text-center text-xs sm:text-sm text-gray-500 mt-2">Game in progress</div>
                                     )}
                                 </div>
                             )) : (
-                                <div className="text-center text-gray-500 py-8">No matchups available for this week</div>
+                                <div className="text-center text-gray-500 py-6 sm:py-8 text-sm sm:text-base">No matchups available for this week</div>
                             )}
                         </div>
                     </div>
@@ -314,33 +357,33 @@ const Dashboard = () => {
 
                 {/* Current Standings */}
                 <div>
-                    <div className="bg-white rounded-lg shadow-lg p-6">
-                        <h2 className="text-2xl font-bold text-blue-800 mb-6 flex items-center">
-                            <svg className="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="bg-white rounded-lg shadow-lg mobile-card p-4 sm:p-6">
+                        <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-blue-800 mb-4 sm:mb-6 flex items-center">
+                            <svg className="w-5 h-5 sm:w-6 sm:h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                             </svg>
-                            Standings
+                            <span className="mobile-text-lg">Standings</span>
                         </h2>
-                        <div className="space-y-3">
+                        <div className="space-y-2 sm:space-y-3">
                             {currentStandings.map((team, idx) => (
-                                <div key={team.ownerId} className="flex items-center justify-between p-2 rounded hover:bg-gray-50">
-                                    <div className="flex items-center space-x-3">
-                                        <div className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center">
+                                <div key={team.ownerId} className="flex items-center justify-between p-2 sm:p-3 rounded hover:bg-gray-50 touch-friendly">
+                                    <div className="flex items-center space-x-2 sm:space-x-3 flex-1 min-w-0">
+                                        <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-blue-600 text-white text-xs sm:text-sm font-bold flex items-center justify-center flex-shrink-0">
                                             {idx + 1}
                                         </div>
                                         <img
                                             src={getTeamDetails(team.ownerId, currentSeason)?.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
                                             alt={team.teamName}
-                                            className="w-8 h-8 rounded-full border border-gray-300"
+                                            className="w-6 h-6 sm:w-8 sm:h-8 rounded-full border border-gray-300 flex-shrink-0"
                                             onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
                                         />
-                                        <div>
-                                            <div className="font-semibold text-sm text-gray-800 truncate max-w-24">{team.teamName}</div>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="font-semibold text-xs sm:text-sm text-gray-800 truncate">{team.teamName}</div>
                                             <div className="text-xs text-gray-500">{team.wins}-{team.losses}-{team.ties}</div>
                                         </div>
                                     </div>
-                                    <div className="text-right">
-                                        <div className="text-sm font-semibold text-blue-600">{team.pointsFor.toFixed(0)}</div>
+                                    <div className="text-right flex-shrink-0">
+                                        <div className="text-sm sm:text-base font-semibold text-blue-600">{team.pointsFor.toFixed(0)}</div>
                                         <div className="text-xs text-gray-500">PF</div>
                                     </div>
                                 </div>
@@ -351,18 +394,18 @@ const Dashboard = () => {
             </div>
 
             {/* Recent Transactions */}
-            <div className="bg-white rounded-lg shadow-lg p-6">
-                <h2 className="text-2xl font-bold text-blue-800 mb-6 flex items-center">
-                    <svg className="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="bg-white rounded-lg shadow-lg mobile-card p-4 sm:p-6">
+                <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-blue-800 mb-4 sm:mb-6 flex items-center">
+                    <svg className="w-5 h-5 sm:w-6 sm:h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                     </svg>
-                    Recent Transactions
+                    <span className="mobile-text-lg">Recent Transactions</span>
                 </h2>
                 <div className="space-y-3">
                     {recentTransactions.length > 0 ? recentTransactions.map((transaction, idx) => (
-                        <div key={transaction.id} className="bg-gray-50 border rounded-lg p-4 hover:bg-gray-100 transition-colors">
-                            <div className="flex items-start justify-between mb-3">
-                                <div className="flex items-center space-x-2">
+                        <div key={transaction.id} className="bg-gray-50 border rounded-lg p-3 sm:p-4 hover:bg-gray-100 transition-colors">
+                            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-3 gap-2 sm:gap-0">
+                                <div className="flex items-center space-x-2 flex-wrap">
                                     <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
                                         {formatTransactionType(transaction.type)}
                                     </span>
@@ -373,7 +416,7 @@ const Dashboard = () => {
                                         {transaction.status}
                                     </span>
                                 </div>
-                                <div className="text-right">
+                                <div className="text-left sm:text-right">
                                     <div className="text-xs text-gray-500">
                                         {transaction.created.toLocaleDateString()}
                                     </div>
@@ -384,16 +427,16 @@ const Dashboard = () => {
                             </div>
                             
                             {/* Team Details */}
-                            <div className="flex items-center space-x-4 mb-3">
+                            <div className="flex items-center space-x-2 sm:space-x-4 mb-3 overflow-x-auto hide-scrollbar">
                                 {transaction.teamDetails.map((team, teamIdx) => (
-                                    <div key={teamIdx} className="flex items-center space-x-2">
+                                    <div key={teamIdx} className="flex items-center space-x-2 flex-shrink-0">
                                         <img
                                             src={team.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
                                             alt={team.name}
-                                            className="w-8 h-8 rounded-full border border-gray-300"
+                                            className="w-6 h-6 sm:w-8 sm:h-8 rounded-full border border-gray-300"
                                             onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
                                         />
-                                        <span className="text-sm font-semibold text-gray-800">{team.name}</span>
+                                        <span className="text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap">{team.name}</span>
                                         {teamIdx < transaction.teamDetails.length - 1 && transaction.type === 'trade' && (
                                             <span className="text-xs text-gray-500 mx-2">↔</span>
                                         )}
@@ -404,56 +447,56 @@ const Dashboard = () => {
                             {/* Player Details */}
                             <div className="space-y-2">
                                 {transaction.addedPlayers.length > 0 && (
-                                    <div className="flex items-center space-x-2">
-                                        <div className="flex items-center space-x-1">
-                                            <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <div className="flex flex-col xs:flex-row xs:items-center space-y-1 xs:space-y-0 xs:space-x-2">
+                                        <div className="flex items-center space-x-1 flex-shrink-0">
+                                            <svg className="w-3 h-3 sm:w-4 sm:h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                                             </svg>
                                             <span className="text-xs font-medium text-green-700">Added:</span>
                                         </div>
-                                        <div className="flex items-center space-x-2 flex-wrap">
-                                            {transaction.addedPlayers.slice(0, 3).map((player, playerIdx) => (
-                                                <div key={playerIdx} className="flex items-center space-x-1 bg-white rounded-full px-2 py-1 border">
+                                        <div className="flex items-center space-x-1 flex-wrap gap-1">
+                                            {transaction.addedPlayers.slice(0, 2).map((player, playerIdx) => (
+                                                <div key={playerIdx} className="flex items-center space-x-1 bg-white rounded-full px-2 py-1 border text-xs">
                                                     <img
                                                         src={player.headshot}
                                                         alt={player.name}
-                                                        className="w-6 h-6 rounded-full"
+                                                        className="w-4 h-4 sm:w-5 sm:h-5 rounded-full"
                                                         onError={(e) => { e.target.style.display = 'none'; }}
                                                     />
-                                                    <span className="text-xs font-medium text-gray-800">{player.name}</span>
-                                                    <span className="text-xs text-gray-500">({player.position})</span>
+                                                    <span className="font-medium text-gray-800 truncate max-w-20">{player.name}</span>
+                                                    <span className="text-gray-500">({player.position})</span>
                                                 </div>
                                             ))}
-                                            {transaction.addedPlayers.length > 3 && (
-                                                <span className="text-xs text-gray-500">+{transaction.addedPlayers.length - 3} more</span>
+                                            {transaction.addedPlayers.length > 2 && (
+                                                <span className="text-xs text-gray-500">+{transaction.addedPlayers.length - 2}</span>
                                             )}
                                         </div>
                                     </div>
                                 )}
                                 
                                 {transaction.droppedPlayers.length > 0 && (
-                                    <div className="flex items-center space-x-2">
-                                        <div className="flex items-center space-x-1">
-                                            <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <div className="flex flex-col xs:flex-row xs:items-center space-y-1 xs:space-y-0 xs:space-x-2">
+                                        <div className="flex items-center space-x-1 flex-shrink-0">
+                                            <svg className="w-3 h-3 sm:w-4 sm:h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 12H4" />
                                             </svg>
                                             <span className="text-xs font-medium text-red-700">Dropped:</span>
                                         </div>
-                                        <div className="flex items-center space-x-2 flex-wrap">
-                                            {transaction.droppedPlayers.slice(0, 3).map((player, playerIdx) => (
-                                                <div key={playerIdx} className="flex items-center space-x-1 bg-white rounded-full px-2 py-1 border">
+                                        <div className="flex items-center space-x-1 flex-wrap gap-1">
+                                            {transaction.droppedPlayers.slice(0, 2).map((player, playerIdx) => (
+                                                <div key={playerIdx} className="flex items-center space-x-1 bg-white rounded-full px-2 py-1 border text-xs">
                                                     <img
                                                         src={player.headshot}
                                                         alt={player.name}
-                                                        className="w-6 h-6 rounded-full"
+                                                        className="w-4 h-4 sm:w-5 sm:h-5 rounded-full"
                                                         onError={(e) => { e.target.style.display = 'none'; }}
                                                     />
-                                                    <span className="text-xs font-medium text-gray-800">{player.name}</span>
-                                                    <span className="text-xs text-gray-500">({player.position})</span>
+                                                    <span className="font-medium text-gray-800 truncate max-w-20">{player.name}</span>
+                                                    <span className="text-gray-500">({player.position})</span>
                                                 </div>
                                             ))}
-                                            {transaction.droppedPlayers.length > 3 && (
-                                                <span className="text-xs text-gray-500">+{transaction.droppedPlayers.length - 3} more</span>
+                                            {transaction.droppedPlayers.length > 2 && (
+                                                <span className="text-xs text-gray-500">+{transaction.droppedPlayers.length - 2}</span>
                                             )}
                                         </div>
                                     </div>
@@ -461,7 +504,7 @@ const Dashboard = () => {
                             </div>
                         </div>
                     )) : (
-                        <div className="text-center text-gray-500 py-8">No recent transactions</div>
+                        <div className="text-center text-gray-500 py-6 sm:py-8 text-sm sm:text-base">No recent transactions</div>
                     )}
                 </div>
             </div>

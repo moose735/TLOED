@@ -264,87 +264,157 @@ const PowerRankings = () => {
   };
 
 		return (
-			<div className="w-full max-w-5xl mx-auto p-4 md:p-8 font-inter">
-				<h2 className="text-3xl font-bold text-blue-800 mb-8 text-center tracking-tight">
+			<div className="w-full max-w-5xl mx-auto p-2 sm:p-4 md:p-8 font-inter">
+				<h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-800 mb-4 sm:mb-6 md:mb-8 text-center tracking-tight px-2">
 					{powerRankings.length > 0
 						? `Power Rankings (DPR) - ${powerRankings[0].year} Season (Week ${currentWeek})`
 						: 'Current Power Rankings'}
 				</h2>
 				{loading ? (
 					<div className="flex justify-center items-center h-32">
-						<span className="text-lg text-gray-500 animate-pulse">Calculating power rankings...</span>
+						<span className="text-sm sm:text-lg text-gray-500 animate-pulse">Calculating power rankings...</span>
 					</div>
 				) : error ? (
 					<div className="flex justify-center items-center h-32">
-						<span className="text-lg text-red-500 font-semibold">{error}</span>
+						<span className="text-sm sm:text-lg text-red-500 font-semibold text-center px-4">{error}</span>
 					</div>
 				) : powerRankings.length > 0 ? (
-					<div className="overflow-x-auto shadow-lg rounded-lg">
-						<table className="min-w-full bg-white border border-gray-200 rounded-lg">
-							<thead className="bg-blue-100 sticky top-0 z-10">
-								<tr>
-									<th className="py-4 px-4 text-left text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Rank</th>
-									<th className="py-4 px-4 text-left text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
-									<th className="py-4 px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">DPR</th>
-									<th className="py-4 px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record</th>
-									<th className="py-4 px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">PF</th>
-									<th className="py-4 px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">PA</th>
-									<th className="py-4 px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Luck</th>
-								</tr>
-							</thead>
-							<tbody>
-								{powerRankings.map((row, idx) => {
-									// Check if this is the start of a new tier
-									const isNewTier = idx > 0 && powerRankings[idx - 1].tier !== row.tier;
-									
-									return (
-										<React.Fragment key={row.ownerId}>
-											{isNewTier && (
-												<tr className="bg-blue-50">
-													<td colSpan="7" className="py-1 px-4 text-center">
-														<div className="flex items-center justify-center">
-															<div className="flex-1 h-px bg-blue-300"></div>
-															<span className="px-3 text-xs font-semibold text-blue-600 uppercase tracking-wide">
-																Tier {row.tier}
-															</span>
-															<div className="flex-1 h-px bg-blue-300"></div>
+					<>
+						{/* Mobile Cards View */}
+						<div className="sm:hidden space-y-3">
+							{powerRankings.map((row, idx) => {
+								const isNewTier = idx > 0 && powerRankings[idx - 1].tier !== row.tier;
+								
+								return (
+									<React.Fragment key={row.ownerId}>
+										{isNewTier && (
+											<div className="flex items-center justify-center py-3">
+												<div className="flex-1 h-px bg-blue-300"></div>
+												<span className="px-3 text-xs font-semibold text-blue-600 uppercase tracking-wide">
+													Tier {row.tier}
+												</span>
+												<div className="flex-1 h-px bg-blue-300"></div>
+											</div>
+										)}
+										<div className="bg-white rounded-lg shadow-md mobile-card p-4 border-l-4 border-blue-500">
+											<div className="flex items-center justify-between mb-3">
+												<div className="flex items-center space-x-3">
+													<div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
+														{row.rank}
+													</div>
+													<img
+														src={getTeamDetails(row.ownerId, row.year)?.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
+														alt={getTeamName(row.ownerId, row.year)}
+														className="w-10 h-10 rounded-full border-2 border-blue-300 shadow-sm object-cover flex-shrink-0"
+														onError={(e) => { 
+															e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`;
+														}}
+													/>
+													<div className="min-w-0 flex-1">
+														<h3 className="font-semibold text-gray-800 text-sm truncate">{getTeamName(row.ownerId, row.year)}</h3>
+														<p className="text-xs text-gray-500">Tier {row.tier}</p>
+													</div>
+												</div>
+												<div className="text-right">
+													<div className="text-lg font-bold text-blue-800">{formatDPR(row.dpr)}</div>
+													<div className="text-xs text-gray-500">DPR</div>
+												</div>
+											</div>
+											
+											<div className="grid grid-cols-2 gap-3 text-sm">
+												<div className="bg-gray-50 rounded-lg p-2">
+													<div className="text-xs text-gray-500 mb-1">Record</div>
+													<div className="font-semibold">{`${row.wins}-${row.losses}-${row.ties}`}</div>
+												</div>
+												<div className="bg-gray-50 rounded-lg p-2">
+													<div className="text-xs text-gray-500 mb-1">Points For</div>
+													<div className="font-semibold text-green-700">{formatPoints(row.pointsFor)}</div>
+												</div>
+												<div className="bg-gray-50 rounded-lg p-2">
+													<div className="text-xs text-gray-500 mb-1">Points Against</div>
+													<div className="font-semibold text-red-700">{formatPoints(row.pointsAgainst)}</div>
+												</div>
+												<div className="bg-gray-50 rounded-lg p-2">
+													<div className="text-xs text-gray-500 mb-1">Luck Rating</div>
+													<div className={`font-semibold ${row.luckRating > 0 ? 'text-green-600' : row.luckRating < 0 ? 'text-red-600' : 'text-gray-700'}`}>
+														{formatLuckRating(row.luckRating)}
+													</div>
+												</div>
+											</div>
+										</div>
+									</React.Fragment>
+								);
+							})}
+						</div>
+
+						{/* Desktop Table View */}
+						<div className="hidden sm:block overflow-x-auto shadow-lg rounded-lg">
+							<table className="min-w-full bg-white border border-gray-200 rounded-lg">
+								<thead className="bg-blue-100 sticky top-0 z-10">
+									<tr>
+										<th className="py-3 md:py-4 px-3 md:px-4 text-left text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Rank</th>
+										<th className="py-3 md:py-4 px-3 md:px-4 text-left text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
+										<th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">DPR</th>
+										<th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record</th>
+										<th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">PF</th>
+										<th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">PA</th>
+										<th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Luck</th>
+									</tr>
+								</thead>
+								<tbody>
+									{powerRankings.map((row, idx) => {
+										// Check if this is the start of a new tier
+										const isNewTier = idx > 0 && powerRankings[idx - 1].tier !== row.tier;
+										
+										return (
+											<React.Fragment key={row.ownerId}>
+												{isNewTier && (
+													<tr className="bg-blue-50">
+														<td colSpan="7" className="py-1 px-3 md:px-4 text-center">
+															<div className="flex items-center justify-center">
+																<div className="flex-1 h-px bg-blue-300"></div>
+																<span className="px-3 text-xs font-semibold text-blue-600 uppercase tracking-wide">
+																	Tier {row.tier}
+																</span>
+																<div className="flex-1 h-px bg-blue-300"></div>
+															</div>
+														</td>
+													</tr>
+												)}
+												<tr className="hover:bg-gray-50 transition-colors touch-friendly">
+													<td className="py-2 md:py-3 px-3 md:px-4 text-sm text-blue-700 font-bold border-b border-gray-200">{row.rank}</td>
+													<td className="py-2 md:py-3 px-3 md:px-4 text-sm text-gray-800 font-medium border-b border-gray-200">
+														<div className="flex items-center gap-2 md:gap-3">
+															<img
+																src={getTeamDetails(row.ownerId, row.year)?.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
+																alt={getTeamName(row.ownerId, row.year)}
+																className="w-6 h-6 md:w-8 md:h-8 rounded-full border-2 border-blue-300 shadow-sm object-cover flex-shrink-0"
+																onError={(e) => { 
+																	e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`;
+																}}
+															/>
+															<span className="truncate font-semibold text-xs md:text-sm">{getTeamName(row.ownerId, row.year)}</span>
 														</div>
 													</td>
+													<td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold text-blue-800">{formatDPR(row.dpr)}</td>
+													<td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold">{`${row.wins}-${row.losses}-${row.ties}`}</td>
+													<td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold text-green-700">{formatPoints(row.pointsFor)}</td>
+													<td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold text-red-700">{formatPoints(row.pointsAgainst)}</td>
+													<td className={`py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold ${row.luckRating > 0 ? 'text-green-600' : row.luckRating < 0 ? 'text-red-600' : 'text-gray-700'}`}>{formatLuckRating(row.luckRating)}</td>
 												</tr>
-											)}
-											<tr className="hover:bg-gray-50 transition-colors">
-												<td className="py-3 px-4 text-sm text-blue-700 font-bold border-b border-gray-200">{row.rank}</td>
-												<td className="py-3 px-4 text-sm text-gray-800 font-medium border-b border-gray-200">
-													<div className="flex items-center gap-3">
-														<img
-															src={getTeamDetails(row.ownerId, row.year)?.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
-															alt={getTeamName(row.ownerId, row.year)}
-															className="w-8 h-8 rounded-full border-2 border-blue-300 shadow-sm object-cover flex-shrink-0"
-															onError={(e) => { 
-																e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`;
-															}}
-														/>
-														<span className="truncate font-semibold">{getTeamName(row.ownerId, row.year)}</span>
-													</div>
-												</td>
-												<td className="py-3 px-4 text-sm text-center border-b border-gray-200 font-semibold text-blue-800">{formatDPR(row.dpr)}</td>
-												<td className="py-3 px-4 text-sm text-center border-b border-gray-200 font-semibold">{`${row.wins}-${row.losses}-${row.ties}`}</td>
-												<td className="py-3 px-4 text-sm text-center border-b border-gray-200 font-semibold text-green-700">{formatPoints(row.pointsFor)}</td>
-												<td className="py-3 px-4 text-sm text-center border-b border-gray-200 font-semibold text-red-700">{formatPoints(row.pointsAgainst)}</td>
-												<td className={`py-3 px-4 text-sm text-center border-b border-gray-200 font-semibold ${row.luckRating > 0 ? 'text-green-600' : row.luckRating < 0 ? 'text-red-600' : 'text-gray-700'}`}>{formatLuckRating(row.luckRating)}</td>
-											</tr>
-										</React.Fragment>
-									);
-								})}
-							</tbody>
-						</table>
-					</div>
+											</React.Fragment>
+										);
+									})}
+								</tbody>
+							</table>
+						</div>
+					</>
 				) : (
 					<div className="flex justify-center items-center h-32">
-						<span className="text-lg text-gray-500">{error}</span>
+						<span className="text-sm sm:text-lg text-gray-500 text-center px-4">{error}</span>
 					</div>
 				)}
-				<p className="mt-8 text-sm text-gray-500 text-center">
+				<p className="mt-4 sm:mt-6 md:mt-8 text-xs sm:text-sm text-gray-500 text-center px-2">
 					Power Rankings are calculated based on DPR (Dominance Power Ranking) for the newest season available. 
 					Teams are automatically grouped into tiers based on significant performance gaps.
 				</p>
