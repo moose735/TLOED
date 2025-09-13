@@ -5,8 +5,6 @@ import {
     calculateEloRatings, 
     calculateTeamMomentum, 
     calculateBookmakerOdds, 
-    generateKeeperBettingMarkets,
-    generateBettingMarkets,
     calculateHybridPlayoffProbability,
     calculateChampionshipOdds,
     classifyKeeperLeagueTeam,
@@ -14,6 +12,7 @@ import {
     calculateTeamDPRValues,
     calculateWinProbability
 } from '../utils/sportsbookCalculations';
+import { generateCleanBettingMarkets } from '../utils/cleanOddsCalculator';
 import { 
     calculateRecentForm, 
     probabilityToAmericanOdds, 
@@ -230,15 +229,20 @@ import {
                     }
                 };
 
-                // Generate additional betting markets using enhanced keeper league analysis with DPR
-                const bettingMarkets = generateKeeperBettingMarkets(
-                    matchupData, 
-                    teamPowerRankings, 
-                    eloRatings, 
-                    historicalData, 
-                    currentSeason,
-                    getTeamName, // Add getTeamName function for DPR calculation
-                    nflState     // Add NFL state for DPR calculation
+                // Generate clean betting markets with proper spread-to-moneyline relationships
+                const bettingMarkets = generateCleanBettingMarkets(
+                    {
+                        team1RosterId,
+                        team2RosterId,
+                        team1Name: team1Details.name,
+                        team2Name: team2Details.name,
+                        winProbability: team1WinProb
+                    },
+                    teamPowerRankings,
+                    {
+                        vig: 0.045,
+                        includePropBets: true
+                    }
                 );
 
                 // Now add actual scores and spread coverage AFTER markets are generated
@@ -248,19 +252,23 @@ import {
                         team2Score: matchup.team2_score,
                         team1Won: matchup.team1_score > matchup.team2_score,
                         totalPoints: matchup.team1_score + matchup.team2_score,
-                        // Calculate spread coverage using the generated markets
-                        team1CoveredSpread: bettingMarkets?.pointSpread ? (() => {
-                            const isFavoriteTeam1 = bettingMarkets.pointSpread.favorite.rosterId === team1RosterId;
-                            const spread = bettingMarkets.pointSpread.spread;
+                        // Calculate spread coverage using the clean betting markets
+                        team1CoveredSpread: bettingMarkets?.spread ? (() => {
+                            const team1SpreadLine = bettingMarkets.spread.team1.line;
+                            // Handle pick'em games (PK)
+                            const team1Spread = team1SpreadLine === "PK" ? 0 : parseFloat(team1SpreadLine);
                             const team1SpreadResult = matchup.team1_score - matchup.team2_score;
                             
-                            if (isFavoriteTeam1) {
-                                // Team 1 is favorite, needs to win by more than spread
-                                return team1SpreadResult > spread;
-                            } else {
-                                // Team 1 is underdog, needs to lose by less than spread or win
-                                return team1SpreadResult > -spread;
-                            }
+                            // Check if team1 covered their spread
+                            // For pick'em games, they need to win outright
+                            return team1SpreadResult > -team1Spread;
+                        })() : null,
+                        
+                        // Calculate over/under result
+                        overHit: bettingMarkets?.total ? (() => {
+                            const totalLine = bettingMarkets.total.over.line;
+                            const actualTotal = matchup.team1_score + matchup.team2_score;
+                            return actualTotal > totalLine;
                         })() : null
                     };
                 }
@@ -546,87 +554,44 @@ import {
                                                     <div className="h-10 flex items-center justify-center text-sm font-semibold text-gray-700 mb-4">
                                                         Spread
                                                     </div>
-                                                    {matchup.markets?.pointSpread ? (
+                                                    {matchup.markets?.spread ? (
                                                         <div className="space-y-2">
-                                                            {(() => {
-                                                                // Handle pick'em games (no favorite)
-                                                                if (matchup.markets.pointSpread.isPickEm || matchup.markets.pointSpread.spread === 0) {
-                                                                    return (
-                                                                        <>
-                                                                            {/* Team 1 Pick'em */}
-                                                                            <div className={`p-3 rounded-lg text-center transition-colors cursor-pointer h-20 flex flex-col justify-center ${
-                                                                                matchup.isCompleted && matchup.actualScores?.team1CoveredSpread !== null
-                                                                                    ? (matchup.actualScores.team1CoveredSpread 
-                                                                                        ? 'bg-green-100 border-2 border-green-500' 
-                                                                                        : 'bg-red-100 border-2 border-red-300')
-                                                                                    : 'bg-gray-100 hover:bg-gray-200 border border-gray-300'
-                                                                            }`}>
-                                                                                <div className={`text-lg font-bold mb-1 ${
-                                                                                    matchup.isCompleted && matchup.actualScores?.team1CoveredSpread !== null
-                                                                                        ? (matchup.actualScores.team1CoveredSpread ? 'text-green-600' : 'text-red-600')
-                                                                                        : 'text-gray-500'
-                                                                                }`}>PICK</div>
-                                                                                <div className="text-sm text-gray-500">{formatOdds(matchup.team1.odds)}</div>
-                                                                            </div>
-                                                                            {/* Team 2 Pick'em */}
-                                                                            <div className={`p-3 rounded-lg text-center transition-colors cursor-pointer h-20 flex flex-col justify-center ${
-                                                                                matchup.isCompleted && matchup.actualScores?.team1CoveredSpread !== null
-                                                                                    ? (!matchup.actualScores.team1CoveredSpread 
-                                                                                        ? 'bg-green-100 border-2 border-green-500' 
-                                                                                        : 'bg-red-100 border-2 border-red-300')
-                                                                                    : 'bg-gray-100 hover:bg-gray-200 border border-gray-300'
-                                                                            }`}>
-                                                                                <div className={`text-lg font-bold mb-1 ${
-                                                                                    matchup.isCompleted && matchup.actualScores?.team1CoveredSpread !== null
-                                                                                        ? (!matchup.actualScores.team1CoveredSpread ? 'text-green-600' : 'text-red-600')
-                                                                                        : 'text-gray-500'
-                                                                                }`}>PICK</div>
-                                                                                <div className="text-sm text-gray-500">{formatOdds(matchup.team2.odds)}</div>
-                                                                            </div>
-                                                                        </>
-                                                                    );
-                                                                }
-                                                                
-                                                                // Standard spread game
-                                                                const isFavoriteTeam1 = matchup.markets.pointSpread.favorite.rosterId === matchup.team1.rosterId;
-                                                                const team1Spread = isFavoriteTeam1 ? `-${matchup.markets.pointSpread.spread}` : `+${matchup.markets.pointSpread.spread}`;
-                                                                const team2Spread = isFavoriteTeam1 ? `+${matchup.markets.pointSpread.spread}` : `-${matchup.markets.pointSpread.spread}`;
-                                                                
-                                                                return (
-                                                                    <>
-                                                                        {/* Team 1 Spread */}
-                                                                        <div className={`p-3 rounded-lg text-center transition-colors cursor-pointer h-20 flex flex-col justify-center ${
-                                                                            matchup.isCompleted && matchup.actualScores?.team1CoveredSpread !== null
-                                                                                ? (matchup.actualScores.team1CoveredSpread 
-                                                                                    ? 'bg-green-100 border-2 border-green-500' 
-                                                                                    : 'bg-red-100 border-2 border-red-300')
-                                                                                : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
-                                                                        }`}>
-                                                                            <div className={`text-lg font-bold mb-1 ${
-                                                                                matchup.isCompleted && matchup.actualScores?.team1CoveredSpread !== null
-                                                                                    ? (matchup.actualScores.team1CoveredSpread ? 'text-green-600' : 'text-red-600')
-                                                                                    : 'text-blue-600'
-                                                                            }`}>{team1Spread}</div>
-                                                                            <div className="text-sm text-gray-600">{formatOdds(matchup.markets.pointSpread.odds)}</div>
-                                                                        </div>
-                                                                        {/* Team 2 Spread */}
-                                                                        <div className={`p-3 rounded-lg text-center transition-colors cursor-pointer h-20 flex flex-col justify-center ${
-                                                                            matchup.isCompleted && matchup.actualScores?.team1CoveredSpread !== null
-                                                                                ? (!matchup.actualScores.team1CoveredSpread 
-                                                                                    ? 'bg-green-100 border-2 border-green-500' 
-                                                                                    : 'bg-red-100 border-2 border-red-300')
-                                                                                : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
-                                                                        }`}>
-                                                                            <div className={`text-lg font-bold mb-1 ${
-                                                                                matchup.isCompleted && matchup.actualScores?.team1CoveredSpread !== null
-                                                                                    ? (!matchup.actualScores.team1CoveredSpread ? 'text-green-600' : 'text-red-600')
-                                                                                    : 'text-blue-600'
-                                                                            }`}>{team2Spread}</div>
-                                                                            <div className="text-sm text-gray-600">{formatOdds(matchup.markets.pointSpread.odds)}</div>
-                                                                        </div>
-                                                                    </>
-                                                                );
-                                                            })()}
+                                                            {/* Team 1 Spread */}
+                                                            <div className={`p-3 rounded-lg text-center transition-colors cursor-pointer h-20 flex flex-col justify-center ${
+                                                                matchup.isCompleted && matchup.actualScores?.team1CoveredSpread !== null
+                                                                    ? (matchup.actualScores.team1CoveredSpread 
+                                                                        ? 'bg-green-100 border-2 border-green-500' 
+                                                                        : 'bg-red-100 border-2 border-red-300')
+                                                                    : 'bg-gray-100 hover:bg-gray-200 border border-gray-300'
+                                                            }`}>
+                                                                <div className={`text-lg font-bold mb-1 ${
+                                                                    matchup.isCompleted && matchup.actualScores?.team1CoveredSpread !== null
+                                                                        ? (matchup.actualScores.team1CoveredSpread ? 'text-green-600' : 'text-red-600')
+                                                                        : 'text-gray-500'
+                                                                }`}>{matchup.markets.spread.team1.line}</div>
+                                                                {/* Only show odds for non-pick'em games */}
+                                                                {matchup.markets.spread.team1.line !== "PK" && (
+                                                                    <div className="text-sm text-gray-500">{formatOdds(matchup.markets.spread.team1.odds)}</div>
+                                                                )}
+                                                            </div>
+                                                            {/* Team 2 Spread */}
+                                                            <div className={`p-3 rounded-lg text-center transition-colors cursor-pointer h-20 flex flex-col justify-center ${
+                                                                matchup.isCompleted && matchup.actualScores?.team1CoveredSpread !== null
+                                                                    ? (!matchup.actualScores.team1CoveredSpread 
+                                                                        ? 'bg-green-100 border-2 border-green-500' 
+                                                                        : 'bg-red-100 border-2 border-red-300')
+                                                                    : 'bg-gray-100 hover:bg-gray-200 border border-gray-300'
+                                                            }`}>
+                                                                <div className={`text-lg font-bold mb-1 ${
+                                                                    matchup.isCompleted && matchup.actualScores?.team1CoveredSpread !== null
+                                                                        ? (!matchup.actualScores.team1CoveredSpread ? 'text-green-600' : 'text-red-600')
+                                                                        : 'text-gray-500'
+                                                                }`}>{matchup.markets.spread.team2.line}</div>
+                                                                {/* Only show odds for non-pick'em games */}
+                                                                {matchup.markets.spread.team2.line !== "PK" && (
+                                                                    <div className="text-sm text-gray-500">{formatOdds(matchup.markets.spread.team2.odds)}</div>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     ) : (
                                                         <div className="space-y-2">
@@ -641,43 +606,43 @@ import {
                                                     <div className="h-10 flex items-center justify-center text-sm font-semibold text-gray-700 mb-4">
                                                         Total
                                                     </div>
-                                                    {matchup.markets?.overUnder ? (
+                                                    {matchup.markets?.total ? (
                                                         <div className="space-y-2">
                                                             {/* Over */}
                                                             <div className={`p-3 rounded-lg text-center transition-colors cursor-pointer h-20 flex flex-col justify-center ${
-                                                                matchup.isCompleted 
-                                                                    ? (matchup.actualScores.totalPoints > matchup.markets.overUnder.total
+                                                                matchup.isCompleted && matchup.actualScores?.overHit !== null
+                                                                    ? (matchup.actualScores.overHit
                                                                         ? 'bg-green-100 border-2 border-green-500' 
                                                                         : 'bg-red-100 border-2 border-red-300') 
                                                                     : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
                                                             }`}>
                                                                 <div className="text-xs text-gray-600 mb-1">OVER</div>
                                                                 <div className={`text-lg font-bold mb-1 ${
-                                                                    matchup.isCompleted 
-                                                                        ? (matchup.actualScores.totalPoints > matchup.markets.overUnder.total ? 'text-green-600' : 'text-red-600')
+                                                                    matchup.isCompleted && matchup.actualScores?.overHit !== null
+                                                                        ? (matchup.actualScores.overHit ? 'text-green-600' : 'text-red-600')
                                                                         : 'text-purple-600'
                                                                 }`}>
-                                                                    {matchup.markets.overUnder.total}
+                                                                    {matchup.markets.total.over.line}
                                                                 </div>
-                                                                <div className="text-sm text-gray-600">{formatOdds(matchup.markets.overUnder.overOdds)}</div>
+                                                                <div className="text-sm text-gray-600">{formatOdds(matchup.markets.total.over.odds)}</div>
                                                             </div>
                                                             {/* Under */}
                                                             <div className={`p-3 rounded-lg text-center transition-colors cursor-pointer h-20 flex flex-col justify-center ${
-                                                                matchup.isCompleted 
-                                                                    ? (matchup.actualScores.totalPoints < matchup.markets.overUnder.total
+                                                                matchup.isCompleted && matchup.actualScores?.overHit !== null
+                                                                    ? (!matchup.actualScores.overHit
                                                                         ? 'bg-green-100 border-2 border-green-500' 
                                                                         : 'bg-red-100 border-2 border-red-300') 
                                                                     : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
                                                             }`}>
                                                                 <div className="text-xs text-gray-600 mb-1">UNDER</div>
                                                                 <div className={`text-lg font-bold mb-1 ${
-                                                                    matchup.isCompleted 
-                                                                        ? (matchup.actualScores.totalPoints < matchup.markets.overUnder.total ? 'text-green-600' : 'text-red-600')
+                                                                    matchup.isCompleted && matchup.actualScores?.overHit !== null
+                                                                        ? (!matchup.actualScores.overHit ? 'text-green-600' : 'text-red-600')
                                                                         : 'text-purple-600'
                                                                 }`}>
-                                                                    {matchup.markets.overUnder.total}
+                                                                    {matchup.markets.total.under.line}
                                                                 </div>
-                                                                <div className="text-sm text-gray-600">{formatOdds(matchup.markets.overUnder.underOdds)}</div>
+                                                                <div className="text-sm text-gray-600">{formatOdds(matchup.markets.total.under.odds)}</div>
                                                             </div>
                                                         </div>
                                                     ) : (
@@ -696,34 +661,34 @@ import {
                                                     <div className="space-y-2">
                                                         {/* Team 1 Moneyline */}
                                                         <div className={`p-3 rounded-lg text-center transition-colors cursor-pointer h-20 flex flex-col justify-center ${
-                                                            matchup.isCompleted 
+                                                            matchup.isCompleted && matchup.actualScores?.team1Won !== null
                                                                 ? (matchup.actualScores.team1Won 
                                                                     ? 'bg-green-100 border-2 border-green-500' 
                                                                     : 'bg-red-100 border-2 border-red-300') 
                                                                 : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
                                                         }`}>
                                                             <div className={`text-lg font-bold ${
-                                                                matchup.isCompleted 
+                                                                matchup.isCompleted && matchup.actualScores?.team1Won !== null
                                                                     ? (matchup.actualScores.team1Won ? 'text-green-600' : 'text-red-600')
                                                                     : 'text-blue-600'
                                                             }`}>
-                                                                {formatOdds(matchup.team1.odds)}
+                                                                {formatOdds(matchup.markets?.moneyline?.team1?.odds || matchup.team1.odds)}
                                                             </div>
                                                         </div>
                                                         {/* Team 2 Moneyline */}
                                                         <div className={`p-3 rounded-lg text-center transition-colors cursor-pointer h-20 flex flex-col justify-center ${
-                                                            matchup.isCompleted 
+                                                            matchup.isCompleted && matchup.actualScores?.team1Won !== null
                                                                 ? (!matchup.actualScores.team1Won 
                                                                     ? 'bg-green-100 border-2 border-green-500' 
                                                                     : 'bg-red-100 border-2 border-red-300') 
                                                                 : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
                                                         }`}>
                                                             <div className={`text-lg font-bold ${
-                                                                matchup.isCompleted 
+                                                                matchup.isCompleted && matchup.actualScores?.team1Won !== null
                                                                     ? (!matchup.actualScores.team1Won ? 'text-green-600' : 'text-red-600')
                                                                     : 'text-blue-600'
                                                             }`}>
-                                                                {formatOdds(matchup.team2.odds)}
+                                                                {formatOdds(matchup.markets?.moneyline?.team2?.odds || matchup.team2.odds)}
                                                             </div>
                                                         </div>
                                                     </div>

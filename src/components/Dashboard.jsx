@@ -140,20 +140,20 @@ const Dashboard = () => {
             .sort((a, b) => b.created - a.created)
             .slice(0, 10)
             .map(transaction => {
+                // Find rosters using the same season logic as other calculations
+                let season = currentSeason;
+                if (!season) {
+                    const years = Object.keys(historicalData?.rostersBySeason || {});
+                    if (years.length > 0) {
+                        season = Math.max(...years.map(Number)).toString();
+                    }
+                }
+                
+                const rosters = historicalData?.rostersBySeason?.[season] || [];
+                
                 // Get team details for the transaction
                 const teamDetails = [];
                 if (transaction.roster_ids && transaction.roster_ids.length > 0) {
-                    // Find rosters using the same season logic as other calculations
-                    let season = currentSeason;
-                    if (!season) {
-                        const years = Object.keys(historicalData?.rostersBySeason || {});
-                        if (years.length > 0) {
-                            season = Math.max(...years.map(Number)).toString();
-                        }
-                    }
-                    
-                    const rosters = historicalData?.rostersBySeason?.[season] || [];
-                    
                     transaction.roster_ids.forEach(rosterId => {
                         const roster = rosters.find(r => String(r.roster_id) === String(rosterId));
                         if (roster) {

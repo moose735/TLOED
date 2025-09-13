@@ -915,22 +915,24 @@ const DraftAnalysis = () => {
                                     <div
                                         className="grid gap-1 p-2 rounded-lg bg-gray-700"
                                         style={{
-                                            gridTemplateColumns: `auto repeat(${orderedTeamColumns.length}, minmax(140px, 1fr))`,
-                                            minWidth: `${Math.max(140 * (orderedTeamColumns.length + 1), 640)}px`
+                                            gridTemplateColumns: `auto repeat(${orderedTeamColumns.length}, minmax(100px, 1fr))`,
+                                            minWidth: `${Math.max(100 * (orderedTeamColumns.length + 1), 480)}px`
                                         }}
                                     >
                                         {/* Header Row: Round and Team Names */}
-                                        <div className="bg-gray-600 text-gray-200 font-bold py-2 px-2 text-center rounded-tl-md">Round</div>
+                                        <div className="bg-gray-600 text-gray-200 font-bold py-1 px-1 text-center rounded-tl-md text-xs">Round</div>
                                         {orderedTeamColumns.map(team => (
-                                            <div key={team.userId} className="bg-gray-600 text-gray-200 font-bold py-2 px-2 text-center flex flex-col items-center justify-center rounded-t-md">
-                                                <span className="text-xs overflow-hidden whitespace-nowrap text-ellipsis max-w-full block">{team.teamName}</span>
+                                            <div key={team.userId} className="bg-gray-600 text-gray-200 font-bold py-1 px-1 text-center flex flex-col items-center justify-center rounded-t-md min-h-[40px]">
+                                                <span className="text-xs leading-tight break-words text-center max-w-full block" style={{ wordBreak: 'break-word', hyphens: 'auto' }}>
+                                                    {team.teamName}
+                                                </span>
                                             </div>
                                         ))}
 
                                         {/* Draft Picks Rows */}
                                         {roundsArray.map(round => (
                                             <React.Fragment key={round}>
-                                                <div className="bg-gray-600 text-gray-200 font-bold py-2 px-2 text-center flex items-center justify-center rounded-bl-md">
+                                                <div className="bg-gray-600 text-gray-200 font-bold py-2 px-1 text-center flex items-center justify-center rounded-bl-md text-xs">
                                                     {round}
                                                 </div>
 
@@ -982,52 +984,52 @@ const DraftAnalysis = () => {
                                                     return (
                                                         <div
                                                             key={`${round}-${colIndex}`}
-                                                            className={`relative p-2 border border-gray-700 text-xs sm:text-sm min-h-[90px] sm:min-h-[120px]
+                                                            className={`relative p-1 border border-gray-700 text-xs min-h-[60px] sm:min-h-[70px]
                                                                         ${pick ? getPositionColorClass(pick.player_position) : 'bg-gray-900'}`}
                                                         >
                                                             {pick ? (
                                                                 pick.is_keeper ? (
-                                                                    <div className="flex items-center justify-center h-full text-lg font-bold text-green-300">
+                                                                    <div className="flex items-center justify-center h-full text-sm font-bold text-green-300">
                                                                         KEEPER
                                                                     </div>
                                                                 ) : (
                                                                     <>
                                                                         {/* Position - Top Left */}
-                                                                        <div className="absolute top-1 left-1 text-xs text-gray-200 text-left">
+                                                                        <div className="absolute top-0.5 left-0.5 text-xs text-gray-200 text-left">
                                                                             {pick.player_position}
                                                                         </div>
                                                                         {/* Team - Top Right */}
-                                                                        <div className="absolute top-1 right-1 text-xs text-gray-200 text-right">
+                                                                        <div className="absolute top-0.5 right-0.5 text-xs text-gray-200 text-right">
                                                                             {pick.player_team}
                                                                         </div>
 
                                                                         {/* Player First Name - Centered */}
-                                                                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 font-medium text-white text-center w-full mt-[-10px] text-sm sm:text-base">
+                                                                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 font-medium text-white text-center w-full mt-[-6px] text-xs leading-tight">
                                                                             {displayFirstName}
                                                                         </div>
                                                                         {/* Player Last Name - Centered, larger font */}
-                                                                        <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 ${lastNameFontSizeClass} font-bold text-white text-center w-full mt-[10px] text-sm sm:text-lg`}>
+                                                                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-sm font-bold text-white text-center w-full mt-[6px] leading-tight">
                                                                             {displayLastName}
                                                                         </div>
 
                                                                         {/* VORP Delta Bubble - Bottom Left */}
                                                                         {typeof pick.scaled_vorp_delta === 'number' && (
                                                                             <div
-                                                                                className={`absolute bottom-1 left-1 inline-flex items-center justify-center text-xs font-bold text-white px-2 py-1 rounded-md
+                                                                                className={`absolute bottom-0.5 left-0.5 inline-flex items-center justify-center text-xs font-bold text-white px-1 py-0.5 rounded
                                                                                             ${pick.scaled_vorp_delta >= 0 ? 'bg-green-500' : 'bg-red-500'}`}
                                                                                 title={`VORP Delta: ${pick.scaled_vorp_delta.toFixed(2)}`}
                                                                             >
-                                                                                {pick.scaled_vorp_delta.toFixed(2)}
+                                                                                {pick.scaled_vorp_delta.toFixed(1)}
                                                                             </div>
                                                                         )}
 
                                                                         {/* Traded Icon for player picks (remains bottom right) */}
                                                                         {isTradedPickForPlayer && (
                                                                             <div
-                                                                                className="absolute bottom-1 right-1 cursor-help"
+                                                                                className="absolute bottom-0.5 right-0.5 cursor-help"
                                                                                 title={`Pick acquired by: ${pick.picked_by_team_name}`}
                                                                             >
-                                                                                <FontAwesomeIcon icon={faRepeat} className="w-4 h-4 text-yellow-400" />
+                                                                                <FontAwesomeIcon icon={faRepeat} className="w-3 h-3 text-yellow-400" />
                                                                             </div>
                                                                         )}
                                                                     </>
@@ -1035,14 +1037,14 @@ const DraftAnalysis = () => {
                                                             ) : tradedPickInfo ? (
                                                                 // Only show the icon and tooltip for empty traded picks
                                                                 <div
-                                                                    className="absolute bottom-1 right-1 cursor-help"
+                                                                    className="absolute bottom-0.5 right-0.5 cursor-help"
                                                                     title={`Pick acquired by: ${getTeamName(getUserIdFromRosterId(tradedPickInfo.owner_id, selectedSeason, historicalData.rostersBySeason), selectedSeason)}`}
                                                                 >
                                                                     {/* Two-way arrow SVG icon */}
-                                                                    <FontAwesomeIcon icon={faRepeat} className="w-4 h-4 text-yellow-400" />
+                                                                    <FontAwesomeIcon icon={faRepeat} className="w-3 h-3 text-yellow-400" />
                                                                 </div>
                                                             ) : (
-                                                                <span className="text-gray-600 text-xs">Empty Pick</span>
+                                                                <span className="text-gray-600 text-xs">Empty</span>
                                                             )}
                                                         </div>
                                                     );
