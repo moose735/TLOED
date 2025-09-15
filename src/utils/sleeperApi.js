@@ -51,6 +51,14 @@ const BASE_URL = 'https://api.sleeper.app/v1';
 const inMemoryCache = new Map();
 
 /**
+ * Clears the in-memory cache (useful for development/debugging)
+ */
+export function clearCache() {
+    inMemoryCache.clear();
+    console.log('[Cache] In-memory cache cleared');
+}
+
+/**
  * Fetches data from a given URL and caches it.
  * @param {string} url The API endpoint URL.
  * @param {string} cacheKey The key to use for caching this data.
@@ -277,6 +285,17 @@ function processRawMatchups(rawMatchups, rosterIdToDetailsMap, season, week) {
                     const team1Score = points;
                     const team2Score = opponentPoints;
 
+                    // Add player data if available
+                    const team1Players = teamMatchup.starters && teamMatchup.players_points ? {
+                        starters: teamMatchup.starters,
+                        players_points: teamMatchup.players_points
+                    } : null;
+                    
+                    const team2Players = opponentEntry.starters && opponentEntry.players_points ? {
+                        starters: opponentEntry.starters,
+                        players_points: opponentEntry.players_points
+                    } : null;
+
                     const newMatchup = {
                         matchup_id: matchupId,
                         season: season,
@@ -284,9 +303,11 @@ function processRawMatchups(rawMatchups, rosterIdToDetailsMap, season, week) {
                         team1_roster_id: rosterId,
                         team1_score: team1Score,
                         team1_details: rosterIdToDetailsMap.get(rosterId),
+                        team1_players: team1Players,
                         team2_roster_id: opponentRosterId,
                         team2_score: team2Score,
                         team2_details: rosterIdToDetailsMap.get(opponentRosterId),
+                        team2_players: team2Players,
                     };
 
                     if (team1Score > team2Score) {

@@ -3,9 +3,11 @@ import { useSleeperData } from '../contexts/SleeperDataContext';
 import { calculateAllLeagueMetrics } from '../utils/calculations';
 
 const LeagueRecords = () => {
-    const { historicalData, allDraftHistory, getTeamName, getTeamDetails, currentSeason, loading, error } = useSleeperData();
+    const { historicalData, allDraftHistory, getTeamName, getTeamDetails, currentSeason, loading, error, nflState } = useSleeperData();
     const [allTimeRecords, setAllTimeRecords] = useState({});
     const [recordHistory, setRecordHistory] = useState({});
+    const [topFiveRankings, setTopFiveRankings] = useState({});
+    const [expandedSections, setExpandedSections] = useState({});
     const [isLoading, setIsLoading] = useState(true);
     const formatConfig = {
         highestDPR: { decimals: 3, type: 'decimal' },
@@ -143,10 +145,66 @@ const LeagueRecords = () => {
         return history;
     };
 
+    // Calculate top 5 rankings for each metric
+    const calculateTopFiveRankings = (careerDPRData) => {
+        const rankings = {};
+        
+        // Helper function to get top 5 for a metric
+        const getTop5 = (metric, isHigherBetter = true) => {
+            return careerDPRData
+                .map(team => ({
+                    name: team.teamName,
+                    ownerId: team.ownerId,
+                    value: team[metric]
+                }))
+                .filter(team => team.value !== undefined && team.value !== null)
+                .sort((a, b) => isHigherBetter ? b.value - a.value : a.value - b.value)
+                .slice(0, 5);
+        };
+
+        rankings.highestDPR = getTop5('dpr', true);
+        rankings.lowestDPR = getTop5('dpr', false);
+        rankings.mostWins = getTop5('wins', true);
+        rankings.mostLosses = getTop5('losses', true);
+        rankings.bestWinPct = getTop5('winPercentage', true);
+        rankings.bestAllPlayWinPct = getTop5('allPlayWinPercentage', true);
+        rankings.mostWeeklyHighScores = getTop5('topScoreWeeksCount', true);
+        rankings.mostWeeklyTop2Scores = getTop5('weeklyTop2ScoresCount', true);
+        rankings.mostBlowoutWins = getTop5('blowoutWins', true);
+        rankings.mostBlowoutLosses = getTop5('blowoutLosses', true);
+        rankings.mostSlimWins = getTop5('slimWins', true);
+        rankings.mostSlimLosses = getTop5('slimLosses', true);
+        rankings.mostTotalPoints = getTop5('pointsFor', true);
+        rankings.mostPointsAgainst = getTop5('pointsAgainst', true);
+
+        // Calculate winning/losing seasons separately
+        const seasonalData = careerDPRData.map(team => {
+            let winningSeasonsCount = 0;
+            let losingSeasonsCount = 0;
+            
+            // This would need access to seasonalMetrics, so we'll calculate it differently
+            return {
+                name: team.teamName,
+                ownerId: team.ownerId,
+                winningSeasons: winningSeasonsCount,
+                losingSeasons: losingSeasonsCount
+            };
+        });
+
+        return rankings;
+    };
+
+    const toggleSection = (recordKey) => {
+        setExpandedSections(prev => ({
+            ...prev,
+            [recordKey]: !prev[recordKey]
+        }));
+    };
+
     useEffect(() => {
         setIsLoading(true);
 
-        if (loading || error || !historicalData || !historicalData.matchupsBySeason || Object.keys(historicalData.matchupsBySeason).length === 0) {
+        if (loading || error || !historicalData || !historicalData.matchupsBySeason || Object.keys(historicalData.matchupsBySeason).length === 0 || !nflState) {
             setAllTimeRecords({});
             setRecordHistory({});
             setIsLoading(false);
@@ -154,11 +212,49 @@ const LeagueRecords = () => {
         }
 
         try {
-            const { seasonalMetrics, careerDPRData: calculatedCareerDPRs } = calculateAllLeagueMetrics(historicalData, allDraftHistory, getTeamName);
+            const { seasonalMetrics, careerDPRData: calculatedCareerDPRs } = calculateAllLeagueMetrics(historicalData, allDraftHistory, getTeamName, nflState);
             
             // Calculate historical progression
             const history = calculateRecordHistory(seasonalMetrics);
             setRecordHistory(history);
+            
+            // Calculate top 5 rankings
+            const rankings = calculateTopFiveRankings(calculatedCareerDPRs);
+            
+            // Calculate winning/losing seasons for rankings
+            calculatedCareerDPRs.forEach(careerStats => {
+                const ownerId = careerStats.ownerId;
+                let winningSeasonsCount = 0;
+                let losingSeasonsCount = 0;
+
+                Object.keys(seasonalMetrics).forEach(year => {
+                    const teamsInSeason = Object.values(seasonalMetrics[year]);
+                    const currentOwnerTeamInSeason = teamsInSeason.find(t => t.ownerId === ownerId);
+                    if (currentOwnerTeamInSeason && currentOwnerTeamInSeason.totalGames > 0) {
+                        if (currentOwnerTeamInSeason.winPercentage > 0.5) {
+                            winningSeasonsCount++;
+                        } else if (currentOwnerTeamInSeason.winPercentage < 0.5) {
+                            losingSeasonsCount++;
+                        }
+                    }
+                });
+                
+                careerStats.winningSeasonsCount = winningSeasonsCount;
+                careerStats.losingSeasonsCount = losingSeasonsCount;
+            });
+
+            // Update rankings with winning/losing seasons
+            rankings.mostWinningSeasons = calculatedCareerDPRs
+                .map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.winningSeasonsCount }))
+                .sort((a, b) => b.value - a.value)
+                .slice(0, 5);
+            
+            rankings.mostLosingSeasons = calculatedCareerDPRs
+                .map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.losingSeasonsCount }))
+                .sort((a, b) => b.value - a.value)
+                .slice(0, 5);
+
+            setTopFiveRankings(rankings);
             
             let highestDPR = { value: -Infinity, teams: [], key: 'highestDPR' };
             let lowestDPR = { value: Infinity, teams: [], key: 'lowestDPR' };
@@ -245,7 +341,7 @@ const LeagueRecords = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [historicalData, allDraftHistory, getTeamName, loading, error]);
+    }, [historicalData, allDraftHistory, getTeamName, loading, error, nflState]);
 
     if (isLoading) {
         return <div className="text-center py-8">Loading all-time league records...</div>;
@@ -330,35 +426,78 @@ const LeagueRecords = () => {
                                     );
                                 }
 
+                                const topFiveData = topFiveRankings[record.key] || [];
+                                const isExpanded = expandedSections[record.key];
+
                                 return (
-                                    <tr
-                                        key={key}
-                                        className={`transition-all duration-200 hover:bg-blue-50 hover:shadow-sm ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}
-                                    >
-                                        <td className="py-3 px-3 sm:py-4 sm:px-6">
-                                            <div className="flex items-center gap-2 sm:gap-3">
-                                                <span className="font-semibold text-gray-900 text-xs sm:text-sm">{getLabel()}</span>
-                                            </div>
-                                        </td>
-                                        <td className="py-3 px-3 sm:py-4 sm:px-6 text-center">
-                                            <div className="inline-flex items-center px-2 py-1 sm:px-3 sm:py-1 rounded-full bg-gradient-to-r from-green-100 to-teal-100 border border-green-200">
-                                                <span className="font-bold text-gray-900 text-xs sm:text-sm">
-                                                    {config.type === 'percentage'
-                                                        ? (record.value * 100).toLocaleString('en-US', { minimumFractionDigits: config.decimals, maximumFractionDigits: config.decimals }) + '%'
-                                                        : record.value.toLocaleString('en-US', { minimumFractionDigits: config.decimals, maximumFractionDigits: config.decimals })}
-                                                </span>
-                                            </div>
-                                        </td>
-                                        <td className="py-3 px-3 sm:py-4 sm:px-6">
-                                            <div className="flex flex-col space-y-1 sm:space-y-2">
-                                                {record.teams.map((team, index) => (
-                                                    <div key={index} className="flex items-center gap-2 sm:gap-3 bg-gray-100 rounded-lg p-1.5 sm:p-2 border border-gray-200">
-                                                        <span className="font-medium text-gray-800 text-xs sm:text-sm truncate">{getDisplayTeamName(team)}</span>
+                                    <React.Fragment key={key}>
+                                        <tr className={`transition-all duration-200 hover:bg-blue-50 hover:shadow-sm ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}>
+                                            <td className="py-3 px-3 sm:py-4 sm:px-6">
+                                                <div className="flex items-center gap-2 sm:gap-3">
+                                                    <span className="font-semibold text-gray-900 text-xs sm:text-sm">{getLabel()}</span>
+                                                    {topFiveData.length > 0 && (
+                                                        <button
+                                                            onClick={() => toggleSection(record.key)}
+                                                            className="text-blue-600 hover:text-blue-800 transition-colors"
+                                                        >
+                                                            <svg 
+                                                                className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                                                fill="none" 
+                                                                stroke="currentColor" 
+                                                                viewBox="0 0 24 24"
+                                                            >
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                            </svg>
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="py-3 px-3 sm:py-4 sm:px-6 text-center">
+                                                <div className="inline-flex items-center px-2 py-1 sm:px-3 sm:py-1 rounded-full bg-gradient-to-r from-green-100 to-teal-100 border border-green-200">
+                                                    <span className="font-bold text-gray-900 text-xs sm:text-sm">
+                                                        {config.type === 'percentage'
+                                                            ? (record.value * 100).toLocaleString('en-US', { minimumFractionDigits: config.decimals, maximumFractionDigits: config.decimals }) + '%'
+                                                            : record.value.toLocaleString('en-US', { minimumFractionDigits: config.decimals, maximumFractionDigits: config.decimals })}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="py-3 px-3 sm:py-4 sm:px-6">
+                                                <div className="flex flex-col space-y-1 sm:space-y-2">
+                                                    {record.teams.map((team, index) => (
+                                                        <div key={index} className="flex items-center gap-2 sm:gap-3 bg-gray-100 rounded-lg p-1.5 sm:p-2 border border-gray-200">
+                                                            <span className="font-medium text-gray-800 text-xs sm:text-sm truncate">{getDisplayTeamName(team)}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {isExpanded && topFiveData.length > 0 && (
+                                            <tr className="bg-blue-50/50">
+                                                <td colSpan="3" className="py-3 px-3 sm:py-4 sm:px-6">
+                                                    <div className="bg-white rounded-lg p-3 sm:p-4 border border-blue-200">
+                                                        <h4 className="font-semibold text-gray-800 text-xs sm:text-sm mb-3">Top 5 Rankings</h4>
+                                                        <div className="space-y-2">
+                                                            {topFiveData.map((team, index) => (
+                                                                <div key={index} className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="w-6 h-6 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                                                                            {index + 1}
+                                                                        </span>
+                                                                        <span className="font-medium text-gray-800 text-xs sm:text-sm">{team.name}</span>
+                                                                    </div>
+                                                                    <span className="font-bold text-gray-900 text-xs sm:text-sm">
+                                                                        {config.type === 'percentage'
+                                                                            ? (team.value * 100).toLocaleString('en-US', { minimumFractionDigits: config.decimals, maximumFractionDigits: config.decimals }) + '%'
+                                                                            : team.value.toLocaleString('en-US', { minimumFractionDigits: config.decimals, maximumFractionDigits: config.decimals })}
+                                                                    </span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
                                                     </div>
-                                                ))}
-                                            </div>
-                                        </td>
-                                    </tr>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </React.Fragment>
                                 );
                             })}
                         </tbody>

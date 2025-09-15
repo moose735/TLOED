@@ -164,147 +164,122 @@ const MilestoneRecords = () => {
     }, [historicalData, contextLoading]);
 
     const calculateMilestones = () => {
-        // Use the standardized calculateAllLeagueMetrics function to ensure consistency
+        console.log('=== SIMPLE MILESTONE TRACKER START ===');
+        
+        // Get career data for final stats and team info
         const { careerDPRData } = calculateAllLeagueMetrics(historicalData, null, getTeamName, nflState);
         
         if (!careerDPRData || careerDPRData.length === 0) {
-            console.warn('MilestoneRecords - No career DPR data found');
+            console.warn('No career data found');
             return;
         }
-        
+
+        // Initialize data structures
         const teamStats = {};
         const allRosters = {};
-        const achievementHistory = {};
-        
-        // We need to process historical data chronologically to track when milestones were achieved
-        const allSeasons = Object.keys(historicalData.matchupsBySeason || {}).sort((a, b) => parseInt(a) - parseInt(b));
-        
-        // Initialize achievement history tracking with base milestones
+        const achievementTimeline = {};
+
+        // Initialize milestone achievement tracking
         Object.keys(baseMilestones).forEach(milestoneKey => {
-            achievementHistory[milestoneKey] = {};
+            achievementTimeline[milestoneKey] = {};
             baseMilestones[milestoneKey].thresholds.forEach(threshold => {
-                achievementHistory[milestoneKey][threshold] = [];
+                achievementTimeline[milestoneKey][threshold] = [];
             });
         });
 
-        // Initialize team stats and rosters using the career data for final values
+        // Set up team info and final stats
         careerDPRData.forEach(careerStats => {
             const ownerId = careerStats.ownerId;
+            const teamDetails = getTeamDetails(ownerId, currentSeason);
+            
             teamStats[ownerId] = {
+                // Running totals (updated week by week)
                 wins: 0,
                 losses: 0,
                 ties: 0,
-                totalWins: 0,
-                totalLosses: 0,
+                points: 0,
                 allPlayWins: 0,
                 allPlayLosses: 0,
-                totalPoints: 0,
-                totalOpponentPoints: 0,
                 highScores: 0,
-                weekHistory: [],
-                achievements: {},
-                milestoneHistory: {},
-                // Store final career totals for reference
-                careerTotals: {
-                    wins: careerStats.wins || 0,
-                    losses: careerStats.losses || 0,
-                    ties: careerStats.ties || 0,
-                    allPlayWins: careerStats.allPlayWins || 0,
-                    allPlayLosses: careerStats.allPlayLosses || 0,
-                    totalPoints: careerStats.pointsFor || 0,
-                    highScores: careerStats.topScoreWeeksCount || 0
-                }
+                // Final career totals
+                finalWins: careerStats.wins || 0,
+                finalLosses: careerStats.losses || 0,
+                finalTies: careerStats.ties || 0,
+                finalPoints: careerStats.pointsFor || 0,
+                finalAllPlayWins: careerStats.allPlayWins || 0,
+                finalAllPlayLosses: careerStats.allPlayLosses || 0,
+                finalHighScores: careerStats.topScoreWeeksCount || 0
             };
 
-            // Use team details from the context
-            const teamDetails = getTeamDetails(ownerId, currentSeason);
             allRosters[ownerId] = {
                 name: careerStats.teamName || getTeamName(ownerId, currentSeason),
                 avatar: teamDetails?.avatar
             };
         });
 
-        // Process historical data chronologically to track milestone achievements
-        let globalWeekCounter = 0;
-        
+        // Process matchups chronologically
+        const allSeasons = Object.keys(historicalData.matchupsBySeason || {}).sort((a, b) => parseInt(a) - parseInt(b));
+        let globalWeek = 0;
+
+        console.log(`Processing ${allSeasons.length} seasons chronologically`);
+
         allSeasons.forEach(season => {
             const matchups = historicalData.matchupsBySeason?.[season] || [];
-            
-            const weeklyScores = {};
+            const rosters = historicalData.rostersBySeason?.[season] || [];
             
             // Group matchups by week
-            const matchupsByWeek = {};
+            const weeklyMatchups = {};
             matchups.forEach(matchup => {
                 const week = matchup.week;
-                if (!matchupsByWeek[week]) {
-                    matchupsByWeek[week] = [];
-                }
-                matchupsByWeek[week].push(matchup);
+                if (!weeklyMatchups[week]) weeklyMatchups[week] = [];
+                weeklyMatchups[week].push(matchup);
             });
 
-            // Process weeks in chronological order
-            const sortedWeeks = Object.keys(matchupsByWeek).sort((a, b) => parseInt(a) - parseInt(b));
+            // Process each week in order
+            const weeks = Object.keys(weeklyMatchups).sort((a, b) => parseInt(a) - parseInt(b));
             
-            sortedWeeks.forEach(week => {
-                globalWeekCounter++;
-                const weekMatchups = matchupsByWeek[week];
-                
-                if (!weeklyScores[week]) {
-                    weeklyScores[week] = [];
-                }
+            weeks.forEach(week => {
+                globalWeek++;
+                const weekMatchups = weeklyMatchups[week];
+                const weekScores = [];
 
-                // Process each matchup in this week
+                // Process matchups for this week
                 weekMatchups.forEach(matchup => {
-                    const team1RosterId = matchup.team1_roster_id;
-                    const team2RosterId = matchup.team2_roster_id;
+                    const team1Roster = rosters.find(r => r.roster_id === matchup.team1_roster_id);
+                    const team2Roster = rosters.find(r => r.roster_id === matchup.team2_roster_id);
+                    
+                    if (!team1Roster || !team2Roster) return;
+
+                    const team1Id = team1Roster.owner_id;
+                    const team2Id = team2Roster.owner_id;
                     const team1Score = parseFloat(matchup.team1_score) || 0;
                     const team2Score = parseFloat(matchup.team2_score) || 0;
 
-                    // Find owner IDs for rosters
-                    const rosters = historicalData.rostersBySeason?.[season] || [];
-                    const team1Roster = rosters.find(r => r.roster_id === team1RosterId);
-                    const team2Roster = rosters.find(r => r.roster_id === team2RosterId);
-                    
-                    if (!team1Roster || !team2Roster) return;
-                    
-                    const team1OwnerId = team1Roster.owner_id;
-                    const team2OwnerId = team2Roster.owner_id;
+                    // Ensure teams exist
+                    if (!teamStats[team1Id] || !teamStats[team2Id]) return;
 
-                    // Update basic stats
+                    // Update wins/losses
                     if (team1Score > team2Score) {
-                        teamStats[team1OwnerId].wins++;
-                        teamStats[team1OwnerId].totalWins++;
-                        teamStats[team2OwnerId].losses++;
-                        teamStats[team2OwnerId].totalLosses++;
+                        teamStats[team1Id].wins++;
+                        teamStats[team2Id].losses++;
                     } else if (team2Score > team1Score) {
-                        teamStats[team2OwnerId].wins++;
-                        teamStats[team2OwnerId].totalWins++;
-                        teamStats[team1OwnerId].losses++;
-                        teamStats[team1OwnerId].totalLosses++;
+                        teamStats[team2Id].wins++;
+                        teamStats[team1Id].losses++;
                     } else {
-                        teamStats[team1OwnerId].ties++;
-                        teamStats[team2OwnerId].ties++;
+                        teamStats[team1Id].ties++;
+                        teamStats[team2Id].ties++;
                     }
 
                     // Update points
-                    teamStats[team1OwnerId].totalPoints += team1Score;
-                    teamStats[team2OwnerId].totalPoints += team2Score;
-                    teamStats[team1OwnerId].totalOpponentPoints += team2Score;
-                    teamStats[team2OwnerId].totalOpponentPoints += team1Score;
+                    teamStats[team1Id].points += team1Score;
+                    teamStats[team2Id].points += team2Score;
 
-                    // Add to weekly scores for all-play and high score tracking
-                    weeklyScores[week].push({
-                        ownerId: team1OwnerId,
-                        score: team1Score
-                    });
-                    weeklyScores[week].push({
-                        ownerId: team2OwnerId,
-                        score: team2Score
-                    });
+                    // Track scores for all-play and high-score calculations
+                    weekScores.push({ ownerId: team1Id, score: team1Score });
+                    weekScores.push({ ownerId: team2Id, score: team2Score });
                 });
 
                 // Calculate all-play wins/losses for this week
-                const weekScores = weeklyScores[week];
                 weekScores.forEach(teamScore => {
                     weekScores.forEach(opponentScore => {
                         if (teamScore.ownerId !== opponentScore.ownerId) {
@@ -317,58 +292,47 @@ const MilestoneRecords = () => {
                     });
                 });
 
-                // Calculate high scores for this week (top 3)
-                const sortedWeekScores = [...weekScores].sort((a, b) => b.score - a.score);
-                for (let i = 0; i < Math.min(3, sortedWeekScores.length); i++) {
-                    if (teamStats[sortedWeekScores[i].ownerId]) {
-                        teamStats[sortedWeekScores[i].ownerId].highScores++;
-                    }
+                // Calculate high scores (top 3 this week)
+                const sortedScores = [...weekScores].sort((a, b) => b.score - a.score);
+                for (let i = 0; i < Math.min(3, sortedScores.length); i++) {
+                    teamStats[sortedScores[i].ownerId].highScores++;
                 }
 
-                // Check for milestone achievements after this week
+                // Check for milestone achievements this week
                 Object.keys(teamStats).forEach(ownerId => {
                     const stats = teamStats[ownerId];
                     
-                    Object.keys(baseMilestones).forEach(milestoneKey => {
-                        let currentValue;
-                        switch (milestoneKey) {
-                            case 'totalWins':
-                                currentValue = stats.totalWins;
-                                break;
-                            case 'totalLosses':
-                                currentValue = stats.totalLosses;
-                                break;
-                            case 'allPlayWins':
-                                currentValue = stats.allPlayWins;
-                                break;
-                            case 'allPlayLosses':
-                                currentValue = stats.allPlayLosses;
-                                break;
-                            case 'totalPoints':
-                                currentValue = stats.totalPoints;
-                                break;
-                            case 'highScores':
-                                currentValue = stats.highScores;
-                                break;
-                            default:
-                                currentValue = 0;
-                        }
+                    // Check each milestone type
+                    const milestoneValues = {
+                        totalWins: stats.wins,
+                        totalLosses: stats.losses,
+                        allPlayWins: stats.allPlayWins,
+                        allPlayLosses: stats.allPlayLosses,
+                        totalPoints: stats.points,
+                        highScores: stats.highScores
+                    };
 
+                    Object.keys(milestoneValues).forEach(milestoneKey => {
+                        const currentValue = milestoneValues[milestoneKey];
+                        
                         baseMilestones[milestoneKey].thresholds.forEach(threshold => {
-                            // Check if milestone was just achieved
+                            // Check if milestone just achieved
                             if (currentValue >= threshold) {
-                                const existingAchievement = achievementHistory[milestoneKey][threshold].find(
+                                const alreadyAchieved = achievementTimeline[milestoneKey][threshold].some(
                                     achievement => achievement.ownerId === ownerId
                                 );
                                 
-                                if (!existingAchievement) {
-                                    achievementHistory[milestoneKey][threshold].push({
+                                if (!alreadyAchieved) {
+                                    achievementTimeline[milestoneKey][threshold].push({
                                         ownerId,
                                         season: parseInt(season),
                                         week: parseInt(week),
-                                        globalWeek: globalWeekCounter,
-                                        currentValue: currentValue
+                                        globalWeek,
+                                        value: currentValue,
+                                        teamName: allRosters[ownerId]?.name || `Team ${ownerId}`
                                     });
+                                    
+                                    console.log(`🏆 ${milestoneKey} ${threshold}: ${allRosters[ownerId]?.name} achieved in S${season}W${week} (value: ${currentValue})`);
                                 }
                             }
                         });
@@ -377,242 +341,53 @@ const MilestoneRecords = () => {
             });
         });
 
-        // Update final team stats to use career totals for milestone calculations
+        // Generate achievements object for UI
+        const achievements = {};
         Object.keys(teamStats).forEach(ownerId => {
-            const stats = teamStats[ownerId];
-            // Use the final career totals for milestone achievement calculations
-            stats.wins = stats.careerTotals.wins;
-            stats.losses = stats.careerTotals.losses;
-            stats.ties = stats.careerTotals.ties;
-            stats.totalWins = stats.careerTotals.wins;
-            stats.totalLosses = stats.careerTotals.losses;
-            stats.allPlayWins = stats.careerTotals.allPlayWins;
-            stats.allPlayLosses = stats.careerTotals.allPlayLosses;
-            stats.totalPoints = stats.careerTotals.totalPoints;
-            stats.highScores = stats.careerTotals.highScores;
-        });
-
-        // Calculate milestone achievements for each team
-        Object.keys(teamStats).forEach(ownerId => {
-            const stats = teamStats[ownerId];
-            const achievements = {};
-
-            Object.keys(baseMilestones).forEach(milestoneKey => {
-                const milestone = baseMilestones[milestoneKey];
-                achievements[milestoneKey] = {};
-                
-                let statValue;
-                switch (milestoneKey) {
-                    case 'totalWins':
-                        statValue = stats.wins;
-                        break;
-                    case 'totalLosses':
-                        statValue = stats.losses;
-                        break;
-                    case 'allPlayWins':
-                        statValue = stats.allPlayWins;
-                        break;
-                    case 'allPlayLosses':
-                        statValue = stats.allPlayLosses;
-                        break;
-                    case 'totalPoints':
-                        statValue = stats.totalPoints;
-                        break;
-                    case 'highScores':
-                        statValue = stats.highScores;
-                        break;
-                    default:
-                        statValue = 0;
-                }
-
-                milestone.thresholds.forEach(threshold => {
-                    achievements[milestoneKey][threshold] = {
-                        achieved: statValue >= threshold,
-                        currentValue: statValue,
-                        remaining: Math.max(0, threshold - statValue)
-                    };
-                });
-            });
-
-            stats.achievements = achievements;
-        });
-
-        // Generate dynamic milestones based on current achievements
-        const updatedMilestones = generateDynamicMilestones(teamStats);
-        setDynamicMilestones(updatedMilestones);
-
-        // Recalculate achievements with dynamic milestones
-        Object.keys(teamStats).forEach(ownerId => {
-            const stats = teamStats[ownerId];
-            const achievements = {};
-
-            Object.keys(updatedMilestones).forEach(milestoneKey => {
-                const milestone = updatedMilestones[milestoneKey];
-                achievements[milestoneKey] = {};
-                
-                let statValue;
-                switch (milestoneKey) {
-                    case 'totalWins':
-                        statValue = stats.wins;
-                        break;
-                    case 'totalLosses':
-                        statValue = stats.losses;
-                        break;
-                    case 'allPlayWins':
-                        statValue = stats.allPlayWins;
-                        break;
-                    case 'allPlayLosses':
-                        statValue = stats.allPlayLosses;
-                        break;
-                    case 'totalPoints':
-                        statValue = stats.totalPoints;
-                        break;
-                    case 'highScores':
-                        statValue = stats.highScores;
-                        break;
-                    default:
-                        statValue = 0;
-                }
-
-                milestone.thresholds.forEach(threshold => {
-                    const achieved = statValue >= threshold;
-                    const remaining = Math.max(0, threshold - statValue);
-                    
-                    achievements[milestoneKey][threshold] = {
-                        achieved,
-                        currentValue: statValue,
-                        remaining,
-                        progress: Math.min(100, (statValue / threshold) * 100)
-                    };
-                });
-            });
-
-            stats.achievements = achievements;
-        });
-
-        // Since we're using standardized stats, we don't have the detailed achievement timeline
-        // but we can populate achievement history based on current stats for milestone tracking
-        Object.keys(teamStats).forEach(ownerId => {
-            Object.keys(updatedMilestones).forEach(milestoneKey => {
-                let currentValue;
-                switch (milestoneKey) {
-                    case 'totalWins':
-                        currentValue = teamStats[ownerId].wins;
-                        break;
-                    case 'totalLosses':
-                        currentValue = teamStats[ownerId].losses;
-                        break;
-                    case 'allPlayWins':
-                        currentValue = teamStats[ownerId].allPlayWins;
-                        break;
-                    case 'allPlayLosses':
-                        currentValue = teamStats[ownerId].allPlayLosses;
-                        break;
-                    case 'totalPoints':
-                        currentValue = teamStats[ownerId].totalPoints;
-                        break;
-                    case 'highScores':
-                        currentValue = teamStats[ownerId].highScores;
-                        break;
-                    default:
-                        currentValue = 0;
-                }
-
-                updatedMilestones[milestoneKey].thresholds.forEach(threshold => {
-                    if (currentValue >= threshold) {
-                        // Add to achievement history (simplified - we don't have exact timing data)
-                        achievementHistory[milestoneKey][threshold].push({
-                            ownerId,
-                            season: currentSeason,
-                            week: 1, // Simplified - we don't track exact week
-                            achievedWeek: 1 // Simplified
-                        });
-                    }
-                });
-            });
-        });
-
-        // Update achievement history for new thresholds
-        Object.keys(updatedMilestones).forEach(milestoneKey => {
-            updatedMilestones[milestoneKey].thresholds.forEach(threshold => {
-                if (!achievementHistory[milestoneKey]) {
-                    achievementHistory[milestoneKey] = {};
-                }
-                if (!achievementHistory[milestoneKey][threshold]) {
-                    achievementHistory[milestoneKey][threshold] = [];
-                }
-            });
-        });
-
-        // Since the complex historical processing might not be working, let's create a fallback
-        // If we don't have proper achievement history, create timeline based on current achievements
-        if (Object.keys(achievementHistory).every(key => 
-            Object.keys(achievementHistory[key]).every(threshold => 
-                achievementHistory[key][threshold].length === 0
-            )
-        )) {
+            achievements[ownerId] = {};
             
-            // Create a simple timeline based on current stats (this won't have real timing, but will show data)
             Object.keys(baseMilestones).forEach(milestoneKey => {
-                const qualifyingTeams = [];
+                achievements[ownerId][milestoneKey] = {};
                 
-                Object.keys(teamStats).forEach(ownerId => {
-                    const stats = teamStats[ownerId];
-                    let currentValue;
-                    
-                    switch (milestoneKey) {
-                        case 'totalWins':
-                            currentValue = stats.wins;
-                            break;
-                        case 'totalLosses':
-                            currentValue = stats.losses;
-                            break;
-                        case 'allPlayWins':
-                            currentValue = stats.allPlayWins;
-                            break;
-                        case 'allPlayLosses':
-                            currentValue = stats.allPlayLosses;
-                            break;
-                        case 'totalPoints':
-                            currentValue = stats.totalPoints;
-                            break;
-                        case 'highScores':
-                            currentValue = stats.highScores;
-                            break;
-                        default:
-                            currentValue = 0;
-                    }
-                    
-                    if (currentValue > 0) {
-                        qualifyingTeams.push({
-                            ownerId,
-                            value: currentValue,
-                            name: stats.name
-                        });
-                    }
-                });
-                
-                // Sort teams by their values (highest first for most milestones)
-                qualifyingTeams.sort((a, b) => b.value - a.value);
+                const finalValue = teamStats[ownerId][milestoneKey === 'totalWins' ? 'finalWins' : 
+                                                       milestoneKey === 'totalLosses' ? 'finalLosses' :
+                                                       milestoneKey === 'allPlayWins' ? 'finalAllPlayWins' :
+                                                       milestoneKey === 'allPlayLosses' ? 'finalAllPlayLosses' :
+                                                       milestoneKey === 'totalPoints' ? 'finalPoints' : 'finalHighScores'];
                 
                 baseMilestones[milestoneKey].thresholds.forEach(threshold => {
-                    const achievingTeams = qualifyingTeams.filter(team => team.value >= threshold);
-                    
-                    if (achievingTeams.length > 0) {
-                        achievementHistory[milestoneKey][threshold] = achievingTeams.map((team, index) => ({
-                            milestoneKey,
-                            threshold,
-                            ownerId: team.ownerId,
-                            season: currentSeason,
-                            week: Math.min(14, index + 1), // Spread achievements across weeks
-                            globalWeek: Math.min(100, (index * 5) + 10) // Simple fallback: spread teams across fake weeks
-                        }));
-                    }
+                    achievements[ownerId][milestoneKey][threshold] = {
+                        achieved: finalValue >= threshold,
+                        currentValue: finalValue,
+                        remaining: Math.max(0, threshold - finalValue),
+                        progress: Math.min(100, (finalValue / threshold) * 100)
+                    };
                 });
             });
-        }
+        });
 
-        setMilestoneData({ teamStats, allRosters, achievementHistory });
+        // Update team stats with final values for display
+        Object.keys(teamStats).forEach(ownerId => {
+            const stats = teamStats[ownerId];
+            stats.achievements = achievements[ownerId];
+        });
+
+        setDynamicMilestones(baseMilestones);
+        setMilestoneData({ 
+            teamStats, 
+            allRosters, 
+            achievementHistory: achievementTimeline 
+        });
+
+        console.log('=== MILESTONE TRACKING COMPLETE ===');
+        console.log('Achievement timeline summary:', Object.keys(achievementTimeline).map(key => ({
+            milestone: key,
+            achievements: Object.keys(achievementTimeline[key]).map(threshold => ({
+                threshold,
+                count: achievementTimeline[key][threshold].length,
+                firstAchiever: achievementTimeline[key][threshold][0]?.teamName || 'None'
+            }))
+        })));
     };
 
     const getMilestoneAchievers = (milestoneKey, threshold) => {
@@ -646,64 +421,37 @@ const MilestoneRecords = () => {
     };
 
     const getMilestoneTimingStats = (milestoneKey, threshold) => {
-        // Debug logging to understand the data structure
-        if (!milestoneData.achievementHistory) {
-            console.log('No achievementHistory in milestoneData');
-            return null;
-        }
-        
-        if (!milestoneData.achievementHistory[milestoneKey]) {
-            console.log(`No achievement history for milestone: ${milestoneKey}`);
-            return null;
-        }
-        
-        if (!milestoneData.achievementHistory[milestoneKey][threshold]) {
-            console.log(`No achievement history for ${milestoneKey} threshold: ${threshold}`);
+        if (!milestoneData.achievementHistory?.[milestoneKey]?.[threshold]) {
             return null;
         }
         
         const achievements = milestoneData.achievementHistory[milestoneKey][threshold];
-        console.log(`Found ${achievements.length} achievements for ${milestoneKey} ${threshold}:`, achievements);
-        
-        if (achievements.length === 0) return null;
-        
-        // Sort by global week to find first achiever
-        const sortedAchievements = [...achievements].sort((a, b) => a.globalWeek - b.globalWeek);
-        const firstAchiever = sortedAchievements[0];
-        
-        if (!firstAchiever || typeof firstAchiever.globalWeek !== 'number') {
-            console.log('Invalid first achiever:', firstAchiever);
+        if (achievements.length === 0) {
             return null;
         }
         
-        const result = {
+        // Sort by global week to get chronological order
+        const sortedAchievements = [...achievements].sort((a, b) => a.globalWeek - b.globalWeek);
+        const firstAchiever = sortedAchievements[0];
+        
+        return {
             firstAchiever: {
                 ownerId: firstAchiever.ownerId,
-                name: milestoneData.allRosters[firstAchiever.ownerId]?.name || 
-                      milestoneData.teamStats[firstAchiever.ownerId]?.name || 
-                      `Team ${firstAchiever.ownerId}`,
+                name: firstAchiever.teamName,
                 globalWeek: firstAchiever.globalWeek,
                 season: firstAchiever.season,
                 week: firstAchiever.week
             },
-            allAchievements: sortedAchievements.map(achievement => {
-                const weeksAfterFirst = achievement.globalWeek - firstAchiever.globalWeek;
-                return {
-                    ownerId: achievement.ownerId,
-                    name: milestoneData.allRosters[achievement.ownerId]?.name || 
-                          milestoneData.teamStats[achievement.ownerId]?.name || 
-                          `Team ${achievement.ownerId}`,
-                    globalWeek: achievement.globalWeek,
-                    weeksAfterFirst: isNaN(weeksAfterFirst) ? 0 : weeksAfterFirst,
-                    season: achievement.season,
-                    week: achievement.week,
-                    achievedIn: achievement.globalWeek
-                };
-            })
+            allAchievements: sortedAchievements.map(achievement => ({
+                ownerId: achievement.ownerId,
+                name: achievement.teamName,
+                globalWeek: achievement.globalWeek,
+                weeksAfterFirst: achievement.globalWeek - firstAchiever.globalWeek,
+                season: achievement.season,
+                week: achievement.week,
+                achievedIn: achievement.globalWeek
+            }))
         };
-        
-        console.log(`Timing stats result for ${milestoneKey} ${threshold}:`, result);
-        return result;
     };
 
     const getMilestoneWatchers = (milestoneKey, threshold) => {
@@ -838,14 +586,14 @@ const MilestoneRecords = () => {
                     {/* Milestone thresholds */}
                     <div className="space-y-4">
                         {milestones[activeMilestone].thresholds.map(threshold => {
-                            const achievers = getMilestoneAchievers(activeMilestone, threshold);
-                            const watchers = getMilestoneWatchers(activeMilestone, threshold);
-                            const progress = getMilestoneProgress(activeMilestone, threshold);
-                            const timingStats = getMilestoneTimingStats(activeMilestone, threshold);
-                            const collapsed = shouldCollapseMilestone(activeMilestone, threshold);
-                            const isExpanded = isThresholdExpanded(activeMilestone, threshold);
+                                            const achievers = getMilestoneAchievers(activeMilestone, threshold);
+                                            const watchers = getMilestoneWatchers(activeMilestone, threshold);
+                                            const progress = getMilestoneProgress(activeMilestone, threshold);
+                                            const timingStats = getMilestoneTimingStats(activeMilestone, threshold);
+                                            const collapsed = shouldCollapseMilestone(activeMilestone, threshold);
+                                            const isExpanded = isThresholdExpanded(activeMilestone, threshold);
 
-                            return (
+                                            return (
                                 <div key={threshold} className="bg-white rounded-lg shadow-sm border border-gray-200">
                                     {/* Threshold header */}
                                     <div 

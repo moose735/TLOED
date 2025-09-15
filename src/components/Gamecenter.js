@@ -449,6 +449,19 @@ const Gamecenter = () => {
                         
                         const isCompleted = matchup.team1_score > 0 || matchup.team2_score > 0;
 
+                        // Determine if we should highlight winners (only if week is complete OR all players have played)
+                        const currentNFLSeason = parseInt(nflState?.season || new Date().getFullYear());
+                        const currentNFLWeek = parseInt(nflState?.week || 1);
+                        const selectedSeasonInt = parseInt(selectedSeason);
+                        const selectedWeekInt = parseInt(selectedWeek);
+                        
+                        const isWeekComplete = selectedSeasonInt < currentNFLSeason || 
+                                             (selectedSeasonInt === currentNFLSeason && selectedWeekInt < currentNFLWeek);
+                        
+                        // For current week/season, check if all players have played (this would need roster data)
+                        // For now, we'll use the simpler logic: only highlight if week is historically complete
+                        const shouldHighlightWinner = isWeekComplete;
+
                         const team1Luck = weeklyLuckData[team1RosterId]?.[selectedWeek - 1] ?? 0;
                         const team2Luck = weeklyLuckData[team2RosterId]?.[selectedWeek - 1] ?? 0;
 
@@ -491,7 +504,7 @@ const Gamecenter = () => {
                                                 </div>
                                                 <div className="text-right flex-shrink-0">
                                                     <div className={`font-bold text-lg ${
-                                                        isCompleted && matchup.team1_score > matchup.team2_score ? 'text-green-600' : 'text-gray-800'
+                                                        isCompleted && shouldHighlightWinner && matchup.team1_score > matchup.team2_score ? 'text-green-600' : 'text-gray-800'
                                                     }`}>
                                                         {isCompleted ? matchup.team1_score.toFixed(1) : '-'}
                                                     </div>
@@ -528,7 +541,7 @@ const Gamecenter = () => {
                                                 </div>
                                                 <div className="text-right flex-shrink-0">
                                                     <div className={`font-bold text-lg ${
-                                                        isCompleted && matchup.team2_score > matchup.team1_score ? 'text-green-600' : 'text-gray-800'
+                                                        isCompleted && shouldHighlightWinner && matchup.team2_score > matchup.team1_score ? 'text-green-600' : 'text-gray-800'
                                                     }`}>
                                                         {isCompleted ? matchup.team2_score.toFixed(1) : '-'}
                                                     </div>
@@ -545,7 +558,7 @@ const Gamecenter = () => {
                                                     <div className="font-semibold text-gray-700 text-sm leading-tight break-words mb-1">
                                                         {team1Details.name}
                                                     </div>
-                                                    <div className={`font-bold text-lg ${isCompleted && matchup.team1_score > matchup.team2_score ? 'text-green-600' : 'text-gray-800'}`}>
+                                                    <div className={`font-bold text-lg ${isCompleted && shouldHighlightWinner && matchup.team1_score > matchup.team2_score ? 'text-green-600' : 'text-gray-800'}`}>
                                                         {isCompleted ? matchup.team1_score.toFixed(2) : '-'}
                                                     </div>
                                                 </div>
@@ -563,7 +576,7 @@ const Gamecenter = () => {
                                                     <div className="font-semibold text-gray-700 text-sm leading-tight break-words mb-1">
                                                         {team2Details.name}
                                                     </div>
-                                                    <div className={`font-bold text-lg ${isCompleted && matchup.team2_score > matchup.team1_score ? 'text-green-600' : 'text-gray-800'}`}>
+                                                    <div className={`font-bold text-lg ${isCompleted && shouldHighlightWinner && matchup.team2_score > matchup.team1_score ? 'text-green-600' : 'text-gray-800'}`}>
                                                         {isCompleted ? matchup.team2_score.toFixed(2) : '-'}
                                                     </div>
                                                 </div>

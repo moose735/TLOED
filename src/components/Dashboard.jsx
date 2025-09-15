@@ -239,7 +239,17 @@ const Dashboard = () => {
     }
 
     return (
-        <div className="w-full max-w-7xl mx-auto p-2 sm:p-4 md:p-8 font-inter space-y-4 sm:space-y-6 md:space-y-8">
+        <>
+            <style>{`
+                @keyframes scroll {
+                    0% { transform: translateX(0%); }
+                    100% { transform: translateX(-100%); }
+                }
+                .animate-scroll {
+                    animation: scroll 90s linear infinite;
+                }
+            `}</style>
+            <div className="w-full max-w-7xl mx-auto p-2 sm:p-4 md:p-8 font-inter space-y-4 sm:space-y-6 md:space-y-8">
             {/* Header */}
             <div className="text-center px-2">
                 <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-blue-800 mb-2">TLOED Dashboard</h1>
@@ -250,98 +260,88 @@ const Dashboard = () => {
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
-                {/* Current Week Matchups */}
+                {/* Current Week Matchups - Ticker Style */}
                 <div className="xl:col-span-3">
-                    <div className="bg-white rounded-lg shadow-lg mobile-card p-4 sm:p-6">
-                        <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-blue-800 mb-4 sm:mb-6 flex items-center">
-                            <svg className="w-5 h-5 sm:w-6 sm:h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                        <div className="flex items-center py-2 px-4 bg-gray-50 border-b border-gray-200">
+                            <svg className="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                             </svg>
-                            <span className="mobile-text-lg">Week {nflState?.week || 1} Matchups</span>
-                        </h2>
-                        <div className="space-y-3 sm:space-y-4">
-                            {currentWeekMatchups.length > 0 ? currentWeekMatchups.map((matchup, idx) => (
-                                <div key={idx} className="border rounded-lg p-3 sm:p-4 hover:bg-gray-50 transition-colors touch-friendly">
-                                    <div className="flex items-center justify-between">
-                                        {/* Mobile Layout - Stacked */}
-                                        <div className="sm:hidden w-full">
-                                            <div className="flex items-center justify-between mb-2">
-                                                <div className="flex items-center space-x-2 flex-1 min-w-0">
+                            <span className="text-sm font-semibold text-gray-700">Week {nflState?.week || 1} Matchups</span>
+                        </div>
+                        <div className="relative h-20 overflow-hidden">
+                            <div className="absolute whitespace-nowrap flex items-center h-full animate-scroll">
+                                {currentWeekMatchups.length > 0 ? (
+                                    <>
+                                        {/* First set of matchups */}
+                                        {currentWeekMatchups.map((matchup, idx) => (
+                                            <div key={`first-${idx}`} className="flex items-center space-x-4 mx-6 bg-gray-50 rounded-lg px-6 py-3 border border-gray-200 min-w-[280px]">
+                                                <div className="flex items-center space-x-3 min-w-0 flex-1">
                                                     <img
                                                         src={matchup.team1.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
                                                         alt={matchup.team1.name}
-                                                        className="w-8 h-8 rounded-full border-2 border-blue-300 flex-shrink-0"
+                                                        className="w-7 h-7 rounded-full border border-gray-300 flex-shrink-0"
                                                         onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
                                                     />
-                                                    <span className="font-semibold text-gray-800 text-sm truncate">{matchup.team1.name}</span>
+                                                    <span className="text-sm font-medium text-gray-800 truncate max-w-[80px]">{matchup.team1.name}</span>
                                                 </div>
-                                                <div className="text-right">
-                                                    {matchup.isCompleted && (
-                                                        <div className={`text-lg font-bold ${matchup.team1.score > matchup.team2.score ? 'text-green-600' : 'text-gray-600'}`}>
-                                                            {matchup.team1.score.toFixed(1)}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center space-x-2 flex-1 min-w-0">
-                                                    <img
-                                                        src={matchup.team2.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
-                                                        alt={matchup.team2.name}
-                                                        className="w-8 h-8 rounded-full border-2 border-blue-300 flex-shrink-0"
-                                                        onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
-                                                    />
-                                                    <span className="font-semibold text-gray-800 text-sm truncate">{matchup.team2.name}</span>
-                                                </div>
-                                                <div className="text-right">
-                                                    {matchup.isCompleted && (
-                                                        <div className={`text-lg font-bold ${matchup.team2.score > matchup.team1.score ? 'text-green-600' : 'text-gray-600'}`}>
-                                                            {matchup.team2.score.toFixed(1)}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Desktop Layout - Side by Side */}
-                                        <div className="hidden sm:flex items-center justify-between w-full">
-                                            <div className="flex items-center space-x-4 flex-1">
-                                                <div className="flex items-center space-x-2 flex-1">
-                                                    <img
-                                                        src={matchup.team1.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
-                                                        alt={matchup.team1.name}
-                                                        className="w-10 h-10 rounded-full border-2 border-blue-300"
-                                                        onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
-                                                    />
-                                                    <span className="font-semibold text-gray-800 truncate">{matchup.team1.name}</span>
-                                                </div>
-                                                <div className="text-center px-4">
-                                                    <div className="text-sm text-gray-500">vs</div>
-                                                    {matchup.isCompleted && (
-                                                        <div className="text-lg font-bold text-blue-600">
+                                                <div className="text-center px-2 flex-shrink-0">
+                                                    {matchup.isCompleted ? (
+                                                        <div className="text-sm font-bold text-gray-800 whitespace-nowrap">
                                                             {matchup.team1.score.toFixed(1)} - {matchup.team2.score.toFixed(1)}
                                                         </div>
+                                                    ) : (
+                                                        <div className="text-xs text-gray-500">vs</div>
                                                     )}
                                                 </div>
-                                                <div className="flex items-center space-x-2 flex-1 justify-end">
-                                                    <span className="font-semibold text-gray-800 truncate">{matchup.team2.name}</span>
+                                                <div className="flex items-center space-x-3 min-w-0 flex-1 justify-end">
+                                                    <span className="text-sm font-medium text-gray-800 truncate max-w-[80px]">{matchup.team2.name}</span>
                                                     <img
                                                         src={matchup.team2.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
                                                         alt={matchup.team2.name}
-                                                        className="w-10 h-10 rounded-full border-2 border-blue-300"
+                                                        className="w-7 h-7 rounded-full border border-gray-300 flex-shrink-0"
                                                         onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
                                                     />
                                                 </div>
                                             </div>
-                                        </div>
-                                    </div>
-                                    {!matchup.isCompleted && (
-                                        <div className="text-center text-xs sm:text-sm text-gray-500 mt-2">Game in progress</div>
-                                    )}
-                                </div>
-                            )) : (
-                                <div className="text-center text-gray-500 py-6 sm:py-8 text-sm sm:text-base">No matchups available for this week</div>
-                            )}
+                                        ))}
+                                        {/* Duplicate set for seamless loop */}
+                                        {currentWeekMatchups.map((matchup, idx) => (
+                                            <div key={`second-${idx}`} className="flex items-center space-x-4 mx-6 bg-gray-50 rounded-lg px-6 py-3 border border-gray-200 min-w-[280px]">
+                                                <div className="flex items-center space-x-3 min-w-0 flex-1">
+                                                    <img
+                                                        src={matchup.team1.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
+                                                        alt={matchup.team1.name}
+                                                        className="w-7 h-7 rounded-full border border-gray-300 flex-shrink-0"
+                                                        onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
+                                                    />
+                                                    <span className="text-sm font-medium text-gray-800 truncate max-w-[80px]">{matchup.team1.name}</span>
+                                                </div>
+                                                <div className="text-center px-2 flex-shrink-0">
+                                                    {matchup.isCompleted ? (
+                                                        <div className="text-sm font-bold text-gray-800 whitespace-nowrap">
+                                                            {matchup.team1.score.toFixed(1)} - {matchup.team2.score.toFixed(1)}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-xs text-gray-500">vs</div>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center space-x-3 min-w-0 flex-1 justify-end">
+                                                    <span className="text-sm font-medium text-gray-800 truncate max-w-[80px]">{matchup.team2.name}</span>
+                                                    <img
+                                                        src={matchup.team2.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
+                                                        alt={matchup.team2.name}
+                                                        className="w-7 h-7 rounded-full border border-gray-300 flex-shrink-0"
+                                                        onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </>
+                                ) : (
+                                    <div className="text-sm text-gray-500 mx-4">No matchups available for this week</div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -550,7 +550,8 @@ const Dashboard = () => {
                     )}
                 </div>
             </div>
-        </div>
+            </div>
+        </>
     );
 };
 

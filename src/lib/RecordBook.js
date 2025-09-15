@@ -6,13 +6,13 @@ import SeasonRecords from '../lib/SeasonRecords';
 import StreaksRecords from '../lib/StreaksRecords';
 import MatchupRecords from '../lib/MatchupRecords';
 import PlayoffRecords from '../lib/PlayoffRecords'; // Import the PlayoffRecords component
-import MilestoneRecords from '../lib/MilestoneRecords'; // Import the MilestoneRecords component
+import PlayerRecords from '../lib/PlayerRecords'; // Import the new PlayerRecords component
 
 // IMPORTANT: This import is absolutely crucial for calculateAllLeagueMetrics to be defined.
 import { calculateAllLeagueMetrics } from '../utils/calculations';
 
 const RecordBook = () => {
-    // State to manage which tab is active: 'overall', 'seasonal', 'streaks', 'matchup', or 'playoffs'
+    // State to manage which tab is active: 'overall', 'seasonal', 'streaks', 'matchup', 'playoffs', or 'players'
     const [activeTab, setActiveTab] = useState('overall'); // Default to 'overall'
 
     // Destructure all necessary data from the context
@@ -201,11 +201,11 @@ const RecordBook = () => {
                 {/* Modern Tab Navigation */}
                 <div className="mb-10">
                     <div className="bg-white rounded-2xl shadow-lg p-2 border border-gray-200">
-                        <nav className="flex flex-wrap gap-1">
+                        <nav className="flex flex-col sm:flex-row gap-2 sm:gap-1">
                             <button
-                                className={`flex-1 min-w-0 py-4 px-6 text-sm font-semibold rounded-xl transition-all duration-200 ${
+                                className={`w-full sm:flex-1 py-3 px-4 sm:py-4 sm:px-6 text-sm font-semibold rounded-xl transition-all duration-200 ${
                                     activeTab === 'overall'
-                                        ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg transform scale-[1.02]'
+                                        ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
                                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                 }`}
                                 onClick={() => setActiveTab('overall')}
@@ -215,9 +215,9 @@ const RecordBook = () => {
                                 <span className="block text-xs opacity-80 mt-1">Career Leaders</span>
                             </button>
                             <button
-                                className={`flex-1 min-w-0 py-4 px-6 text-sm font-semibold rounded-xl transition-all duration-200 ${
+                                className={`w-full sm:flex-1 py-3 px-4 sm:py-4 sm:px-6 text-sm font-semibold rounded-xl transition-all duration-200 ${
                                     activeTab === 'seasonal'
-                                        ? 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg transform scale-[1.02]'
+                                        ? 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg'
                                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                 }`}
                                 onClick={() => setActiveTab('seasonal')}
@@ -227,9 +227,9 @@ const RecordBook = () => {
                                 <span className="block text-xs opacity-80 mt-1">Single Season</span>
                             </button>
                             <button
-                                className={`flex-1 min-w-0 py-4 px-6 text-sm font-semibold rounded-xl transition-all duration-200 ${
+                                className={`w-full sm:flex-1 py-3 px-4 sm:py-4 sm:px-6 text-sm font-semibold rounded-xl transition-all duration-200 ${
                                     activeTab === 'streaks'
-                                        ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg transform scale-[1.02]'
+                                        ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg'
                                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                 }`}
                                 onClick={() => setActiveTab('streaks')}
@@ -239,9 +239,9 @@ const RecordBook = () => {
                                 <span className="block text-xs opacity-80 mt-1">Consecutive</span>
                             </button>
                             <button
-                                className={`flex-1 min-w-0 py-4 px-6 text-sm font-semibold rounded-xl transition-all duration-200 ${
+                                className={`w-full sm:flex-1 py-3 px-4 sm:py-4 sm:px-6 text-sm font-semibold rounded-xl transition-all duration-200 ${
                                     activeTab === 'matchup'
-                                        ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg transform scale-[1.02]'
+                                        ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg'
                                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                 }`}
                                 onClick={() => setActiveTab('matchup')}
@@ -251,9 +251,9 @@ const RecordBook = () => {
                                 <span className="block text-xs opacity-80 mt-1">Single Game</span>
                             </button>
                             <button
-                                className={`flex-1 min-w-0 py-4 px-6 text-sm font-semibold rounded-xl transition-all duration-200 ${
+                                className={`w-full sm:flex-1 py-3 px-4 sm:py-4 sm:px-6 text-sm font-semibold rounded-xl transition-all duration-200 ${
                                     activeTab === 'playoffs'
-                                        ? 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg transform scale-[1.02]'
+                                        ? 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg'
                                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                 }`}
                                 onClick={() => setActiveTab('playoffs')}
@@ -263,16 +263,16 @@ const RecordBook = () => {
                                 <span className="block text-xs opacity-80 mt-1">Postseason</span>
                             </button>
                             <button
-                                className={`flex-1 min-w-0 py-4 px-6 text-sm font-semibold rounded-xl transition-all duration-200 ${
-                                    activeTab === 'milestones'
-                                        ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg transform scale-[1.02]'
+                                className={`w-full sm:flex-1 py-3 px-4 sm:py-4 sm:px-6 text-sm font-semibold rounded-xl transition-all duration-200 ${
+                                    activeTab === 'players'
+                                        ? 'bg-gradient-to-r from-indigo-500 to-indigo-600 text-white shadow-lg'
                                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                 }`}
-                                onClick={() => setActiveTab('milestones')}
-                                aria-current={activeTab === 'milestones' ? 'page' : undefined}
+                                onClick={() => setActiveTab('players')}
+                                aria-current={activeTab === 'players' ? 'page' : undefined}
                             >
-                                <span className="block text-center">Milestones</span>
-                                <span className="block text-xs opacity-80 mt-1">Achievements</span>
+                                <span className="block text-center">Player Records</span>
+                                <span className="block text-xs opacity-80 mt-1">Individual Stars</span>
                             </button>
                         </nav>
                     </div>
@@ -349,14 +349,14 @@ const RecordBook = () => {
                         )
                     )}
 
-                    {activeTab === 'milestones' && (
-                        hasOverallData ? (
-                            <MilestoneRecords />
+                    {activeTab === 'players' && (
+                        historicalData ? (
+                            <PlayerRecords />
                         ) : (
                             <div className="text-center py-16 px-6">
-                                <div className="text-6xl mb-4">🎯</div>
-                                <h3 className="text-xl font-semibold text-gray-700 mb-2">No Milestone Data</h3>
-                                <p className="text-gray-500">No historical data available to calculate milestones.</p>
+                                <div className="text-6xl mb-4">⭐</div>
+                                <h3 className="text-xl font-semibold text-gray-700 mb-2">No Player Data</h3>
+                                <p className="text-gray-500">No historical player data available.</p>
                             </div>
                         )
                     )}

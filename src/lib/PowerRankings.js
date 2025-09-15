@@ -353,6 +353,7 @@ const PowerRankings = () => {
 								<thead className="bg-blue-100 sticky top-0 z-10">
 									<tr>
 										<th className="py-3 md:py-4 px-3 md:px-4 text-left text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Rank</th>
+										<th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Change</th>
 										<th className="py-3 md:py-4 px-3 md:px-4 text-left text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
 										<th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">DPR</th>
 										<th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record</th>
@@ -370,7 +371,7 @@ const PowerRankings = () => {
 											<React.Fragment key={row.ownerId}>
 												{isNewTier && (
 													<tr className="bg-blue-50">
-														<td colSpan="7" className="py-1 px-3 md:px-4 text-center">
+														<td colSpan="8" className="py-1 px-3 md:px-4 text-center">
 															<div className="flex items-center justify-center">
 																<div className="flex-1 h-px bg-blue-300"></div>
 																<span className="px-3 text-xs font-semibold text-blue-600 uppercase tracking-wide">
@@ -383,6 +384,9 @@ const PowerRankings = () => {
 												)}
 												<tr className="hover:bg-gray-50 transition-colors touch-friendly">
 													<td className="py-2 md:py-3 px-3 md:px-4 text-sm text-blue-700 font-bold border-b border-gray-200">{row.rank}</td>
+													<td className="py-2 md:py-3 px-3 md:px-4 text-sm text-center border-b border-gray-200">
+														<span className="text-gray-400">-</span>
+													</td>
 													<td className="py-2 md:py-3 px-3 md:px-4 text-sm text-gray-800 font-medium border-b border-gray-200">
 														<div className="flex items-center gap-2 md:gap-3">
 															<img

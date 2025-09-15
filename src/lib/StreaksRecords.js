@@ -6,6 +6,15 @@ const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is no
     // Consume historicalData, getTeamName, loading, and error from the context
     const { historicalData, getTeamName, loading, error } = useSleeperData();
     const [aggregatedStreaks, setAggregatedStreaks] = useState({});
+    const [allStreaksData, setAllStreaksData] = useState({});
+    const [expandedSections, setExpandedSections] = useState({});
+
+    const toggleSection = (recordKey) => {
+        setExpandedSections(prev => ({
+            ...prev,
+            [recordKey]: !prev[recordKey]
+        }));
+    };
 
     useEffect(() => {
         // Check for loading, error, or missing historical data
@@ -135,12 +144,21 @@ const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is no
             longestConsecutiveTop3Weeks: { value: 0, entries: [] },
         };
 
+        // Track all streaks for top 5 rankings
+        const allStreaks = {
+            longestWinStreak: [],
+            longestLosingStreak: [],
+            longestConsecutiveHighestScoreWeeks: [],
+            longestConsecutiveLowestScoreWeeks: [],
+            longestConsecutiveTop3Weeks: [],
+        };
+
         // Helper to update a streak record (max)
         // MODIFIED: Now accepts getTeamNameFn and ownerId to dynamically get team name
         const updateStreakRecord = (recordObj, newStreak, entryDetails, ownerId, getTeamNameFn) => {
             // Get the team name based on the start year of the streak
             const teamName = getTeamNameFn(ownerId, entryDetails.startYear);
-            const newEntry = { ...entryDetails, team: teamName }; // Add the correct team name to the entry
+            const newEntry = { ...entryDetails, team: teamName, ownerId }; // Add the correct team name to the entry
 
             if (newStreak > recordObj.value) {
                 recordObj.value = newStreak;
@@ -156,6 +174,19 @@ const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is no
                 if (!isDuplicate) {
                     recordObj.entries.push(newEntry);
                 }
+            }
+        };
+
+        // Helper to add all streaks for top 5 tracking
+        const addToAllStreaks = (category, streak, entryDetails, ownerId, getTeamNameFn) => {
+            if (streak > 0) {
+                const teamName = getTeamNameFn(ownerId, entryDetails.startYear);
+                allStreaks[category].push({
+                    ...entryDetails,
+                    team: teamName,
+                    ownerId,
+                    streak
+                });
             }
         };
 
@@ -183,13 +214,15 @@ const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is no
                     currentWinStreak++;
                     // If a win occurs, end any active losing streak
                     if (currentLossStreak > 0) {
-                        updateStreakRecord(newAggregatedStreaks.longestLosingStreak, currentLossStreak, {
+                        const losingStreakData = {
                             streak: currentLossStreak,
                             startYear: lossStreakStartYear,
                             startWeek: lossStreakStartWeek,
                             endYear: games[i-1] ? games[i-1].year : lossStreakStartYear,
                             endWeek: games[i-1] ? games[i-1].week : lossStreakStartWeek
-                        }, ownerId, getTeamName); // Pass ownerId and getTeamName
+                        };
+                        updateStreakRecord(newAggregatedStreaks.longestLosingStreak, currentLossStreak, losingStreakData, ownerId, getTeamName);
+                        addToAllStreaks('longestLosingStreak', currentLossStreak, losingStreakData, ownerId, getTeamName);
                     }
                     currentLossStreak = 0;
                     lossStreakStartYear = null;
@@ -202,13 +235,15 @@ const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is no
                     currentLossStreak++;
                     // If a loss occurs, end any active winning streak
                     if (currentWinStreak > 0) {
-                        updateStreakRecord(newAggregatedStreaks.longestWinStreak, currentWinStreak, {
+                        const winStreakData = {
                             streak: currentWinStreak,
                             startYear: winStreakStartYear,
                             startWeek: winStreakStartWeek,
                             endYear: games[i-1] ? games[i-1].year : winStreakStartYear,
                             endWeek: games[i-1] ? games[i-1].week : winStreakStartWeek
-                        }, ownerId, getTeamName); // Pass ownerId and getTeamName
+                        };
+                        updateStreakRecord(newAggregatedStreaks.longestWinStreak, currentWinStreak, winStreakData, ownerId, getTeamName);
+                        addToAllStreaks('longestWinStreak', currentWinStreak, winStreakData, ownerId, getTeamName);
                     }
                     currentWinStreak = 0;
                     winStreakStartYear = null;
@@ -345,13 +380,19 @@ const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is no
 
             // After loop, check for any ending streaks
             if (currentHighestScoreStreak > 0) {
-                updateStreakRecord(newAggregatedStreaks.longestConsecutiveHighestScoreWeeks, currentHighestScoreStreak, { streak: currentHighestScoreStreak, startYear: highestScoreStreakStartYear, startWeek: highestScoreStreakStartWeek, endYear: games[games.length - 1].year, endWeek: games[games.length - 1].week }, ownerId, getTeamName); // Pass ownerId and getTeamName
+                const endingStreak = { streak: currentHighestScoreStreak, startYear: highestScoreStreakStartYear, startWeek: highestScoreStreakStartWeek, endYear: games[games.length - 1].year, endWeek: games[games.length - 1].week };
+                updateStreakRecord(newAggregatedStreaks.longestConsecutiveHighestScoreWeeks, currentHighestScoreStreak, endingStreak, ownerId, getTeamName);
+                addToAllStreaks('longestConsecutiveHighestScoreWeeks', currentHighestScoreStreak, endingStreak, ownerId, getTeamName);
             }
             if (currentLowestScoreStreak > 0) {
-                updateStreakRecord(newAggregatedStreaks.longestConsecutiveLowestScoreWeeks, currentLowestScoreStreak, { streak: currentLowestScoreStreak, startYear: lowestScoreStreakStartYear, startWeek: lowestScoreStreakStartWeek, endYear: games[games.length - 1].year, endWeek: games[games.length - 1].week }, ownerId, getTeamName); // Pass ownerId and getTeamName
+                const endingStreak = { streak: currentLowestScoreStreak, startYear: lowestScoreStreakStartYear, startWeek: lowestScoreStreakStartWeek, endYear: games[games.length - 1].year, endWeek: games[games.length - 1].week };
+                updateStreakRecord(newAggregatedStreaks.longestConsecutiveLowestScoreWeeks, currentLowestScoreStreak, endingStreak, ownerId, getTeamName);
+                addToAllStreaks('longestConsecutiveLowestScoreWeeks', currentLowestScoreStreak, endingStreak, ownerId, getTeamName);
             }
             if (currentTop3Streak > 0) {
-                updateStreakRecord(newAggregatedStreaks.longestConsecutiveTop3Weeks, currentTop3Streak, { streak: currentTop3Streak, startYear: top3StreakStartYear, startWeek: top3StreakStartWeek, endYear: games[games.length - 1].year, endWeek: games[games.length - 1].week }, ownerId, getTeamName); // Pass ownerId and getTeamName
+                const endingStreak = { streak: currentTop3Streak, startYear: top3StreakStartYear, startWeek: top3StreakStartWeek, endYear: games[games.length - 1].year, endWeek: games[games.length - 1].week };
+                updateStreakRecord(newAggregatedStreaks.longestConsecutiveTop3Weeks, currentTop3Streak, endingStreak, ownerId, getTeamName);
+                addToAllStreaks('longestConsecutiveTop3Weeks', currentTop3Streak, endingStreak, ownerId, getTeamName);
             }
         });
 
@@ -371,6 +412,7 @@ const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is no
         });
 
         setAggregatedStreaks(newAggregatedStreaks);
+        setAllStreaksData(allStreaks);
 
     }, [historicalMatchups, historicalData, getTeamName, loading, error]);
 
@@ -395,16 +437,16 @@ const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is no
     }
 
     return (
-        <div className="p-8">
+        <div className="p-4 sm:p-6 lg:p-8">
             {/* Header Section */}
-            <div className="mb-8">
-                <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl flex items-center justify-center text-white text-xl font-bold">
+            <div className="mb-6 sm:mb-8">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-4">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl flex items-center justify-center text-white text-lg sm:text-xl font-bold">
                         🔥
                     </div>
                     <div>
-                        <h3 className="text-3xl font-bold text-gray-900">Streak Records</h3>
-                        <p className="text-gray-600 mt-1">
+                        <h3 className="text-2xl sm:text-3xl font-bold text-gray-900">Streak Records</h3>
+                        <p className="text-gray-600 mt-1 text-sm sm:text-base">
                             Longest consecutive achievements in league history
                         </p>
                     </div>
@@ -412,34 +454,34 @@ const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is no
             </div>
 
             {/* Records Table */}
-            <div className="bg-gradient-to-r from-gray-50 to-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+            <div className="bg-gradient-to-r from-gray-50 to-white rounded-xl sm:rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
                     <table className="min-w-full">
                         <thead>
                             <tr className="bg-gradient-to-r from-gray-100 to-gray-50 border-b border-gray-200">
-                                <th className="py-4 px-6 text-left text-sm font-bold text-gray-800 uppercase tracking-wide">
-                                    <div className="flex items-center gap-2">
-                                        🏆 Streak Type
+                                <th className="py-3 px-3 sm:py-4 sm:px-6 text-left text-xs sm:text-sm font-bold text-gray-800 uppercase tracking-wide">
+                                    <div className="flex items-center gap-1 sm:gap-2">
+                                        <span className="hidden sm:inline">🏆</span> Record
                                     </div>
                                 </th>
-                                <th className="py-4 px-6 text-center text-sm font-bold text-gray-800 uppercase tracking-wide">
-                                    <div className="flex items-center justify-center gap-2">
-                                        📊 Length
+                                <th className="py-3 px-3 sm:py-4 sm:px-6 text-center text-xs sm:text-sm font-bold text-gray-800 uppercase tracking-wide">
+                                    <div className="flex items-center justify-center gap-1 sm:gap-2">
+                                        <span className="hidden sm:inline">📊</span> Length
                                     </div>
                                 </th>
-                                <th className="py-4 px-6 text-left text-sm font-bold text-gray-800 uppercase tracking-wide">
-                                    <div className="flex items-center gap-2">
-                                        👑 Team
+                                <th className="py-3 px-3 sm:py-4 sm:px-6 text-left text-xs sm:text-sm font-bold text-gray-800 uppercase tracking-wide">
+                                    <div className="flex items-center gap-1 sm:gap-2">
+                                        <span className="hidden sm:inline">👑</span> Team
                                     </div>
                                 </th>
-                                <th className="py-4 px-6 text-center text-sm font-bold text-gray-800 uppercase tracking-wide">
-                                    <div className="flex items-center justify-center gap-2">
-                                        🎯 Started
+                                <th className="py-3 px-3 sm:py-4 sm:px-6 text-center text-xs sm:text-sm font-bold text-gray-800 uppercase tracking-wide">
+                                    <div className="flex items-center justify-center gap-1 sm:gap-2">
+                                        <span className="hidden sm:inline">🎯</span> Started
                                     </div>
                                 </th>
-                                <th className="py-4 px-6 text-center text-sm font-bold text-gray-800 uppercase tracking-wide">
-                                    <div className="flex items-center justify-center gap-2">
-                                        🏁 Ended
+                                <th className="py-3 px-3 sm:py-4 sm:px-6 text-center text-xs sm:text-sm font-bold text-gray-800 uppercase tracking-wide">
+                                    <div className="flex items-center justify-center gap-1 sm:gap-2">
+                                        <span className="hidden sm:inline">🏁</span> Ended
                                     </div>
                                 </th>
                             </tr>
@@ -447,77 +489,121 @@ const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is no
                         <tbody className="divide-y divide-gray-100">
                             {recordsToDisplay.map((recordDef, recordGroupIndex) => {
                                 const recordData = aggregatedStreaks[recordDef.key];
+                                const isExpanded = expandedSections[recordDef.key];
+                                
                                 if (!recordData || recordData.entries.length === 0) {
                                     return (
-                                        <tr key={recordDef.key} className={`transition-all duration-200 hover:bg-blue-50 ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}>
-                                            <td className="py-4 px-6">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 bg-gray-300 rounded-lg flex items-center justify-center text-white text-sm font-bold">
-                                                        {recordGroupIndex + 1}
-                                                    </div>
-                                                    <span className="font-semibold text-gray-900 text-sm">{recordDef.label}</span>
-                                                </div>
-                                            </td>
-                                            <td colSpan="4" className="py-4 px-6 text-center">
-                                                <span className="text-gray-500 text-sm italic">No data available</span>
-                                            </td>
-                                        </tr>
+                                        <React.Fragment key={recordDef.key}>
+                                            <tr className={`transition-all duration-200 hover:bg-blue-50 ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}>
+                                                <td className="py-3 px-3 sm:py-4 sm:px-6">
+                                                    <span className="font-semibold text-gray-900 text-xs sm:text-sm">{recordDef.label}</span>
+                                                </td>
+                                                <td colSpan="4" className="py-3 px-3 sm:py-4 sm:px-6 text-center">
+                                                    <span className="text-gray-500 text-xs sm:text-sm italic">No data available</span>
+                                                </td>
+                                            </tr>
+                                        </React.Fragment>
                                     );
                                 }
-                                return recordData.entries.map((entry, entryIndex) => (
-                                    <tr
-                                        key={`${recordDef.key}-${entry.team}-${entry.startYear}-${entry.startWeek}-${entryIndex}`}
-                                        className={`
-                                            transition-all duration-200 hover:bg-blue-50 hover:shadow-sm
-                                            ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}
-                                            ${entryIndex === recordData.entries.length - 1 ? 'border-b-2 border-gray-200' : ''}
-                                        `}
-                                    >
-                                        <td className="py-4 px-6">
-                                            {entryIndex === 0 ? (
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center text-white text-sm font-bold">
-                                                        {recordGroupIndex + 1}
+                                
+                                return (
+                                    <React.Fragment key={recordDef.key}>
+                                        {recordData.entries.map((entry, entryIndex) => (
+                                            <tr
+                                                key={`${recordDef.key}-${entry.team}-${entry.startYear}-${entry.startWeek}-${entryIndex}`}
+                                                className={`transition-all duration-200 hover:bg-blue-50 hover:shadow-sm ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}
+                                            >
+                                                <td className="py-3 px-3 sm:py-4 sm:px-6">
+                                                    {entryIndex === 0 ? (
+                                                        <div className="flex items-center gap-2 sm:gap-3">
+                                                            <span className="font-semibold text-gray-900 text-xs sm:text-sm">
+                                                                {recordDef.label}
+                                                            </span>
+                                                            <button
+                                                                onClick={() => toggleSection(recordDef.key)}
+                                                                className="ml-2 p-1 rounded-md hover:bg-gray-200 transition-colors"
+                                                                aria-label={`${isExpanded ? 'Hide' : 'Show'} top 5 for ${recordDef.label}`}
+                                                            >
+                                                                <svg
+                                                                    className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                                                    fill="none"
+                                                                    stroke="currentColor"
+                                                                    viewBox="0 0 24 24"
+                                                                >
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                                </svg>
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-gray-400 text-xs sm:text-sm">• Tied Record</div>
+                                                    )}
+                                                </td>
+                                                <td className="py-3 px-3 sm:py-4 sm:px-6 text-center">
+                                                    {entryIndex === 0 ? (
+                                                        <div className="inline-flex items-center px-2 py-1 sm:px-3 sm:py-1 rounded-full bg-gradient-to-r from-purple-100 to-pink-100 border border-purple-200">
+                                                            <span className="font-bold text-gray-900 text-xs sm:text-sm">
+                                                                {entry.streak}
+                                                            </span>
+                                                            <span className="text-gray-600 text-xs ml-1">games</span>
+                                                        </div>
+                                                    ) : ''}
+                                                </td>
+                                                <td className="py-3 px-3 sm:py-4 sm:px-6">
+                                                    <span className="font-medium text-gray-900 text-xs sm:text-sm">{entry.team}</span>
+                                                </td>
+                                                <td className="py-3 px-3 sm:py-4 sm:px-6 text-center">
+                                                    <div className="inline-flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-1 bg-green-100 text-green-800 rounded-lg text-xs font-medium">
+                                                        <span>{entry.startYear}</span>
+                                                        <span className="text-green-600">•</span>
+                                                        <span>Week {entry.startWeek}</span>
                                                     </div>
-                                                    <span className="font-semibold text-gray-900 text-sm">
-                                                        {recordDef.label}
-                                                    </span>
-                                                </div>
-                                            ) : (
-                                                <div className="ml-11">
-                                                    <span className="text-gray-400 text-sm">• Tied Record</span>
-                                                </div>
-                                            )}
-                                        </td>
-                                        <td className="py-4 px-6 text-center">
-                                            {entryIndex === 0 ? (
-                                                <div className="inline-flex items-center px-4 py-2 rounded-full bg-gradient-to-r from-purple-100 to-pink-100 border border-purple-200">
-                                                    <span className="font-bold text-gray-900 text-lg">
-                                                        {entry.streak}
-                                                    </span>
-                                                    <span className="text-gray-600 text-sm ml-1">games</span>
-                                                </div>
-                                            ) : ''}
-                                        </td>
-                                        <td className="py-4 px-6">
-                                            <span className="font-medium text-gray-900 text-sm">{entry.team}</span>
-                                        </td>
-                                        <td className="py-4 px-6 text-center">
-                                            <div className="inline-flex items-center gap-1 px-3 py-1 bg-green-100 text-green-800 rounded-lg text-xs font-medium">
-                                                <span>{entry.startYear}</span>
-                                                <span className="text-green-600">•</span>
-                                                <span>Week {entry.startWeek}</span>
-                                            </div>
-                                        </td>
-                                        <td className="py-4 px-6 text-center">
-                                            <div className="inline-flex items-center gap-1 px-3 py-1 bg-red-100 text-red-800 rounded-lg text-xs font-medium">
-                                                <span>{entry.endYear}</span>
-                                                <span className="text-red-600">•</span>
-                                                <span>Week {entry.endWeek}</span>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ));
+                                                </td>
+                                                <td className="py-3 px-3 sm:py-4 sm:px-6 text-center">
+                                                    <div className="inline-flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-1 bg-red-100 text-red-800 rounded-lg text-xs font-medium">
+                                                        <span>{entry.endYear}</span>
+                                                        <span className="text-red-600">•</span>
+                                                        <span>Week {entry.endWeek}</span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        
+                                        {/* Collapsible Top 5 Section */}
+                                        {isExpanded && allStreaksData[recordDef.key] && allStreaksData[recordDef.key].length > 0 && (
+                                            <tr className={`${recordGroupIndex % 2 === 0 ? 'bg-gray-50' : 'bg-gray-75'}`}>
+                                                <td colSpan="5" className="p-0">
+                                                    <div className="px-3 py-4 sm:px-6 sm:py-6">
+                                                        <h4 className="text-sm font-semibold text-gray-700 mb-3">
+                                                            Top 5 {recordDef.label}s
+                                                        </h4>
+                                                        <div className="space-y-2">
+                                                            {allStreaksData[recordDef.key]
+                                                                .sort((a, b) => b.streak - a.streak)
+                                                                .slice(0, 5)
+                                                                .map((streak, index) => (
+                                                                    <div key={`${streak.team}-${streak.streak}-${streak.startYear}-${streak.startWeek}-${index}`} 
+                                                                         className="flex items-center justify-between py-2 px-3 bg-white rounded-lg border border-gray-200">
+                                                                        <div className="flex items-center gap-3">
+                                                                            <span className="flex items-center justify-center w-6 h-6 bg-blue-100 text-blue-800 text-xs font-bold rounded-full">
+                                                                                {index + 1}
+                                                                            </span>
+                                                                            <span className="font-medium text-gray-900 text-sm">{streak.team}</span>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-4">
+                                                                            <span className="font-bold text-gray-900">{streak.streak} games</span>
+                                                                            <div className="text-xs text-gray-500">
+                                                                                {streak.startYear} Week {streak.startWeek} - {streak.endYear} Week {streak.endWeek}
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </React.Fragment>
+                                );
                             })}
                         </tbody>
                     </table>

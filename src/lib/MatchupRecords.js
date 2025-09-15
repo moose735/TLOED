@@ -5,6 +5,18 @@ import { useSleeperData } from '../contexts/SleeperDataContext'; // Import useSl
 const MatchupRecords = () => {
     const { historicalData, getTeamName, loading, error } = useSleeperData();
     const [aggregatedMatchupRecords, setAggregatedMatchupRecords] = useState({});
+    
+    // State for collapsible sections
+    const [expandedSections, setExpandedSections] = useState({});
+    const [allMatchupData, setAllMatchupData] = useState({});
+
+    // Toggle function for expanding/collapsing sections
+    const toggleSection = (key) => {
+        setExpandedSections(prev => ({
+            ...prev,
+            [key]: !prev[key]
+        }));
+    };
 
     // Helper to update a record (max/min)
     function updateRecord(recordObj, newValue, entryDetails, isMin = false) {
@@ -52,8 +64,29 @@ const MatchupRecords = () => {
         // Handle loading, error, or missing historical data
         if (loading || error || !historicalData || !historicalData.matchupsBySeason) {
             setAggregatedMatchupRecords({});
+            setAllMatchupData({});
             return;
         }
+
+        // Initialize collection for all matchup data
+        const tempAllMatchupData = {
+            mostPointsScored: [],
+            fewestPointsScored: [],
+            highestCombinedScore: [],
+            lowestCombinedScore: [],
+            biggestBlowout: [],
+            slimmestWin: []
+        };
+
+        // Helper function to add data to all matchup data collection
+        const addToAllMatchupData = (recordKey, value, entryDetails) => {
+            if (typeof value === 'number' && !isNaN(value) && tempAllMatchupData[recordKey]) {
+                tempAllMatchupData[recordKey].push({
+                    ...entryDetails,
+                    value: value
+                });
+            }
+        };
 
         // Get the current year to exclude ongoing season data from certain records
         const currentYear = new Date().getFullYear().toString();
@@ -137,33 +170,46 @@ const MatchupRecords = () => {
             // --- Update Records ---
 
             // Most Points Scored by a team
-            updateRecord(newAggregatedRecords.mostPointsScored, team1Score, { ...baseEntryDetails, team: team1Name, score: team1Score });
-            updateRecord(newAggregatedRecords.mostPointsScored, team2Score, { ...baseEntryDetails, team: team2Name, score: team2Score });
+            const team1Details = { ...baseEntryDetails, team: team1Name, score: team1Score };
+            const team2Details = { ...baseEntryDetails, team: team2Name, score: team2Score };
+            updateRecord(newAggregatedRecords.mostPointsScored, team1Score, team1Details);
+            updateRecord(newAggregatedRecords.mostPointsScored, team2Score, team2Details);
+            addToAllMatchupData('mostPointsScored', team1Score, team1Details);
+            addToAllMatchupData('mostPointsScored', team2Score, team2Details);
 
             // Fewest Points Scored by a team - ONLY FOR SCORES > 0
             if (team1Score > 0) {
-                updateRecord(newAggregatedRecords.fewestPointsScored, team1Score, { ...baseEntryDetails, team: team1Name, score: team1Score }, true);
+                updateRecord(newAggregatedRecords.fewestPointsScored, team1Score, team1Details, true);
+                addToAllMatchupData('fewestPointsScored', team1Score, team1Details);
             }
             if (team2Score > 0) {
-                updateRecord(newAggregatedRecords.fewestPointsScored, team2Score, { ...baseEntryDetails, team: team2Name, score: team2Score }, true);
+                updateRecord(newAggregatedRecords.fewestPointsScored, team2Score, team2Details, true);
+                addToAllMatchupData('fewestPointsScored', team2Score, team2Details);
             }
 
             // Highest Combined Score
-            updateRecord(newAggregatedRecords.highestCombinedScore, combinedScore, { ...baseEntryDetails, combinedScore: combinedScore });
+            const combinedDetails = { ...baseEntryDetails, combinedScore: combinedScore };
+            updateRecord(newAggregatedRecords.highestCombinedScore, combinedScore, combinedDetails);
+            addToAllMatchupData('highestCombinedScore', combinedScore, combinedDetails);
 
             // Lowest Combined Score - ONLY IF BOTH SCORES > 0
             if (combinedScore > 0 && team1Score > 0 && team2Score > 0) {
-                updateRecord(newAggregatedRecords.lowestCombinedScore, combinedScore, { ...baseEntryDetails, combinedScore: combinedScore }, true);
+                updateRecord(newAggregatedRecords.lowestCombinedScore, combinedScore, combinedDetails, true);
+                addToAllMatchupData('lowestCombinedScore', combinedScore, combinedDetails);
             }
 
             // Biggest Blowout (largest absolute score difference in a non-tied game)
             if (!isTie) {
-                updateRecord(newAggregatedRecords.biggestBlowout, scoreDifference, { ...baseEntryDetails, margin: scoreDifference, winner: winnerName, loser: loserName });
+                const blowoutDetails = { ...baseEntryDetails, margin: scoreDifference, winner: winnerName, loser: loserName };
+                updateRecord(newAggregatedRecords.biggestBlowout, scoreDifference, blowoutDetails);
+                addToAllMatchupData('biggestBlowout', scoreDifference, blowoutDetails);
             }
 
             // Slimmest Win (smallest positive score difference)
             if (!isTie && scoreDifference > 0) {
-                updateRecord(newAggregatedRecords.slimmestWin, scoreDifference, { ...baseEntryDetails, margin: scoreDifference, winner: winnerName, loser: loserName }, true);
+                const slimDetails = { ...baseEntryDetails, margin: scoreDifference, winner: winnerName, loser: loserName };
+                updateRecord(newAggregatedRecords.slimmestWin, scoreDifference, slimDetails, true);
+                addToAllMatchupData('slimmestWin', scoreDifference, slimDetails);
             }
         });
 
@@ -192,6 +238,7 @@ const MatchupRecords = () => {
         });
 
         setAggregatedMatchupRecords(newAggregatedRecords);
+        setAllMatchupData(tempAllMatchupData);
 
     }, [historicalData, getTeamName, loading, error]);
 
@@ -248,7 +295,7 @@ const MatchupRecords = () => {
                             <tr className="bg-gradient-to-r from-gray-100 to-gray-50 border-b border-gray-200">
                                 <th className="py-3 px-3 sm:py-4 sm:px-6 text-left text-xs sm:text-sm font-bold text-gray-800 uppercase tracking-wide">
                                     <div className="flex items-center gap-1 sm:gap-2">
-                                        <span className="hidden sm:inline">🏆</span> Record Type
+                                        Record Type
                                     </div>
                                 </th>
                                 <th className="py-3 px-3 sm:py-4 sm:px-6 text-center text-xs sm:text-sm font-bold text-gray-800 uppercase tracking-wide">
@@ -276,25 +323,217 @@ const MatchupRecords = () => {
                         <tbody className="divide-y divide-gray-100">
                             {recordsToDisplay.map((recordDef, recordGroupIndex) => {
                                 const recordData = aggregatedMatchupRecords[recordDef.key];
+                                const isExpanded = expandedSections[recordDef.key];
+                                
                                 if (!recordData || recordData.entries.length === 0) {
                                     return (
-                                        <tr key={recordDef.key} className={`transition-all duration-200 hover:bg-blue-50 ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}>
-                                            <td className="py-3 px-3 sm:py-4 sm:px-6">
-                                                <div className="flex items-center gap-2 sm:gap-3">
-                                                    <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gray-300 rounded-lg flex items-center justify-center text-white text-xs sm:text-sm font-bold">
-                                                        {recordGroupIndex + 1}
+                                        <React.Fragment key={recordDef.key}>
+                                            <tr className={`transition-all duration-200 hover:bg-blue-50 ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}>
+                                                <td className="py-3 px-3 sm:py-4 sm:px-6">
+                                                    <div className="flex items-center gap-2 sm:gap-3">
+                                                        <span className="font-semibold text-gray-900 text-xs sm:text-sm">{recordDef.label}</span>
                                                     </div>
-                                                    <span className="font-semibold text-gray-900 text-xs sm:text-sm">{recordDef.label}</span>
-                                                </div>
-                                            </td>
-                                            <td colSpan="4" className="py-3 px-3 sm:py-4 sm:px-6 text-center">
-                                                <span className="text-gray-500 text-xs sm:text-sm italic">No data available</span>
-                                            </td>
-                                        </tr>
+                                                </td>
+                                                <td colSpan="4" className="py-3 px-3 sm:py-4 sm:px-6 text-center">
+                                                    <span className="text-gray-500 text-xs sm:text-sm italic">No data available</span>
+                                                </td>
+                                            </tr>
+                                        </React.Fragment>
                                     );
                                 }
 
-                                return recordData.entries.map((entry, index) => {
+                                return (
+                                    <React.Fragment key={recordDef.key}>
+                                        {recordData.entries.map((entry, index) => {
+                                            let matchupDisplay;
+                                            const team1ScoreFormatted = entry.team1Score.toFixed(2);
+                                            const team2ScoreFormatted = entry.team2Score.toFixed(2);
+                                            const winnerScore = (entry.winner === entry.team1 ? entry.team1Score : entry.team2Score).toFixed(2);
+                                            const loserScore = (entry.loser === entry.team1 ? entry.team1Score : entry.team2Score).toFixed(2);
+
+                                            if (recordDef.key === 'mostPointsScored' || recordDef.key === 'fewestPointsScored') {
+                                                const recordHolder = entry.team;
+                                                const recordScore = entry.score.toFixed(2);
+                                                const opponent = recordHolder === entry.team1 ? entry.team2 : entry.team1;
+                                                const opponentScore = (recordHolder === entry.team1 ? entry.team2Score : entry.team1Score).toFixed(2);
+
+                                                matchupDisplay = (
+                                                    <div className="space-y-2">
+                                                        <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-2 sm:p-3 border border-blue-200">
+                                                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
+                                                                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                                                                    <span className="font-semibold text-gray-900 text-xs sm:text-sm truncate">{recordHolder}</span>
+                                                                    <span className="font-bold text-blue-600 text-xs sm:text-sm">{recordScore}</span>
+                                                                </div>
+                                                                <span className="text-gray-500 font-medium text-xs sm:text-sm hidden sm:inline">vs</span>
+                                                                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                                                                    <span className="text-gray-700 text-xs sm:text-sm truncate">{opponent}</span>
+                                                                    <span className="text-gray-600 text-xs sm:text-sm">{opponentScore}</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            } else if (recordDef.key === 'biggestBlowout' || recordDef.key === 'slimmestWin') {
+                                                matchupDisplay = (
+                                                    <div className="space-y-2">
+                                                        <div className="bg-gradient-to-r from-orange-50 to-red-50 rounded-lg p-2 sm:p-3 border border-orange-200">
+                                                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
+                                                                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                                                                    <span className="font-semibold text-gray-900 text-xs sm:text-sm truncate">{entry.winner}</span>
+                                                                    <span className="font-bold text-green-600 text-xs sm:text-sm">{winnerScore}</span>
+                                                                </div>
+                                                                <span className="text-gray-500 font-medium text-xs sm:text-sm hidden sm:inline">vs</span>
+                                                                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                                                                    <span className="text-gray-700 text-xs sm:text-sm truncate">{entry.loser}</span>
+                                                                    <span className="text-gray-600 text-xs sm:text-sm">{loserScore}</span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="mt-1 text-center">
+                                                                <span className="inline-flex items-center px-2 py-1 bg-white rounded-md text-xs font-medium text-gray-700">
+                                                                    Margin: {entry.margin.toFixed(2)} pts
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            } else {
+                                                // Combined score records
+                                                matchupDisplay = (
+                                                    <div className="space-y-2">
+                                                        <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg p-2 sm:p-3 border border-green-200">
+                                                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
+                                                                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                                                                    <span className="font-semibold text-gray-900 text-xs sm:text-sm truncate">{entry.team1}</span>
+                                                                    <span className="font-bold text-blue-600 text-xs sm:text-sm">{team1ScoreFormatted}</span>
+                                                                </div>
+                                                                <span className="text-gray-500 font-medium text-xs sm:text-sm hidden sm:inline">vs</span>
+                                                                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                                                                    <span className="text-gray-700 text-xs sm:text-sm truncate">{entry.team2}</span>
+                                                                    <span className="text-gray-600 text-xs sm:text-sm">{team2ScoreFormatted}</span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="mt-1 text-center">
+                                                                <span className="inline-flex items-center px-2 py-1 bg-white rounded-md text-xs font-medium text-gray-700">
+                                                                    Combined: {entry.combinedScore.toFixed(2)} pts
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+
+                                            return (
+                                                <tr
+                                                    key={`${recordDef.key}-${index}`}
+                                                    className={`transition-all duration-200 hover:bg-blue-50 hover:shadow-sm ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}
+                                                >
+                                                    <td className="py-3 px-3 sm:py-4 sm:px-6">
+                                                        {index === 0 ? (
+                                                            <div className="flex items-center gap-2 sm:gap-3">
+                                                                <span className="font-semibold text-gray-900 text-xs sm:text-sm">
+                                                                    {recordDef.label}
+                                                                </span>
+                                                                <button
+                                                                    onClick={() => toggleSection(recordDef.key)}
+                                                                    className="ml-2 p-1 rounded-md hover:bg-gray-200 transition-colors"
+                                                                    aria-label={`${isExpanded ? 'Hide' : 'Show'} top 5 for ${recordDef.label}`}
+                                                                >
+                                                                    <svg
+                                                                        className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                                                        fill="none"
+                                                                        stroke="currentColor"
+                                                                        viewBox="0 0 24 24"
+                                                                    >
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                                    </svg>
+                                                                </button>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="text-gray-400 text-xs sm:text-sm">• Tied Record</div>
+                                                        )}
+                                                    </td>
+                                                    <td className="py-3 px-3 sm:py-4 sm:px-6 text-center">
+                                                        {index === 0 ? (
+                                                            <div className="inline-flex items-center px-2 py-1 sm:px-3 sm:py-1 rounded-full bg-gradient-to-r from-orange-100 to-red-100 border border-orange-200">
+                                                                <span className="font-bold text-gray-900 text-xs sm:text-sm">
+                                                                    {formatDisplayValue(recordData.value, recordDef.key)}
+                                                                </span>
+                                                            </div>
+                                                        ) : ''}
+                                                    </td>
+                                                    <td className="py-3 px-3 sm:py-4 sm:px-6">
+                                                        <div className="text-xs sm:text-sm">
+                                                            {matchupDisplay}
+                                                        </div>
+                                                    </td>
+                                                    <td className="py-3 px-3 sm:py-4 sm:px-6 text-center">
+                                                        <div className="inline-flex items-center px-2 py-1 sm:px-3 sm:py-1 bg-blue-100 text-blue-800 rounded-lg text-xs font-medium">
+                                                            {entry.year}
+                                                        </div>
+                                                    </td>
+                                                    <td className="py-3 px-3 sm:py-4 sm:px-6 text-center">
+                                                        <div className="inline-flex items-center px-2 py-1 sm:px-3 sm:py-1 bg-purple-100 text-purple-800 rounded-lg text-xs font-medium">
+                                                            Week {entry.week}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                        
+                                        {/* Collapsible Top 5 Section */}
+                                        {isExpanded && allMatchupData[recordDef.key] && allMatchupData[recordDef.key].length > 0 && (
+                                            <tr className={`${recordGroupIndex % 2 === 0 ? 'bg-gray-50' : 'bg-gray-75'}`}>
+                                                <td colSpan="5" className="p-0">
+                                                    <div className="px-3 py-4 sm:px-6 sm:py-6">
+                                                        <h4 className="text-sm font-semibold text-gray-700 mb-3">
+                                                            Top 5 {recordDef.label}
+                                                        </h4>
+                                                        <div className="space-y-2">
+                                                            {(() => {
+                                                                const sortKey = recordDef.key;
+                                                                const isMinRecord = ['fewestPointsScored', 'lowestCombinedScore', 'slimmestWin'].includes(sortKey);
+                                                                
+                                                                return allMatchupData[sortKey]
+                                                                    .sort((a, b) => isMinRecord ? a.value - b.value : b.value - a.value)
+                                                                    .slice(0, 5)
+                                                                    .map((matchupData, index) => {
+                                                                        let displayText = '';
+                                                                        
+                                                                        if (sortKey === 'mostPointsScored' || sortKey === 'fewestPointsScored') {
+                                                                            displayText = `${matchupData.team}: ${matchupData.value.toFixed(2)} pts`;
+                                                                        } else if (sortKey === 'biggestBlowout' || sortKey === 'slimmestWin') {
+                                                                            displayText = `${matchupData.winner} beat ${matchupData.loser} by ${matchupData.value.toFixed(2)} pts`;
+                                                                        } else {
+                                                                            displayText = `${matchupData.team1} vs ${matchupData.team2}: ${matchupData.value.toFixed(2)} pts combined`;
+                                                                        }
+                                                                        
+                                                                        return (
+                                                                            <div key={`${matchupData.year}-${matchupData.week}-${index}`} 
+                                                                                 className="flex items-center justify-between py-2 px-3 bg-white rounded-lg border border-gray-200">
+                                                                                <div className="flex items-center gap-3">
+                                                                                    <span className="flex items-center justify-center w-6 h-6 bg-blue-100 text-blue-800 text-xs font-bold rounded-full">
+                                                                                        {index + 1}
+                                                                                    </span>
+                                                                                    <span className="font-medium text-gray-900 text-sm">{displayText}</span>
+                                                                                </div>
+                                                                                <div className="flex items-center gap-4">
+                                                                                    <span className="font-bold text-gray-900">{matchupData.value.toFixed(2)}</span>
+                                                                                    <div className="text-xs text-gray-500">
+                                                                                        {matchupData.year} Week {matchupData.week}
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    });
+                                                            })()}
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </React.Fragment>
+                                );
                                     let matchupDisplay;
                                     const team1ScoreFormatted = entry.team1Score.toFixed(2);
                                     const team2ScoreFormatted = entry.team2Score.toFixed(2);
@@ -308,48 +547,54 @@ const MatchupRecords = () => {
                                         const opponentScore = (recordHolder === entry.team1 ? entry.team2Score : entry.team1Score).toFixed(2);
 
                                         matchupDisplay = (
-                                            <div className="flex flex-col space-y-2">
-                                                <div className="flex items-center justify-between bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-3 border border-blue-200">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="font-semibold text-gray-900">{recordHolder}</span>
-                                                        <span className="font-bold text-blue-600">{recordScore}</span>
-                                                    </div>
-                                                    <span className="text-gray-500 font-medium">vs</span>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-gray-700">{opponent}</span>
-                                                        <span className="text-gray-600">{opponentScore}</span>
+                                            <div className="space-y-2">
+                                                <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-2 sm:p-3 border border-blue-200">
+                                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
+                                                        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                                                            <span className="font-semibold text-gray-900 text-xs sm:text-sm truncate">{recordHolder}</span>
+                                                            <span className="font-bold text-blue-600 text-xs sm:text-sm">{recordScore}</span>
+                                                        </div>
+                                                        <span className="text-gray-500 font-medium text-xs sm:text-sm hidden sm:inline">vs</span>
+                                                        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                                                            <span className="text-gray-700 text-xs sm:text-sm truncate">{opponent}</span>
+                                                            <span className="text-gray-600 text-xs sm:text-sm">{opponentScore}</span>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
                                         );
                                     } else if (recordDef.key === 'biggestBlowout' || recordDef.key === 'slimmestWin') {
                                         matchupDisplay = (
-                                            <div className="flex flex-col space-y-2">
-                                                <div className="flex items-center justify-between bg-gradient-to-r from-orange-50 to-red-50 rounded-lg p-3 border border-orange-200">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="font-semibold text-gray-900">{entry.winner}</span>
-                                                        <span className="font-bold text-green-600">{winnerScore}</span>
-                                                    </div>
-                                                    <span className="text-gray-500 font-medium">vs</span>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-gray-700">{entry.loser}</span>
-                                                        <span className="text-red-600">{loserScore}</span>
+                                            <div className="space-y-2">
+                                                <div className="bg-gradient-to-r from-orange-50 to-red-50 rounded-lg p-2 sm:p-3 border border-orange-200">
+                                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
+                                                        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                                                            <span className="font-semibold text-gray-900 text-xs sm:text-sm truncate">{entry.winner}</span>
+                                                            <span className="font-bold text-green-600 text-xs sm:text-sm">{winnerScore}</span>
+                                                        </div>
+                                                        <span className="text-gray-500 font-medium text-xs sm:text-sm hidden sm:inline">vs</span>
+                                                        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                                                            <span className="text-gray-700 text-xs sm:text-sm truncate">{entry.loser}</span>
+                                                            <span className="text-red-600 text-xs sm:text-sm">{loserScore}</span>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
                                         );
                                     } else {
                                         matchupDisplay = (
-                                            <div className="flex flex-col space-y-2">
-                                                <div className="flex items-center justify-between bg-gradient-to-r from-gray-50 to-blue-50 rounded-lg p-3 border border-gray-200">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="font-semibold text-gray-900">{entry.team1}</span>
-                                                        <span className="font-bold text-blue-600">{team1ScoreFormatted}</span>
-                                                    </div>
-                                                    <span className="text-gray-500 font-medium">vs</span>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="font-semibold text-gray-900">{entry.team2}</span>
-                                                        <span className="font-bold text-blue-600">{team2ScoreFormatted}</span>
+                                            <div className="space-y-2">
+                                                <div className="bg-gradient-to-r from-gray-50 to-blue-50 rounded-lg p-2 sm:p-3 border border-gray-200">
+                                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
+                                                        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                                                            <span className="font-semibold text-gray-900 text-xs sm:text-sm truncate">{entry.team1}</span>
+                                                            <span className="font-bold text-blue-600 text-xs sm:text-sm">{team1ScoreFormatted}</span>
+                                                        </div>
+                                                        <span className="text-gray-500 font-medium text-xs sm:text-sm hidden sm:inline">vs</span>
+                                                        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                                                            <span className="font-semibold text-gray-900 text-xs sm:text-sm truncate">{entry.team2}</span>
+                                                            <span className="font-bold text-blue-600 text-xs sm:text-sm">{team2ScoreFormatted}</span>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -359,11 +604,7 @@ const MatchupRecords = () => {
                                     return (
                                         <tr
                                             key={`${recordDef.key}-${entry.team1}-${entry.team2}-${entry.year}-${entry.week}-${index}`}
-                                            className={`
-                                                transition-all duration-200 hover:bg-blue-50 hover:shadow-sm
-                                                ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}
-                                                ${index === recordData.entries.length - 1 ? 'border-b-2 border-gray-200' : ''}
-                                            `}
+                                            className={`transition-all duration-200 hover:bg-blue-50 hover:shadow-sm ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}
                                         >
                                             <td className="py-3 px-3 sm:py-4 sm:px-6">
                                                 {index === 0 ? (
@@ -373,9 +614,7 @@ const MatchupRecords = () => {
                                                         </span>
                                                     </div>
                                                 ) : (
-                                                    <div className="ml-2 sm:ml-4">
-                                                        <span className="text-gray-400 text-xs sm:text-sm">• Tied Record</span>
-                                                    </div>
+                                                    <div className="text-gray-400 text-xs sm:text-sm">• Tied Record</div>
                                                 )}
                                             </td>
                                             <td className="py-3 px-3 sm:py-4 sm:px-6 text-center">
@@ -404,7 +643,6 @@ const MatchupRecords = () => {
                                             </td>
                                         </tr>
                                     );
-                                });
                             })}
                         </tbody>
                     </table>

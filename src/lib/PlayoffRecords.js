@@ -5,12 +5,50 @@ import { useSleeperData } from '../contexts/SleeperDataContext'; // Import useSl
 const PlayoffRecords = ({ historicalMatchups }) => { // Removed getDisplayTeamName from props as it's now from context
   const { historicalData, getTeamName, loading, error } = useSleeperData(); // Get historicalData and getTeamName from context
   const [aggregatedPlayoffRecords, setAggregatedPlayoffRecords] = useState({});
+  
+  // State for collapsible sections
+  const [expandedSections, setExpandedSections] = useState({});
+  const [allPlayoffData, setAllPlayoffData] = useState({});
+
+  // Toggle function for expanding/collapsing sections
+  const toggleSection = (key) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
 
   useEffect(() => {
     if (loading || error || !historicalMatchups || historicalMatchups.length === 0 || !historicalData || !historicalData.rostersBySeason) {
       setAggregatedPlayoffRecords({});
+      setAllPlayoffData({});
       return;
     }
+
+    // Initialize collection for all playoff data
+    const tempAllPlayoffData = {
+      mostPlayoffAppearances: [],
+      mostPlayoffWins: [],
+      mostPlayoffLosses: [],
+      bestPlayoffWinPercentage: [],
+      worstPlayoffWinPercentage: [],
+      mostPlayoffPointsFor: [],
+      mostPlayoffPointsAgainst: [],
+      mostChampionships: [],
+      mostFirstPlaceFinishes: [],
+      mostSecondPlaceFinishes: [],
+      mostThirdPlaceFinishes: []
+    };
+
+    // Helper function to add data to all playoff data collection
+    const addToAllPlayoffData = (recordKey, value, teamInfo) => {
+      if (typeof value === 'number' && !isNaN(value) && tempAllPlayoffData[recordKey]) {
+        tempAllPlayoffData[recordKey].push({
+          ...teamInfo,
+          value: value
+        });
+      }
+    };
 
     // teamPlayoffStats will now be keyed by ownerId for consistent aggregation
     const teamPlayoffStats = {}; // { ownerId: { appearances: Set<year>, wins: 0, losses: 0, ties: 0, pointsFor: 0, pointsAgainst: 0, medals: { 1: 0, 2: 0, 3: 0 }, championships: 0 } }
@@ -180,13 +218,31 @@ const PlayoffRecords = ({ historicalMatchups }) => { // Removed getDisplayTeamNa
       const stats = teamPlayoffStats[ownerId];
       const currentTeamName = getTeamName(ownerId, null); // Get the current team name for display
 
-      updateRecord(newAggregatedRecords.mostPlayoffAppearances, stats.appearances.size, { team: currentTeamName, appearances: stats.appearances.size });
-      updateRecord(newAggregatedRecords.mostPlayoffWins, stats.wins, { team: currentTeamName, wins: stats.wins });
-      updateRecord(newAggregatedRecords.totalPlayoffPoints, stats.pointsFor, { team: currentTeamName, points: stats.pointsFor });
-      updateRecord(newAggregatedRecords.mostPlayoffPointsAgainst, stats.pointsAgainst, { team: currentTeamName, pointsAgainst: stats.pointsAgainst });
-      updateRecord(newAggregatedRecords.mostChampionships, stats.championships, { team: currentTeamName, championships: stats.championships });
-      updateRecord(newAggregatedRecords.most2ndPlaceFinishes, stats.medals[2], { team: currentTeamName, place: stats.medals[2] });
-      updateRecord(newAggregatedRecords.most3rdPlaceFinishes, stats.medals[3], { team: currentTeamName, place: stats.medals[3] });
+      const appearancesEntry = { team: currentTeamName, appearances: stats.appearances.size };
+      const winsEntry = { team: currentTeamName, wins: stats.wins };
+      const pointsEntry = { team: currentTeamName, points: stats.pointsFor };
+      const pointsAgainstEntry = { team: currentTeamName, pointsAgainst: stats.pointsAgainst };
+      const championshipsEntry = { team: currentTeamName, championships: stats.championships };
+      const secondPlaceEntry = { team: currentTeamName, place: stats.medals[2] };
+      const thirdPlaceEntry = { team: currentTeamName, place: stats.medals[3] };
+
+      updateRecord(newAggregatedRecords.mostPlayoffAppearances, stats.appearances.size, appearancesEntry);
+      updateRecord(newAggregatedRecords.mostPlayoffWins, stats.wins, winsEntry);
+      updateRecord(newAggregatedRecords.totalPlayoffPoints, stats.pointsFor, pointsEntry);
+      updateRecord(newAggregatedRecords.mostPlayoffPointsAgainst, stats.pointsAgainst, pointsAgainstEntry);
+      updateRecord(newAggregatedRecords.mostChampionships, stats.championships, championshipsEntry);
+      updateRecord(newAggregatedRecords.most2ndPlaceFinishes, stats.medals[2], secondPlaceEntry);
+      updateRecord(newAggregatedRecords.most3rdPlaceFinishes, stats.medals[3], thirdPlaceEntry);
+
+      // Add to all playoff data for top 5 rankings
+      addToAllPlayoffData('mostPlayoffAppearances', stats.appearances.size, appearancesEntry);
+      addToAllPlayoffData('mostPlayoffWins', stats.wins, winsEntry);
+      addToAllPlayoffData('mostPlayoffPointsFor', stats.pointsFor, pointsEntry);
+      addToAllPlayoffData('mostPlayoffPointsAgainst', stats.pointsAgainst, pointsAgainstEntry);
+      addToAllPlayoffData('mostChampionships', stats.championships, championshipsEntry);
+      addToAllPlayoffData('mostFirstPlaceFinishes', stats.championships, championshipsEntry);
+      addToAllPlayoffData('mostSecondPlaceFinishes', stats.medals[2], secondPlaceEntry);
+      addToAllPlayoffData('mostThirdPlaceFinishes', stats.medals[3], thirdPlaceEntry);
     });
 
     // Clean up: filter out initial -Infinity/Infinity values, sort entries
@@ -240,6 +296,7 @@ const PlayoffRecords = ({ historicalMatchups }) => { // Removed getDisplayTeamNa
     });
 
     setAggregatedPlayoffRecords(newAggregatedRecords);
+    setAllPlayoffData(tempAllPlayoffData);
   }, [historicalMatchups, historicalData, getTeamName, loading, error]); // Add historicalData, loading, error to dependencies
 
   // Helper to format values for display
@@ -268,16 +325,16 @@ const PlayoffRecords = ({ historicalMatchups }) => { // Removed getDisplayTeamNa
 
   // Render component
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
         {/* Header Section */}
-        <div className="mb-8">
-            <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center text-white text-xl font-bold">
+        <div className="mb-6 sm:mb-8">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-4">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center text-white text-lg sm:text-xl font-bold">
                     🏆
                 </div>
                 <div>
-                    <h3 className="text-3xl font-bold text-gray-900">All-Time Playoff Records</h3>
-                    <p className="text-gray-600 mt-1">
+                    <h3 className="text-2xl sm:text-3xl font-bold text-gray-900">All-Time Playoff Records</h3>
+                    <p className="text-gray-600 mt-1 text-sm sm:text-base">
                         Historical playoff performance and championship accolades.
                     </p>
                 </div>
@@ -286,30 +343,30 @@ const PlayoffRecords = ({ historicalMatchups }) => { // Removed getDisplayTeamNa
 
         {/* Records Table */}
         {Object.keys(aggregatedPlayoffRecords).length === 0 || recordsToDisplay.every(r => aggregatedPlayoffRecords[r.key]?.entries.length === 0) ? (
-            <div className="text-center py-12 bg-gray-50 rounded-2xl border border-gray-200">
+            <div className="text-center py-12 bg-gray-50 rounded-xl sm:rounded-2xl border border-gray-200">
                 <div className="text-4xl mb-4">🤷‍♂️</div>
                 <h4 className="text-xl font-semibold text-gray-800">No Playoff Data Available</h4>
                 <p className="text-gray-500">Cannot display records without historical playoff data.</p>
             </div>
         ) : (
-            <div className="bg-gradient-to-r from-gray-50 to-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+            <div className="bg-gradient-to-r from-gray-50 to-white rounded-xl sm:rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
                     <table className="min-w-full">
                         <thead>
                             <tr className="bg-gradient-to-r from-gray-100 to-gray-50 border-b border-gray-200">
-                                <th className="py-4 px-6 text-left text-sm font-bold text-gray-800 uppercase tracking-wide">
-                                    <div className="flex items-center gap-2">
-                                        🏅 Record
+                                <th className="py-3 px-3 sm:py-4 sm:px-6 text-left text-xs sm:text-sm font-bold text-gray-800 uppercase tracking-wide">
+                                    <div className="flex items-center gap-1 sm:gap-2">
+                                        <span className="hidden sm:inline">�</span> Record
                                     </div>
                                 </th>
-                                <th className="py-4 px-6 text-center text-sm font-bold text-gray-800 uppercase tracking-wide">
-                                    <div className="flex items-center justify-center gap-2">
-                                        📊 Value
+                                <th className="py-3 px-3 sm:py-4 sm:px-6 text-center text-xs sm:text-sm font-bold text-gray-800 uppercase tracking-wide">
+                                    <div className="flex items-center justify-center gap-1 sm:gap-2">
+                                        <span className="hidden sm:inline">📊</span> Value
                                     </div>
                                 </th>
-                                <th className="py-4 px-6 text-left text-sm font-bold text-gray-800 uppercase tracking-wide">
-                                    <div className="flex items-center gap-2">
-                                        👑 Holder(s)
+                                <th className="py-3 px-3 sm:py-4 sm:px-6 text-left text-xs sm:text-sm font-bold text-gray-800 uppercase tracking-wide">
+                                    <div className="flex items-center gap-1 sm:gap-2">
+                                        <span className="hidden sm:inline">👑</span> Holder(s)
                                     </div>
                                 </th>
                             </tr>
@@ -317,48 +374,95 @@ const PlayoffRecords = ({ historicalMatchups }) => { // Removed getDisplayTeamNa
                         <tbody className="divide-y divide-gray-100">
                             {recordsToDisplay.map((recordDef, recordGroupIndex) => {
                                 const recordData = aggregatedPlayoffRecords[recordDef.key];
+                                const isExpanded = expandedSections[recordDef.key];
+                                
                                 if (!recordData || recordData.entries.length === 0) {
                                     return (
-                                        <tr key={recordDef.key} className={`transition-all duration-200 hover:bg-blue-50 ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}>
-                                            <td className="py-4 px-6">
-                                                <div className="flex items-center gap-3">
-                                                    <span className="font-semibold text-gray-900 text-sm">{recordDef.label}</span>
-                                                </div>
-                                            </td>
-                                            <td colSpan="2" className="py-4 px-6 text-center">
-                                                <span className="text-gray-500 text-sm italic">No data available</span>
-                                            </td>
-                                        </tr>
+                                        <React.Fragment key={recordDef.key}>
+                                            <tr className={`transition-all duration-200 hover:bg-blue-50 ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}>
+                                                <td className="py-3 px-3 sm:py-4 sm:px-6">
+                                                    <span className="font-semibold text-gray-900 text-xs sm:text-sm">{recordDef.label}</span>
+                                                </td>
+                                                <td colSpan="2" className="py-3 px-3 sm:py-4 sm:px-6 text-center">
+                                                    <span className="text-gray-500 text-xs sm:text-sm italic">No data available</span>
+                                                </td>
+                                            </tr>
+                                        </React.Fragment>
                                     );
                                 }
 
                                 return (
-                                    <tr
-                                        key={recordDef.key}
-                                        className={`transition-all duration-200 hover:bg-blue-50 hover:shadow-sm ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}
-                                    >
-                                        <td className="py-4 px-6">
-                                            <div className="flex items-center gap-3">
-                                                <span className="font-semibold text-gray-900 text-sm">{recordDef.label}</span>
-                                            </div>
-                                        </td>
-                                        <td className="py-4 px-6 text-center">
-                                            <div className="inline-flex items-center px-3 py-1 rounded-full bg-gradient-to-r from-blue-100 to-indigo-100 border border-blue-200">
-                                                <span className="font-bold text-gray-900 text-sm">
-                                                    {formatDisplayValue(recordData.value, recordDef.key)}
-                                                </span>
-                                            </div>
-                                        </td>
-                                        <td className="py-4 px-6">
-                                            <div className="flex flex-col space-y-2">
-                                                {recordData.entries.map((entry, index) => (
-                                                    <div key={index} className="flex items-center gap-3 bg-gray-100 rounded-lg p-2 border border-gray-200">
-                                                        <span className="font-medium text-gray-800 text-sm">{entry.team}</span>
+                                    <React.Fragment key={recordDef.key}>
+                                        <tr className={`transition-all duration-200 hover:bg-blue-50 hover:shadow-sm ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}>
+                                            <td className="py-3 px-3 sm:py-4 sm:px-6">
+                                                <div className="flex items-center gap-2 sm:gap-3">
+                                                    <span className="font-semibold text-gray-900 text-xs sm:text-sm">{recordDef.label}</span>
+                                                    <button
+                                                        onClick={() => toggleSection(recordDef.key)}
+                                                        className="ml-2 p-1 rounded-md hover:bg-gray-200 transition-colors"
+                                                        aria-label={`${isExpanded ? 'Hide' : 'Show'} top 5 for ${recordDef.label}`}
+                                                    >
+                                                        <svg
+                                                            className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                                            fill="none"
+                                                            stroke="currentColor"
+                                                            viewBox="0 0 24 24"
+                                                        >
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                            <td className="py-3 px-3 sm:py-4 sm:px-6 text-center">
+                                                <div className="inline-flex items-center px-2 py-1 sm:px-3 sm:py-1 rounded-full bg-gradient-to-r from-blue-100 to-indigo-100 border border-blue-200">
+                                                    <span className="font-bold text-gray-900 text-xs sm:text-sm">
+                                                        {formatDisplayValue(recordData.value, recordDef.key)}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="py-3 px-3 sm:py-4 sm:px-6">
+                                                <div className="flex flex-col space-y-1 sm:space-y-2">
+                                                    {recordData.entries.map((entry, index) => (
+                                                        <div key={index} className="flex items-center gap-2 sm:gap-3 bg-gray-100 rounded-lg p-1.5 sm:p-2 border border-gray-200">
+                                                            <span className="font-medium text-gray-800 text-xs sm:text-sm truncate">{entry.team}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        
+                                        {/* Collapsible Top 5 Section */}
+                                        {isExpanded && allPlayoffData[recordDef.key] && allPlayoffData[recordDef.key].length > 0 && (
+                                            <tr className={`${recordGroupIndex % 2 === 0 ? 'bg-gray-50' : 'bg-gray-75'}`}>
+                                                <td colSpan="3" className="p-0">
+                                                    <div className="px-3 py-4 sm:px-6 sm:py-6">
+                                                        <h4 className="text-sm font-semibold text-gray-700 mb-3">
+                                                            Top 5 {recordDef.label}
+                                                        </h4>
+                                                        <div className="space-y-2">
+                                                            {allPlayoffData[recordDef.key]
+                                                                .sort((a, b) => b.value - a.value)
+                                                                .slice(0, 5)
+                                                                .map((playoffData, index) => (
+                                                                    <div key={`${playoffData.team}-${playoffData.value}-${index}`} 
+                                                                         className="flex items-center justify-between py-2 px-3 bg-white rounded-lg border border-gray-200">
+                                                                        <div className="flex items-center gap-3">
+                                                                            <span className="flex items-center justify-center w-6 h-6 bg-blue-100 text-blue-800 text-xs font-bold rounded-full">
+                                                                                {index + 1}
+                                                                            </span>
+                                                                            <span className="font-medium text-gray-900 text-sm">{playoffData.team}</span>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-4">
+                                                                            <span className="font-bold text-gray-900">{formatDisplayValue(playoffData.value, recordDef.key)}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                        </div>
                                                     </div>
-                                                ))}
-                                            </div>
-                                        </td>
-                                    </tr>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </React.Fragment>
                                 );
                             })}
                         </tbody>

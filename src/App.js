@@ -92,10 +92,10 @@ const AppContent = () => {
         }
     }, [usersData]); // Memoize this function, re-create only if usersData changes
 
-    // State to hold the reigning champion's display name
-    const [reigningChampion, setReigningChampion] = useState(''); // Changed initial state to empty string
+    // State to hold the top 3 finishers
+    const [topFinishers, setTopFinishers] = useState([]); // Changed to array for top 3
 
-    // Effect to determine the reigning champion once historicalData and usersData are loaded
+    // Effect to determine the top 3 finishers once historicalData and usersData are loaded
     useEffect(() => {
         // Access rostersBySeason from historicalData
         const rostersBySeason = historicalData?.rostersBySeason;
@@ -108,8 +108,8 @@ const AppContent = () => {
             const hasSummaryData = historicalData.seasonAwardsSummary || historicalData.awardsSummary || historicalData.winnersBracketBySeason;
 
             if (hasSummaryData) {
-                let championDisplayName = ''; // Initialize as empty string here too
-                let foundChampion = false;
+                let finishers = []; // Array to hold top 3 finishers
+                let foundFinishers = false;
 
                 // Get all years from all relevant sources, sort them descending
                 const allYears = new Set();
@@ -125,63 +125,84 @@ const AppContent = () => {
                 const sortedYears = Array.from(allYears).sort((a, b) => b - a);
 
                 for (const year of sortedYears) {
-                    let potentialChampionValue = '';
-                    let championRosterId = '';
-
-                    // --- PRIORITY 1: Check winnersBracketBySeason for the championship game (p: 1) ---
+                    // Try to get top 3 finishers from winnersBracketBySeason
                     if (historicalData.winnersBracketBySeason && historicalData.winnersBracketBySeason[year]) {
-                        const championshipGame = historicalData.winnersBracketBySeason[year].find(
-                            matchup => matchup.p === 1 && matchup.w // Find the playoff game with position 1 and a winner
-                        );
-                        if (championshipGame) {
-                            championRosterId = String(championshipGame.w).trim();
-
-                            // Now, map roster_id to user_id using rostersBySeason for that year
-                            if (rostersBySeason[year]) {
-                                const winningRoster = rostersBySeason[year].find(
-                                    roster => String(roster.roster_id) === championRosterId
-                                );
-                                if (winningRoster && winningRoster.owner_id) {
-                                    potentialChampionValue = winningRoster.owner_id; // This is the user_id
+                        const bracket = historicalData.winnersBracketBySeason[year];
+                        
+                        // Find championship game (p: 1)
+                        const championshipGame = bracket.find(matchup => matchup.p === 1 && matchup.w);
+                        // Find 3rd place game - try different position values
+                        let thirdPlaceGame = bracket.find(matchup => matchup.p === 2 && matchup.w);
+                        if (!thirdPlaceGame) {
+                            // Sometimes 3rd place game might have different position value
+                            thirdPlaceGame = bracket.find(matchup => matchup.p === 3 && matchup.w);
+                        }
+                        if (!thirdPlaceGame) {
+                            // Look for any game that might be 3rd place by checking for consolation bracket
+                            thirdPlaceGame = bracket.find(matchup => matchup.w && matchup.p > 1 && matchup.p <= 3);
+                        }
+                        
+                        if (championshipGame && rostersBySeason[year]) {
+                            const getTeamName = (rosterId) => {
+                                const roster = rostersBySeason[year].find(r => String(r.roster_id) === String(rosterId));
+                                if (roster && roster.owner_id) {
+                                    return getUserDisplayName(roster.owner_id, usersData);
                                 }
+                                return null;
+                            };
+
+                            // 1st place - winner of championship
+                            const firstPlace = getTeamName(championshipGame.w);
+                            // 2nd place - loser of championship
+                            const secondPlace = getTeamName(championshipGame.l);
+                            // 3rd place - winner of 3rd place game (if exists)
+                            const thirdPlace = thirdPlaceGame ? getTeamName(thirdPlaceGame.w) : null;
+
+                            if (firstPlace) {
+                                finishers = [
+                                    { place: 1, name: firstPlace, emoji: '🥇' },
+                                    ...(secondPlace ? [{ place: 2, name: secondPlace, emoji: '🥈' }] : []),
+                                    ...(thirdPlace ? [{ place: 3, name: thirdPlace, emoji: '🥉' }] : [])
+                                ];
+                                foundFinishers = true;
+                                break;
                             }
                         }
                     }
 
-                    // --- PRIORITY 2: Check seasonAwardsSummary if not found in winnersBracket ---
-                    if (!potentialChampionValue && historicalData.seasonAwardsSummary && historicalData.seasonAwardsSummary[year]) {
-                        const summary = historicalData.seasonAwardsSummary[year];
-                        if (summary.champion && summary.champion !== 'N/A' && summary.champion.trim() !== '') {
-                            potentialChampionValue = summary.champion.trim();
-                        }
-                    }
+                    // Fallback to just champion if bracket data not available
+                    if (!foundFinishers) {
+                        let potentialChampionValue = '';
 
-                    // --- PRIORITY 3: Check awardsSummary if not found in previous sources ---
-                    if (!potentialChampionValue && historicalData.awardsSummary && historicalData.awardsSummary[year]) {
-                        const summary = historicalData.awardsSummary[year];
-                        const champKey = summary.champion || summary["Champion"];
-                        if (champKey && champKey !== 'N/A' && String(champKey).trim() !== '') {
-                            potentialChampionValue = String(champKey).trim();
+                        // Check seasonAwardsSummary
+                        if (historicalData.seasonAwardsSummary && historicalData.seasonAwardsSummary[year]) {
+                            const summary = historicalData.seasonAwardsSummary[year];
+                            if (summary.champion && summary.champion !== 'N/A' && summary.champion.trim() !== '') {
+                                potentialChampionValue = summary.champion.trim();
+                            }
                         }
-                    }
 
-                    // If a potential champion value was found for this year, try to resolve it
-                    if (potentialChampionValue) {
-                        const resolvedName = getUserDisplayName(potentialChampionValue, usersData);
-                        if (resolvedName !== 'Unknown Champion') {
-                            championDisplayName = resolvedName;
-                            foundChampion = true;
-                            break; // Found the most recent champion, stop
-                        } else {
-                            // If it's not a user ID (e.g., if it's already a display name from Google Sheet data), use it directly
-                            championDisplayName = potentialChampionValue;
-                            foundChampion = true;
-                            break; // Found the most recent champion, stop
+                        // Check awardsSummary if not found
+                        if (!potentialChampionValue && historicalData.awardsSummary && historicalData.awardsSummary[year]) {
+                            const summary = historicalData.awardsSummary[year];
+                            const champKey = summary.champion || summary["Champion"];
+                            if (champKey && champKey !== 'N/A' && String(champKey).trim() !== '') {
+                                potentialChampionValue = String(champKey).trim();
+                            }
+                        }
+
+                        if (potentialChampionValue) {
+                            const resolvedName = getUserDisplayName(potentialChampionValue, usersData);
+                            const championName = resolvedName !== 'Unknown Champion' ? resolvedName : potentialChampionValue;
+                            
+                            finishers = [{ place: 1, name: championName, emoji: '🥇' }];
+                            foundFinishers = true;
+                            break;
                         }
                     }
                 }
 
-                setReigningChampion(championDisplayName);
+                setTopFinishers(finishers);
             }
         }
     }, [loading, error, historicalData, usersData, getUserDisplayName]);
@@ -214,11 +235,46 @@ const AppContent = () => {
         if (loading) {
             return (
                 <div className="flex items-center justify-center min-h-screen bg-gray-100 font-inter">
-                    <div className="text-center p-6 bg-white rounded-lg shadow-md">
-                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4"></div>
-                        <p className="text-lg font-semibold text-gray-700">Loading Sleeper fantasy data...</p>
-                        <p className="text-sm text-gray-500 mt-2">This might take a moment as we fetch historical league information.</p>
+                    <div className="text-center p-6 bg-white rounded-lg shadow-md max-w-md w-full mx-4">
+                        <div className="mb-6">
+                            <img
+                                src={process.env.PUBLIC_URL + '/LeagueLogoNoBack.PNG'}
+                                alt="League Logo"
+                                className="h-16 w-16 mx-auto mb-4 object-contain"
+                            />
+                            <p className="text-lg font-semibold text-gray-700 mb-2">Loading Sleeper fantasy data...</p>
+                            <p className="text-sm text-gray-500">This might take a moment as we fetch historical league information.</p>
+                        </div>
+                        
+                        {/* Progress Bar */}
+                        <div className="w-full bg-gray-200 rounded-full h-3 mb-4 overflow-hidden">
+                            <div className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full animate-progress shadow-sm"></div>
+                        </div>
+                        
+                        <div className="text-xs text-gray-400">
+                            Fetching league data and historical matchups...
+                        </div>
                     </div>
+                    
+                    <style jsx>{`
+                        @keyframes progress {
+                            0% {
+                                width: 0%;
+                                transform: translateX(-100%);
+                            }
+                            50% {
+                                width: 100%;
+                                transform: translateX(0%);
+                            }
+                            100% {
+                                width: 100%;
+                                transform: translateX(100%);
+                            }
+                        }
+                        .animate-progress {
+                            animation: progress 2s ease-in-out infinite;
+                        }
+                    `}</style>
                 </div>
             );
         }
@@ -285,24 +341,25 @@ const AppContent = () => {
                             alt="League Logo"
                             className="h-10 w-10 md:h-14 md:w-14 mr-2 md:mr-4 object-contain flex-shrink-0"
                         />
-                        <h1 className="text-sm sm:text-base md:text-2xl font-bold truncate">
-                            <span className="sm:hidden">TLOED</span>
-                            <span className="hidden sm:inline">The League of Extraordinary Douchebags</span>
-                        </h1>
-                    </div>
-
-                    {/* Champion Trophy - Hidden on very small screens */}
-                    <div className="hidden xs:flex items-center gap-1 md:gap-2 mx-2 flex-shrink-0">
-                        {reigningChampion && (
-                            <>
-                                <span title="Reigning Champion">
-                                    <i className="fas fa-trophy text-[#eab308] text-lg md:text-2xl"></i>
-                                </span>
-                                <span className="font-semibold text-[#eab308] text-sm md:text-lg max-w-24 sm:max-w-none truncate">
-                                    {reigningChampion}
-                                </span>
-                            </>
-                        )}
+                        <div className="flex flex-col min-w-0">
+                            <h1 className="text-sm sm:text-base md:text-2xl font-bold truncate">
+                                <span className="sm:hidden">TLOED</span>
+                                <span className="hidden sm:inline">The League of Extraordinary Douchebags</span>
+                            </h1>
+                            {/* Top 3 Finishers */}
+                            {topFinishers.length > 0 && (
+                                <div className="flex items-center gap-1 sm:gap-2 mt-1">
+                                    {topFinishers.map((finisher, index) => (
+                                        <div key={index} className="flex items-center gap-1" title={`${finisher.place === 1 ? 'Champion' : finisher.place === 2 ? 'Runner-up' : '3rd Place'}`}>
+                                            <span className="text-xs sm:text-sm md:text-base">{finisher.emoji}</span>
+                                            <span className="font-medium text-white text-xs sm:text-sm md:text-base max-w-16 sm:max-w-24 md:max-w-none truncate">
+                                                {finisher.name}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     {/* Mobile Menu Button */}
@@ -315,13 +372,6 @@ const AppContent = () => {
                     </button>
                 </div>
             </header>
-
-            {/* Mobile Champion Display - Shows when trophy is hidden */}
-            {reigningChampion && (
-                <div className="xs:hidden bg-yellow-500 text-gray-800 px-4 py-2 text-center text-sm font-semibold">
-                    🏆 {reigningChampion}
-                </div>
-            )}
 
             {/* Navigation - Mobile Optimized */}
             <nav className={`bg-gray-700 text-white shadow-lg transition-all duration-300 md:block relative z-50 ${
