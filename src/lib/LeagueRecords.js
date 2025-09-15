@@ -7,8 +7,6 @@ const LeagueRecords = () => {
     const [allTimeRecords, setAllTimeRecords] = useState({});
     const [recordHistory, setRecordHistory] = useState({});
     const [isLoading, setIsLoading] = useState(true);
-    const [viewMode, setViewMode] = useState('table'); // 'table' or 'detailed'
-
     const formatConfig = {
         highestDPR: { decimals: 3, type: 'decimal' },
         lowestDPR: { decimals: 3, type: 'decimal' },
@@ -270,67 +268,41 @@ const LeagueRecords = () => {
     };
 
     return (
-        <div className="p-8">
+        <div className="p-4 sm:p-6 lg:p-8">
             {/* Header Section */}
-            <div className="mb-8">
-                <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-teal-600 rounded-xl flex items-center justify-center text-white text-xl font-bold">
+            <div className="mb-6 sm:mb-8">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-4">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-r from-green-500 to-teal-600 rounded-xl flex items-center justify-center text-white text-lg sm:text-xl font-bold">
                         🌍
                     </div>
                     <div>
-                        <h3 className="text-3xl font-bold text-gray-900">All-Time League Records</h3>
-                        <p className="text-gray-600 mt-1">
+                        <h3 className="text-2xl sm:text-3xl font-bold text-gray-900">All-Time League Records</h3>
+                        <p className="text-gray-600 mt-1 text-sm sm:text-base">
                             Career-spanning achievements and historical league data.
                         </p>
                     </div>
                 </div>
-                
-                {/* View Toggle */}
-                <div className="flex items-center justify-center gap-2">
-                    <button
-                        onClick={() => setViewMode('table')}
-                        className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                            viewMode === 'table' 
-                                ? 'bg-blue-600 text-white shadow-md' 
-                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                        }`}
-                    >
-                        Table View
-                    </button>
-                    <button
-                        onClick={() => setViewMode('detailed')}
-                        className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                            viewMode === 'detailed' 
-                                ? 'bg-blue-600 text-white shadow-md' 
-                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                        }`}
-                    >
-                        Detailed View
-                    </button>
-                </div>
             </div>
 
             {/* Records Display */}
-            {viewMode === 'table' ? (
-                /* Table View */
-                <div className="bg-gradient-to-r from-gray-50 to-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-                    <div className="overflow-x-auto">
-                    <table className="min-w-full">
+            <div className="bg-gradient-to-r from-gray-50 to-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                <table className="min-w-full">
                         <thead>
                             <tr className="bg-gradient-to-r from-gray-100 to-gray-50 border-b border-gray-200">
-                                <th className="py-4 px-6 text-left text-sm font-bold text-gray-800 uppercase tracking-wide">
-                                    <div className="flex items-center gap-2">
-                                        🏆 Record
+                                <th className="py-3 px-3 sm:py-4 sm:px-6 text-left text-xs sm:text-sm font-bold text-gray-800 uppercase tracking-wide">
+                                    <div className="flex items-center gap-1 sm:gap-2">
+                                        <span className="hidden sm:inline">🏆</span> Record
                                     </div>
                                 </th>
-                                <th className="py-4 px-6 text-center text-sm font-bold text-gray-800 uppercase tracking-wide">
-                                    <div className="flex items-center justify-center gap-2">
-                                        📊 Value
+                                <th className="py-3 px-3 sm:py-4 sm:px-6 text-center text-xs sm:text-sm font-bold text-gray-800 uppercase tracking-wide">
+                                    <div className="flex items-center justify-center gap-1 sm:gap-2">
+                                        <span className="hidden sm:inline">📊</span> Value
                                     </div>
                                 </th>
-                                <th className="py-4 px-6 text-left text-sm font-bold text-gray-800 uppercase tracking-wide">
-                                    <div className="flex items-center gap-2">
-                                        👑 Holder(s)
+                                <th className="py-3 px-3 sm:py-4 sm:px-6 text-left text-xs sm:text-sm font-bold text-gray-800 uppercase tracking-wide">
+                                    <div className="flex items-center gap-1 sm:gap-2">
+                                        <span className="hidden sm:inline">👑</span> Holder(s)
                                     </div>
                                 </th>
                             </tr>
@@ -346,13 +318,13 @@ const LeagueRecords = () => {
                                 if (!record || record.value === -Infinity || record.value === Infinity || !record.teams || record.teams.length === 0) {
                                     return (
                                         <tr key={key} className={`transition-all duration-200 hover:bg-blue-50 ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}>
-                                            <td className="py-4 px-6">
-                                                <div className="flex items-center gap-3">
-                                                    <span className="font-semibold text-gray-900 text-sm">{getLabel()}</span>
+                                            <td className="py-3 px-3 sm:py-4 sm:px-6">
+                                                <div className="flex items-center gap-2 sm:gap-3">
+                                                    <span className="font-semibold text-gray-900 text-xs sm:text-sm">{getLabel()}</span>
                                                 </div>
                                             </td>
-                                            <td colSpan="2" className="py-4 px-6 text-center">
-                                                <span className="text-gray-500 text-sm italic">No data available</span>
+                                            <td colSpan="2" className="py-3 px-3 sm:py-4 sm:px-6 text-center">
+                                                <span className="text-gray-500 text-xs sm:text-sm italic">No data available</span>
                                             </td>
                                         </tr>
                                     );
@@ -363,25 +335,25 @@ const LeagueRecords = () => {
                                         key={key}
                                         className={`transition-all duration-200 hover:bg-blue-50 hover:shadow-sm ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}
                                     >
-                                        <td className="py-4 px-6">
-                                            <div className="flex items-center gap-3">
-                                                <span className="font-semibold text-gray-900 text-sm">{getLabel()}</span>
+                                        <td className="py-3 px-3 sm:py-4 sm:px-6">
+                                            <div className="flex items-center gap-2 sm:gap-3">
+                                                <span className="font-semibold text-gray-900 text-xs sm:text-sm">{getLabel()}</span>
                                             </div>
                                         </td>
-                                        <td className="py-4 px-6 text-center">
-                                            <div className="inline-flex items-center px-3 py-1 rounded-full bg-gradient-to-r from-green-100 to-teal-100 border border-green-200">
-                                                <span className="font-bold text-gray-900 text-sm">
+                                        <td className="py-3 px-3 sm:py-4 sm:px-6 text-center">
+                                            <div className="inline-flex items-center px-2 py-1 sm:px-3 sm:py-1 rounded-full bg-gradient-to-r from-green-100 to-teal-100 border border-green-200">
+                                                <span className="font-bold text-gray-900 text-xs sm:text-sm">
                                                     {config.type === 'percentage'
                                                         ? (record.value * 100).toLocaleString('en-US', { minimumFractionDigits: config.decimals, maximumFractionDigits: config.decimals }) + '%'
                                                         : record.value.toLocaleString('en-US', { minimumFractionDigits: config.decimals, maximumFractionDigits: config.decimals })}
                                                 </span>
                                             </div>
                                         </td>
-                                        <td className="py-4 px-6">
-                                            <div className="flex flex-col space-y-2">
+                                        <td className="py-3 px-3 sm:py-4 sm:px-6">
+                                            <div className="flex flex-col space-y-1 sm:space-y-2">
                                                 {record.teams.map((team, index) => (
-                                                    <div key={index} className="flex items-center gap-3 bg-gray-100 rounded-lg p-2 border border-gray-200">
-                                                        <span className="font-medium text-gray-800 text-sm">{getDisplayTeamName(team)}</span>
+                                                    <div key={index} className="flex items-center gap-2 sm:gap-3 bg-gray-100 rounded-lg p-1.5 sm:p-2 border border-gray-200">
+                                                        <span className="font-medium text-gray-800 text-xs sm:text-sm truncate">{getDisplayTeamName(team)}</span>
                                                     </div>
                                                 ))}
                                             </div>
@@ -393,175 +365,6 @@ const LeagueRecords = () => {
                     </table>
                 </div>
             </div>
-            ) : (
-                /* Detailed View */
-                <div className="space-y-8">
-                    {Object.entries(allTimeRecords).map(([key, record], recordGroupIndex) => {
-                        const config = formatConfig[record.key] || { decimals: 2, type: 'default' };
-                        const getLabel = () => {
-                            let label = record.key.replace(/([A-Z])/g, ' $1').trim();
-                            return label.charAt(0).toUpperCase() + label.slice(1);
-                        };
-
-                        if (!record || record.value === -Infinity || record.value === Infinity || !record.teams || record.teams.length === 0) {
-                            return null;
-                        }
-
-                        return (
-                            <div key={key} className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
-                                {/* Record Header */}
-                                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 border-b">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <h3 className="text-2xl font-bold text-gray-900">{getLabel()}</h3>
-                                            <div className="text-4xl font-bold text-blue-600 mt-2">
-                                                {config.type === 'percentage' 
-                                                    ? `${(record.value * 100).toFixed(config.decimals)}%` 
-                                                    : config.type === 'decimal' 
-                                                    ? record.value.toFixed(config.decimals) 
-                                                    : config.type === 'points' 
-                                                    ? record.value.toFixed(config.decimals) 
-                                                    : Math.round(record.value).toLocaleString()}
-                                            </div>
-                                            <div className="text-sm text-gray-600 mt-1">{getLabel()}</div>
-                                        </div>
-                                        <div className="text-right">
-                                            <div className="text-sm text-gray-500">Current Holder</div>
-                                            <div className="font-semibold text-gray-900">
-                                                {record.teams[0] ? getTeamName(record.teams[0].ownerId, record.teams[0].year || currentSeason) : 'Unknown'}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Current Rankings */}
-                                <div className="p-6">
-                                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Current Rankings</h4>
-                                    <div className="space-y-3">
-                                        {record.teams.slice(0, 10).map((team, index) => {
-                                            const teamName = getTeamName(team.ownerId, team.year || currentSeason);
-                                            const teamDetails = getTeamDetails ? getTeamDetails(team.ownerId, currentSeason || team.year) : null;
-                                            
-                                            return (
-                                                <div key={`${team.ownerId}-${index}`} className="flex items-center justify-between py-3 px-4 bg-gray-50 rounded-lg">
-                                                    <div className="flex items-center space-x-3">
-                                                        <div className="w-8 h-8 bg-blue-100 text-blue-800 rounded-full flex items-center justify-center text-sm font-bold">
-                                                            #{index + 1}
-                                                        </div>
-                                                        {teamDetails?.avatar && (
-                                                            <img 
-                                                                src={teamDetails.avatar}
-                                                                alt={teamName}
-                                                                className="w-8 h-8 rounded-full"
-                                                                onError={(e) => { 
-                                                                    e.target.src = 'https://sleepercdn.com/avatars/default_avatar.png'; 
-                                                                }}
-                                                            />
-                                                        )}
-                                                        <span className="font-medium text-gray-900">{teamName}</span>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <div className="font-semibold text-gray-900">
-                                                            {config.type === 'percentage' 
-                                                                ? `${(record.value * 100).toFixed(config.decimals)}%` 
-                                                                : config.type === 'decimal' 
-                                                                ? record.value.toFixed(config.decimals) 
-                                                                : config.type === 'points' 
-                                                                ? record.value.toFixed(config.decimals) 
-                                                                : Math.round(record.value).toLocaleString()}
-                                                        </div>
-                                                        <div className="text-sm text-gray-500">
-                                                            {index === 0 ? '---' : `${index === 1 ? '-1' : index === 2 ? '1' : '---'}`}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-
-                                    {/* Record Description */}
-                                    <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-                                        <p className="text-sm text-gray-700">
-                                            This record honors the team with the {getLabel().toLowerCase()} in league history. 
-                                            It reflects sustained excellence and competitive performance across multiple seasons.
-                                        </p>
-                                    </div>
-
-                                    {/* Record Statistics */}
-                                    <div className="mt-6 grid grid-cols-3 gap-4">
-                                        <div className="text-center">
-                                            <div className="text-lg font-bold text-gray-900">
-                                                {record.teams[0] ? getTeamName(record.teams[0].ownerId, record.teams[0].year || currentSeason) : 'Unknown'}
-                                            </div>
-                                            <div className="text-sm text-gray-500">Current Holder Since</div>
-                                            <div className="text-xl font-semibold text-blue-600">
-                                                {recordHistory[record.key]?.allTimeHolders?.length > 0 
-                                                    ? `${recordHistory[record.key].allTimeHolders[recordHistory[record.key].allTimeHolders.length - 1].year || 'Unknown'}`
-                                                    : 'Unknown'
-                                                }
-                                            </div>
-                                        </div>
-                                        <div className="text-center">
-                                            <div className="text-xl font-semibold text-blue-600">
-                                                {recordHistory[record.key]?.recordHistory?.length || 0}
-                                            </div>
-                                            <div className="text-sm text-gray-500">Times Record Broken</div>
-                                        </div>
-                                        <div className="text-center">
-                                            <div className="text-xl font-semibold text-blue-600">{record.teams.length}</div>
-                                            <div className="text-sm text-gray-500"># All-Time Holders</div>
-                                        </div>
-                                    </div>
-
-                                    {/* All-Time Holders History */}
-                                    <div className="mt-6">
-                                        <h4 className="text-lg font-semibold text-gray-900 mb-4">All-Time Holders History</h4>
-                                        {recordHistory[record.key]?.allTimeHolders?.length > 0 ? (
-                                            <div className="space-y-2">
-                                                {recordHistory[record.key].allTimeHolders.map((holder, index) => {
-                                                    const isCurrentHolder = index === recordHistory[record.key].allTimeHolders.length - 1;
-                                                    const nextHolder = recordHistory[record.key].allTimeHolders[index + 1];
-                                                    const endYear = nextHolder ? nextHolder.year : 'PRESENT';
-                                                    const years = nextHolder ? (Number(nextHolder.year) - Number(holder.year)) : (Number(currentSeason) - Number(holder.year) + 1);
-                                                    
-                                                    return (
-                                                        <div key={`${holder.ownerId}-${holder.year}-${index}`} className="flex items-center justify-between py-3 px-4 bg-gray-50 rounded-lg">
-                                                            <div>
-                                                                <span className="font-medium text-gray-900">{holder.name}</span>
-                                                                <span className="text-gray-600 ml-2">
-                                                                    {holder.year} - {endYear}
-                                                                </span>
-                                                                <span className="text-gray-500 ml-2">
-                                                                    ({years} {years === 1 ? 'year' : 'years'})
-                                                                </span>
-                                                            </div>
-                                                            <div className="text-right">
-                                                                <div className="font-semibold text-gray-900">
-                                                                    {config.type === 'percentage' 
-                                                                        ? `${(holder.value * 100).toFixed(config.decimals)}%` 
-                                                                        : config.type === 'decimal' 
-                                                                        ? holder.value.toFixed(config.decimals) 
-                                                                        : config.type === 'points' 
-                                                                        ? holder.value.toFixed(config.decimals) 
-                                                                        : Math.round(holder.value).toLocaleString()}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        ) : (
-                                            <div className="text-center py-4 text-gray-500">
-                                                No historical data available for this record.
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            )}
         </div>
     );
 };

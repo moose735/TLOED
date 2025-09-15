@@ -224,16 +224,16 @@ const MatchupRecords = () => {
     }
 
     return (
-        <div className="p-8">
+        <div className="p-4 sm:p-6 lg:p-8">
             {/* Header Section */}
-            <div className="mb-8">
-                <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl flex items-center justify-center text-white text-xl font-bold">
+            <div className="mb-6 sm:mb-8">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-4">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl flex items-center justify-center text-white text-lg sm:text-xl font-bold">
                         ⚔️
                     </div>
                     <div>
-                        <h3 className="text-3xl font-bold text-gray-900">Game Record Holders</h3>
-                        <p className="text-gray-600 mt-1">
+                        <h3 className="text-2xl sm:text-3xl font-bold text-gray-900">Game Record Holders</h3>
+                        <p className="text-gray-600 mt-1 text-sm sm:text-base">
                             Outstanding single-game performances across all seasons • Minimum scores required for some records
                         </p>
                     </div>
@@ -241,34 +241,34 @@ const MatchupRecords = () => {
             </div>
 
             {/* Records Table */}
-            <div className="bg-gradient-to-r from-gray-50 to-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+            <div className="bg-gradient-to-r from-gray-50 to-white rounded-xl sm:rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
                     <table className="min-w-full">
                         <thead>
                             <tr className="bg-gradient-to-r from-gray-100 to-gray-50 border-b border-gray-200">
-                                <th className="py-4 px-6 text-left text-sm font-bold text-gray-800 uppercase tracking-wide">
-                                    <div className="flex items-center gap-2">
-                                        🏆 Record Type
+                                <th className="py-3 px-3 sm:py-4 sm:px-6 text-left text-xs sm:text-sm font-bold text-gray-800 uppercase tracking-wide">
+                                    <div className="flex items-center gap-1 sm:gap-2">
+                                        <span className="hidden sm:inline">🏆</span> Record Type
                                     </div>
                                 </th>
-                                <th className="py-4 px-6 text-center text-sm font-bold text-gray-800 uppercase tracking-wide">
-                                    <div className="flex items-center justify-center gap-2">
-                                        📊 Value
+                                <th className="py-3 px-3 sm:py-4 sm:px-6 text-center text-xs sm:text-sm font-bold text-gray-800 uppercase tracking-wide">
+                                    <div className="flex items-center justify-center gap-1 sm:gap-2">
+                                        <span className="hidden sm:inline">📊</span> Value
                                     </div>
                                 </th>
-                                <th className="py-4 px-6 text-left text-sm font-bold text-gray-800 uppercase tracking-wide">
-                                    <div className="flex items-center gap-2">
-                                        ⚔️ Game Details
+                                <th className="py-3 px-3 sm:py-4 sm:px-6 text-left text-xs sm:text-sm font-bold text-gray-800 uppercase tracking-wide">
+                                    <div className="flex items-center gap-1 sm:gap-2">
+                                        <span className="hidden sm:inline">⚔️</span> Game Details
                                     </div>
                                 </th>
-                                <th className="py-4 px-6 text-center text-sm font-bold text-gray-800 uppercase tracking-wide">
-                                    <div className="flex items-center justify-center gap-2">
-                                        📅 Season
+                                <th className="py-3 px-3 sm:py-4 sm:px-6 text-center text-xs sm:text-sm font-bold text-gray-800 uppercase tracking-wide">
+                                    <div className="flex items-center justify-center gap-1 sm:gap-2">
+                                        <span className="hidden sm:inline">📅</span> Season
                                     </div>
                                 </th>
-                                <th className="py-4 px-6 text-center text-sm font-bold text-gray-800 uppercase tracking-wide">
-                                    <div className="flex items-center justify-center gap-2">
-                                        📍 Week
+                                <th className="py-3 px-3 sm:py-4 sm:px-6 text-center text-xs sm:text-sm font-bold text-gray-800 uppercase tracking-wide">
+                                    <div className="flex items-center justify-center gap-1 sm:gap-2">
+                                        <span className="hidden sm:inline">📍</span> Week
                                     </div>
                                 </th>
                             </tr>
@@ -279,16 +279,16 @@ const MatchupRecords = () => {
                                 if (!recordData || recordData.entries.length === 0) {
                                     return (
                                         <tr key={recordDef.key} className={`transition-all duration-200 hover:bg-blue-50 ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}>
-                                            <td className="py-4 px-6">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 bg-gray-300 rounded-lg flex items-center justify-center text-white text-sm font-bold">
+                                            <td className="py-3 px-3 sm:py-4 sm:px-6">
+                                                <div className="flex items-center gap-2 sm:gap-3">
+                                                    <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gray-300 rounded-lg flex items-center justify-center text-white text-xs sm:text-sm font-bold">
                                                         {recordGroupIndex + 1}
                                                     </div>
-                                                    <span className="font-semibold text-gray-900 text-sm">{recordDef.label}</span>
+                                                    <span className="font-semibold text-gray-900 text-xs sm:text-sm">{recordDef.label}</span>
                                                 </div>
                                             </td>
-                                            <td colSpan="4" className="py-4 px-6 text-center">
-                                                <span className="text-gray-500 text-sm italic">No data available</span>
+                                            <td colSpan="4" className="py-3 px-3 sm:py-4 sm:px-6 text-center">
+                                                <span className="text-gray-500 text-xs sm:text-sm italic">No data available</span>
                                             </td>
                                         </tr>
                                     );
@@ -365,38 +365,40 @@ const MatchupRecords = () => {
                                                 ${index === recordData.entries.length - 1 ? 'border-b-2 border-gray-200' : ''}
                                             `}
                                         >
-                                            <td className="py-4 px-6">
+                                            <td className="py-3 px-3 sm:py-4 sm:px-6">
                                                 {index === 0 ? (
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="font-semibold text-gray-900 text-sm">
+                                                    <div className="flex items-center gap-2 sm:gap-3">
+                                                        <span className="font-semibold text-gray-900 text-xs sm:text-sm">
                                                             {recordDef.label}
                                                         </span>
                                                     </div>
                                                 ) : (
-                                                    <div className="ml-4">
-                                                        <span className="text-gray-400 text-sm">• Tied Record</span>
+                                                    <div className="ml-2 sm:ml-4">
+                                                        <span className="text-gray-400 text-xs sm:text-sm">• Tied Record</span>
                                                     </div>
                                                 )}
                                             </td>
-                                            <td className="py-4 px-6 text-center">
+                                            <td className="py-3 px-3 sm:py-4 sm:px-6 text-center">
                                                 {index === 0 ? (
-                                                    <div className="inline-flex items-center px-3 py-1 rounded-full bg-gradient-to-r from-orange-100 to-red-100 border border-orange-200">
-                                                        <span className="font-bold text-gray-900 text-sm">
+                                                    <div className="inline-flex items-center px-2 py-1 sm:px-3 sm:py-1 rounded-full bg-gradient-to-r from-orange-100 to-red-100 border border-orange-200">
+                                                        <span className="font-bold text-gray-900 text-xs sm:text-sm">
                                                             {formatDisplayValue(recordData.value, recordDef.key)}
                                                         </span>
                                                     </div>
                                                 ) : ''}
                                             </td>
-                                            <td className="py-4 px-6">
-                                                {matchupDisplay}
+                                            <td className="py-3 px-3 sm:py-4 sm:px-6">
+                                                <div className="text-xs sm:text-sm">
+                                                    {matchupDisplay}
+                                                </div>
                                             </td>
-                                            <td className="py-4 px-6 text-center">
-                                                <div className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-lg text-xs font-medium">
+                                            <td className="py-3 px-3 sm:py-4 sm:px-6 text-center">
+                                                <div className="inline-flex items-center px-2 py-1 sm:px-3 sm:py-1 bg-blue-100 text-blue-800 rounded-lg text-xs font-medium">
                                                     {entry.year}
                                                 </div>
                                             </td>
-                                            <td className="py-4 px-6 text-center">
-                                                <div className="inline-flex items-center px-3 py-1 bg-purple-100 text-purple-800 rounded-lg text-xs font-medium">
+                                            <td className="py-3 px-3 sm:py-4 sm:px-6 text-center">
+                                                <div className="inline-flex items-center px-2 py-1 sm:px-3 sm:py-1 bg-purple-100 text-purple-800 rounded-lg text-xs font-medium">
                                                     Week {entry.week}
                                                 </div>
                                             </td>
