@@ -76,6 +76,66 @@ const AppContent = () => {
     const [activeTab, setActiveTab] = useState(TABS.HOME);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [openSubMenu, setOpenSubMenu] = useState(null);
+    const [showLoadingAlert, setShowLoadingAlert] = useState(false);
+    const [selectedTeamName, setSelectedTeamName] = useState('');
+    const [navigationHistory, setNavigationHistory] = useState([]);
+
+    // Loading timeout effect
+    useEffect(() => {
+        let timeoutId;
+        if (loading) {
+            // Show alert after 15 seconds of loading
+            timeoutId = setTimeout(() => {
+                setShowLoadingAlert(true);
+            }, 15000);
+        } else {
+            // Reset alert when not loading
+            setShowLoadingAlert(false);
+        }
+
+        return () => {
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
+        };
+    }, [loading]);
+
+    // Set up browser history handling
+    useEffect(() => {
+        // Push initial state
+        const initialState = {
+            tab: activeTab,
+            selectedTeamName: selectedTeamName
+        };
+        window.history.replaceState(initialState, '', window.location.pathname);
+
+        // Handle browser back/forward buttons
+        const handlePopState = (event) => {
+            console.log('Pop state event:', event.state);
+            
+            if (event.state) {
+                setActiveTab(event.state.tab || TABS.DASHBOARD);
+                setSelectedTeamName(event.state.selectedTeamName || '');
+                
+                // Sync our navigation history with browser history
+                setNavigationHistory(prev => {
+                    // If we're navigating back, remove the last entry
+                    return prev.slice(0, -1);
+                });
+            } else {
+                // Default state when no history
+                setActiveTab(TABS.DASHBOARD);
+                setSelectedTeamName('');
+                setNavigationHistory([]);
+            }
+        };
+
+        window.addEventListener('popstate', handlePopState);
+
+        return () => {
+            window.removeEventListener('popstate', handlePopState);
+        };
+    }, []);
 
     // Helper function to get user display name from user ID
     const getUserDisplayName = useCallback((userId, usersData) => {
@@ -230,30 +290,89 @@ const AppContent = () => {
         setOpenSubMenu(openSubMenu === category ? null : category);
     };
 
+    const handleRefresh = () => {
+        window.location.reload();
+    };
+
+    const handleTeamNameClick = (teamName) => {
+        // Push current state to browser history
+        const currentState = {
+            tab: activeTab,
+            selectedTeamName: selectedTeamName
+        };
+        window.history.pushState(currentState, '', window.location.pathname);
+        
+        // Track navigation for our custom back button
+        setNavigationHistory(prev => [...prev, { tab: activeTab, teamName: selectedTeamName }]);
+        
+        // Navigate to team detail
+        setSelectedTeamName(teamName);
+        setActiveTab(TABS.TEAMS_OVERVIEW);
+        setIsMobileMenuOpen(false);
+        setOpenSubMenu(null);
+        
+        // Push new state to browser history
+        const newState = {
+            tab: TABS.TEAMS_OVERVIEW,
+            selectedTeamName: teamName
+        };
+        window.history.pushState(newState, '', window.location.pathname);
+    };
+
+    const handleGoBack = () => {
+        // Use browser's back functionality
+        window.history.back();
+        // Also update our navigation history
+        if (navigationHistory.length > 0) {
+            setNavigationHistory(prev => prev.slice(0, -1));
+        }
+    };
+
     const renderContent = () => {
         // Use the loading and error states from SleeperDataContext
         if (loading) {
             return (
                 <div className="flex items-center justify-center min-h-screen bg-gray-100 font-inter">
-                    <div className="text-center p-6 bg-white rounded-lg shadow-md max-w-md w-full mx-4">
+                    <div className="text-center p-6 bg-gray-800 rounded-lg shadow-md max-w-md w-full mx-4">
                         <div className="mb-6">
                             <img
                                 src={process.env.PUBLIC_URL + '/LeagueLogoNoBack.PNG'}
                                 alt="League Logo"
                                 className="h-16 w-16 mx-auto mb-4 object-contain"
                             />
-                            <p className="text-lg font-semibold text-gray-700 mb-2">Loading Sleeper fantasy data...</p>
-                            <p className="text-sm text-gray-500">This might take a moment as we fetch historical league information.</p>
+                            <p className="text-lg font-semibold text-white mb-2">Loading Sleeper fantasy data...</p>
+                            <p className="text-sm text-gray-300">This might take a moment as we fetch historical league information.</p>
                         </div>
                         
                         {/* Progress Bar */}
-                        <div className="w-full bg-gray-200 rounded-full h-3 mb-4 overflow-hidden">
+                        <div className="w-full bg-gray-600 rounded-full h-3 mb-4 overflow-hidden">
                             <div className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full animate-progress shadow-sm"></div>
                         </div>
                         
-                        <div className="text-xs text-gray-400">
+                        <div className="text-xs text-gray-300 mb-4">
                             Fetching league data and historical matchups...
                         </div>
+
+                        {/* Loading timeout alert */}
+                        {showLoadingAlert && (
+                            <div className="bg-yellow-600 text-yellow-100 p-4 rounded-lg border border-yellow-500 mb-4">
+                                <div className="flex items-center mb-2">
+                                    <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                    </svg>
+                                    <span className="font-semibold">Taking longer than usual?</span>
+                                </div>
+                                <p className="text-sm mb-3">
+                                    If the app seems stuck loading, try refreshing the page. The Sleeper API might be experiencing delays.
+                                </p>
+                                <button
+                                    onClick={handleRefresh}
+                                    className="bg-yellow-500 hover:bg-yellow-400 text-yellow-900 px-4 py-2 rounded font-medium text-sm transition-colors duration-200"
+                                >
+                                    Refresh Page
+                                </button>
+                            </div>
+                        )}
                     </div>
                     
                     <style jsx>{`
@@ -305,19 +424,19 @@ const AppContent = () => {
             case TABS.SPORTSBOOK:
                 return <Sportsbook />;
             case TABS.LEAGUE_HISTORY:
-                return <LeagueHistory />;
+                return <LeagueHistory onTeamNameClick={handleTeamNameClick} />;
             case TABS.HALL_OF_CHAMPIONS: // New case for Hall of Champions
-                return <HallOfChampions />;
+                return <HallOfChampions onTeamNameClick={handleTeamNameClick} />;
             case TABS.RECORD_BOOK:
-                return <RecordBook historicalMatchups={allMatchups} />;
+                return <RecordBook historicalMatchups={allMatchups} onTeamNameClick={handleTeamNameClick} />;
             case TABS.HEAD_TO_HEAD:
-                return <Head2HeadGrid historicalMatchups={allMatchups} getDisplayTeamName={getUserDisplayName} />;
+                return <Head2HeadGrid historicalMatchups={allMatchups} getDisplayTeamName={getUserDisplayName} onTeamNameClick={handleTeamNameClick} />;
             case TABS.DPR_ANALYSIS:
-                return <DPRAnalysis />;
+                return <DPRAnalysis onTeamNameClick={handleTeamNameClick} />;
             case TABS.LUCK_RATING:
-                return <LuckRatingAnalysis />;
+                return <LuckRatingAnalysis onTeamNameClick={handleTeamNameClick} />;
             case TABS.TEAMS_OVERVIEW:
-                return <TeamsOverviewPage />;
+                return <TeamsOverviewPage selectedTeamName={selectedTeamName} />;
             case TABS.FINANCIALS:
                 return <FinancialTracker />;
             case TABS.SEASON_BREAKDOWN:
@@ -362,14 +481,29 @@ const AppContent = () => {
                         </div>
                     </div>
 
-                    {/* Mobile Menu Button */}
-                    <button 
-                        className="md:hidden text-white text-2xl touch-friendly flex items-center justify-center" 
-                        onClick={toggleMobileMenu} 
-                        aria-label={isMobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
-                    >
-                        {isMobileMenuOpen ? '✕' : '☰'}
-                    </button>
+                    {/* Back Button and Mobile Menu Button */}
+                    <div className="flex items-center gap-2">
+                        {/* Back Button */}
+                        {navigationHistory.length > 0 && (
+                            <button 
+                                className="text-white text-xl touch-friendly flex items-center justify-center hover:text-gray-300" 
+                                onClick={handleGoBack}
+                                aria-label="Go back to previous page"
+                                title="Go back"
+                            >
+                                ←
+                            </button>
+                        )}
+                        
+                        {/* Mobile Menu Button */}
+                        <button 
+                            className="md:hidden text-white text-2xl touch-friendly flex items-center justify-center" 
+                            onClick={toggleMobileMenu} 
+                            aria-label={isMobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+                        >
+                            {isMobileMenuOpen ? '✕' : '☰'}
+                        </button>
+                    </div>
                 </div>
             </header>
 

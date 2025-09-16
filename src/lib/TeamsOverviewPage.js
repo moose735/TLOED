@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useSleeperData } from '../contexts/SleeperDataContext';
 import TeamDetailPage from './TeamDetailPage'; // Import the TeamDetailPage
 
-const TeamsOverviewPage = () => {
+const TeamsOverviewPage = ({ selectedTeamName: initialSelectedTeamName }) => {
   const {
     loading: contextLoading,
     error: contextError,
@@ -24,12 +24,16 @@ const TeamsOverviewPage = () => {
 
       setAvailableTeamNames(names);
 
-      // Set the first available team as the default selected team
-      if (names.length > 0 && !selectedTeamName) {
-        setSelectedTeamName(names[0]);
+      // Use initial selected team name if provided, otherwise use first available team
+      if (names.length > 0) {
+        if (initialSelectedTeamName && names.includes(initialSelectedTeamName)) {
+          setSelectedTeamName(initialSelectedTeamName);
+        } else if (!selectedTeamName) {
+          setSelectedTeamName(names[0]);
+        }
       }
     }
-  }, [contextLoading, contextError, careerDPRData, getTeamName, selectedTeamName]);
+  }, [contextLoading, contextError, careerDPRData, getTeamName, initialSelectedTeamName, selectedTeamName]);
 
   const handleTeamChange = (event) => {
     setSelectedTeamName(event.target.value);

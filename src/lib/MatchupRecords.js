@@ -72,6 +72,8 @@ const MatchupRecords = () => {
         const tempAllMatchupData = {
             mostPointsScored: [],
             fewestPointsScored: [],
+            mostPointsInLoss: [],
+            fewestPointsInWin: [],
             highestCombinedScore: [],
             lowestCombinedScore: [],
             biggestBlowout: [],
@@ -111,6 +113,8 @@ const MatchupRecords = () => {
         const newAggregatedRecords = {
             mostPointsScored: { value: -Infinity, entries: [] },
             fewestPointsScored: { value: Infinity, entries: [] },
+            mostPointsInLoss: { value: -Infinity, entries: [] },
+            fewestPointsInWin: { value: Infinity, entries: [] },
             highestCombinedScore: { value: -Infinity, entries: [] },
             lowestCombinedScore: { value: Infinity, entries: [] },
             biggestBlowout: { value: -Infinity, entries: [] },
@@ -187,6 +191,32 @@ const MatchupRecords = () => {
                 addToAllMatchupData('fewestPointsScored', team2Score, team2Details);
             }
 
+            // Most Points Scored in a Loss (loser's score, maximize)
+            if (!isTie) {
+                const loserIsTeam1 = team1Score < team2Score;
+                const losingTeam = loserIsTeam1 ? team1Name : team2Name;
+                const losingScore = loserIsTeam1 ? team1Score : team2Score;
+                const winningTeam = loserIsTeam1 ? team2Name : team1Name;
+                const winningScore = loserIsTeam1 ? team2Score : team1Score;
+                const lossDetails = { ...baseEntryDetails, team: losingTeam, score: losingScore, opponent: winningTeam, opponentScore: winningScore };
+                updateRecord(newAggregatedRecords.mostPointsInLoss, losingScore, lossDetails);
+                addToAllMatchupData('mostPointsInLoss', losingScore, lossDetails);
+            }
+
+            // Fewest Points Scored in a Win (winner's score, minimize)
+            if (!isTie) {
+                const winnerIsTeam1 = team1Score > team2Score;
+                const winningTeam = winnerIsTeam1 ? team1Name : team2Name;
+                const winningScore = winnerIsTeam1 ? team1Score : team2Score;
+                const losingTeam = winnerIsTeam1 ? team2Name : team1Name;
+                const losingScore = winnerIsTeam1 ? team2Score : team1Score;
+                if (winningScore > 0) {
+                    const winDetails = { ...baseEntryDetails, team: winningTeam, score: winningScore, opponent: losingTeam, opponentScore: losingScore };
+                    updateRecord(newAggregatedRecords.fewestPointsInWin, winningScore, winDetails, true);
+                    addToAllMatchupData('fewestPointsInWin', winningScore, winDetails);
+                }
+            }
+
             // Highest Combined Score
             const combinedDetails = { ...baseEntryDetails, combinedScore: combinedScore };
             updateRecord(newAggregatedRecords.highestCombinedScore, combinedScore, combinedDetails);
@@ -224,7 +254,7 @@ const MatchupRecords = () => {
             record.entries.sort((a, b) => {
                 if (a.year !== b.year) return a.year - b.year;
                 if (a.week !== b.week) return a.week - b.week;
-                if (a.team && b.team && (key === 'mostPointsScored' || key === 'fewestPointsScored')) {
+                if (a.team && b.team && (key === 'mostPointsScored' || key === 'fewestPointsScored' || key === 'mostPointsInLoss' || key === 'fewestPointsInWin')) {
                     return a.team.localeCompare(b.team);
                 }
                 if (a.team1 && b.team1 && (key === 'highestCombinedScore' || key === 'lowestCombinedScore')) {
@@ -251,7 +281,9 @@ const MatchupRecords = () => {
     // Define the order and labels for the records to display
     const recordsToDisplay = [
         { key: 'mostPointsScored', label: 'Most Points Scored by a Team' },
+        { key: 'mostPointsInLoss', label: 'Most Points Scored in a Loss' },
         { key: 'fewestPointsScored', label: 'Fewest Points Scored by a Team' },
+        { key: 'fewestPointsInWin', label: 'Fewest Points Scored in a Win' },
         { key: 'highestCombinedScore', label: 'Highest Combined Score' },
         { key: 'lowestCombinedScore', label: 'Lowest Combined Score' },
         { key: 'biggestBlowout', label: 'Biggest Blowout' },
@@ -351,7 +383,7 @@ const MatchupRecords = () => {
                                             const winnerScore = (entry.winner === entry.team1 ? entry.team1Score : entry.team2Score).toFixed(2);
                                             const loserScore = (entry.loser === entry.team1 ? entry.team1Score : entry.team2Score).toFixed(2);
 
-                                            if (recordDef.key === 'mostPointsScored' || recordDef.key === 'fewestPointsScored') {
+                                            if (recordDef.key === 'mostPointsScored' || recordDef.key === 'fewestPointsScored' || recordDef.key === 'mostPointsInLoss' || recordDef.key === 'fewestPointsInWin') {
                                                 const recordHolder = entry.team;
                                                 const recordScore = entry.score.toFixed(2);
                                                 const opponent = recordHolder === entry.team1 ? entry.team2 : entry.team1;
@@ -360,15 +392,14 @@ const MatchupRecords = () => {
                                                 matchupDisplay = (
                                                     <div className="space-y-2">
                                                         <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-2 sm:p-3 border border-blue-200">
-                                                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
-                                                                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                                                                    <span className="font-semibold text-gray-900 text-xs sm:text-sm truncate">{recordHolder}</span>
-                                                                    <span className="font-bold text-blue-600 text-xs sm:text-sm">{recordScore}</span>
+                                                            <div className="space-y-1">
+                                                                <div className="flex items-center justify-between">
+                                                                    <span className="font-semibold text-gray-900 text-xs sm:text-sm truncate text-left">{recordHolder}</span>
+                                                                    <span className="font-bold text-blue-600 text-xs sm:text-sm text-right">{recordScore}</span>
                                                                 </div>
-                                                                <span className="text-gray-500 font-medium text-xs sm:text-sm hidden sm:inline">vs</span>
-                                                                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                                                                    <span className="text-gray-700 text-xs sm:text-sm truncate">{opponent}</span>
-                                                                    <span className="text-gray-600 text-xs sm:text-sm">{opponentScore}</span>
+                                                                <div className="flex items-center justify-between">
+                                                                    <span className="text-gray-700 text-xs sm:text-sm truncate text-left">{opponent}</span>
+                                                                    <span className="text-gray-600 text-xs sm:text-sm text-right">{opponentScore}</span>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -378,21 +409,15 @@ const MatchupRecords = () => {
                                                 matchupDisplay = (
                                                     <div className="space-y-2">
                                                         <div className="bg-gradient-to-r from-orange-50 to-red-50 rounded-lg p-2 sm:p-3 border border-orange-200">
-                                                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
-                                                                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                                                                    <span className="font-semibold text-gray-900 text-xs sm:text-sm truncate">{entry.winner}</span>
-                                                                    <span className="font-bold text-green-600 text-xs sm:text-sm">{winnerScore}</span>
+                                                            <div className="space-y-1">
+                                                                <div className="flex items-center justify-between">
+                                                                    <span className="font-semibold text-gray-900 text-xs sm:text-sm truncate text-left">{entry.winner}</span>
+                                                                    <span className="font-bold text-green-600 text-xs sm:text-sm text-right">{winnerScore}</span>
                                                                 </div>
-                                                                <span className="text-gray-500 font-medium text-xs sm:text-sm hidden sm:inline">vs</span>
-                                                                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                                                                    <span className="text-gray-700 text-xs sm:text-sm truncate">{entry.loser}</span>
-                                                                    <span className="text-gray-600 text-xs sm:text-sm">{loserScore}</span>
+                                                                <div className="flex items-center justify-between">
+                                                                    <span className="text-gray-700 text-xs sm:text-sm truncate text-left">{entry.loser}</span>
+                                                                    <span className="text-gray-600 text-xs sm:text-sm text-right">{loserScore}</span>
                                                                 </div>
-                                                            </div>
-                                                            <div className="mt-1 text-center">
-                                                                <span className="inline-flex items-center px-2 py-1 bg-white rounded-md text-xs font-medium text-gray-700">
-                                                                    Margin: {entry.margin.toFixed(2)} pts
-                                                                </span>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -402,21 +427,26 @@ const MatchupRecords = () => {
                                                 matchupDisplay = (
                                                     <div className="space-y-2">
                                                         <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg p-2 sm:p-3 border border-green-200">
-                                                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
-                                                                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                                                                    <span className="font-semibold text-gray-900 text-xs sm:text-sm truncate">{entry.team1}</span>
-                                                                    <span className="font-bold text-blue-600 text-xs sm:text-sm">{team1ScoreFormatted}</span>
-                                                                </div>
-                                                                <span className="text-gray-500 font-medium text-xs sm:text-sm hidden sm:inline">vs</span>
-                                                                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                                                                    <span className="text-gray-700 text-xs sm:text-sm truncate">{entry.team2}</span>
-                                                                    <span className="text-gray-600 text-xs sm:text-sm">{team2ScoreFormatted}</span>
-                                                                </div>
-                                                            </div>
-                                                            <div className="mt-1 text-center">
-                                                                <span className="inline-flex items-center px-2 py-1 bg-white rounded-md text-xs font-medium text-gray-700">
-                                                                    Combined: {entry.combinedScore.toFixed(2)} pts
-                                                                </span>
+                                                            <div className="space-y-1">
+                                                                {(() => {
+                                                                    const team1Top = entry.team1Score >= entry.team2Score;
+                                                                    const topTeam = team1Top ? entry.team1 : entry.team2;
+                                                                    const topScore = team1Top ? team1ScoreFormatted : team2ScoreFormatted;
+                                                                    const bottomTeam = team1Top ? entry.team2 : entry.team1;
+                                                                    const bottomScore = team1Top ? team2ScoreFormatted : team1ScoreFormatted;
+                                                                    return (
+                                                                        <>
+                                                                            <div className="flex items-center justify-between">
+                                                                                <span className="font-semibold text-gray-900 text-xs sm:text-sm truncate text-left">{topTeam}</span>
+                                                                                <span className="font-bold text-blue-600 text-xs sm:text-sm text-right">{topScore}</span>
+                                                                            </div>
+                                                                            <div className="flex items-center justify-between">
+                                                                                <span className="text-gray-700 text-xs sm:text-sm truncate text-left">{bottomTeam}</span>
+                                                                                <span className="text-gray-600 text-xs sm:text-sm text-right">{bottomScore}</span>
+                                                                            </div>
+                                                                        </>
+                                                                    );
+                                                                })()}
                                                             </div>
                                                         </div>
                                                     </div>
@@ -492,7 +522,7 @@ const MatchupRecords = () => {
                                                         <div className="space-y-2">
                                                             {(() => {
                                                                 const sortKey = recordDef.key;
-                                                                const isMinRecord = ['fewestPointsScored', 'lowestCombinedScore', 'slimmestWin'].includes(sortKey);
+                                                                const isMinRecord = ['fewestPointsScored', 'fewestPointsInWin', 'lowestCombinedScore', 'slimmestWin'].includes(sortKey);
                                                                 
                                                                 return allMatchupData[sortKey]
                                                                     .sort((a, b) => isMinRecord ? a.value - b.value : b.value - a.value)
@@ -500,7 +530,7 @@ const MatchupRecords = () => {
                                                                     .map((matchupData, index) => {
                                                                         let displayText = '';
                                                                         
-                                                                        if (sortKey === 'mostPointsScored' || sortKey === 'fewestPointsScored') {
+                                                                        if (sortKey === 'mostPointsScored' || sortKey === 'fewestPointsScored' || sortKey === 'mostPointsInLoss' || sortKey === 'fewestPointsInWin') {
                                                                             displayText = `${matchupData.team}: ${matchupData.value.toFixed(2)} pts`;
                                                                         } else if (sortKey === 'biggestBlowout' || sortKey === 'slimmestWin') {
                                                                             displayText = `${matchupData.winner} beat ${matchupData.loser} by ${matchupData.value.toFixed(2)} pts`;

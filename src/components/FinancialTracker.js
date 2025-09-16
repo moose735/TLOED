@@ -4,6 +4,7 @@ import { useSleeperData } from '../contexts/SleeperDataContext';
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { getTransactionTotal } from '../utils/financialCalculations';
 
 // Your Firebase Config (should be replaced by env vars in a real app)
 const firebaseConfig = {
@@ -255,20 +256,7 @@ const FinancialTracker = () => {
 	}, [selectedYear, db]);
 
 	// --- UPDATED HELPER FUNCTION TO GET TRANSACTION TOTAL ---
-	// This function calculates the total value of a transaction.
-	// It now correctly handles Waiver/FA fees by multiplying amount by quantity.
-	const getTransactionTotal = (transaction) => {
-		// If the category is Waiver/FA Fee, multiply amount by the quantity.
-		if (transaction.category === 'Waiver/FA Fee') {
-			return Number(transaction.amount || 0) * Number(transaction.quantity || 1);
-		}
-		// If the category is Trade Fee, multiply amount by the number of teams.
-		if (transaction.category === 'Trade Fee' && Array.isArray(transaction.team)) {
-			return Number(transaction.amount || 0) * transaction.team.length;
-		}
-		// For all other cases, the total is just the amount.
-		return Number(transaction.amount || 0);
-	};
+	// This function is now imported from utils/financialCalculations.js
 	// --------------------------------------------------
 
 	// Summary calculations for the selected year's data

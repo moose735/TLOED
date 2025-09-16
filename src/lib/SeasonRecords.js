@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSleeperData } from '../contexts/SleeperDataContext';
 import { formatNumber } from '../utils/formatUtils';
+import { fetchFinancialDataForYears } from '../services/financialService';
+import { calculateTeamTransactionCountsByOwnerId } from '../utils/financialCalculations';
 
 /**
  * Displays seasonal league records, including per-season standings and overall seasonal highlights.
@@ -27,11 +29,15 @@ const SeasonRecords = () => {
         worstLuckRatingSeason: { value: Infinity, entries: [], key: 'luckRating' },
         highestDPRSeason: { value: -Infinity, entries: [], key: 'highestDPR' },
         lowestDPRSeason: { value: Infinity, entries: [], key: 'lowestDPR' },
+        mostTradesSeason: { value: -Infinity, entries: [], key: 'tradeCount' },
+        mostWaiversSeason: { value: -Infinity, entries: [], key: 'waiverCount' },
     }));
 
     // State for collapsible sections
     const [expandedSections, setExpandedSections] = useState({});
     const [allSeasonData, setAllSeasonData] = useState({});
+    const [financialDataByYear, setFinancialDataByYear] = useState({});
+    const [loadingFinancial, setLoadingFinancial] = useState(false);
 
     // Toggle function for expanding/collapsing sections
     const toggleSection = (key) => {
@@ -59,6 +65,8 @@ const SeasonRecords = () => {
         slimLosses: { decimals: 0, type: 'count' },
         weeklyTop2ScoresCount: { decimals: 0, type: 'count' },
         luckRating: { decimals: 2, type: 'decimal' },
+        tradeCount: { decimals: 0, type: 'count' },
+        waiverCount: { decimals: 0, type: 'count' },
     };
 
     // Helper function to create a clean label from a record key
@@ -74,6 +82,12 @@ const SeasonRecords = () => {
         }
         if (recordKey === 'lowestDPR') {
             return 'Lowest Season DPR';
+        }
+        if (recordKey === 'tradeCount') {
+            return 'Most Trades in a Season';
+        }
+        if (recordKey === 'waiverCount') {
+            return 'Most FA/Waivers in a Season';
         }
         const cleanedKey = recordKey
             .replace(/Season$/, '')

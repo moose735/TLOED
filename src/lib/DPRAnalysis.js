@@ -1,7 +1,8 @@
 // src/lib/DPRAnalysis.js
 
 import React, { useState, useEffect } from 'react';
-import { calculateAllLeagueMetrics } from '../utils/calculations'; // Import the new utility
+import { calculateAllLeagueMetrics } from '../utils/calculations';
+import PowerRankings from './PowerRankings';
 import { useSleeperData } from '../contexts/SleeperDataContext'; // Import the custom hook
 
 // Always define metrics at the top level so it's available everywhere
@@ -9,23 +10,114 @@ let metricsResult = {};
 let seasonalMetrics = {};
 let calculatedCareerDPRs = [];
 
-const DPRAnalysis = () => { // Removed props as data will come from context
+const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
   const {
     loading: contextLoading, // Rename to avoid conflict with local loading state
     error: contextError,      // Rename to avoid conflict with local error state
     historicalData,
     allDraftHistory, // FIXED: Import allDraftHistory from context
-    getTeamName
+    getTeamName,
+    nflState // Import nflState to get current week
   } = useSleeperData();
 
   const [careerDPRData, setCareerDPRData] = useState([]);
   const [seasonalDPRData, setSeasonalDPRData] = useState([]);
   const [loading, setLoading] = useState(true); // Local loading state for calculations
   const [showAllSeasonal, setShowAllSeasonal] = useState(false); // New state for "Show More"
+  const [currentSeasonPower, setCurrentSeasonPower] = useState([]);
+  // Fetch current season DPRs from PowerRankings logic, always for the real current season
+  useEffect(() => {
+    if (!historicalData || !historicalData.rostersBySeason) return;
+    // Always use the real current NFL season
+    const getCurrentNFLSeason = () => {
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = today.getMonth();
+      return (month >= 8) ? year : year - 1;
+    };
+    const currentSeason = getCurrentNFLSeason().toString();
+    // Use the same logic as PowerRankings to get current season DPRs
+    const metricsResult = calculateAllLeagueMetrics(historicalData, null, getTeamName, nflState);
+    const seasonalMetrics = metricsResult?.seasonalMetrics || {};
+    const seasonMetrics = seasonalMetrics[currentSeason] || {};
+    // If there are no teams for this season, try to get rosters from rostersBySeason
+    let rosterIds = Object.keys(seasonMetrics);
+    if (rosterIds.length === 0 && historicalData.rostersBySeason && historicalData.rostersBySeason[currentSeason]) {
+      rosterIds = historicalData.rostersBySeason[currentSeason].map(r => String(r.roster_id));
+    }
+    let rankedTeams = rosterIds
+      .map(rosterId => {
+        // Always try to get the full stats from seasonalMetrics for this team/season
+        const teamStats = seasonMetrics[rosterId] || {};
+        // Try to get ownerId from stats or from rostersBySeason
+        let ownerId = teamStats.ownerId;
+        if (!ownerId && historicalData.rostersBySeason && historicalData.rostersBySeason[currentSeason]) {
+          const roster = historicalData.rostersBySeason[currentSeason].find(r => String(r.roster_id) === String(rosterId));
+          if (roster) ownerId = roster.owner_id;
+        }
+
+        // Explicitly aggregate completed games from matchupsBySeason
+        let completedMatchups = [];
+        if (historicalData.matchupsBySeason && historicalData.matchupsBySeason[currentSeason]) {
+          // Get current NFL week to filter only completed games
+          const currentNFLWeek = nflState?.week ? parseInt(nflState.week) : 1;
+          completedMatchups = historicalData.matchupsBySeason[currentSeason]
+            .filter(m => (String(m.team1_roster_id) === String(rosterId) || String(m.team2_roster_id) === String(rosterId))
+              && typeof m.team1_score === 'number'
+              && typeof m.team2_score === 'number'
+              && (m.team1_score > 0 || m.team2_score > 0) // Exclude unplayed games (0-0)
+              && parseInt(m.week) < currentNFLWeek); // Only include completed weeks
+        }
+
+        let wins = 0, losses = 0, ties = 0, pointsTotal = 0, pointsArr = [], oppPointsTotal = 0;
+        completedMatchups.forEach(m => {
+          let myScore, oppScore;
+          if (String(m.team1_roster_id) === String(rosterId)) {
+            myScore = m.team1_score;
+            oppScore = m.team2_score;
+          } else {
+            myScore = m.team2_score;
+            oppScore = m.team1_score;
+          }
+          pointsTotal += myScore;
+          oppPointsTotal += oppScore;
+          pointsArr.push(myScore);
+          if (myScore > oppScore) wins++;
+          else if (myScore < oppScore) losses++;
+          else ties++;
+        });
+        const gamesPlayed = completedMatchups.length;
+        const pointsPerGame = gamesPlayed > 0 ? pointsTotal / gamesPlayed : null;
+        const highestPointsGame = pointsArr.length > 0 ? Math.max(...pointsArr) : null;
+        const lowestPointsGame = pointsArr.length > 0 ? Math.min(...pointsArr) : null;
+        const winPercentage = gamesPlayed > 0 ? (wins + 0.5 * ties) / gamesPlayed : null;
+
+        return {
+          ownerId,
+          team: getTeamName(ownerId, currentSeason),
+          dpr: teamStats.adjustedDPR || 0,
+          wins: gamesPlayed > 0 ? wins : null,
+          losses: gamesPlayed > 0 ? losses : null,
+          ties: gamesPlayed > 0 ? ties : null,
+          pointsFor: gamesPlayed > 0 ? pointsTotal : null,
+          pointsAgainst: gamesPlayed > 0 ? oppPointsTotal : null,
+          luckRating: teamStats.luckRating ?? 0,
+          winPercentage: winPercentage,
+          pointsPerGame: pointsPerGame,
+          highestPointsGame: highestPointsGame,
+          lowestPointsGame: lowestPointsGame,
+          year: parseInt(currentSeason),
+          rosterId
+        };
+      })
+      .filter(team => team.ownerId)
+      .sort((a, b) => b.dpr - a.dpr);
+    setCurrentSeasonPower(rankedTeams);
+  }, [historicalData, getTeamName, nflState]);
 
   useEffect(() => {
     // Always define metrics before any other logic
-    metricsResult = calculateAllLeagueMetrics(historicalData, allDraftHistory, getTeamName);
+    metricsResult = calculateAllLeagueMetrics(historicalData, allDraftHistory, getTeamName, nflState);
     seasonalMetrics = metricsResult?.seasonalMetrics || {};
     calculatedCareerDPRs = metricsResult?.careerDPRData || [];
 
@@ -80,15 +172,14 @@ const DPRAnalysis = () => { // Removed props as data will come from context
       const teamRawDPRs = [];
       Object.keys(seasonalMetrics[year]).forEach(rosterId => {
         const teamSeasonalData = seasonalMetrics[year][rosterId];
+        // Only include teams with at least one completed game (like LuckRatingAnalysis)
         if (teamSeasonalData && teamSeasonalData.totalGames > 0) {
           let currentOwnerId = teamSeasonalData.ownerId;
           if (!currentOwnerId && historicalData?.rostersBySeason?.[year]) {
             const rosterInHistoricalData = historicalData.rostersBySeason[year].find(
               (r) => String(r.roster_id) === String(rosterId)
             );
-            if (rosterInHistoricalData) {
-              currentOwnerId = rosterInHistoricalData.owner_id;
-            }
+            if (rosterInHistoricalData) currentOwnerId = rosterInHistoricalData.owner_id;
           }
           // Calculate Raw DPR
           const avgScore = teamSeasonalData.averageScore || 0;
@@ -124,51 +215,7 @@ const DPRAnalysis = () => { // Removed props as data will come from context
       });
     });
 
-    // Ensure current season is always included, even if only partial weeks are completed
-    if (currentSeason !== null) {
-      const hasCurrentSeason = allSeasonalDPRs.some(row => row.year === currentSeason);
-      if (!hasCurrentSeason && seasonalMetrics[currentSeason]) {
-        Object.keys(seasonalMetrics[currentSeason]).forEach(rosterId => {
-          const teamSeasonalData = seasonalMetrics[currentSeason][rosterId];
-          if (teamSeasonalData && teamSeasonalData.totalGames > 0) {
-            let currentOwnerId = teamSeasonalData.ownerId;
-            if (!currentOwnerId && historicalData?.rostersBySeason?.[currentSeason]) {
-              const rosterInHistoricalData = historicalData.rostersBySeason[currentSeason].find(
-                (r) => String(r.roster_id) === String(rosterId)
-              );
-              if (rosterInHistoricalData) {
-                currentOwnerId = rosterInHistoricalData.owner_id;
-              }
-            }
-            const avgScore = teamSeasonalData.averageScore || 0;
-            const highScore = teamSeasonalData.highScore || 0;
-            const lowScore = teamSeasonalData.lowScore || 0;
-            const winPct = teamSeasonalData.winPercentage || 0;
-            const rawDPR = (((avgScore * 6) + ((highScore + lowScore) * 2) + ((winPct * 200) * 2)) / 10);
-            // Calculate league average Raw DPR for current season
-            const teamRawDPRs = Object.values(seasonalMetrics[currentSeason]).map(tsd => (((tsd.averageScore || 0) * 6) + (((tsd.highScore || 0) + (tsd.lowScore || 0)) * 2) + (((tsd.winPercentage || 0) * 200) * 2)) / 10);
-            const leagueAvgRawDPR = teamRawDPRs.length > 0 ? (teamRawDPRs.reduce((a, b) => a + b, 0) / teamRawDPRs.length) : 1;
-            const adjustedDPR = leagueAvgRawDPR > 0 ? (rawDPR / leagueAvgRawDPR) : 1.0;
-            allSeasonalDPRs.push({
-              year: currentSeason,
-              team: getTeamName(currentOwnerId, currentSeason),
-              rosterId: rosterId,
-              ownerId: currentOwnerId,
-              rawDPR,
-              dpr: adjustedDPR,
-              wins: teamSeasonalData.wins,
-              losses: teamSeasonalData.losses,
-              ties: teamSeasonalData.ties,
-              winPercentage: winPct,
-              pointsPerGame: avgScore,
-              highestPointsGame: highScore,
-              lowestPointsGame: lowScore,
-              isCurrentSeason: true
-            });
-          }
-        });
-      }
-    }
+    // No need to separately inject current season rows here; handled above like LuckRatingAnalysis
 
     // Sort the consolidated seasonal DPR data by DPR descending
     allSeasonalDPRs.sort((a, b) => b.dpr - a.dpr);
@@ -289,24 +336,155 @@ const DPRAnalysis = () => { // Removed props as data will come from context
     return `${wins || 0}-${losses || 0}-${ties || 0}`;
   };
 
-  const displayedSeasonalDPRData = showAllSeasonal ? seasonalDPRData : seasonalDPRData.slice(0, 20);
-  // Find current season for highlighting
-  // Highlight the latest season found in any data source (matches LuckAnalysis logic)
-  let highlightCurrentSeasonYear = null;
-  const highlightYearsSet = new Set([
-    ...Object.keys(seasonalMetrics || {}),
-    ...Object.keys(historicalData?.matchupsBySeason || {}),
-    ...Object.keys(historicalData?.rostersBySeason || {})
-  ].map(Number));
-  if (highlightYearsSet.size > 0) {
-    highlightCurrentSeasonYear = Math.max(...Array.from(highlightYearsSet));
+  // Use the real current NFL season (from system date or constant)
+  // You can replace this with a dynamic value if you have nflState or similar available
+  const getCurrentNFLSeason = () => {
+    // Use system date to determine NFL season (September or later = current year, else previous year)
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth(); // 0-indexed: 0=Jan, 8=Sep
+    return (month >= 8) ? year : year - 1;
+  };
+  const currentNFLSeason = getCurrentNFLSeason();
+
+  // Always show all current season rows, even if not in top 20, when Show All is off
+  let displayedSeasonalDPRData;
+  // Helper to dedupe by rosterId and year
+  const dedupeRows = (rows) => {
+    const key = (row) => `${row.rosterId}-${row.year}`;
+    const seen = new Set();
+    const deduped = [];
+    for (const row of rows) {
+      if (!seen.has(key(row))) {
+        deduped.push(row);
+        seen.add(key(row));
+      }
+    }
+    return deduped;
+  };
+
+  // Replace current season rows with PowerRankings DPRs for accuracy, always for the real current NFL season
+  const injectCurrentSeasonDPRs = (rows) => {
+    if (!currentSeasonPower || currentSeasonPower.length === 0) return rows;
+    // Remove all current season rows from rows (using real currentNFLSeason)
+    const filtered = rows.filter(row => row.year !== currentNFLSeason || row.isAverageRow);
+    // Merge in full stat set from seasonalMetrics for each current season team
+    const currentSeasonStats = seasonalMetrics && seasonalMetrics[currentNFLSeason] ? seasonalMetrics[currentNFLSeason] : {};
+    const injected = [
+      ...currentSeasonPower.map(row => {
+        const stats = currentSeasonStats[row.rosterId] || {};
+        // Fallback: calculate from completed matchups if missing or zero
+        let wins = stats.wins ?? row.wins ?? null;
+        let losses = stats.losses ?? row.losses ?? null;
+        let ties = stats.ties ?? row.ties ?? null;
+        let winPercentage = stats.winPercentage ?? row.winPercentage ?? null;
+        let pointsPerGame = stats.averageScore ?? row.pointsPerGame ?? null;
+        let highestPointsGame = stats.highScore ?? row.highestPointsGame ?? null;
+        let lowestPointsGame = stats.lowScore ?? row.lowestPointsGame ?? null;
+
+        // Always recalculate from matchups for current season (ignore seasonalMetrics)
+        const matchups = (historicalData && historicalData.matchupsBySeason && historicalData.matchupsBySeason[currentNFLSeason])
+          ? historicalData.matchupsBySeason[currentNFLSeason].filter(m => {
+              // Get current NFL week to filter only completed games
+              const currentNFLWeek = nflState?.week ? parseInt(nflState.week) : 1;
+              return (String(m.team1_roster_id) === String(row.rosterId) || String(m.team2_roster_id) === String(row.rosterId))
+                && typeof m.team1_score === 'number' 
+                && typeof m.team2_score === 'number'
+                && !isNaN(m.team1_score)
+                && !isNaN(m.team2_score)
+                && (m.team1_score > 0 || m.team2_score > 0) // Exclude unplayed games (0-0)
+                && parseInt(m.week) < currentNFLWeek; // Only include completed weeks
+            })
+          : [];
+        
+        if (matchups.length > 0) {
+          // Always recalculate all stats from actual matchups for current season
+          wins = matchups.filter(m => {
+            const myScore = String(m.team1_roster_id) === String(row.rosterId) ? m.team1_score : m.team2_score;
+            const oppScore = String(m.team1_roster_id) === String(row.rosterId) ? m.team2_score : m.team1_score;
+            return myScore > oppScore;
+          }).length;
+          
+          losses = matchups.filter(m => {
+            const myScore = String(m.team1_roster_id) === String(row.rosterId) ? m.team1_score : m.team2_score;
+            const oppScore = String(m.team1_roster_id) === String(row.rosterId) ? m.team2_score : m.team1_score;
+            return myScore < oppScore;
+          }).length;
+          
+          ties = matchups.filter(m => {
+            const myScore = String(m.team1_roster_id) === String(row.rosterId) ? m.team1_score : m.team2_score;
+            const oppScore = String(m.team1_roster_id) === String(row.rosterId) ? m.team2_score : m.team1_score;
+            return myScore === oppScore;
+          }).length;
+          
+          const totalPoints = matchups.reduce((sum, m) => {
+            const myScore = String(m.team1_roster_id) === String(row.rosterId) ? m.team1_score : m.team2_score;
+            return sum + myScore;
+          }, 0);
+          pointsPerGame = totalPoints / matchups.length;
+          
+          const scores = matchups.map(m => String(m.team1_roster_id) === String(row.rosterId) ? m.team1_score : m.team2_score);
+          highestPointsGame = Math.max(...scores);
+          lowestPointsGame = Math.min(...scores);
+          
+          winPercentage = (wins + 0.5 * ties) / matchups.length;
+        }
+        return {
+          ...row,
+          year: currentNFLSeason,
+          isAverageRow: false,
+          wins,
+          losses,
+          ties,
+          winPercentage,
+          pointsPerGame,
+          highestPointsGame,
+          lowestPointsGame
+        };
+      }),
+      ...filtered
+    ];
+    // Sort by DPR descending, then by year
+    injected.sort((a, b) => b.dpr - a.dpr);
+    // Insert average row after top 20 or after all current season teams if more than 20
+    const avgRow = rows.find(row => row.isAverageRow);
+    let result = injected;
+    if (avgRow) {
+      // Find the index after top 20 or after all current season teams if more than 20
+      let insertIdx = 20;
+      if (injected.length > 20) {
+        // Find last current season team index
+        const lastCurrentIdx = injected.reduce((acc, row, idx) => (row.year === currentNFLSeason ? idx : acc), 19);
+        insertIdx = lastCurrentIdx + 1;
+      }
+      // Remove any existing avgRow
+      result = injected.filter(row => !row.isAverageRow);
+      result.splice(insertIdx, 0, avgRow);
+    }
+    return result;
+  };
+
+  // Always dedupe and sort the full list, then slice top 20 for above the button
+  const allRows = dedupeRows(injectCurrentSeasonDPRs(seasonalDPRData));
+  allRows.sort((a, b) => b.dpr - a.dpr);
+  if (showAllSeasonal) {
+    displayedSeasonalDPRData = allRows;
+  } else {
+    // Find the position of the average row in the sorted list
+    const avgRowIndex = allRows.findIndex(row => row.isAverageRow);
+    
+    if (avgRowIndex >= 0 && avgRowIndex < 20) {
+      // Average row naturally falls in top 20, show it in its correct position
+      displayedSeasonalDPRData = allRows.slice(0, 20);
+    } else {
+      // Average row is not in top 20, only show non-average rows
+      const nonAverageRows = allRows.filter(row => !row.isAverageRow);
+      displayedSeasonalDPRData = nonAverageRows.slice(0, 20);
+    }
   }
 
   // Determine the number of columns for the colSpan
   const numberOfSeasonalColumns = 9; // Rank, Team, Season, Season DPR, Win %, Record, Points Avg, Highest Points, Lowest Points
-
-  // Initialize actualRank here, within the component's render function, but outside JSX
-  let actualRank = 0;
 
   return (
     <div className="w-full">
@@ -341,9 +519,20 @@ const DPRAnalysis = () => { // Removed props as data will come from context
                   </thead>
                   <tbody>
                     {careerDPRData.map((data, index) => (
-                      <tr key={data.ownerId} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}> {/* FIXED: Use ownerId for key */}
+                      <tr key={data.ownerId} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                         <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{index + 1}</td>
-                        <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{getTeamName(data.ownerId, null)}</td> {/* FIXED: Use getTeamName with ownerId and null for current name */}
+                        <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">
+                          {onTeamNameClick ? (
+                            <button
+                              onClick={() => onTeamNameClick(getTeamName(data.ownerId, null))}
+                              className="text-gray-800 hover:text-gray-600 cursor-pointer bg-transparent border-none p-0 text-left"
+                            >
+                              {getTeamName(data.ownerId, null)}
+                            </button>
+                          ) : (
+                            getTeamName(data.ownerId, null)
+                          )}
+                        </td>
                         <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatDPR(data.dpr)}</td>
                         <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPercentage(data.winPercentage)}</td>
                         <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{renderRecord(data.wins, data.losses, data.ties)}</td>
@@ -380,44 +569,57 @@ const DPRAnalysis = () => { // Removed props as data will come from context
                     </tr>
                   </thead>
                   <tbody>
-                    {/* The initialization of actualRank needs to be here, but not rendered directly */}
-                    {displayedSeasonalDPRData.map((data) => {
-                      if (!data.isAverageRow) {
-                        actualRank++;
-                      }
-                      // Highlight current season row
-                      const isCurrentSeasonRow = data.isCurrentSeason && data.year === highlightCurrentSeasonYear;
-                      return (
-                        <tr
-                          key={`${data.rosterId}-${data.year}`}
-                          className={
-                            data.isAverageRow
-                              ? 'bg-yellow-100 font-bold'
-                              : isCurrentSeasonRow
-                                ? 'bg-green-200 font-bold'
-                                : (actualRank % 2 === 0 ? 'bg-gray-50' : 'bg-white')
-                          }
-                        >
-                          {data.isAverageRow ? (
-                            <td colSpan={numberOfSeasonalColumns} className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap text-center">
-                              {data.team}
-                            </td>
-                          ) : (
-                            <>
-                              <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{actualRank}</td>
-                              <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{getTeamName(data.ownerId, data.year)}</td>
-                              <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.year}</td>
-                              <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatDPR(data.dpr)}</td>
-                              <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPercentage(data.winPercentage)}</td>
-                              <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{renderRecord(data.wins, data.losses, data.ties)}</td>
-                              <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.pointsPerGame)}</td>
-                              <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.highestPointsGame)}</td>
-                              <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.lowestPointsGame)}</td>
-                            </>
-                          )}
-                        </tr>
-                      );
-                    })}
+                    {(() => {
+                      let actualRank = 0;
+                      return displayedSeasonalDPRData.map((data, index) => {
+                        if (!data.isAverageRow) {
+                          actualRank++;
+                        }
+                        // Highlight current season row (matches LuckAnalysis logic)
+                        const isCurrentSeasonRow = data.year === currentNFLSeason && !data.isAverageRow;
+                        return (
+                          <tr
+                            key={`${data.rosterId}-${data.year}`}
+                            className={
+                              data.isAverageRow
+                                ? 'bg-yellow-100 font-bold'
+                                : isCurrentSeasonRow
+                                  ? `font-bold ${actualRank % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`
+                                  : (actualRank % 2 === 0 ? 'bg-gray-50' : 'bg-white')
+                            }
+                          >
+                            {data.isAverageRow ? (
+                              <td colSpan={numberOfSeasonalColumns} className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap text-center">
+                                {data.team}
+                              </td>
+                            ) : (
+                              <>
+                                <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{actualRank}</td>
+                                <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">
+                                  {onTeamNameClick ? (
+                                    <button
+                                      onClick={() => onTeamNameClick(getTeamName(data.ownerId, data.year))}
+                                      className="text-gray-800 hover:text-gray-600 cursor-pointer bg-transparent border-none p-0 text-left"
+                                    >
+                                      {getTeamName(data.ownerId, data.year)}
+                                    </button>
+                                  ) : (
+                                    getTeamName(data.ownerId, data.year)
+                                  )}
+                                </td>
+                                <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.year}</td>
+                                <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatDPR(data.dpr)}</td>
+                                <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPercentage(data.winPercentage)}</td>
+                                <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{renderRecord(data.wins, data.losses, data.ties)}</td>
+                                <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.pointsPerGame)}</td>
+                                <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.highestPointsGame)}</td>
+                                <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.lowestPointsGame)}</td>
+                              </>
+                            )}
+                          </tr>
+                        );
+                      });
+                    })()}
                   </tbody>
                 </table>
               </div>

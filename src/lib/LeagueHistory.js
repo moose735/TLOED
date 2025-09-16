@@ -30,7 +30,7 @@ const getFinalSeedingGamePurpose = (value) => {
     return 'Final Seeding Game';
 };
 
-const LeagueHistory = () => {
+const LeagueHistory = ({ onTeamNameClick }) => {
     // Consume data from SleeperDataContext
     const {
         loading: contextLoading,
@@ -430,7 +430,18 @@ const LeagueHistory = () => {
                                         return (
                                             <tr key={team.team} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                                                 <td className="py-2 px-3 text-sm text-gray-800 text-center font-semibold whitespace-nowrap">{index + 1}</td>
-                                                <td className="py-2 px-3 text-sm text-gray-800 font-semibold whitespace-nowrap">{team.team}</td>
+                                                <td className="py-2 px-3 text-sm text-gray-800 font-semibold whitespace-nowrap">
+                                                  {onTeamNameClick ? (
+                                                    <button
+                                                      onClick={() => onTeamNameClick(team.team)}
+                                                      className="text-gray-800 hover:text-gray-600 cursor-pointer bg-transparent border-none p-0 text-left"
+                                                    >
+                                                      {team.team}
+                                                    </button>
+                                                  ) : (
+                                                    team.team
+                                                  )}
+                                                </td>
                                                 <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{team.seasons}</td>
                                                 {/* NEW: Added Total DPR data cell */}
                                                 <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatDPR(team.totalDPR)}</td>

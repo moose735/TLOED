@@ -2,6 +2,7 @@
 import React, { useCallback, useMemo } from 'react';
 import { useSleeperData } from '../contexts/SleeperDataContext';
 import PowerRankings from '../lib/PowerRankings';
+import ProjectedPlayoffBracket from './ProjectedPlayoffBracket';
 
 const Dashboard = () => {
     const {
@@ -351,6 +352,9 @@ const Dashboard = () => {
             <div className="bg-white rounded-lg shadow-lg mobile-card">
                 <PowerRankings />
             </div>
+
+            {/* Projected Playoff Bracket */}
+            <ProjectedPlayoffBracket />
 
             {/* Recent Transactions */}
             <div className="bg-white rounded-lg shadow-lg mobile-card p-4 sm:p-6">

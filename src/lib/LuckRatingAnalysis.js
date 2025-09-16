@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { calculateAllLeagueMetrics } from '../utils/calculations'; // Import the new utility
 import { useSleeperData } from '../contexts/SleeperDataContext'; // Import the custom hook
 
-const LuckRatingAnalysis = () => {
+const LuckRatingAnalysis = ({ onTeamNameClick }) => {
   // Consume necessary data from context
   const {
     loading: contextLoading, // Rename to avoid conflict with local loading state
@@ -165,7 +165,18 @@ const LuckRatingAnalysis = () => {
                     {careerLuckData.map((data, index) => (
                       <tr key={data.team} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                         <td className="py-2 px-3 text-sm text-gray-800">{index + 1}</td>
-                        <td className="py-2 px-3 text-sm text-gray-800">{data.team}</td>
+                        <td className="py-2 px-3 text-sm text-gray-800">
+                          {onTeamNameClick ? (
+                            <button
+                              onClick={() => onTeamNameClick(data.team)}
+                              className="text-gray-800 hover:text-gray-600 cursor-pointer bg-transparent border-none p-0 text-left"
+                            >
+                              {data.team}
+                            </button>
+                          ) : (
+                            data.team
+                          )}
+                        </td>
                         <td className="py-2 px-3 text-sm text-gray-700 text-center">{formatLuckRating(data.luckRating)}</td>
                         <td className="py-2 px-3 text-sm text-gray-700 text-center">{data.actualWins}</td>
                         <td className="py-2 px-3 text-sm text-gray-700 text-center">{formatLuckRating(data.projectedWins)}</td>
@@ -200,7 +211,18 @@ const LuckRatingAnalysis = () => {
                       <tr key={`${data.team}-${data.year}`} className={`${index % 2 === 0 ? 'bg-gray-50' : 'bg-white'} ${data.year === currentNFLSeason ? 'font-bold' : ''}`}>
                         <td className="py-2 px-3 text-sm text-gray-800">{index + 1}</td>
                         <td className="py-2 px-3 text-sm text-gray-800">{data.year}</td>
-                        <td className="py-2 px-3 text-sm text-gray-800">{data.team}</td>
+                        <td className="py-2 px-3 text-sm text-gray-800">
+                          {onTeamNameClick ? (
+                            <button
+                              onClick={() => onTeamNameClick(data.team)}
+                              className="text-gray-800 hover:text-gray-600 cursor-pointer bg-transparent border-none p-0 text-left"
+                            >
+                              {data.team}
+                            </button>
+                          ) : (
+                            data.team
+                          )}
+                        </td>
                         <td className="py-2 px-3 text-sm text-gray-700 text-center">{formatLuckRating(data.luckRating)}</td>
                         <td className="py-2 px-3 text-sm text-gray-700 text-center">{data.actualWins}</td>
                         <td className="py-2 px-3 text-sm text-gray-700 text-center">{formatLuckRating(data.projectedWins)}</td>

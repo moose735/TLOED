@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useSleeperData } from '../contexts/SleeperDataContext';
 import { calculateAllLeagueMetrics } from '../utils/calculations';
+import { fetchFinancialDataForYears } from '../services/financialService';
+import { calculateCareerTransactionCountsByOwnerId } from '../utils/financialCalculations';
 
 const LeagueRecords = () => {
     const { historicalData, allDraftHistory, getTeamName, getTeamDetails, currentSeason, loading, error, nflState } = useSleeperData();
@@ -9,9 +11,13 @@ const LeagueRecords = () => {
     const [topFiveRankings, setTopFiveRankings] = useState({});
     const [expandedSections, setExpandedSections] = useState({});
     const [isLoading, setIsLoading] = useState(true);
+    const [financialDataByYear, setFinancialDataByYear] = useState({});
+    const [loadingFinancial, setLoadingFinancial] = useState(false);
     const formatConfig = {
         highestDPR: { decimals: 3, type: 'decimal' },
         lowestDPR: { decimals: 3, type: 'decimal' },
+        bestLuck: { decimals: 3, type: 'decimal' },
+        worstLuck: { decimals: 3, type: 'decimal' },
         mostWins: { decimals: 0, type: 'count' },
         mostLosses: { decimals: 0, type: 'count' },
         bestWinPct: { decimals: 3, type: 'percentage' },
@@ -26,6 +32,8 @@ const LeagueRecords = () => {
         mostSlimLosses: { decimals: 0, type: 'count' },
         mostTotalPoints: { decimals: 2, type: 'points' },
         mostPointsAgainst: { decimals: 2, type: 'points' },
+        mostTrades: { decimals: 0, type: 'count' },
+        mostWaivers: { decimals: 0, type: 'count' },
     };
 
     const updateRecord = (currentRecord, newValue, teamInfo) => {
@@ -177,6 +185,19 @@ const LeagueRecords = () => {
         rankings.mostTotalPoints = getTop5('pointsFor', true);
         rankings.mostPointsAgainst = getTop5('pointsAgainst', true);
 
+        // Luck-based rankings using totalLuckRating
+        rankings.bestLuck = careerDPRData
+            .map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.totalLuckRating }))
+            .filter(team => typeof team.value === 'number' && !isNaN(team.value))
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 5);
+
+        rankings.worstLuck = careerDPRData
+            .map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.totalLuckRating }))
+            .filter(team => typeof team.value === 'number' && !isNaN(team.value))
+            .sort((a, b) => a.value - b.value)
+            .slice(0, 5);
+
         // Calculate winning/losing seasons separately
         const seasonalData = careerDPRData.map(team => {
             let winningSeasonsCount = 0;
@@ -214,6 +235,24 @@ const LeagueRecords = () => {
         try {
             const { seasonalMetrics, careerDPRData: calculatedCareerDPRs } = calculateAllLeagueMetrics(historicalData, allDraftHistory, getTeamName, nflState);
             
+            // Load financial data for transaction counts
+            setLoadingFinancial(true);
+            const allYears = Object.keys(historicalData.matchupsBySeason || {});
+            if (allYears.length > 0) {
+                fetchFinancialDataForYears(allYears)
+                    .then(financialData => {
+                        setFinancialDataByYear(financialData || {});
+                        setLoadingFinancial(false);
+                    })
+                    .catch(financialError => {
+                        console.warn("Could not load financial data for transaction counts:", financialError);
+                        setFinancialDataByYear({});
+                        setLoadingFinancial(false);
+                    });
+            } else {
+                setLoadingFinancial(false);
+            }
+            
             // Calculate historical progression
             const history = calculateRecordHistory(seasonalMetrics);
             setRecordHistory(history);
@@ -241,6 +280,16 @@ const LeagueRecords = () => {
                 
                 careerStats.winningSeasonsCount = winningSeasonsCount;
                 careerStats.losingSeasonsCount = losingSeasonsCount;
+                
+                // Add transaction counts if financial data is available
+                if (Object.keys(financialDataByYear).length > 0) {
+                    const transactionCounts = calculateCareerTransactionCountsByOwnerId(financialDataByYear, ownerId);
+                    careerStats.careerTradeFees = transactionCounts.careerTradeFees;
+                    careerStats.careerWaiverFees = transactionCounts.careerWaiverFees;
+                } else {
+                    careerStats.careerTradeFees = 0;
+                    careerStats.careerWaiverFees = 0;
+                }
             });
 
             // Update rankings with winning/losing seasons
@@ -251,6 +300,17 @@ const LeagueRecords = () => {
             
             rankings.mostLosingSeasons = calculatedCareerDPRs
                 .map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.losingSeasonsCount }))
+                .sort((a, b) => b.value - a.value)
+                .slice(0, 5);
+
+            // Add transaction count rankings
+            rankings.mostTrades = calculatedCareerDPRs
+                .map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.careerTradeFees }))
+                .sort((a, b) => b.value - a.value)
+                .slice(0, 5);
+                
+            rankings.mostWaivers = calculatedCareerDPRs
+                .map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.careerWaiverFees }))
                 .sort((a, b) => b.value - a.value)
                 .slice(0, 5);
 
@@ -272,6 +332,10 @@ const LeagueRecords = () => {
             let mostSlimLosses = { value: -Infinity, teams: [], key: 'mostSlimLosses' };
             let mostTotalPoints = { value: -Infinity, teams: [], key: 'mostTotalPoints' };
             let mostPointsAgainst = { value: -Infinity, teams: [], key: 'mostPointsAgainst' };
+            let bestLuck = { value: -Infinity, teams: [], key: 'bestLuck' };
+            let worstLuck = { value: Infinity, teams: [], key: 'worstLuck' };
+            let mostTrades = { value: -Infinity, teams: [], key: 'mostTrades' };
+            let mostWaivers = { value: -Infinity, teams: [], key: 'mostWaivers' };
 
             calculatedCareerDPRs.forEach(careerStats => {
                 const teamName = careerStats.teamName;
@@ -280,6 +344,12 @@ const LeagueRecords = () => {
                 if (careerStats.dpr !== 0) {
                     updateRecord(highestDPR, careerStats.dpr, { name: teamName, value: careerStats.dpr, ownerId: ownerId });
                     updateLowestRecord(lowestDPR, careerStats.dpr, { name: teamName, value: careerStats.dpr, ownerId: ownerId });
+                }
+
+                // Update luck records (can be zero; include valid numbers only)
+                if (typeof careerStats.totalLuckRating === 'number' && !isNaN(careerStats.totalLuckRating)) {
+                    updateRecord(bestLuck, careerStats.totalLuckRating, { name: teamName, value: careerStats.totalLuckRating, ownerId: ownerId });
+                    updateLowestRecord(worstLuck, careerStats.totalLuckRating, { name: teamName, value: careerStats.totalLuckRating, ownerId: ownerId });
                 }
 
                 if (careerStats.totalGames > 0) {
@@ -295,6 +365,13 @@ const LeagueRecords = () => {
                     updateRecord(mostWeeklyTop2Scores, careerStats.weeklyTop2ScoresCount, { name: teamName, value: careerStats.weeklyTop2ScoresCount, ownerId: ownerId });
                     updateRecord(mostWeeklyHighScores, careerStats.topScoreWeeksCount, { name: teamName, value: careerStats.topScoreWeeksCount, ownerId: ownerId });
                     updateRecord(bestAllPlayWinPct, careerStats.allPlayWinPercentage, { name: teamName, value: careerStats.allPlayWinPercentage, ownerId: ownerId });
+                }
+
+                // Calculate career transaction counts if financial data is available
+                if (Object.keys(financialDataByYear).length > 0) {
+                    const transactionCounts = calculateCareerTransactionCountsByOwnerId(financialDataByYear, ownerId);
+                    updateRecord(mostTrades, transactionCounts.careerTradeFees, { name: teamName, value: transactionCounts.careerTradeFees, ownerId: ownerId });
+                    updateRecord(mostWaivers, transactionCounts.careerWaiverFees, { name: teamName, value: transactionCounts.careerWaiverFees, ownerId: ownerId });
                 }
 
                 let winningSeasonsCount = 0;
@@ -318,6 +395,8 @@ const LeagueRecords = () => {
             setAllTimeRecords({
                 highestDPR,
                 lowestDPR,
+                bestLuck,
+                worstLuck,
                 mostWins,
                 mostLosses,
                 bestWinPct,
@@ -332,6 +411,8 @@ const LeagueRecords = () => {
                 mostSlimLosses,
                 mostTotalPoints,
                 mostPointsAgainst,
+                mostTrades,
+                mostWaivers,
             });
 
         } catch (error) {
