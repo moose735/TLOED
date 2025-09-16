@@ -115,6 +115,8 @@ const SeasonRecords = () => {
                 fewestPointsSeason: { value: Infinity, entries: [], key: 'pointsFor' },
                 bestLuckRatingSeason: { value: -Infinity, entries: [], key: 'luckRating' },
                 worstLuckRatingSeason: { value: Infinity, entries: [], key: 'luckRating' },
+                mostTradesSeason: { value: -Infinity, entries: [], key: 'tradeCount' },
+                mostWaiversSeason: { value: -Infinity, entries: [], key: 'waiverCount' },
             });
             setAllSeasonData({});
             return;
@@ -137,7 +139,9 @@ const SeasonRecords = () => {
             bestLuckRatingSeason: [],
             worstLuckRatingSeason: [],
             highestDPRSeason: [],
-            lowestDPRSeason: []
+            lowestDPRSeason: [],
+            mostTradesSeason: [],
+            mostWaiversSeason: []
         };
 
         // Helper function to add data to all season data collection
@@ -153,13 +157,8 @@ const SeasonRecords = () => {
         // Get the current year to exclude it from the records
         const currentYear = new Date().getFullYear().toString();
         
-        // Filter out the current season's data
-        const historicalRecords = Object.keys(processedSeasonalRecords).reduce((acc, year) => {
-            if (year !== currentYear) {
-                acc[year] = processedSeasonalRecords[year];
-            }
-            return acc;
-        }, {});
+        // Include all seasons (including current year for transaction counts)
+        const historicalRecords = processedSeasonalRecords;
 
         // Initialize highlight records with extreme values for this run
         let currentHighestDPRSeason = { value: -Infinity, entries: [], key: 'highestDPR' };
@@ -178,6 +177,8 @@ const SeasonRecords = () => {
         let currentFewestPointsSeason = { value: Infinity, entries: [], key: 'pointsFor' };
         let currentBestLuckRatingSeason = { value: -Infinity, entries: [], key: 'luckRating' };
         let currentWorstLuckRatingSeason = { value: Infinity, entries: [], key: 'luckRating' };
+        let currentMostTradesSeason = { value: -Infinity, entries: [], key: 'tradeCount' };
+        let currentMostWaiversSeason = { value: -Infinity, entries: [], key: 'waiverCount' };
 
         // Helper to update records (handles ties)
         const updateRecord = (currentRecord, newValue, teamInfo, isMin = false) => {
@@ -206,129 +207,163 @@ const SeasonRecords = () => {
             }
         };
 
-        // Iterate over the filtered `historicalRecords`
-        Object.keys(historicalRecords).forEach(year => {
-            const teamsInSeasonObject = historicalRecords[year];
-            if (!teamsInSeasonObject || typeof teamsInSeasonObject !== 'object') return;
-            const teamsInSeason = Object.values(teamsInSeasonObject);
-            teamsInSeason.forEach(teamStats => {
-                if (!teamStats || typeof teamStats !== 'object' || !teamStats.rosterId || !teamStats.ownerId) return;
-                if (teamStats.totalGames === 0) return;
+        // Load financial data for transaction counts, then complete calculations
+        setLoadingFinancial(true);
+        const allYears = Object.keys(historicalRecords);
+        
+        const finishCalculationsWithFinancialData = (financialData = {}) => {
+            console.log("Season Records: Processing with financial data for", Object.keys(financialData).length, "years");
+            setFinancialDataByYear(financialData);
+            setLoadingFinancial(false);
+            
+            // Process teams with financial data for transaction counts
+            Object.keys(historicalRecords).forEach(year => {
+                const teamsInSeasonObject = historicalRecords[year];
+                if (!teamsInSeasonObject || typeof teamsInSeasonObject !== 'object') return;
+                const teamsInSeason = Object.values(teamsInSeasonObject);
                 
-                const baseEntry = {
-                    teamName: getTeamName(teamStats.ownerId, year),
-                    year,
-                    ownerId: teamStats.ownerId,
-                    rosterId: teamStats.rosterId,
-                };
+                teamsInSeason.forEach(teamStats => {
+                    if (!teamStats || typeof teamStats !== 'object' || !teamStats.rosterId || !teamStats.ownerId) return;
+                    if (teamStats.totalGames === 0) return;
+                    
+                    const baseEntry = {
+                        teamName: getTeamName(teamStats.ownerId, year),
+                        year,
+                        ownerId: teamStats.ownerId,
+                        rosterId: teamStats.rosterId,
+                    };
 
-                // Update records using the base entry
-                if (typeof teamStats.wins === 'number') {
-                    updateRecord(currentMostWinsSeason, teamStats.wins, { ...baseEntry, value: teamStats.wins });
-                    addToAllSeasonData('mostWinsSeason', teamStats.wins, { ...baseEntry, value: teamStats.wins });
-                }
-                if (typeof teamStats.losses === 'number') {
-                    updateRecord(currentMostLossesSeason, teamStats.losses, { ...baseEntry, value: teamStats.losses });
-                    addToAllSeasonData('mostLossesSeason', teamStats.losses, { ...baseEntry, value: teamStats.losses });
-                }
-                if (typeof teamStats.winPercentage === 'number') {
-                    updateRecord(currentBestWinPctSeason, teamStats.winPercentage, { ...baseEntry, value: teamStats.winPercentage });
-                    addToAllSeasonData('bestWinPctSeason', teamStats.winPercentage, { ...baseEntry, value: teamStats.winPercentage });
-                }
-                if (typeof teamStats.allPlayWinPercentage === 'number') {
-                    updateRecord(currentBestAllPlayWinPctSeason, teamStats.allPlayWinPercentage, { ...baseEntry, value: teamStats.allPlayWinPercentage });
-                    addToAllSeasonData('bestAllPlayWinPctSeason', teamStats.allPlayWinPercentage, { ...baseEntry, value: teamStats.allPlayWinPercentage });
-                }
-                if (typeof teamStats.topScoreWeeksCount === 'number') {
-                    updateRecord(currentMostWeeklyHighScoresSeason, teamStats.topScoreWeeksCount, { ...baseEntry, value: teamStats.topScoreWeeksCount });
-                    addToAllSeasonData('mostWeeklyHighScoresSeason', teamStats.topScoreWeeksCount, { ...baseEntry, value: teamStats.topScoreWeeksCount });
-                }
-                if (typeof teamStats.weeklyTop2ScoresCount === 'number') {
-                    updateRecord(currentMostWeeklyTop2ScoresSeason, teamStats.weeklyTop2ScoresCount, { ...baseEntry, value: teamStats.weeklyTop2ScoresCount });
-                    addToAllSeasonData('mostWeeklyTop2ScoresSeason', teamStats.weeklyTop2ScoresCount, { ...baseEntry, value: teamStats.weeklyTop2ScoresCount });
-                }
-                if (typeof teamStats.blowoutWins === 'number') {
-                    updateRecord(currentMostBlowoutWinsSeason, teamStats.blowoutWins, { ...baseEntry, value: teamStats.blowoutWins });
-                    addToAllSeasonData('mostBlowoutWinsSeason', teamStats.blowoutWins, { ...baseEntry, value: teamStats.blowoutWins });
-                }
-                if (typeof teamStats.blowoutLosses === 'number') {
-                    updateRecord(currentMostBlowoutLossesSeason, teamStats.blowoutLosses, { ...baseEntry, value: teamStats.blowoutLosses });
-                    addToAllSeasonData('mostBlowoutLossesSeason', teamStats.blowoutLosses, { ...baseEntry, value: teamStats.blowoutLosses });
-                }
-                if (typeof teamStats.slimWins === 'number') {
-                    updateRecord(currentMostSlimWinsSeason, teamStats.slimWins, { ...baseEntry, value: teamStats.slimWins });
-                    addToAllSeasonData('mostSlimWinsSeason', teamStats.slimWins, { ...baseEntry, value: teamStats.slimWins });
-                }
-                if (typeof teamStats.slimLosses === 'number') {
-                    updateRecord(currentMostSlimLossesSeason, teamStats.slimLosses, { ...baseEntry, value: teamStats.slimLosses });
-                    addToAllSeasonData('mostSlimLossesSeason', teamStats.slimLosses, { ...baseEntry, value: teamStats.slimLosses });
-                }
-                if (typeof teamStats.pointsFor === 'number') {
-                    updateRecord(currentMostPointsSeason, teamStats.pointsFor, { ...baseEntry, value: teamStats.pointsFor });
-                    updateRecord(currentFewestPointsSeason, teamStats.pointsFor, { ...baseEntry, value: teamStats.pointsFor }, true);
-                    addToAllSeasonData('mostPointsSeason', teamStats.pointsFor, { ...baseEntry, value: teamStats.pointsFor });
-                    addToAllSeasonData('fewestPointsSeason', teamStats.pointsFor, { ...baseEntry, value: teamStats.pointsFor });
-                }
-                if (typeof teamStats.luckRating === 'number' && !isNaN(teamStats.luckRating)) {
-                    updateRecord(currentBestLuckRatingSeason, teamStats.luckRating, { ...baseEntry, value: teamStats.luckRating });
-                    updateRecord(currentWorstLuckRatingSeason, teamStats.luckRating, { ...baseEntry, value: teamStats.luckRating }, true);
-                    addToAllSeasonData('bestLuckRatingSeason', teamStats.luckRating, { ...baseEntry, value: teamStats.luckRating });
-                    addToAllSeasonData('worstLuckRatingSeason', teamStats.luckRating, { ...baseEntry, value: teamStats.luckRating });
-                }
-                if (typeof teamStats.adjustedDPR === 'number' && !isNaN(teamStats.adjustedDPR)) {
-                    updateRecord(currentHighestDPRSeason, teamStats.adjustedDPR, { ...baseEntry, value: teamStats.adjustedDPR });
-                    updateRecord(currentLowestDPRSeason, teamStats.adjustedDPR, { ...baseEntry, value: teamStats.adjustedDPR }, true);
-                    addToAllSeasonData('highestDPRSeason', teamStats.adjustedDPR, { ...baseEntry, value: teamStats.adjustedDPR });
-                    addToAllSeasonData('lowestDPRSeason', teamStats.adjustedDPR, { ...baseEntry, value: teamStats.adjustedDPR });
+                    // Calculate transaction counts for this team and year if financial data is available
+                    if (financialData[year] && financialData[year].transactions) {
+                        const transactionCounts = calculateTeamTransactionCountsByOwnerId(financialData[year].transactions, teamStats.ownerId);
+                        const tradeCount = transactionCounts.tradeFees;
+                        const waiverCount = transactionCounts.waiverFees;
+                        
+                        if (typeof tradeCount === 'number' && tradeCount >= 0) {
+                            updateRecord(currentMostTradesSeason, tradeCount, { ...baseEntry, value: tradeCount });
+                            addToAllSeasonData('mostTradesSeason', tradeCount, { ...baseEntry, value: tradeCount });
+                        }
+                        
+                        if (typeof waiverCount === 'number' && waiverCount >= 0) {
+                            updateRecord(currentMostWaiversSeason, waiverCount, { ...baseEntry, value: waiverCount });
+                            addToAllSeasonData('mostWaiversSeason', waiverCount, { ...baseEntry, value: waiverCount });
+                        }
+                    }
+
+                    // Regular stats (existing logic)
+                    if (typeof teamStats.wins === 'number') {
+                        updateRecord(currentMostWinsSeason, teamStats.wins, { ...baseEntry, value: teamStats.wins });
+                        addToAllSeasonData('mostWinsSeason', teamStats.wins, { ...baseEntry, value: teamStats.wins });
+                    }
+                    if (typeof teamStats.losses === 'number') {
+                        updateRecord(currentMostLossesSeason, teamStats.losses, { ...baseEntry, value: teamStats.losses });
+                        addToAllSeasonData('mostLossesSeason', teamStats.losses, { ...baseEntry, value: teamStats.losses });
+                    }
+                    if (typeof teamStats.winPercentage === 'number') {
+                        updateRecord(currentBestWinPctSeason, teamStats.winPercentage, { ...baseEntry, value: teamStats.winPercentage });
+                        addToAllSeasonData('bestWinPctSeason', teamStats.winPercentage, { ...baseEntry, value: teamStats.winPercentage });
+                    }
+                    if (typeof teamStats.allPlayWinPercentage === 'number') {
+                        updateRecord(currentBestAllPlayWinPctSeason, teamStats.allPlayWinPercentage, { ...baseEntry, value: teamStats.allPlayWinPercentage });
+                        addToAllSeasonData('bestAllPlayWinPctSeason', teamStats.allPlayWinPercentage, { ...baseEntry, value: teamStats.allPlayWinPercentage });
+                    }
+                    if (typeof teamStats.topScoreWeeksCount === 'number') {
+                        updateRecord(currentMostWeeklyHighScoresSeason, teamStats.topScoreWeeksCount, { ...baseEntry, value: teamStats.topScoreWeeksCount });
+                        addToAllSeasonData('mostWeeklyHighScoresSeason', teamStats.topScoreWeeksCount, { ...baseEntry, value: teamStats.topScoreWeeksCount });
+                    }
+                    if (typeof teamStats.weeklyTop2ScoresCount === 'number') {
+                        updateRecord(currentMostWeeklyTop2ScoresSeason, teamStats.weeklyTop2ScoresCount, { ...baseEntry, value: teamStats.weeklyTop2ScoresCount });
+                        addToAllSeasonData('mostWeeklyTop2ScoresSeason', teamStats.weeklyTop2ScoresCount, { ...baseEntry, value: teamStats.weeklyTop2ScoresCount });
+                    }
+                    if (typeof teamStats.blowoutWins === 'number') {
+                        updateRecord(currentMostBlowoutWinsSeason, teamStats.blowoutWins, { ...baseEntry, value: teamStats.blowoutWins });
+                        addToAllSeasonData('mostBlowoutWinsSeason', teamStats.blowoutWins, { ...baseEntry, value: teamStats.blowoutWins });
+                    }
+                    if (typeof teamStats.blowoutLosses === 'number') {
+                        updateRecord(currentMostBlowoutLossesSeason, teamStats.blowoutLosses, { ...baseEntry, value: teamStats.blowoutLosses });
+                        addToAllSeasonData('mostBlowoutLossesSeason', teamStats.blowoutLosses, { ...baseEntry, value: teamStats.blowoutLosses });
+                    }
+                    if (typeof teamStats.slimWins === 'number') {
+                        updateRecord(currentMostSlimWinsSeason, teamStats.slimWins, { ...baseEntry, value: teamStats.slimWins });
+                        addToAllSeasonData('mostSlimWinsSeason', teamStats.slimWins, { ...baseEntry, value: teamStats.slimWins });
+                    }
+                    if (typeof teamStats.slimLosses === 'number') {
+                        updateRecord(currentMostSlimLossesSeason, teamStats.slimLosses, { ...baseEntry, value: teamStats.slimLosses });
+                        addToAllSeasonData('mostSlimLossesSeason', teamStats.slimLosses, { ...baseEntry, value: teamStats.slimLosses });
+                    }
+                    if (typeof teamStats.pointsFor === 'number') {
+                        updateRecord(currentMostPointsSeason, teamStats.pointsFor, { ...baseEntry, value: teamStats.pointsFor });
+                        updateRecord(currentFewestPointsSeason, teamStats.pointsFor, { ...baseEntry, value: teamStats.pointsFor }, true);
+                        addToAllSeasonData('mostPointsSeason', teamStats.pointsFor, { ...baseEntry, value: teamStats.pointsFor });
+                        addToAllSeasonData('fewestPointsSeason', teamStats.pointsFor, { ...baseEntry, value: teamStats.pointsFor });
+                    }
+                    if (typeof teamStats.luckRating === 'number' && !isNaN(teamStats.luckRating)) {
+                        updateRecord(currentBestLuckRatingSeason, teamStats.luckRating, { ...baseEntry, value: teamStats.luckRating });
+                        updateRecord(currentWorstLuckRatingSeason, teamStats.luckRating, { ...baseEntry, value: teamStats.luckRating }, true);
+                        addToAllSeasonData('bestLuckRatingSeason', teamStats.luckRating, { ...baseEntry, value: teamStats.luckRating });
+                        addToAllSeasonData('worstLuckRatingSeason', teamStats.luckRating, { ...baseEntry, value: teamStats.luckRating });
+                    }
+                    if (typeof teamStats.adjustedDPR === 'number' && !isNaN(teamStats.adjustedDPR)) {
+                        updateRecord(currentHighestDPRSeason, teamStats.adjustedDPR, { ...baseEntry, value: teamStats.adjustedDPR });
+                        updateRecord(currentLowestDPRSeason, teamStats.adjustedDPR, { ...baseEntry, value: teamStats.adjustedDPR }, true);
+                        addToAllSeasonData('highestDPRSeason', teamStats.adjustedDPR, { ...baseEntry, value: teamStats.adjustedDPR });
+                        addToAllSeasonData('lowestDPRSeason', teamStats.adjustedDPR, { ...baseEntry, value: teamStats.adjustedDPR });
+                    }
+                });
+            });
+
+            // Sort all record entries
+            [currentMostWinsSeason, currentMostLossesSeason, currentBestWinPctSeason, currentBestAllPlayWinPctSeason,
+             currentMostWeeklyHighScoresSeason, currentMostWeeklyTop2ScoresSeason, currentMostBlowoutWinsSeason,
+             currentMostBlowoutLossesSeason, currentMostSlimWinsSeason, currentMostSlimLossesSeason,
+             currentMostPointsSeason, currentFewestPointsSeason, currentBestLuckRatingSeason, currentWorstLuckRatingSeason,
+             currentHighestDPRSeason, currentLowestDPRSeason, currentMostTradesSeason, currentMostWaiversSeason].forEach(record => {
+                if (record && record.entries.length > 1) {
+                    record.entries.sort((a, b) => {
+                        if (a.year !== b.year) return parseInt(a.year) - parseInt(b.year);
+                        return (a.teamName || '').localeCompare(b.teamName || '');
+                    });
                 }
             });
-        });
 
-        const sortRecordEntries = (record) => {
-            if (record && record.entries.length > 1) {
-                record.entries.sort((a, b) => {
-                    if (a.year !== b.year) return parseInt(a.year) - parseInt(b.year);
-                    return (a.teamName || '').localeCompare(b.teamName || '');
-                });
-            }
+            setSeasonalHighlights({
+                mostWinsSeason: currentMostWinsSeason,
+                mostLossesSeason: currentMostLossesSeason,
+                bestWinPctSeason: currentBestWinPctSeason,
+                bestAllPlayWinPctSeason: currentBestAllPlayWinPctSeason,
+                mostWeeklyHighScoresSeason: currentMostWeeklyHighScoresSeason,
+                mostWeeklyTop2ScoresSeason: currentMostWeeklyTop2ScoresSeason,
+                mostBlowoutWinsSeason: currentMostBlowoutWinsSeason,
+                mostBlowoutLossesSeason: currentMostBlowoutLossesSeason,
+                mostSlimWinsSeason: currentMostSlimWinsSeason,
+                mostSlimLossesSeason: currentMostSlimLossesSeason,
+                mostPointsSeason: currentMostPointsSeason,
+                fewestPointsSeason: currentFewestPointsSeason,
+                bestLuckRatingSeason: currentBestLuckRatingSeason,
+                worstLuckRatingSeason: currentWorstLuckRatingSeason,
+                highestDPRSeason: currentHighestDPRSeason,
+                lowestDPRSeason: currentLowestDPRSeason,
+                mostTradesSeason: currentMostTradesSeason,
+                mostWaiversSeason: currentMostWaiversSeason,
+            });
+            
+            console.log("Season Records - Final transaction counts:");
+            console.log("Most Trades Season:", currentMostTradesSeason);
+            console.log("Most Waivers Season:", currentMostWaiversSeason);
+            
+            setAllSeasonData(tempAllSeasonData);
         };
-
-        sortRecordEntries(currentMostWinsSeason);
-        sortRecordEntries(currentMostLossesSeason);
-        sortRecordEntries(currentBestWinPctSeason);
-        sortRecordEntries(currentBestAllPlayWinPctSeason);
-        sortRecordEntries(currentMostWeeklyHighScoresSeason);
-        sortRecordEntries(currentMostWeeklyTop2ScoresSeason);
-        sortRecordEntries(currentMostBlowoutWinsSeason);
-        sortRecordEntries(currentMostBlowoutLossesSeason);
-        sortRecordEntries(currentMostSlimWinsSeason);
-        sortRecordEntries(currentMostSlimLossesSeason);
-        sortRecordEntries(currentMostPointsSeason);
-        sortRecordEntries(currentFewestPointsSeason);
-        sortRecordEntries(currentBestLuckRatingSeason);
-        sortRecordEntries(currentWorstLuckRatingSeason);
-        sortRecordEntries(currentHighestDPRSeason);
-        sortRecordEntries(currentLowestDPRSeason);
-
-        setSeasonalHighlights({
-            mostWinsSeason: currentMostWinsSeason,
-            mostLossesSeason: currentMostLossesSeason,
-            bestWinPctSeason: currentBestWinPctSeason,
-            bestAllPlayWinPctSeason: currentBestAllPlayWinPctSeason,
-            mostWeeklyHighScoresSeason: currentMostWeeklyHighScoresSeason,
-            mostWeeklyTop2ScoresSeason: currentMostWeeklyTop2ScoresSeason,
-            mostBlowoutWinsSeason: currentMostBlowoutWinsSeason,
-            mostBlowoutLossesSeason: currentMostBlowoutLossesSeason,
-            mostSlimWinsSeason: currentMostSlimWinsSeason,
-            mostSlimLossesSeason: currentMostSlimLossesSeason,
-            mostPointsSeason: currentMostPointsSeason,
-            fewestPointsSeason: currentFewestPointsSeason,
-            bestLuckRatingSeason: currentBestLuckRatingSeason,
-            worstLuckRatingSeason: currentWorstLuckRatingSeason,
-            highestDPRSeason: currentHighestDPRSeason,
-            lowestDPRSeason: currentLowestDPRSeason,
-        });
-        setAllSeasonData(tempAllSeasonData);
+        
+        if (allYears.length > 0) {
+            fetchFinancialDataForYears(allYears)
+                .then(finishCalculationsWithFinancialData)
+                .catch(financialError => {
+                    console.warn("Could not load financial data for Season Records transaction counts:", financialError);
+                    finishCalculationsWithFinancialData({});
+                });
+        } else {
+            finishCalculationsWithFinancialData({});
+        }
 
     }, [processedSeasonalRecords, getTeamName, loading, error]);
 
@@ -361,6 +396,8 @@ const SeasonRecords = () => {
         seasonalHighlights.worstLuckRatingSeason,
         seasonalHighlights.highestDPRSeason,
         seasonalHighlights.lowestDPRSeason,
+        seasonalHighlights.mostTradesSeason,
+        seasonalHighlights.mostWaiversSeason,
     ].filter(
         (record) => record && record.value !== -Infinity && record.value !== Infinity && record.entries && record.entries.length > 0
     );
@@ -421,7 +458,7 @@ const SeasonRecords = () => {
                                                 if (typeof entry.value === 'number') {
                                                     if ([
                                                         'wins', 'losses', 'topScoreWeeksCount', 'weeklyTop2ScoresCount',
-                                                        'blowoutWins', 'blowoutLosses', 'slimWins', 'slimLosses'
+                                                        'blowoutWins', 'blowoutLosses', 'slimWins', 'slimLosses', 'tradeCount', 'waiverCount'
                                                     ].includes(record.key)) {
                                                         valueDisplay = Math.round(entry.value).toLocaleString('en-US', { maximumFractionDigits: 0 });
                                                     } else if (['luckRating', 'highestDPR', 'lowestDPR'].includes(record.key)) {
@@ -508,7 +545,9 @@ const SeasonRecords = () => {
                                                 'pointsFor': record.value > 0 ? 'mostPointsSeason' : 'fewestPointsSeason',
                                                 'luckRating': record.value > 0 ? 'bestLuckRatingSeason' : 'worstLuckRatingSeason',
                                                 'highestDPR': 'highestDPRSeason',
-                                                'lowestDPR': 'lowestDPRSeason'
+                                                'lowestDPR': 'lowestDPRSeason',
+                                                'tradeCount': 'mostTradesSeason',
+                                                'waiverCount': 'mostWaiversSeason'
                                             };
                                             const dataKey = keyMapping[record.key];
                                             return dataKey && allSeasonData[dataKey] && allSeasonData[dataKey].length > 0;
@@ -536,7 +575,9 @@ const SeasonRecords = () => {
                                                                     'pointsFor': record.value > 0 ? 'mostPointsSeason' : 'fewestPointsSeason',
                                                                     'luckRating': record.value > 0 ? 'bestLuckRatingSeason' : 'worstLuckRatingSeason',
                                                                     'highestDPR': 'highestDPRSeason',
-                                                                    'lowestDPR': 'lowestDPRSeason'
+                                                                    'lowestDPR': 'lowestDPRSeason',
+                                                                    'tradeCount': 'mostTradesSeason',
+                                                                    'waiverCount': 'mostWaiversSeason'
                                                                 };
                                                                 const dataKey = keyMapping[record.key];
                                                                 const sortKey = record.key;
@@ -549,7 +590,7 @@ const SeasonRecords = () => {
                                                                         let displayValue = '';
                                                                         if ([
                                                                             'wins', 'losses', 'topScoreWeeksCount', 'weeklyTop2ScoresCount',
-                                                                            'blowoutWins', 'blowoutLosses', 'slimWins', 'slimLosses'
+                                                                            'blowoutWins', 'blowoutLosses', 'slimWins', 'slimLosses', 'tradeCount', 'waiverCount'
                                                                         ].includes(record.key)) {
                                                                             displayValue = Math.round(seasonData.value).toLocaleString('en-US', { maximumFractionDigits: 0 });
                                                                         } else if (['luckRating', 'adjustedDPR'].includes(record.key)) {

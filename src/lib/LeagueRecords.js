@@ -222,6 +222,166 @@ const LeagueRecords = () => {
         }));
     };
 
+    // Function to handle all calculations that require both league and financial data
+    const doAllCalculations = (calculatedCareerDPRs, seasonalMetrics, financialData) => {
+        // Calculate top 5 rankings
+        const rankings = calculateTopFiveRankings(calculatedCareerDPRs);
+        
+        // Calculate winning/losing seasons and transaction counts for rankings
+        calculatedCareerDPRs.forEach(careerStats => {
+            const ownerId = careerStats.ownerId;
+            let winningSeasonsCount = 0;
+            let losingSeasonsCount = 0;
+
+            Object.keys(seasonalMetrics).forEach(year => {
+                const teamsInSeason = Object.values(seasonalMetrics[year]);
+                const currentOwnerTeamInSeason = teamsInSeason.find(t => t.ownerId === ownerId);
+                if (currentOwnerTeamInSeason && currentOwnerTeamInSeason.totalGames > 0) {
+                    if (currentOwnerTeamInSeason.winPercentage > 0.5) {
+                        winningSeasonsCount++;
+                    } else if (currentOwnerTeamInSeason.winPercentage < 0.5) {
+                        losingSeasonsCount++;
+                    }
+                }
+            });
+            
+            careerStats.winningSeasonsCount = winningSeasonsCount;
+            careerStats.losingSeasonsCount = losingSeasonsCount;
+            
+            // Add transaction counts using the passed financial data
+            if (Object.keys(financialData).length > 0) {
+                const transactionCounts = calculateCareerTransactionCountsByOwnerId(financialData, ownerId);
+                careerStats.careerTradeFees = transactionCounts.careerTradeFees;
+                careerStats.careerWaiverFees = transactionCounts.careerWaiverFees;
+                console.log(`Transaction counts for ${careerStats.teamName}:`, transactionCounts);
+            } else {
+                careerStats.careerTradeFees = 0;
+                careerStats.careerWaiverFees = 0;
+            }
+        });
+
+        // Update rankings with winning/losing seasons and transaction counts
+        rankings.mostWinningSeasons = calculatedCareerDPRs
+            .map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.winningSeasonsCount }))
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 5);
+        
+        rankings.mostLosingSeasons = calculatedCareerDPRs
+            .map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.losingSeasonsCount }))
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 5);
+
+        // Add transaction count rankings
+        rankings.mostTrades = calculatedCareerDPRs
+            .map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.careerTradeFees }))
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 5);
+            
+        rankings.mostWaivers = calculatedCareerDPRs
+            .map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.careerWaiverFees }))
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 5);
+
+        setTopFiveRankings(rankings);
+        
+        // Calculate all-time records
+        let highestDPR = { value: -Infinity, teams: [], key: 'highestDPR' };
+        let lowestDPR = { value: Infinity, teams: [], key: 'lowestDPR' };
+        let mostWins = { value: -Infinity, teams: [], key: 'mostWins' };
+        let mostLosses = { value: -Infinity, teams: [], key: 'mostLosses' };
+        let bestWinPct = { value: -Infinity, teams: [], key: 'bestWinPct' };
+        let bestAllPlayWinPct = { value: -Infinity, teams: [], key: 'bestAllPlayWinPct' };
+        let mostWeeklyHighScores = { value: -Infinity, teams: [], key: 'mostWeeklyHighScores' };
+        let mostWeeklyTop2Scores = { value: -Infinity, teams: [], key: 'mostWeeklyTop2Scores' };
+        let mostWinningSeasons = { value: -Infinity, teams: [], key: 'mostWinningSeasons' };
+        let mostLosingSeasons = { value: -Infinity, teams: [], key: 'mostLosingSeasons' };
+        let mostBlowoutWins = { value: -Infinity, teams: [], key: 'mostBlowoutWins' };
+        let mostBlowoutLosses = { value: -Infinity, teams: [], key: 'mostBlowoutLosses' };
+        let mostSlimWins = { value: -Infinity, teams: [], key: 'mostSlimWins' };
+        let mostSlimLosses = { value: -Infinity, teams: [], key: 'mostSlimLosses' };
+        let mostTotalPoints = { value: -Infinity, teams: [], key: 'mostTotalPoints' };
+        let mostPointsAgainst = { value: -Infinity, teams: [], key: 'mostPointsAgainst' };
+        let bestLuck = { value: -Infinity, teams: [], key: 'bestLuck' };
+        let worstLuck = { value: Infinity, teams: [], key: 'worstLuck' };
+        let mostTrades = { value: -Infinity, teams: [], key: 'mostTrades' };
+        let mostWaivers = { value: -Infinity, teams: [], key: 'mostWaivers' };
+
+        calculatedCareerDPRs.forEach(careerStats => {
+            const teamName = careerStats.teamName;
+            const ownerId = careerStats.ownerId;
+
+            if (careerStats.dpr !== 0) {
+                updateRecord(highestDPR, careerStats.dpr, { name: teamName, value: careerStats.dpr, ownerId: ownerId });
+                updateLowestRecord(lowestDPR, careerStats.dpr, { name: teamName, value: careerStats.dpr, ownerId: ownerId });
+            }
+
+            // Update luck records (can be zero; include valid numbers only)
+            if (typeof careerStats.totalLuckRating === 'number' && !isNaN(careerStats.totalLuckRating)) {
+                updateRecord(bestLuck, careerStats.totalLuckRating, { name: teamName, value: careerStats.totalLuckRating, ownerId: ownerId });
+                updateLowestRecord(worstLuck, careerStats.totalLuckRating, { name: teamName, value: careerStats.totalLuckRating, ownerId: ownerId });
+            }
+
+            if (careerStats.totalGames > 0) {
+                updateRecord(mostWins, careerStats.wins, { name: teamName, value: careerStats.wins, ownerId: ownerId });
+                updateRecord(mostLosses, careerStats.losses, { name: teamName, value: careerStats.losses, ownerId: ownerId });
+                updateRecord(bestWinPct, careerStats.winPercentage, { name: teamName, value: careerStats.winPercentage, ownerId: ownerId });
+                updateRecord(mostTotalPoints, careerStats.pointsFor, { name: teamName, value: careerStats.pointsFor, ownerId: ownerId });
+                updateRecord(mostPointsAgainst, careerStats.pointsAgainst, { name: teamName, value: careerStats.pointsAgainst, ownerId: ownerId });
+                updateRecord(mostBlowoutWins, careerStats.blowoutWins, { name: teamName, value: careerStats.blowoutWins, ownerId: ownerId });
+                updateRecord(mostBlowoutLosses, careerStats.blowoutLosses, { name: teamName, value: careerStats.blowoutLosses, ownerId: ownerId });
+                updateRecord(mostSlimWins, careerStats.slimWins, { name: teamName, value: careerStats.slimWins, ownerId: ownerId });
+                updateRecord(mostSlimLosses, careerStats.slimLosses, { name: teamName, value: careerStats.slimLosses, ownerId: ownerId });
+                updateRecord(mostWeeklyTop2Scores, careerStats.weeklyTop2ScoresCount, { name: teamName, value: careerStats.weeklyTop2ScoresCount, ownerId: ownerId });
+                updateRecord(mostWeeklyHighScores, careerStats.topScoreWeeksCount, { name: teamName, value: careerStats.topScoreWeeksCount, ownerId: ownerId });
+                updateRecord(bestAllPlayWinPct, careerStats.allPlayWinPercentage, { name: teamName, value: careerStats.allPlayWinPercentage, ownerId: ownerId });
+            }
+
+            // Calculate transaction counts
+            updateRecord(mostTrades, careerStats.careerTradeFees, { name: teamName, value: careerStats.careerTradeFees, ownerId: ownerId });
+            updateRecord(mostWaivers, careerStats.careerWaiverFees, { name: teamName, value: careerStats.careerWaiverFees, ownerId: ownerId });
+            
+            let winningSeasonsCount = 0;
+            let losingSeasonsCount = 0;
+
+            Object.keys(seasonalMetrics).forEach(year => {
+                const teamsInSeason = Object.values(seasonalMetrics[year]);
+                const currentOwnerTeamInSeason = teamsInSeason.find(t => t.ownerId === ownerId);
+                if (currentOwnerTeamInSeason && currentOwnerTeamInSeason.totalGames > 0) {
+                    if (currentOwnerTeamInSeason.winPercentage > 0.5) {
+                        winningSeasonsCount++;
+                    } else if (currentOwnerTeamInSeason.winPercentage < 0.5) {
+                        losingSeasonsCount++;
+                    }
+                }
+            });
+            updateRecord(mostWinningSeasons, winningSeasonsCount, { name: teamName, value: winningSeasonsCount, ownerId: ownerId });
+            updateRecord(mostLosingSeasons, losingSeasonsCount, { name: teamName, value: losingSeasonsCount, ownerId: ownerId });
+        });
+
+        setAllTimeRecords({
+            highestDPR,
+            lowestDPR,
+            bestLuck,
+            worstLuck,
+            mostWins,
+            mostLosses,
+            bestWinPct,
+            bestAllPlayWinPct,
+            mostWeeklyHighScores,
+            mostWeeklyTop2Scores,
+            mostWinningSeasons,
+            mostLosingSeasons,
+            mostBlowoutWins,
+            mostBlowoutLosses,
+            mostSlimWins,
+            mostSlimLosses,
+            mostTotalPoints,
+            mostPointsAgainst,
+            mostTrades,
+            mostWaivers,
+        });
+    };
+
     useEffect(() => {
         setIsLoading(true);
 
@@ -235,191 +395,39 @@ const LeagueRecords = () => {
         try {
             const { seasonalMetrics, careerDPRData: calculatedCareerDPRs } = calculateAllLeagueMetrics(historicalData, allDraftHistory, getTeamName, nflState);
             
-            // Load financial data for transaction counts
-            setLoadingFinancial(true);
-            const allYears = Object.keys(historicalData.matchupsBySeason || {});
-            if (allYears.length > 0) {
-                fetchFinancialDataForYears(allYears)
-                    .then(financialData => {
-                        setFinancialDataByYear(financialData || {});
-                        setLoadingFinancial(false);
-                    })
-                    .catch(financialError => {
-                        console.warn("Could not load financial data for transaction counts:", financialError);
-                        setFinancialDataByYear({});
-                        setLoadingFinancial(false);
-                    });
-            } else {
-                setLoadingFinancial(false);
-            }
-            
-            // Calculate historical progression
+            // Calculate historical progression (doesn't need financial data)
             const history = calculateRecordHistory(seasonalMetrics);
             setRecordHistory(history);
             
-            // Calculate top 5 rankings
-            const rankings = calculateTopFiveRankings(calculatedCareerDPRs);
+            // Load financial data for transaction counts, then do all other calculations
+            setLoadingFinancial(true);
+            const allYears = Object.keys(historicalData.matchupsBySeason || {});
             
-            // Calculate winning/losing seasons for rankings
-            calculatedCareerDPRs.forEach(careerStats => {
-                const ownerId = careerStats.ownerId;
-                let winningSeasonsCount = 0;
-                let losingSeasonsCount = 0;
-
-                Object.keys(seasonalMetrics).forEach(year => {
-                    const teamsInSeason = Object.values(seasonalMetrics[year]);
-                    const currentOwnerTeamInSeason = teamsInSeason.find(t => t.ownerId === ownerId);
-                    if (currentOwnerTeamInSeason && currentOwnerTeamInSeason.totalGames > 0) {
-                        if (currentOwnerTeamInSeason.winPercentage > 0.5) {
-                            winningSeasonsCount++;
-                        } else if (currentOwnerTeamInSeason.winPercentage < 0.5) {
-                            losingSeasonsCount++;
-                        }
-                    }
-                });
+            const finishCalculations = (financialData = {}) => {
+                console.log("League Records: Processing with financial data for", Object.keys(financialData).length, "years");
+                setFinancialDataByYear(financialData);
+                setLoadingFinancial(false);
                 
-                careerStats.winningSeasonsCount = winningSeasonsCount;
-                careerStats.losingSeasonsCount = losingSeasonsCount;
-                
-                // Add transaction counts if financial data is available
-                if (Object.keys(financialDataByYear).length > 0) {
-                    const transactionCounts = calculateCareerTransactionCountsByOwnerId(financialDataByYear, ownerId);
-                    careerStats.careerTradeFees = transactionCounts.careerTradeFees;
-                    careerStats.careerWaiverFees = transactionCounts.careerWaiverFees;
-                } else {
-                    careerStats.careerTradeFees = 0;
-                    careerStats.careerWaiverFees = 0;
-                }
-            });
-
-            // Update rankings with winning/losing seasons
-            rankings.mostWinningSeasons = calculatedCareerDPRs
-                .map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.winningSeasonsCount }))
-                .sort((a, b) => b.value - a.value)
-                .slice(0, 5);
+                // Now do all calculations that need both league and financial data
+                doAllCalculations(calculatedCareerDPRs, seasonalMetrics, financialData);
+                setIsLoading(false);
+            };
             
-            rankings.mostLosingSeasons = calculatedCareerDPRs
-                .map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.losingSeasonsCount }))
-                .sort((a, b) => b.value - a.value)
-                .slice(0, 5);
-
-            // Add transaction count rankings
-            rankings.mostTrades = calculatedCareerDPRs
-                .map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.careerTradeFees }))
-                .sort((a, b) => b.value - a.value)
-                .slice(0, 5);
-                
-            rankings.mostWaivers = calculatedCareerDPRs
-                .map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.careerWaiverFees }))
-                .sort((a, b) => b.value - a.value)
-                .slice(0, 5);
-
-            setTopFiveRankings(rankings);
-            
-            let highestDPR = { value: -Infinity, teams: [], key: 'highestDPR' };
-            let lowestDPR = { value: Infinity, teams: [], key: 'lowestDPR' };
-            let mostWins = { value: -Infinity, teams: [], key: 'mostWins' };
-            let mostLosses = { value: -Infinity, teams: [], key: 'mostLosses' };
-            let bestWinPct = { value: -Infinity, teams: [], key: 'bestWinPct' };
-            let bestAllPlayWinPct = { value: -Infinity, teams: [], key: 'bestAllPlayWinPct' };
-            let mostWeeklyHighScores = { value: -Infinity, teams: [], key: 'mostWeeklyHighScores' };
-            let mostWeeklyTop2Scores = { value: -Infinity, teams: [], key: 'mostWeeklyTop2Scores' };
-            let mostWinningSeasons = { value: -Infinity, teams: [], key: 'mostWinningSeasons' };
-            let mostLosingSeasons = { value: -Infinity, teams: [], key: 'mostLosingSeasons' };
-            let mostBlowoutWins = { value: -Infinity, teams: [], key: 'mostBlowoutWins' };
-            let mostBlowoutLosses = { value: -Infinity, teams: [], key: 'mostBlowoutLosses' };
-            let mostSlimWins = { value: -Infinity, teams: [], key: 'mostSlimWins' };
-            let mostSlimLosses = { value: -Infinity, teams: [], key: 'mostSlimLosses' };
-            let mostTotalPoints = { value: -Infinity, teams: [], key: 'mostTotalPoints' };
-            let mostPointsAgainst = { value: -Infinity, teams: [], key: 'mostPointsAgainst' };
-            let bestLuck = { value: -Infinity, teams: [], key: 'bestLuck' };
-            let worstLuck = { value: Infinity, teams: [], key: 'worstLuck' };
-            let mostTrades = { value: -Infinity, teams: [], key: 'mostTrades' };
-            let mostWaivers = { value: -Infinity, teams: [], key: 'mostWaivers' };
-
-            calculatedCareerDPRs.forEach(careerStats => {
-                const teamName = careerStats.teamName;
-                const ownerId = careerStats.ownerId;
-
-                if (careerStats.dpr !== 0) {
-                    updateRecord(highestDPR, careerStats.dpr, { name: teamName, value: careerStats.dpr, ownerId: ownerId });
-                    updateLowestRecord(lowestDPR, careerStats.dpr, { name: teamName, value: careerStats.dpr, ownerId: ownerId });
-                }
-
-                // Update luck records (can be zero; include valid numbers only)
-                if (typeof careerStats.totalLuckRating === 'number' && !isNaN(careerStats.totalLuckRating)) {
-                    updateRecord(bestLuck, careerStats.totalLuckRating, { name: teamName, value: careerStats.totalLuckRating, ownerId: ownerId });
-                    updateLowestRecord(worstLuck, careerStats.totalLuckRating, { name: teamName, value: careerStats.totalLuckRating, ownerId: ownerId });
-                }
-
-                if (careerStats.totalGames > 0) {
-                    updateRecord(mostWins, careerStats.wins, { name: teamName, value: careerStats.wins, ownerId: ownerId });
-                    updateRecord(mostLosses, careerStats.losses, { name: teamName, value: careerStats.losses, ownerId: ownerId });
-                    updateRecord(bestWinPct, careerStats.winPercentage, { name: teamName, value: careerStats.winPercentage, ownerId: ownerId });
-                    updateRecord(mostTotalPoints, careerStats.pointsFor, { name: teamName, value: careerStats.pointsFor, ownerId: ownerId });
-                    updateRecord(mostPointsAgainst, careerStats.pointsAgainst, { name: teamName, value: careerStats.pointsAgainst, ownerId: ownerId });
-                    updateRecord(mostBlowoutWins, careerStats.blowoutWins, { name: teamName, value: careerStats.blowoutWins, ownerId: ownerId });
-                    updateRecord(mostBlowoutLosses, careerStats.blowoutLosses, { name: teamName, value: careerStats.blowoutLosses, ownerId: ownerId });
-                    updateRecord(mostSlimWins, careerStats.slimWins, { name: teamName, value: careerStats.slimWins, ownerId: ownerId });
-                    updateRecord(mostSlimLosses, careerStats.slimLosses, { name: teamName, value: careerStats.slimLosses, ownerId: ownerId });
-                    updateRecord(mostWeeklyTop2Scores, careerStats.weeklyTop2ScoresCount, { name: teamName, value: careerStats.weeklyTop2ScoresCount, ownerId: ownerId });
-                    updateRecord(mostWeeklyHighScores, careerStats.topScoreWeeksCount, { name: teamName, value: careerStats.topScoreWeeksCount, ownerId: ownerId });
-                    updateRecord(bestAllPlayWinPct, careerStats.allPlayWinPercentage, { name: teamName, value: careerStats.allPlayWinPercentage, ownerId: ownerId });
-                }
-
-                // Calculate career transaction counts if financial data is available
-                if (Object.keys(financialDataByYear).length > 0) {
-                    const transactionCounts = calculateCareerTransactionCountsByOwnerId(financialDataByYear, ownerId);
-                    updateRecord(mostTrades, transactionCounts.careerTradeFees, { name: teamName, value: transactionCounts.careerTradeFees, ownerId: ownerId });
-                    updateRecord(mostWaivers, transactionCounts.careerWaiverFees, { name: teamName, value: transactionCounts.careerWaiverFees, ownerId: ownerId });
-                }
-
-                let winningSeasonsCount = 0;
-                let losingSeasonsCount = 0;
-
-                Object.keys(seasonalMetrics).forEach(year => {
-                    const teamsInSeason = Object.values(seasonalMetrics[year]);
-                    const currentOwnerTeamInSeason = teamsInSeason.find(t => t.ownerId === ownerId);
-                    if (currentOwnerTeamInSeason && currentOwnerTeamInSeason.totalGames > 0) {
-                        if (currentOwnerTeamInSeason.winPercentage > 0.5) {
-                            winningSeasonsCount++;
-                        } else if (currentOwnerTeamInSeason.winPercentage < 0.5) {
-                            losingSeasonsCount++;
-                        }
-                    }
-                });
-                updateRecord(mostWinningSeasons, winningSeasonsCount, { name: teamName, value: winningSeasonsCount, ownerId: ownerId });
-                updateRecord(mostLosingSeasons, losingSeasonsCount, { name: teamName, value: losingSeasonsCount, ownerId: ownerId });
-            });
-
-            setAllTimeRecords({
-                highestDPR,
-                lowestDPR,
-                bestLuck,
-                worstLuck,
-                mostWins,
-                mostLosses,
-                bestWinPct,
-                bestAllPlayWinPct,
-                mostWeeklyHighScores,
-                mostWeeklyTop2Scores,
-                mostWinningSeasons,
-                mostLosingSeasons,
-                mostBlowoutWins,
-                mostBlowoutLosses,
-                mostSlimWins,
-                mostSlimLosses,
-                mostTotalPoints,
-                mostPointsAgainst,
-                mostTrades,
-                mostWaivers,
-            });
+            if (allYears.length > 0) {
+                fetchFinancialDataForYears(allYears)
+                    .then(finishCalculations)
+                    .catch(financialError => {
+                        console.warn("Could not load financial data for transaction counts:", financialError);
+                        finishCalculations({});
+                    });
+            } else {
+                finishCalculations({});
+            }
 
         } catch (error) {
             console.error("Error calculating league records:", error);
             setAllTimeRecords({});
             setRecordHistory({});
-        } finally {
             setIsLoading(false);
         }
     }, [historicalData, allDraftHistory, getTeamName, loading, error, nflState]);
