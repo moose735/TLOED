@@ -9,11 +9,12 @@ import { calculatePlayoffFinishes } from './playoffRankings'; // Import the play
  * @param {number} teamWinPercentage - Win percentage of the team for the period (season or career).
  * @returns {number} The raw DPR value (Power Rating).
  */
+// Raw DPR = (((Points scored avg *6)) +((Points scored max+points scored min)*2)+((win%*200)*2))/10
 export const calculateRawDPR = (averageScore, teamHighScore, teamLowScore, teamWinPercentage) => {
     const pointsComponent = averageScore * 6;
     const deviationComponent = (teamHighScore + teamLowScore) * 2;
-    const winPercentageComponent = (teamWinPercentage * 200) * 2;
-    const rawDPR = (pointsComponent + deviationComponent) / 10;
+    const winPctComponent = (teamWinPercentage * 200) * 2;
+    const rawDPR = (pointsComponent + deviationComponent + winPctComponent) / 10;
     return rawDPR;
 };
 
@@ -276,8 +277,11 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
                 // Always add to pointsFor, even if it's 0 for a bye
                 currentTeamStats.pointsFor += scoreToAdd;
                 
-                // Update high/low score based on actual valid scores
-                if (hasValidWeeklyScore) {
+
+
+                // Only consider completed games (week is over and score > 0) for high/low score
+                let isWeekOver = year < currentNFLSeason || (year === currentNFLSeason && week < currentNFLWeek);
+                if (hasValidWeeklyScore && isWeekOver && currentTeamScoreInWeek > 0) {
                     currentTeamStats.highScore = Math.max(currentTeamStats.highScore, currentTeamScoreInWeek);
                     currentTeamStats.lowScore = Math.min(currentTeamStats.lowScore, currentTeamScoreInWeek);
                 }
@@ -288,9 +292,7 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
                 }
 
                 // Only count wins/losses for weeks that are completely over.
-                // A week is "over" if the current NFL week is greater than the week being processed.
-                const isWeekOver = year < currentNFLSeason || (year === currentNFLSeason && week < currentNFLWeek);
-
+                // isWeekOver already declared above
                 if (isWeekOver) {
                     // Only count the game if at least one team has a score greater than zero and there was an opponent
                     if (hasOpponent && (currentTeamScoreInWeek > 0 || opponentScore > 0)) {
@@ -683,21 +685,34 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
             });
         });
 
-        // Ensure high/low scores are calculated from the *accumulated* careerWeeklyScores
-        const careerHighScore = stats.careerWeeklyScores.length > 0 ? Math.max(...stats.careerWeeklyScores) : 0;
-        const careerLowScore = stats.careerWeeklyScores.length > 0 ? Math.min(...stats.careerWeeklyScores) : 0;
+
+        // Calculate highest/lowest seasonal average points per game for career DPR formula
+        let highestSeasonalPointsAvg = -Infinity;
+        let lowestSeasonalPointsAvg = Infinity;
+        Object.keys(seasonalMetrics).forEach(yearStr => {
+            const year = parseInt(yearStr);
+            const seasonalTeams = Object.values(seasonalMetrics[year]);
+            const teamSeasonalStats = seasonalTeams.find(team => team.ownerId === ownerId);
+            if (teamSeasonalStats && teamSeasonalStats.totalGames > 0) {
+                const seasonAvg = teamSeasonalStats.pointsFor / teamSeasonalStats.totalGames;
+                if (seasonAvg > highestSeasonalPointsAvg) highestSeasonalPointsAvg = seasonAvg;
+                if (seasonAvg < lowestSeasonalPointsAvg) lowestSeasonalPointsAvg = seasonAvg;
+            }
+        });
+        if (highestSeasonalPointsAvg === -Infinity) highestSeasonalPointsAvg = 0;
+        if (lowestSeasonalPointsAvg === Infinity) lowestSeasonalPointsAvg = 0;
 
         const careerAverageScore = stats.totalGames > 0 ? stats.pointsFor / stats.totalGames : 0;
         const careerWinPercentage = (stats.totalGames > 0) ? ((stats.wins + 0.5 * stats.ties) / stats.totalGames) : 0;
 
+        // Use highest/lowest seasonal average points per game in the career raw DPR formula
         let careerRawDPR = 0;
         if (stats.totalGames > 0) {
-            careerRawDPR = calculateRawDPR(
-                careerAverageScore,
-                careerHighScore,
-                careerLowScore,
-                careerWinPercentage
-            );
+            careerRawDPR = (
+                (careerAverageScore * 6)
+                + ((highestSeasonalPointsAvg + lowestSeasonalPointsAvg) * 2)
+                + ((careerWinPercentage * 200) * 2)
+            ) / 10;
             allCareerRawDPRs.push(careerRawDPR);
         }
 
@@ -708,21 +723,6 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
         // Career Luck Rating: Actual Career Wins - Total Expected Wins from all-play across career
         const careerLuckRating = stats.actualCareerWinsRecord - stats.careerExpectedWinsSum;
 
-        // Calculate highest/lowest seasonal points avg for career data
-        let highestSeasonalPointsAvg = 0;
-        let lowestSeasonalPointsAvg = Infinity;
-        Object.keys(seasonalMetrics).forEach(yearStr => { // Iterate through calculated seasonal metrics
-            const year = parseInt(yearStr);
-            const seasonalTeams = Object.values(seasonalMetrics[year]);
-            const teamSeasonalStats = seasonalTeams.find(team => team.ownerId === ownerId);
-
-            if (teamSeasonalStats && teamSeasonalStats.totalGames > 0) {
-                const currentSeasonalAvg = teamSeasonalStats.pointsFor / teamSeasonalStats.totalGames;
-                highestSeasonalPointsAvg = Math.max(highestSeasonalPointsAvg, currentSeasonalAvg);
-                lowestSeasonalPointsAvg = Math.min(lowestSeasonalPointsAvg, currentSeasonalAvg);
-            }
-        });
-        if (lowestSeasonalPointsAvg === Infinity) lowestSeasonalPointsAvg = 0;
 
         finalCareerDPRData.push({
             ownerId: ownerId,
@@ -765,13 +765,24 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
         });
     });
 
-    // Calculate overall average raw DPR for career adjustment
-    const avgRawDPROverall = allCareerRawDPRs.length > 0 ? allCareerRawDPRs.reduce((sum, dpr) => sum + dpr, 0) / allCareerRawDPRs.length : 0;
 
-    // Adjust career DPRs based on overall average
+    // Calculate the average of all seasonal league average raw DPRs (per user formula)
+    // For each season, get the league average raw DPR (mean of all teams' rawDPR for that season)
+    const allSeasonalAvgRawDPRs = [];
+    Object.keys(seasonalMetrics).forEach(yearStr => {
+        const teams = Object.values(seasonalMetrics[yearStr]);
+        const seasonRawDPRs = teams.map(t => typeof t.rawDPR === 'number' ? t.rawDPR : 0).filter(dpr => dpr > 0);
+        if (seasonRawDPRs.length > 0) {
+            const avg = seasonRawDPRs.reduce((a, b) => a + b, 0) / seasonRawDPRs.length;
+            allSeasonalAvgRawDPRs.push(avg);
+        }
+    });
+    const avgOfSeasonalAvgRawDPRs = allSeasonalAvgRawDPRs.length > 0 ? allSeasonalAvgRawDPRs.reduce((a, b) => a + b, 0) / allSeasonalAvgRawDPRs.length : 0;
+
+    // Adjust career DPRs based on this average
     finalCareerDPRData.forEach(entry => {
-        if (avgRawDPROverall > 0) {
-            entry.dpr = entry.dpr / avgRawDPROverall;
+        if (avgOfSeasonalAvgRawDPRs > 0) {
+            entry.dpr = entry.dpr / avgOfSeasonalAvgRawDPRs;
         } else {
             entry.dpr = 0;
         }

@@ -36,7 +36,8 @@ const calculateRank = (value, allValues, isHigherBetter = true) => {
         const currentUniqueValue = uniqueSortedValues[i];
         if (currentUniqueValue === value) {
             const tieCount = numericValues.filter(v => v === value).length;
-            return tieCount > 1 ? `T-${rank}${getOrdinalSuffix(rank)}` : `${rank}${getOrdinalSuffix(rank)}`;
+            // Only show T- prefix if there are multiple teams with the same value and value > 0
+            return (tieCount > 1 && value > 0) ? `T-${rank}${getOrdinalSuffix(rank)}` : `${rank}${getOrdinalSuffix(rank)}`;
         }
         rank += numericValues.filter(v => v === currentUniqueValue).length;
     }
@@ -50,7 +51,9 @@ const formatPercentage = (value) =>
 const formatLuckRating = (value) =>
     typeof value === 'number' ? value.toFixed(3) : 'N/A';
 const formatDPR = (value) =>
-    typeof value === 'number' ? value.toFixed(3) : 'N/A';
+    typeof value === 'number' && !isNaN(value)
+        ? value.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
+        : 'N/A';
 
 const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and getMappedTeamName from props
     const {
@@ -141,7 +144,7 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
                 if (!isNaN(team1Score) && !isNaN(team2Score)) {
                     if (team1Score > team2Score) { playoffStatsByOwner[team1OwnerId].wins++; playoffStatsByOwner[team2OwnerId].losses++; }
                     else if (team2Score > team1Score) { playoffStatsByOwner[team2OwnerId].wins++; playoffStatsByOwner[team1OwnerId].losses++; }
-                    else { playoffStatsByOwner[team1OwnerId].ties++; playoffStatsByOwner[team2OwnerId].ties++; }
+                    else if (team1Score === team2Score && team1Score > 0) { playoffStatsByOwner[team1OwnerId].ties++; playoffStatsByOwner[team2OwnerId].ties++; }
                     playoffStatsByOwner[team1OwnerId].pointsFor += team1Score;
                     playoffStatsByOwner[team1OwnerId].pointsAgainst += team2Score;
                     playoffStatsByOwner[team2OwnerId].pointsFor += team2Score;
@@ -466,7 +469,7 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
                 overallTopScoreWeeksCount: currentTeamAggregatedStats.topScoreWeeksCount,
                 playoffAppearancesCount: currentTeamAggregatedStats.playoffAppearancesCount,
                 // Assign avgDPR directly from the found teamCareerStats
-                avgDPR: teamCareerStats ? teamCareerStats.dpr : 0,
+                avgDPR: teamCareerStats && typeof teamCareerStats.dpr === 'number' ? teamCareerStats.dpr : null,
                 totalChampionships: currentTeamAggregatedStats.championships,
                 totalRunnerUps: currentTeamAggregatedStats.runnerUps,
                 totalThirdPlaces: currentTeamAggregatedStats.thirdPlaces,
@@ -478,7 +481,7 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
 
             // Calculate ranks based on allTeamsAggregatedStats
             const allWins = Object.values(allTeamsAggregatedStats).map(s => s.wins);
-            const allWinPercentages = Object.values(allTeamsAggregatedStats).map(s => (s.wins + 0.5 * s.ties) / s.totalGamesPlayed);
+            const allWinPercentages = Object.values(allTeamsAggregatedStats).map(s => (s.wins + (s.ties > 0 ? 0.5 * s.ties : 0)) / s.totalGamesPlayed);
             const allPointsFor = Object.values(allTeamsAggregatedStats).map(s => s.pointsFor);
             const allTopScoreWeeks = Object.values(allTeamsAggregatedStats).map(s => s.topScoreWeeksCount);
             const allPlayoffAppearances = Object.values(allTeamsAggregatedStats).map(s => s.playoffAppearancesCount);
@@ -486,7 +489,7 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
             const allLuckRatings = Object.values(allTeamsAggregatedStats).map(s => s.totalLuckRating);
 
             overallStats.winRank = calculateRank(overallStats.totalWins, allWins);
-            overallStats.winPercentageRank = calculateRank((overallStats.totalWins + 0.5 * overallStats.totalTies) / overallStats.totalGamesPlayed, allWinPercentages);
+            overallStats.winPercentageRank = calculateRank((overallStats.totalWins + (overallStats.totalTies > 0 ? 0.5 * overallStats.totalTies : 0)) / overallStats.totalGamesPlayed, allWinPercentages);
             overallStats.pointsForRank = calculateRank(overallStats.totalPointsFor, allPointsFor);
             overallStats.topScoreWeeksRank = calculateRank(overallStats.overallTopScoreWeeksCount, allTopScoreWeeks);
             overallStats.playoffRank = calculateRank(overallStats.playoffAppearancesCount, allPlayoffAppearances);
@@ -521,7 +524,7 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
                         pointsFor: teamSeasonalData.pointsFor,
                         pointsAgainst: teamSeasonalData.pointsAgainst,
                         luckRating: teamSeasonalData.luckRating,
-                        adjustedDPR: teamSeasonalData.adjustedDPR,
+                        adjustedDPR: typeof teamSeasonalData.adjustedDPR === 'number' ? teamSeasonalData.adjustedDPR : null,
                         allPlayWinPercentage: teamSeasonalData.allPlayWinPercentage,
                         winPercentage: teamSeasonalData.winPercentage,
                         // Display N/A for finish and points finish if it's the current/latest season
@@ -608,7 +611,7 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
                 const team1Name = resolveTeamName(year, team1RosterId, team1OwnerId);
                 const team2Name = resolveTeamName(year, team2RosterId, team2OwnerId);
                 const combined = team1Score + team2Score;
-                const isTie = team1Score === team2Score;
+                const isTie = team1Score === team2Score && team1Score > 0;
                 const winner = isTie ? null : (team1Score > team2Score ? team1Name : team2Name);
                 const loser = isTie ? null : (team1Score > team2Score ? team2Name : team1Name);
                 const margin = Math.abs(team1Score - team2Score);
@@ -969,7 +972,7 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
                                     return (
                                         <tr key={season.year} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                                             <td className="py-2 px-3 text-sm text-gray-800 text-center">{season.year}</td>
-                                            <td className="py-2 px-3 text-sm text-gray-800 text-center">{season.wins}-{season.losses}-{season.ties}</td>
+                                            <td className="py-2 px-3 text-sm text-gray-800 text-center">{season.ties > 0 ? `${season.wins}-${season.losses}-${season.ties}` : `${season.wins}-${season.losses}`}</td>
                                             <td className="py-2 px-3 text-sm text-gray-700 text-center">{formatScore(season.pointsFor)}</td>
                                             <td className="py-2 px-3 text-sm text-gray-700 text-center">{formatScore(season.pointsAgainst)}</td>
                                             <td className="py-2 px-3 text-sm text-gray-700 text-center">{formatLuckRating(season.luckRating)}</td>

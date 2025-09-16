@@ -150,7 +150,7 @@ const MatchupRecords = () => {
 
             const combinedScore = team1Score + team2Score;
             const scoreDifference = Math.abs(team1Score - team2Score);
-            const isTie = team1Score === team2Score;
+            const isTie = team1Score === team2Score && team1Score > 0;
 
             let winnerName = '';
             let loserName = '';
@@ -480,7 +480,7 @@ const MatchupRecords = () => {
                                                                 </button>
                                                             </div>
                                                         ) : (
-                                                            <div className="text-gray-400 text-xs sm:text-sm">• Tied Record</div>
+                                                            recordData.entries.length > 1 ? <div className="text-gray-400 text-xs sm:text-sm">• Tied Record</div> : null
                                                         )}
                                                     </td>
                                                     <td className="py-3 px-3 sm:py-4 sm:px-6 text-center">
@@ -644,7 +644,7 @@ const MatchupRecords = () => {
                                                         </span>
                                                     </div>
                                                 ) : (
-                                                    <div className="text-gray-400 text-xs sm:text-sm">• Tied Record</div>
+                                                    recordData.entries.length > 1 ? <div className="text-gray-400 text-xs sm:text-sm">• Tied Record</div> : null
                                                 )}
                                             </td>
                                             <td className="py-3 px-3 sm:py-4 sm:px-6 text-center">

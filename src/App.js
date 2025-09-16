@@ -11,10 +11,12 @@ import FinancialTracker from './components/FinancialTracker';
 import Dashboard from './components/Dashboard';
 import TeamsOverviewPage from './lib/TeamsOverviewPage';
 import SeasonBreakdown from './lib/SeasonBreakdown';
-import DraftAnalysis from './lib/DraftAnalysis'; // Import the new DraftAnalysis component
-import HallOfChampions from './lib/HallOfChampions'; // Import the new HallOfChampions component
-import Gamecenter from './components/Gamecenter'; // Import the new Gamecenter component
-import Sportsbook from './components/Sportsbook'; // Import the new Sportsbook component
+import DraftAnalysis from './lib/DraftAnalysis';
+import HallOfChampions from './lib/HallOfChampions';
+import Gamecenter from './components/Gamecenter';
+import Sportsbook from './components/Sportsbook';
+import MobileSidebarNav from './components/MobileSidebarNav';
+import DesktopNav from './components/DesktopNav';
 
 // Import the custom hook from your SleeperDataContext
 import { SleeperDataProvider, useSleeperData } from './contexts/SleeperDataContext';
@@ -452,13 +454,13 @@ const AppContent = () => {
         <div className="min-h-screen bg-gray-100 flex flex-col font-inter overflow-x-hidden">
             {/* Header - Mobile Optimized */}
             <header className="bg-gray-800 text-white shadow-md safe-area-top relative">
-                <div className="flex items-center justify-between px-4 py-3 md:px-6 md:py-4 max-w-6xl w-full mx-auto">
+                <div className="flex items-center justify-between px-4 py-1 md:px-6 md:py-2 max-w-6xl w-full mx-auto">
                     {/* Logo and Title */}
                     <div className="flex items-center flex-1 min-w-0">
                         <img
                             src={process.env.PUBLIC_URL + '/LeagueLogoNoBack.PNG'}
                             alt="League Logo"
-                            className="h-10 w-10 md:h-14 md:w-14 mr-2 md:mr-4 object-contain flex-shrink-0"
+                            className="h-16 w-16 md:h-24 md:w-24 mr-2 md:mr-4 object-contain flex-shrink-0 transition-all duration-200"
                         />
                         <div className="flex flex-col min-w-0">
                             <h1 className="text-sm sm:text-base md:text-2xl font-bold truncate">
@@ -601,59 +603,18 @@ const AppContent = () => {
                         </li>
                     </ul>
 
+                    {/* Mobile Sidebar Navigation */}
+                    <div className="md:hidden">
+                        <MobileSidebarNav />
+                    </div>
                     {/* Desktop Navigation */}
-                    <ul className="hidden md:flex md:flex-row md:justify-center py-2">
-                        {/* Home Tab */}
-                        <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 text-lg text-center touch-friendly"
-                            onClick={() => handleTabClick(NAV_CATEGORIES.HOME.tab)}>
-                            {NAV_CATEGORIES.HOME.label}
-                        </li>
-                        {/* Gamecenter Tab */}
-                        <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 text-lg text-center touch-friendly"
-                            onClick={() => handleTabClick(NAV_CATEGORIES.GAMECENTER.tab)}>
-                            {NAV_CATEGORIES.GAMECENTER.label}
-                        </li>
-                        {/* Sportsbook Tab */}
-                        <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 text-lg text-center touch-friendly"
-                            onClick={() => handleTabClick(NAV_CATEGORIES.SPORTSBOOK.tab)}>
-                            {NAV_CATEGORIES.SPORTSBOOK.label}
-                        </li>
-                        {/* League Data Submenu */}
-                        <li className="relative px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 text-lg text-center touch-friendly"
-                            onClick={() => toggleSubMenu('leagueData')}>
-                            {NAV_CATEGORIES.LEAGUE_DATA.label} <span className="ml-1">▼</span>
-                            {openSubMenu === 'leagueData' && (
-                                <ul className="absolute left-0 top-full bg-gray-700 shadow-lg rounded-md mt-2 w-48 z-10">
-                                    {NAV_CATEGORIES.LEAGUE_DATA.subTabs.map(subTab => (
-                                        <li key={subTab.tab} className="px-4 py-2 hover:bg-gray-600 cursor-pointer rounded-md text-base touch-friendly"
-                                            onClick={(e) => { e.stopPropagation(); handleSubTabClick(subTab.tab); }}>
-                                            {subTab.label}
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-                        </li>
-                        {/* Teams Tab */}
-                        <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 text-lg text-center touch-friendly"
-                            onClick={() => handleTabClick(NAV_CATEGORIES.TEAMS.tab)}>
-                            {NAV_CATEGORIES.TEAMS.label}
-                        </li>
-                        {/* Season Breakdown Tab */}
-                        <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 text-lg text-center touch-friendly"
-                            onClick={() => handleTabClick(NAV_CATEGORIES.SEASON_BREAKDOWN.tab)}>
-                            {NAV_CATEGORIES.SEASON_BREAKDOWN.label}
-                        </li>
-                        {/* Draft Tab */}
-                        <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 text-lg text-center touch-friendly"
-                            onClick={() => handleTabClick(NAV_CATEGORIES.DRAFT.tab)}>
-                            {NAV_CATEGORIES.DRAFT.label}
-                        </li>
-                        {/* Financials Tab */}
-                        <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 text-lg text-center touch-friendly"
-                            onClick={() => handleTabClick(NAV_CATEGORIES.FINANCIALS.tab)}>
-                            {NAV_CATEGORIES.FINANCIALS.label}
-                        </li>
-                    </ul>
+                    <DesktopNav
+                        handleTabClick={handleTabClick}
+                        handleSubTabClick={handleSubTabClick}
+                        openSubMenu={openSubMenu}
+                        toggleSubMenu={toggleSubMenu}
+                        NAV_CATEGORIES={NAV_CATEGORIES}
+                    />
                 </div>
             </nav>
 

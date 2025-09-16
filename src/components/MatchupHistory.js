@@ -153,7 +153,7 @@ const MatchupHistory = () => {
                                                     </span>
                                                     <span className={`font-bold ${matchup.winner_roster_id === matchup.team2_roster_id ? 'text-gray-900' : 'text-gray-500'}`}>{matchup.team2_score ? matchup.team2_score.toFixed(2) : 'N/A'}</span>
                                                 </div>
-                                                {matchup.winner_roster_id === null && ( // Display "Tie" only if it's actually a tie
+                                                {matchup.winner_roster_id === null && Number(matchup.team1_score) > 0 && Number(matchup.team2_score) > 0 && Number(matchup.team1_score) === Number(matchup.team2_score) && (
                                                     <div className="text-xs text-gray-500 mt-1 text-center">
                                                         <strong>Tie</strong>
                                                     </div>

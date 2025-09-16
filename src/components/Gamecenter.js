@@ -371,8 +371,8 @@ const Gamecenter = () => {
             }
         });
     
-        // Only show ties if there are any
-        return ties > 0 ? `${wins}-${losses}-${ties}` : `${wins}-${losses}`;
+    // Only show ties if there are any and ties > 0
+    return ties > 0 ? `${wins}-${losses}-${ties}` : `${wins}-${losses}`;
     };
 
     // --- Render Logic ---

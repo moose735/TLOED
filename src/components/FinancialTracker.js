@@ -390,7 +390,8 @@ const FinancialTracker = () => {
 			setTransactionMessage({ text: 'Error saving transaction.', type: 'error' });
 		}
 	
-		setTransaction({ type: 'Fee', amount: '', category: '', description: '', week: '', team: [], quantity: 1 });
+		// Only clear the transaction message, keep form fields populated
+		setTimeout(() => setTransactionMessage({ text: '', type: '' }), 3000);
 		setShowTeamDropdown(false);
 	};
 
@@ -770,7 +771,7 @@ const FinancialTracker = () => {
 								</div>
 							)}
 						</div>
-						{transaction.category === 'Waiver/FA Fee' && (
+						{(transaction.category === 'Waiver/FA Fee' || transaction.category === 'Trade Fee') && (
 							<div>
 								<label className="block text-xs font-semibold mb-1 text-gray-700">Quantity</label>
 								<input
@@ -780,7 +781,6 @@ const FinancialTracker = () => {
 									className="w-full border rounded-lg px-2 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
 									value={transaction.quantity}
 									onChange={e => setTransaction(t => ({ ...t, quantity: parseInt(e.target.value) || 1 }))}
-									required
 								/>
 							</div>
 						)}
@@ -796,7 +796,6 @@ const FinancialTracker = () => {
 									}
 								}}
 								placeholder="e.g. Paid for entry, Weekly winner, etc."
-								required
 								disabled={(transaction.type === 'Payout' && ((transaction.category.startsWith('Weekly') && transaction.week) || transaction.category.startsWith('Total Points')))}
 							/>
 						</div>
@@ -887,10 +886,19 @@ const FinancialTracker = () => {
 						</thead>
 						<tbody>
 							{allMembers.map(member => {
-								const memberFees = currentYearData.transactions.filter(t => t.type === 'Fee' && (Array.isArray(t.team) ? t.team.includes(member.userId) : t.team === member.userId)).reduce((sum, t) => sum + Number(t.amount || 0), 0);
-								// FIX: Corrected the calculation for `memberTransactionFees` to use the per-person amount (t.amount)
-								// instead of the total transaction value.
-								const memberTransactionFees = currentYearData.transactions.filter(t => t.type === 'Fee' && (t.category === 'Trade Fee' || t.category === 'Waiver/FA Fee') && (Array.isArray(t.team) ? t.team.includes(member.userId) : t.team === member.userId)).reduce((sum, t) => sum + Number(t.amount || 0), 0);
+																										const memberFees = currentYearData.transactions
+																										  .filter(t => t.type === 'Fee' && (Array.isArray(t.team) ? t.team.includes(member.userId) : t.team === member.userId))
+																										  .reduce((sum, t) => {
+																										    const teamCount = Array.isArray(t.team) ? t.team.length : 1;
+																										    return sum + (getTransactionTotal(t) / teamCount);
+																										  }, 0);
+
+																										const memberTransactionFees = currentYearData.transactions
+																										  .filter(t => t.type === 'Fee' && (t.category === 'Trade Fee' || t.category === 'Waiver/FA Fee') && (Array.isArray(t.team) ? t.team.includes(member.userId) : t.team === member.userId))
+																										  .reduce((sum, t) => {
+																										    const teamCount = Array.isArray(t.team) ? t.team.length : 1;
+																										    return sum + (getTransactionTotal(t) / teamCount);
+																										  }, 0);
 								const memberPayouts = currentYearData.transactions.filter(t => t.type === 'Payout' && (Array.isArray(t.team) ? t.team.includes(member.userId) : t.team === member.userId)).reduce((sum, t) => sum + Number(t.amount || 0), 0);
 								const netTotal = memberPayouts - memberFees;
 								const netColor = netTotal < 0 ? 'text-red-600' : 'text-green-600';
@@ -1092,7 +1100,7 @@ const FinancialTracker = () => {
 										</td>
 										<td className="py-2 px-3 text-center">{t.type}</td>
 										{/* NEW Qty Cell */}
-										<td className="py-2 px-3 text-center">{t.category === 'Waiver/FA Fee' ? t.quantity : ''}</td>
+										<td className="py-2 px-3 text-center">{(t.category === 'Waiver/FA Fee' || t.category === 'Trade Fee') ? (t.quantity || 1) : ''}</td>
 										{/* End NEW Qty Cell */}
 										<td className="py-2 px-3 text-center">${Number(t.amount || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
 										<td className="py-2 px-3 text-center">{t.category}</td>

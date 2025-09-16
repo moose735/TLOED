@@ -38,10 +38,13 @@ const LeagueHistory = ({ onTeamNameClick }) => {
         historicalData, // Contains matchupsBySeason, winnersBracketBySeason, losersBracketBySeason, rostersBySeason, leaguesMetadataBySeason, usersBySeason
         allDraftHistory, // Added allDraftHistory from context
         nflState, // NEW: Import nflState from context
-        getTeamName: getDisplayTeamNameFromContext // Renamed to avoid conflict with prop name
+        getTeamName: getDisplayTeamNameFromContext, // Renamed to avoid conflict with prop name
+        getTeamDetails
     } = useSleeperData();
 
     const [allTimeStandings, setAllTimeStandings] = useState([]);
+    const [sortBy, setSortBy] = useState('winPercentage');
+    const [sortOrder, setSortOrder] = useState('desc');
     const [seasonalDPRChartData, setSeasonalDPRChartData] = useState([]);
     const [uniqueTeamsForChart, setUniqueTeamsForChart] = useState([]);
     const [seasonAwardsSummary, setSeasonAwardsSummary] = useState({});
@@ -241,17 +244,31 @@ const LeagueHistory = ({ onTeamNameClick }) => {
                 </>
             );
 
-            // Populate career awards from calculatedCareerDPRs
+            // Populate career awards from calculatedCareerDPRs, and collect years for each award
             const careerStatsForTeam = calculatedCareerDPRs.find(cs => cs.ownerId === stats.ownerId);
+            // Helper to collect years for each award type
+            const getAwardYears = (flag) => {
+                const years = [];
+                Object.entries(seasonalMetrics).forEach(([year, teams]) => {
+                    const found = Object.values(teams).find(t => t.ownerId === stats.ownerId && t[flag]);
+                    if (found) years.push(year);
+                });
+                return years;
+            };
             const awardsToDisplay = careerStatsForTeam ? {
                 championships: careerStatsForTeam.championships || 0,
+                championshipsYears: getAwardYears('isChampion'),
                 runnerUps: careerStatsForTeam.runnerUps || 0,
+                runnerUpsYears: getAwardYears('isRunnerUp'),
                 thirdPlace: careerStatsForTeam.thirdPlaces || 0,
+                thirdPlaceYears: getAwardYears('isThirdPlace'),
                 firstPoints: careerStatsForTeam.pointsChampionships || 0,
+                firstPointsYears: getAwardYears('isPointsChampion'),
                 secondPoints: careerStatsForTeam.pointsRunnerUps || 0,
+                secondPointsYears: getAwardYears('isPointsRunnerUp'),
                 thirdPoints: careerStatsForTeam.thirdPlacePoints || 0,
-            } : { championships: 0, runnerUps: 0, thirdPlace: 0, firstPoints: 0, secondPoints: 0, thirdPoints: 0 };
-
+                thirdPointsYears: getAwardYears('isThirdPlacePoints'),
+            } : { championships: 0, championshipsYears: [], runnerUps: 0, runnerUpsYears: [], thirdPlace: 0, thirdPlaceYears: [], firstPoints: 0, firstPointsYears: [], secondPoints: 0, secondPointsYears: [], thirdPoints: 0, thirdPointsYears: [] };
 
             return {
                 team: teamName,
@@ -265,9 +282,9 @@ const LeagueHistory = ({ onTeamNameClick }) => {
             };
         }).filter(Boolean).sort((a, b) => b.winPercentage - a.winPercentage);
 
-        setAllTimeStandings(compiledStandings);
+    setAllTimeStandings(compiledStandings);
 
-        // Prepare data for the total DPR progression line graph
+        // Prepare data for the total DPR progression line graph (now as rankings 1-12)
         const chartData = [];
         const allYearsForChart = Object.keys(historicalData.matchupsBySeason).map(Number).filter(y => !isNaN(y)).sort((a, b) => a - b);
 
@@ -277,8 +294,6 @@ const LeagueHistory = ({ onTeamNameClick }) => {
         const uniqueTeamsForChartDisplayNames = uniqueOwnerIdsForChart.map(ownerId => getDisplayTeamNameFromContext(ownerId, null)).sort();
 
         setUniqueTeamsForChart(uniqueTeamsForChartDisplayNames);
-
-        const cumulativeTeamDPRs = {}; // Stores DPR by ownerId
 
         allYearsForChart.forEach(currentYear => {
             // Recalculate metrics up to the current year
@@ -304,25 +319,30 @@ const LeagueHistory = ({ onTeamNameClick }) => {
                 }
             });
 
-            // NEW: Pass nflState to the nested calculateAllLeagueMetrics call for chart data
+            // Calculate DPRs for all teams for this year
             const { careerDPRData: cumulativeCareerDPRDataForYear } = calculateAllLeagueMetrics(tempHistoricalDataForYear, allDraftHistory, getDisplayTeamNameFromContext, nflState);
 
-            uniqueOwnerIdsForChart.forEach(ownerId => {
-                const teamDPR = cumulativeCareerDPRDataForYear.find(dpr => dpr.ownerId === ownerId)?.dpr;
-                if (teamDPR !== undefined) {
-                    cumulativeTeamDPRs[ownerId] = teamDPR;
-                } else {
-                    // If a team didn't exist in this year's data, carry over its last known DPR or default to 0
-                    cumulativeTeamDPRs[ownerId] = cumulativeTeamDPRs[ownerId] || 0;
-                }
+            // Build a list of {ownerId, dpr, teamName} for this year
+            const dprList = uniqueOwnerIdsForChart.map(ownerId => {
+                const dpr = cumulativeCareerDPRDataForYear.find(dpr => dpr.ownerId === ownerId)?.dpr;
+                return {
+                    ownerId,
+                    dpr: dpr !== undefined ? dpr : -9999, // Use a very low value for missing teams
+                    teamName: getDisplayTeamNameFromContext(ownerId, null)
+                };
             });
 
+            // Sort by DPR descending, assign rank (1 = best DPR)
+            dprList.sort((a, b) => b.dpr - a.dpr);
+            dprList.forEach((item, idx) => {
+                item.rank = idx + 1;
+            });
+
+            // Build chart data point: { year, [teamName]: rank, ... }
             const yearDataPoint = { year: currentYear };
-            uniqueOwnerIdsForChart.forEach(ownerId => {
-                const teamDisplayName = getDisplayTeamNameFromContext(ownerId, null); // Get current name for chart key
-                yearDataPoint[teamDisplayName] = cumulativeTeamDPRs[ownerId]; // Store the actual DPR value
+            dprList.forEach(item => {
+                yearDataPoint[item.teamName] = item.rank;
             });
-
             chartData.push(yearDataPoint);
         });
         setSeasonalDPRChartData(chartData);
@@ -355,45 +375,139 @@ const LeagueHistory = ({ onTeamNameClick }) => {
         return 'N/A';
     };
 
-    // Custom Tooltip component for Recharts
+    // Custom Tooltip component for Recharts (show rank and actual DPR, sorted by rank ascending)
     const CustomTooltip = ({ active, payload, label }) => {
         if (active && payload && payload.length) {
-            // Sort the payload by DPR value in descending order (higher DPR is better)
-            const sortedPayload = [...payload].sort((a, b) => b.value - a.value);
+            // Ensure year is a number for comparison
+            const year = typeof label === 'string' ? parseInt(label) : label;
+            // Find the chart data point for this year
+            const yearData = seasonalDPRChartData.find(d => parseInt(d.year) === year);
+            // Build a list of {team, rank, color, dataKey, ownerId}
+            // To get ownerId, reconstruct dprList for this year
+            let dprList = [];
+            if (historicalData && allDraftHistory && getDisplayTeamNameFromContext && nflState && uniqueTeamsForChart) {
+                const uniqueOwnerIdsForChart = Array.from(new Set(Object.keys(historicalData.rostersBySeason).flatMap(y => (historicalData.rostersBySeason[y] || []).map(r => r.owner_id))));
+                const tempHistoricalDataForYear = {
+                    matchupsBySeason: {},
+                    rostersBySeason: {},
+                    leaguesMetadataBySeason: {},
+                    winnersBracketBySeason: {},
+                    losersBracketBySeason: {},
+                    usersBySeason: {}
+                };
+                Object.keys(historicalData.matchupsBySeason).forEach(yearKey => {
+                    const yearNum = parseInt(yearKey);
+                    if (yearNum <= year) {
+                        tempHistoricalDataForYear.matchupsBySeason[yearKey] = historicalData.matchupsBySeason[yearKey];
+                        tempHistoricalDataForYear.rostersBySeason[yearKey] = historicalData.rostersBySeason[yearKey];
+                        tempHistoricalDataForYear.leaguesMetadataBySeason[yearKey] = historicalData.leaguesMetadataBySeason[yearKey];
+                        tempHistoricalDataForYear.winnersBracketBySeason[yearKey] = historicalData.winnersBracketBySeason[yearKey];
+                        tempHistoricalDataForYear.losersBracketBySeason[yearKey] = historicalData.losersBracketBySeason[yearKey];
+                        tempHistoricalDataForYear.usersBySeason[yearKey] = historicalData.usersBySeason[yearKey];
+                    }
+                });
+                const { careerDPRData: cumulativeCareerDPRDataForYear } = calculateAllLeagueMetrics(tempHistoricalDataForYear, allDraftHistory, getDisplayTeamNameFromContext, nflState);
+                dprList = uniqueOwnerIdsForChart.map(ownerId => {
+                    const dprObj = cumulativeCareerDPRDataForYear.find(dpr => dpr.ownerId === ownerId);
+                    return {
+                        ownerId,
+                        dpr: dprObj ? dprObj.dpr : undefined,
+                        teamName: getDisplayTeamNameFromContext(ownerId, null)
+                    };
+                });
+            }
+            // Build a map from ownerId to DPR
+            const dprMapByOwnerId = {};
+            dprList.forEach(item => {
+                dprMapByOwnerId[item.ownerId] = item.dpr;
+            });
+            // Map payload to ownerId by matching team name to dprList
+            const teamRanks = payload.map((entry) => {
+                // Try to find ownerId by matching team name in dprList
+                let ownerId = undefined;
+                if (dprList && dprList.length > 0) {
+                    const found = dprList.find(item => item.teamName === entry.name);
+                    if (found) ownerId = found.ownerId;
+                }
+                return {
+                    team: entry.name,
+                    rank: yearData ? yearData[entry.name] : undefined,
+                    color: entry.color,
+                    ownerId
+                };
+            });
+            // Sort by rank ascending (1 = best)
+            teamRanks.sort((a, b) => a.rank - b.rank);
 
             return (
                 <div className="bg-white p-3 border border-gray-300 rounded-md shadow-lg text-sm">
                     <p className="font-bold text-gray-800 mb-1">{`Year: ${label}`}</p>
-                    {sortedPayload.map((entry, index) => {
-                        return (
-                            <p key={`item-${index}`} style={{ color: entry.color }}>
-                                {/* Display team name and their DPR value */}
-                                {`${entry.name}: ${formatDPR(entry.value)} DPR`}
-                            </p>
-                        );
-                    })}
+                    {teamRanks.map((entry, index) => (
+                        <p key={`item-${index}`} style={{ color: entry.color }}>
+                            {entry.team}
+                        </p>
+                    ))}
                 </div>
             );
         }
         return null;
     };
 
-    // Generate ticks and domain for Y-axis based on actual DPR values
-    const allDPRValues = seasonalDPRChartData.flatMap(dataPoint =>
-        uniqueTeamsForChart.map(team => typeof dataPoint[team] === 'number' ? dataPoint[team] : null).filter(v => v !== null)
-    );
-    const minDPR = allDPRValues.length > 0 ? Math.min(...allDPRValues) : 0.5;
-    const maxDPR = allDPRValues.length > 0 ? Math.max(...allDPRValues) : 1.5;
-    // Add a little padding to min/max
-    const paddedMin = Math.max(0, minDPR - 0.05);
-    const paddedMax = maxDPR + 0.05;
-    // Generate ticks between paddedMin and paddedMax
-    const tickStep = 0.05;
+    // Generate ticks and domain for Y-axis based on rankings (1 = best, 12 = worst)
+    const numTeams = uniqueTeamsForChart.length;
     const yAxisTicks = [];
-    for (let t = Math.floor(paddedMin * 20) / 20; t <= paddedMax; t += tickStep) {
-        yAxisTicks.push(Number(t.toFixed(2)));
+    for (let t = 1; t <= numTeams; t++) {
+        yAxisTicks.push(t);
     }
 
+
+    // Sorting logic for all-time standings
+    const getSortedStandings = () => {
+        const sorted = [...allTimeStandings];
+        sorted.sort((a, b) => {
+            let aVal = a[sortBy];
+            let bVal = b[sortBy];
+            // For team name, sort alphabetically
+            if (sortBy === 'team') {
+                aVal = aVal?.toLowerCase() || '';
+                bVal = bVal?.toLowerCase() || '';
+                if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+                if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+                return 0;
+            }
+            // For seasons, sort by number of seasons played
+            if (sortBy === 'seasons') {
+                const aCount = a.seasons?.props?.children?.[1]?.props?.children || 0;
+                const bCount = b.seasons?.props?.children?.[1]?.props?.children || 0;
+                return sortOrder === 'asc' ? aCount - bCount : bCount - aCount;
+            }
+            // For awards, sort by championships, then runnerUps, then thirdPlace
+            if (sortBy === 'awards') {
+                const aAwards = a.awards || {};
+                const bAwards = b.awards || {};
+                if (aAwards.championships !== bAwards.championships) return sortOrder === 'asc' ? aAwards.championships - bAwards.championships : bAwards.championships - aAwards.championships;
+                if (aAwards.runnerUps !== bAwards.runnerUps) return sortOrder === 'asc' ? aAwards.runnerUps - bAwards.runnerUps : bAwards.runnerUps - aAwards.runnerUps;
+                if (aAwards.thirdPlace !== bAwards.thirdPlace) return sortOrder === 'asc' ? aAwards.thirdPlace - bAwards.thirdPlace : bAwards.thirdPlace - aAwards.thirdPlace;
+                return 0;
+            }
+            // For numbers, sort numerically
+            aVal = typeof aVal === 'string' ? parseFloat(aVal) : aVal;
+            bVal = typeof bVal === 'string' ? parseFloat(bVal) : bVal;
+            if (isNaN(aVal)) aVal = 0;
+            if (isNaN(bVal)) bVal = 0;
+            return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+        });
+        return sorted;
+    };
+
+    const handleSort = (column) => {
+        if (sortBy === column) {
+            setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortBy(column);
+            setSortOrder('desc');
+        }
+    };
 
     return (
         <div className="w-full max-w-full mt-8 mx-auto">
@@ -414,74 +528,95 @@ const LeagueHistory = ({ onTeamNameClick }) => {
                             <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
                                 <thead className="bg-blue-50">
                                     <tr>
-                                        <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Rank</th>
-                                        <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Team</th>
-                                        <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Seasons</th>
-                                        {/* NEW: Added Total DPR header */}
-                                        <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Career DPR</th>
-                                        <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Record</th>
-                                        <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Win %</th>
-                                        <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Awards</th>
+                                        <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap cursor-pointer" onClick={() => handleSort('rank')}>
+                                            Rank {sortBy === 'rank' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+                                        </th>
+                                        <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap cursor-pointer" onClick={() => handleSort('team')}>
+                                            Team {sortBy === 'team' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+                                        </th>
+                                        <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap cursor-pointer" onClick={() => handleSort('seasons')}>
+                                            Seasons {sortBy === 'seasons' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+                                        </th>
+                                        <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap cursor-pointer" onClick={() => handleSort('totalDPR')}>
+                                            Career DPR {sortBy === 'totalDPR' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+                                        </th>
+                                        <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap cursor-pointer" onClick={() => handleSort('record')}>
+                                            Record {sortBy === 'record' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+                                        </th>
+                                        <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap cursor-pointer" onClick={() => handleSort('winPercentage')}>
+                                            Win % {sortBy === 'winPercentage' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+                                        </th>
+                                        <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap cursor-pointer" onClick={() => handleSort('awards')}>
+                                            Awards {sortBy === 'awards' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {allTimeStandings.map((team, index) => {
-                                        console.log(`LeagueHistory: All-Time Standings - Team: ${team.team}, OwnerId: ${team.ownerId}, Resolved Name: ${getDisplayTeamNameFromContext(team.ownerId, null)}`); // NEW LOG
+                                    {getSortedStandings().map((team, index) => {
+                                        // Get team details (name, avatar) using ownerId
+                                        const teamDetails = getTeamDetails ? getTeamDetails(team.ownerId, null) : { name: team.team, avatar: undefined };
                                         return (
                                             <tr key={team.team} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                                                 <td className="py-2 px-3 text-sm text-gray-800 text-center font-semibold whitespace-nowrap">{index + 1}</td>
-                                                <td className="py-2 px-3 text-sm text-gray-800 font-semibold whitespace-nowrap">
-                                                  {onTeamNameClick ? (
-                                                    <button
-                                                      onClick={() => onTeamNameClick(team.team)}
-                                                      className="text-gray-800 hover:text-gray-600 cursor-pointer bg-transparent border-none p-0 text-left"
-                                                    >
-                                                      {team.team}
-                                                    </button>
-                                                  ) : (
-                                                    team.team
-                                                  )}
+                                                <td className="py-2 px-3 text-sm text-gray-800 font-semibold whitespace-nowrap flex items-center gap-2">
+                                                    {teamDetails.avatar && (
+                                                        <img
+                                                            src={teamDetails.avatar}
+                                                            alt={teamDetails.name + ' logo'}
+                                                            className="w-8 h-8 rounded-full border border-gray-300 mr-2 bg-white object-cover"
+                                                            onError={e => { e.target.onerror = null; e.target.src = '/LeagueLogo.PNG'; }}
+                                                        />
+                                                    )}
+                                                    {onTeamNameClick ? (
+                                                        <button
+                                                            onClick={() => onTeamNameClick(team.team)}
+                                                            className="text-gray-800 hover:text-gray-600 cursor-pointer bg-transparent border-none p-0 text-left"
+                                                        >
+                                                            {team.team}
+                                                        </button>
+                                                    ) : (
+                                                        team.team
+                                                    )}
                                                 </td>
                                                 <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{team.seasons}</td>
-                                                {/* NEW: Added Total DPR data cell */}
                                                 <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatDPR(team.totalDPR)}</td>
                                                 <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{team.record}</td>
                                                 <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{formatPercentage(team.winPercentage)}</td>
                                                 <td className="py-2 px-3 text-sm text-gray-700 text-center">
                                                     <div className="flex justify-center items-center gap-2 whitespace-nowrap">
                                                         {team.awards.championships > 0 && (
-                                                            <span title="Sween Bowl Championship" className="flex items-center space-x-1 whitespace-nowrap">
+                                                            <span title={`Sween Bowl Championship${team.awards.championshipsYears.length > 0 ? ' (' + team.awards.championshipsYears.join(', ') + ')' : ''}`} className="flex items-center space-x-1 whitespace-nowrap">
                                                                 <i className="fas fa-trophy text-yellow-500 text-lg"></i>
                                                                 <span className="text-xs font-medium">{team.awards.championships}x</span>
                                                             </span>
                                                         )}
                                                         {team.awards.runnerUps > 0 && (
-                                                            <span title="Sween Bowl Runner-Up" className="flex items-center space-x-1 whitespace-nowrap">
+                                                            <span title={`Sween Bowl Runner-Up${team.awards.runnerUpsYears.length > 0 ? ' (' + team.awards.runnerUpsYears.join(', ') + ')' : ''}`} className="flex items-center space-x-1 whitespace-nowrap">
                                                                 <i className="fas fa-trophy text-gray-400 text-lg"></i>
                                                                 <span className="text-xs font-medium">{team.awards.runnerUps}x</span>
                                                             </span>
                                                         )}
                                                         {team.awards.thirdPlace > 0 && (
-                                                            <span title="3rd Place Finish" className="flex items-center space-x-1 whitespace-nowrap">
-                                                                <i className="fas fa-trophy text-amber-800 text-lg"></i> {/* Using amber-800 for bronze-like color */}
+                                                            <span title={`3rd Place Finish${team.awards.thirdPlaceYears.length > 0 ? ' (' + team.awards.thirdPlaceYears.join(', ') + ')' : ''}`} className="flex items-center space-x-1 whitespace-nowrap">
+                                                                <i className="fas fa-trophy text-amber-800 text-lg"></i>
                                                                 <span className="text-xs font-medium">{team.awards.thirdPlace}x</span>
                                                             </span>
                                                         )}
                                                         {team.awards.firstPoints > 0 && (
-                                                            <span title="1st Place - Points" className="flex items-center space-x-1 whitespace-nowrap">
+                                                            <span title={`1st Place - Points${team.awards.firstPointsYears.length > 0 ? ' (' + team.awards.firstPointsYears.join(', ') + ')' : ''}`} className="flex items-center space-x-1 whitespace-nowrap">
                                                                 <i className="fas fa-medal text-yellow-500 text-lg"></i>
                                                                 <span className="text-xs font-medium">{team.awards.firstPoints}x</span>
                                                             </span>
                                                         )}
                                                         {team.awards.secondPoints > 0 && (
-                                                            <span title="2nd Place - Points" className="flex items-center space-x-1 whitespace-nowrap">
+                                                            <span title={`2nd Place - Points${team.awards.secondPointsYears.length > 0 ? ' (' + team.awards.secondPointsYears.join(', ') + ')' : ''}`} className="flex items-center space-x-1 whitespace-nowrap">
                                                                 <i className="fas fa-medal text-gray-400 text-lg"></i>
                                                                 <span className="text-xs font-medium">{team.awards.secondPoints}x</span>
                                                             </span>
                                                         )}
                                                         {team.awards.thirdPoints > 0 && (
-                                                            <span title="3rd Place - Points" className="flex items-center space-x-1 whitespace-nowrap">
-                                                                <i className="fas fa-medal text-amber-800 text-lg"></i> {/* Using amber-800 for bronze-like color */}
+                                                            <span title={`3rd Place - Points${team.awards.thirdPointsYears.length > 0 ? ' (' + team.awards.thirdPointsYears.join(', ') + ')' : ''}`} className="flex items-center space-x-1 whitespace-nowrap">
+                                                                <i className="fas fa-medal text-amber-800 text-lg"></i>
                                                                 <span className="text-xs font-medium">{team.awards.thirdPoints}x</span>
                                                             </span>
                                                         )}
@@ -560,10 +695,11 @@ const LeagueHistory = ({ onTeamNameClick }) => {
                                     <CartesianGrid strokeDasharray="3 3" />
                                     <XAxis dataKey="year" label={{ value: "Season", position: "insideBottom", offset: 0 }} />
                                     <YAxis
-                                        label={{ value: "Adjusted DPR", angle: -90, position: "insideLeft", offset: 0 }}
-                                        domain={[paddedMin, paddedMax]}
-                                        tickFormatter={value => value.toFixed(2)}
+                                        label={{ value: "Rank (1 = Best)", angle: -90, position: "insideLeft", offset: 0 }}
+                                        domain={[1, numTeams]}
+                                        tickFormatter={value => `#${value}`}
                                         ticks={yAxisTicks}
+                                        reversed={true}
                                         allowDataOverflow={true}
                                         padding={{ top: 10, bottom: 10 }}
                                     />

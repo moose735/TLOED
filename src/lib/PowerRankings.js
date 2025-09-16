@@ -96,7 +96,12 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { TEAM_NAME_TO_SLEEPER_ID_MAP, RETIRED_MANAGERS } from '../config';
 
 const formatDPR = (dpr) => (typeof dpr === 'number' && !isNaN(dpr) ? dpr.toFixed(3) : 'N/A');
-const renderRecordNoTies = (wins, losses) => `${wins || 0}-${losses || 0}`;
+const renderRecord = (wins, losses, ties) => {
+	if (ties > 0) {
+		return `${wins || 0}-${losses || 0}-${ties}`;
+	}
+	return `${wins || 0}-${losses || 0}`;
+};
 const formatPoints = (points) => (typeof points === 'number' && !isNaN(points) ? points.toFixed(2) : 'N/A');
 const formatLuckRating = (luck) => (typeof luck === 'number' && !isNaN(luck) ? luck.toFixed(3) : 'N/A');
 
@@ -123,120 +128,145 @@ const CustomDPRRankTooltip = ({ active, payload, label }) => {
 };
 
 const PowerRankings = () => {
-  const {
-    historicalData,
-    getTeamName,
-    getTeamDetails,
-    loading: contextLoading,
-    error: contextError,
-    currentSeason,
-    nflState
-  } = useSleeperData();  const [powerRankings, setPowerRankings] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [currentWeek, setCurrentWeek] = useState(0);
-  const TIER_THRESHOLD = 0.0455; // 4.55% drop
-  const TIER_COLORS = [
-    'bg-green-200', // Tier 1 (top)
-    'bg-lime-200',  // Tier 2
-    'bg-yellow-200',// Tier 3
-    'bg-orange-200',// Tier 4
-    'bg-amber-200', // Tier 5
-    'bg-pink-200',  // Tier 6
-    'bg-red-200',   // Tier 7
-    'bg-red-400'    // Tier 8 (bottom)
-  ];
+	const {
+		historicalData,
+		getTeamName,
+		getTeamDetails,
+		loading: contextLoading,
+		error: contextError,
+		currentSeason,
+		nflState
+	} = useSleeperData();
+	const [powerRankings, setPowerRankings] = useState([]);
+	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState(null);
+	const [currentWeek, setCurrentWeek] = useState(0);
+	const TIER_THRESHOLD = 0.0455; // 4.55% drop
+	const TIER_COLORS = [
+		'bg-green-200', // Tier 1 (top)
+		'bg-lime-200',  // Tier 2
+		'bg-yellow-200',// Tier 3
+		'bg-orange-200',// Tier 4
+		'bg-amber-200', // Tier 5
+		'bg-pink-200',  // Tier 6
+		'bg-red-200',   // Tier 7
+		'bg-red-400'    // Tier 8 (bottom)
+	];
 
-  useEffect(() => {
-    // Defensive checks
-    if (contextLoading || !historicalData || !historicalData.matchupsBySeason) {
-      setLoading(true);
-      setError(contextError || null);
-      return;
-    }
+	useEffect(() => {
+		if (contextLoading || !historicalData || !historicalData.matchupsBySeason) {
+			setLoading(true);
+			setError(contextError || null);
+			return;
+		}
 
-    // Determine the current season and completed week
-    let season = currentSeason;
-    if (!season) {
-      const years = Object.keys(historicalData.matchupsBySeason);
-      if (years.length > 0) {
-        season = Math.max(...years.map(Number)).toString();
-      }
-    }
+		// Determine the current season and completed week
+		let season = currentSeason;
+		if (!season) {
+			const years = Object.keys(historicalData.matchupsBySeason);
+			if (years.length > 0) {
+				season = Math.max(...years.map(Number)).toString();
+			}
+		}
 
-    const matchups = historicalData.matchupsBySeason[season];
-    if (!matchups || matchups.length === 0) {
-      setPowerRankings([]);
-      setLoading(false);
-      setError("No games have been played for the current season yet. Please check back after the first week's games have been completed.");
-      return;
-    }
+		const matchups = historicalData.matchupsBySeason[season];
+		if (!matchups || matchups.length === 0) {
+			setPowerRankings([]);
+			setLoading(false);
+			setError("No games have been played for the current season yet. Please check back after the first week's games have been completed.");
+			return;
+		}
 
-    // Get current week from nflState, only use completed weeks
-    const nflWeek = nflState && nflState.week ? parseInt(nflState.week) : 1;
-    const completedWeek = nflWeek > 1 ? nflWeek - 1 : 1;
-    setCurrentWeek(completedWeek);
+		// Get current week from nflState, only use completed weeks
+		const nflWeek = nflState && nflState.week ? parseInt(nflState.week) : 1;
+		const completedWeek = nflWeek > 1 ? nflWeek - 1 : 1;
+		setCurrentWeek(completedWeek);
 
-    // Use centralized metrics for DPR and Luck
-    try {
-      const metricsResult = calculateAllLeagueMetrics(historicalData, null, getTeamName, nflState);
-      const seasonalMetrics = metricsResult?.seasonalMetrics || {};
-      const seasonMetrics = seasonalMetrics[season] || {};
-      let rankedTeams = Object.keys(seasonMetrics)
-        .map(rosterId => {
-          const team = seasonMetrics[rosterId];
-          return {
-            ownerId: team.ownerId,
-            team: getTeamName(team.ownerId, season),
-            dpr: team.adjustedDPR,
-            wins: team.wins,
-            losses: team.losses,
-            ties: team.ties,
-            pointsFor: team.pointsFor,
-            pointsAgainst: team.pointsAgainst,
-            luckRating: team.luckRating,
-            year: season
-          };
-        })
-        .filter(team => team.wins + team.losses + team.ties > 0)
-        .sort((a, b) => b.dpr - a.dpr);
+		try {
+			const metricsResult = calculateAllLeagueMetrics(historicalData, null, getTeamName, nflState);
+			const seasonalMetrics = metricsResult?.seasonalMetrics || {};
+			const seasonMetrics = seasonalMetrics[season] || {};
+					// Use calculateSeasonalDPRMetrics to get rankings for current and previous week
 
-      // --- Tiering Algorithm ---
-      let tiers = [];
-      let currentTier = 1;
-      tiers.push(currentTier); // First team is always Tier 1
-      for (let i = 1; i < rankedTeams.length; i++) {
-        const prevDPR = rankedTeams[i - 1].dpr;
-        const currDPR = rankedTeams[i].dpr;
-        const percentDrop = 1 - (currDPR / prevDPR);
-        if (percentDrop > TIER_THRESHOLD) {
-          currentTier++;
-        }
-        tiers.push(currentTier);
-      }
-      // Assign tiers to teams
-      rankedTeams = rankedTeams.map((team, idx) => ({
-        ...team,
-        rank: idx + 1,
-        tier: tiers[idx]
-      }));
+							// Helper to get ranked teams for a given week using the same DPR logic as the main table
+							const getRankedTeams = (week) => {
+								// Deep clone historicalData and filter matchups for the season up to the given week
+								const filteredHistoricalData = JSON.parse(JSON.stringify(historicalData));
+								if (filteredHistoricalData.matchupsBySeason && filteredHistoricalData.matchupsBySeason[season]) {
+									filteredHistoricalData.matchupsBySeason[season] = filteredHistoricalData.matchupsBySeason[season].filter(m => parseInt(m.week) <= week);
+								}
+								// Use the same calculation as the main table
+								const metricsResult = calculateAllLeagueMetrics(filteredHistoricalData, null, getTeamName, nflState);
+								const seasonalMetrics = metricsResult?.seasonalMetrics || {};
+								const seasonMetrics = seasonalMetrics[season] || {};
+								return Object.keys(seasonMetrics)
+									.map(rosterId => {
+										const team = seasonMetrics[rosterId];
+										return {
+											ownerId: team.ownerId,
+											team: getTeamName(team.ownerId, season),
+											dpr: team.adjustedDPR,
+											wins: team.wins,
+											losses: team.losses,
+											ties: team.ties,
+											pointsFor: team.pointsFor,
+											pointsAgainst: team.pointsAgainst,
+											luckRating: team.luckRating,
+											year: season
+										};
+									})
+									.filter(team => team.wins + team.losses + team.ties > 0)
+									.sort((a, b) => b.dpr - a.dpr)
+									.map((team, idx) => ({ ...team, rank: idx + 1 }));
+							};
 
-            setPowerRankings(rankedTeams);
-      
-      // Debug: Log team details for the first team
-      if (rankedTeams.length > 0) {
-        const firstTeam = rankedTeams[0];
-        const teamDetails = getTeamDetails(firstTeam.ownerId, season);
-        console.log('First team details:', firstTeam.ownerId, teamDetails);
-      }
-      setLoading(false);
-      setError(null);
-    } catch (err) {
-      setPowerRankings([]);
-      setLoading(false);
-      setError("Failed to calculate power rankings: " + err.message);
-    }
-  }, [contextLoading, contextError, historicalData, getTeamName, currentSeason, nflState]);
+					// Get current and previous week rankings
+					const currentRankings = getRankedTeams(completedWeek);
+					const prevRankings = completedWeek > 1 ? getRankedTeams(completedWeek - 1) : [];
+
+					// Map ownerId to previous rank
+					const prevRankMap = {};
+					prevRankings.forEach(team => {
+						prevRankMap[team.ownerId] = team.rank;
+					});
+
+					// --- Tiering Algorithm ---
+					let tiers = [];
+					let currentTier = 1;
+					tiers.push(currentTier); // First team is always Tier 1
+					for (let i = 1; i < currentRankings.length; i++) {
+						const prevDPR = currentRankings[i - 1].dpr;
+						const currDPR = currentRankings[i].dpr;
+						const percentDrop = 1 - (currDPR / prevDPR);
+						if (percentDrop > TIER_THRESHOLD) {
+							currentTier++;
+						}
+						tiers.push(currentTier);
+					}
+
+					// Assign tiers and movement to teams
+					const rankedTeams = currentRankings.map((team, idx) => {
+						const prevRank = prevRankMap[team.ownerId];
+						let movement = 0;
+						if (prevRank !== undefined) {
+							movement = prevRank - team.rank;
+						}
+						return {
+							...team,
+							tier: tiers[idx],
+							movement
+						};
+					});
+
+					setPowerRankings(rankedTeams);
+					setLoading(false);
+					setError(null);
+				} catch (err) {
+					setPowerRankings([]);
+					setLoading(false);
+					setError("Failed to calculate power rankings: " + err.message);
+				}
+	}, [contextLoading, contextError, historicalData, getTeamName, currentSeason, nflState]);
 // ...existing code...
 
   const renderMovement = (movement) => {
@@ -324,7 +354,7 @@ const PowerRankings = () => {
 											<div className="grid grid-cols-2 gap-3 text-sm">
 												<div className="bg-gray-50 rounded-lg p-2">
 													<div className="text-xs text-gray-500 mb-1">Record</div>
-													<div className="font-semibold">{`${row.wins}-${row.losses}-${row.ties}`}</div>
+													<div className="font-semibold">{renderRecord(row.wins, row.losses, row.ties)}</div>
 												</div>
 												<div className="bg-gray-50 rounded-lg p-2">
 													<div className="text-xs text-gray-500 mb-1">Points For</div>
@@ -385,7 +415,7 @@ const PowerRankings = () => {
 												<tr className="hover:bg-gray-50 transition-colors touch-friendly">
 													<td className="py-2 md:py-3 px-3 md:px-4 text-sm text-blue-700 font-bold border-b border-gray-200">{row.rank}</td>
 													<td className="py-2 md:py-3 px-3 md:px-4 text-sm text-center border-b border-gray-200">
-														<span className="text-gray-400">-</span>
+														{renderMovement(row.movement)}
 													</td>
 													<td className="py-2 md:py-3 px-3 md:px-4 text-sm text-gray-800 font-medium border-b border-gray-200">
 														<div className="flex items-center gap-2 md:gap-3">
@@ -401,7 +431,7 @@ const PowerRankings = () => {
 														</div>
 													</td>
 													<td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold text-blue-800">{formatDPR(row.dpr)}</td>
-													<td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold">{`${row.wins}-${row.losses}-${row.ties}`}</td>
+													<td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold">{renderRecord(row.wins, row.losses, row.ties)}</td>
 													<td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold text-green-700">{formatPoints(row.pointsFor)}</td>
 													<td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold text-red-700">{formatPoints(row.pointsAgainst)}</td>
 													<td className={`py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold ${row.luckRating > 0 ? 'text-green-600' : row.luckRating < 0 ? 'text-red-600' : 'text-gray-700'}`}>{formatLuckRating(row.luckRating)}</td>

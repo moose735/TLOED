@@ -24,96 +24,6 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
   const [seasonalDPRData, setSeasonalDPRData] = useState([]);
   const [loading, setLoading] = useState(true); // Local loading state for calculations
   const [showAllSeasonal, setShowAllSeasonal] = useState(false); // New state for "Show More"
-  const [currentSeasonPower, setCurrentSeasonPower] = useState([]);
-  // Fetch current season DPRs from PowerRankings logic, always for the real current season
-  useEffect(() => {
-    if (!historicalData || !historicalData.rostersBySeason) return;
-    // Always use the real current NFL season
-    const getCurrentNFLSeason = () => {
-      const today = new Date();
-      const year = today.getFullYear();
-      const month = today.getMonth();
-      return (month >= 8) ? year : year - 1;
-    };
-    const currentSeason = getCurrentNFLSeason().toString();
-    // Use the same logic as PowerRankings to get current season DPRs
-    const metricsResult = calculateAllLeagueMetrics(historicalData, null, getTeamName, nflState);
-    const seasonalMetrics = metricsResult?.seasonalMetrics || {};
-    const seasonMetrics = seasonalMetrics[currentSeason] || {};
-    // If there are no teams for this season, try to get rosters from rostersBySeason
-    let rosterIds = Object.keys(seasonMetrics);
-    if (rosterIds.length === 0 && historicalData.rostersBySeason && historicalData.rostersBySeason[currentSeason]) {
-      rosterIds = historicalData.rostersBySeason[currentSeason].map(r => String(r.roster_id));
-    }
-    let rankedTeams = rosterIds
-      .map(rosterId => {
-        // Always try to get the full stats from seasonalMetrics for this team/season
-        const teamStats = seasonMetrics[rosterId] || {};
-        // Try to get ownerId from stats or from rostersBySeason
-        let ownerId = teamStats.ownerId;
-        if (!ownerId && historicalData.rostersBySeason && historicalData.rostersBySeason[currentSeason]) {
-          const roster = historicalData.rostersBySeason[currentSeason].find(r => String(r.roster_id) === String(rosterId));
-          if (roster) ownerId = roster.owner_id;
-        }
-
-        // Explicitly aggregate completed games from matchupsBySeason
-        let completedMatchups = [];
-        if (historicalData.matchupsBySeason && historicalData.matchupsBySeason[currentSeason]) {
-          // Get current NFL week to filter only completed games
-          const currentNFLWeek = nflState?.week ? parseInt(nflState.week) : 1;
-          completedMatchups = historicalData.matchupsBySeason[currentSeason]
-            .filter(m => (String(m.team1_roster_id) === String(rosterId) || String(m.team2_roster_id) === String(rosterId))
-              && typeof m.team1_score === 'number'
-              && typeof m.team2_score === 'number'
-              && (m.team1_score > 0 || m.team2_score > 0) // Exclude unplayed games (0-0)
-              && parseInt(m.week) < currentNFLWeek); // Only include completed weeks
-        }
-
-        let wins = 0, losses = 0, ties = 0, pointsTotal = 0, pointsArr = [], oppPointsTotal = 0;
-        completedMatchups.forEach(m => {
-          let myScore, oppScore;
-          if (String(m.team1_roster_id) === String(rosterId)) {
-            myScore = m.team1_score;
-            oppScore = m.team2_score;
-          } else {
-            myScore = m.team2_score;
-            oppScore = m.team1_score;
-          }
-          pointsTotal += myScore;
-          oppPointsTotal += oppScore;
-          pointsArr.push(myScore);
-          if (myScore > oppScore) wins++;
-          else if (myScore < oppScore) losses++;
-          else ties++;
-        });
-        const gamesPlayed = completedMatchups.length;
-        const pointsPerGame = gamesPlayed > 0 ? pointsTotal / gamesPlayed : null;
-        const highestPointsGame = pointsArr.length > 0 ? Math.max(...pointsArr) : null;
-        const lowestPointsGame = pointsArr.length > 0 ? Math.min(...pointsArr) : null;
-        const winPercentage = gamesPlayed > 0 ? (wins + 0.5 * ties) / gamesPlayed : null;
-
-        return {
-          ownerId,
-          team: getTeamName(ownerId, currentSeason),
-          dpr: teamStats.adjustedDPR || 0,
-          wins: gamesPlayed > 0 ? wins : null,
-          losses: gamesPlayed > 0 ? losses : null,
-          ties: gamesPlayed > 0 ? ties : null,
-          pointsFor: gamesPlayed > 0 ? pointsTotal : null,
-          pointsAgainst: gamesPlayed > 0 ? oppPointsTotal : null,
-          luckRating: teamStats.luckRating ?? 0,
-          winPercentage: winPercentage,
-          pointsPerGame: pointsPerGame,
-          highestPointsGame: highestPointsGame,
-          lowestPointsGame: lowestPointsGame,
-          year: parseInt(currentSeason),
-          rosterId
-        };
-      })
-      .filter(team => team.ownerId)
-      .sort((a, b) => b.dpr - a.dpr);
-    setCurrentSeasonPower(rankedTeams);
-  }, [historicalData, getTeamName, nflState]);
 
   useEffect(() => {
     // Always define metrics before any other logic
@@ -333,7 +243,10 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
 
   const renderRecord = (wins, losses, ties) => {
     if (wins === null) return ''; // Check for null to handle the average row
-    return `${wins || 0}-${losses || 0}-${ties || 0}`;
+    if (ties > 0) {
+      return `${wins || 0}-${losses || 0}-${ties}`;
+    }
+    return `${wins || 0}-${losses || 0}`;
   };
 
   // Use the real current NFL season (from system date or constant)
@@ -363,116 +276,14 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
     return deduped;
   };
 
-  // Replace current season rows with PowerRankings DPRs for accuracy, always for the real current NFL season
-  const injectCurrentSeasonDPRs = (rows) => {
-    if (!currentSeasonPower || currentSeasonPower.length === 0) return rows;
-    // Remove all current season rows from rows (using real currentNFLSeason)
-    const filtered = rows.filter(row => row.year !== currentNFLSeason || row.isAverageRow);
-    // Merge in full stat set from seasonalMetrics for each current season team
-    const currentSeasonStats = seasonalMetrics && seasonalMetrics[currentNFLSeason] ? seasonalMetrics[currentNFLSeason] : {};
-    const injected = [
-      ...currentSeasonPower.map(row => {
-        const stats = currentSeasonStats[row.rosterId] || {};
-        // Fallback: calculate from completed matchups if missing or zero
-        let wins = stats.wins ?? row.wins ?? null;
-        let losses = stats.losses ?? row.losses ?? null;
-        let ties = stats.ties ?? row.ties ?? null;
-        let winPercentage = stats.winPercentage ?? row.winPercentage ?? null;
-        let pointsPerGame = stats.averageScore ?? row.pointsPerGame ?? null;
-        let highestPointsGame = stats.highScore ?? row.highestPointsGame ?? null;
-        let lowestPointsGame = stats.lowScore ?? row.lowestPointsGame ?? null;
-
-        // Always recalculate from matchups for current season (ignore seasonalMetrics)
-        const matchups = (historicalData && historicalData.matchupsBySeason && historicalData.matchupsBySeason[currentNFLSeason])
-          ? historicalData.matchupsBySeason[currentNFLSeason].filter(m => {
-              // Get current NFL week to filter only completed games
-              const currentNFLWeek = nflState?.week ? parseInt(nflState.week) : 1;
-              return (String(m.team1_roster_id) === String(row.rosterId) || String(m.team2_roster_id) === String(row.rosterId))
-                && typeof m.team1_score === 'number' 
-                && typeof m.team2_score === 'number'
-                && !isNaN(m.team1_score)
-                && !isNaN(m.team2_score)
-                && (m.team1_score > 0 || m.team2_score > 0) // Exclude unplayed games (0-0)
-                && parseInt(m.week) < currentNFLWeek; // Only include completed weeks
-            })
-          : [];
-        
-        if (matchups.length > 0) {
-          // Always recalculate all stats from actual matchups for current season
-          wins = matchups.filter(m => {
-            const myScore = String(m.team1_roster_id) === String(row.rosterId) ? m.team1_score : m.team2_score;
-            const oppScore = String(m.team1_roster_id) === String(row.rosterId) ? m.team2_score : m.team1_score;
-            return myScore > oppScore;
-          }).length;
-          
-          losses = matchups.filter(m => {
-            const myScore = String(m.team1_roster_id) === String(row.rosterId) ? m.team1_score : m.team2_score;
-            const oppScore = String(m.team1_roster_id) === String(row.rosterId) ? m.team2_score : m.team1_score;
-            return myScore < oppScore;
-          }).length;
-          
-          ties = matchups.filter(m => {
-            const myScore = String(m.team1_roster_id) === String(row.rosterId) ? m.team1_score : m.team2_score;
-            const oppScore = String(m.team1_roster_id) === String(row.rosterId) ? m.team2_score : m.team1_score;
-            return myScore === oppScore;
-          }).length;
-          
-          const totalPoints = matchups.reduce((sum, m) => {
-            const myScore = String(m.team1_roster_id) === String(row.rosterId) ? m.team1_score : m.team2_score;
-            return sum + myScore;
-          }, 0);
-          pointsPerGame = totalPoints / matchups.length;
-          
-          const scores = matchups.map(m => String(m.team1_roster_id) === String(row.rosterId) ? m.team1_score : m.team2_score);
-          highestPointsGame = Math.max(...scores);
-          lowestPointsGame = Math.min(...scores);
-          
-          winPercentage = (wins + 0.5 * ties) / matchups.length;
-        }
-        return {
-          ...row,
-          year: currentNFLSeason,
-          isAverageRow: false,
-          wins,
-          losses,
-          ties,
-          winPercentage,
-          pointsPerGame,
-          highestPointsGame,
-          lowestPointsGame
-        };
-      }),
-      ...filtered
-    ];
-    // Sort by DPR descending, then by year
-    injected.sort((a, b) => b.dpr - a.dpr);
-    // Insert average row after top 20 or after all current season teams if more than 20
-    const avgRow = rows.find(row => row.isAverageRow);
-    let result = injected;
-    if (avgRow) {
-      // Find the index after top 20 or after all current season teams if more than 20
-      let insertIdx = 20;
-      if (injected.length > 20) {
-        // Find last current season team index
-        const lastCurrentIdx = injected.reduce((acc, row, idx) => (row.year === currentNFLSeason ? idx : acc), 19);
-        insertIdx = lastCurrentIdx + 1;
-      }
-      // Remove any existing avgRow
-      result = injected.filter(row => !row.isAverageRow);
-      result.splice(insertIdx, 0, avgRow);
-    }
-    return result;
-  };
-
   // Always dedupe and sort the full list, then slice top 20 for above the button
-  const allRows = dedupeRows(injectCurrentSeasonDPRs(seasonalDPRData));
+  const allRows = dedupeRows(seasonalDPRData);
   allRows.sort((a, b) => b.dpr - a.dpr);
   if (showAllSeasonal) {
     displayedSeasonalDPRData = allRows;
   } else {
     // Find the position of the average row in the sorted list
     const avgRowIndex = allRows.findIndex(row => row.isAverageRow);
-    
     if (avgRowIndex >= 0 && avgRowIndex < 20) {
       // Average row naturally falls in top 20, show it in its correct position
       displayedSeasonalDPRData = allRows.slice(0, 20);

@@ -27,6 +27,7 @@ const ProjectedPlayoffBracket = () => {
     const matchupsFlat = historicalData.matchupsBySeason?.[season] || [];
     const currentRecords = new Map(); // rosterId -> { wins, losses, ties, pointsFor, games }
 
+
     rosters.forEach(r => {
       currentRecords.set(String(r.roster_id), { wins: 0, losses: 0, ties: 0, pointsFor: 0, games: 0 });
     });
@@ -45,7 +46,7 @@ const ProjectedPlayoffBracket = () => {
       r1.pointsFor += s1; r2.pointsFor += s2; r1.games += 1; r2.games += 1;
       if (s1 > s2) { r1.wins += 1; r2.losses += 1; }
       else if (s2 > s1) { r2.wins += 1; r1.losses += 1; }
-      else { r1.ties += 1; r2.ties += 1; }
+      else if (s1 === s2 && s1 > 0) { r1.ties += 1; r2.ties += 1; } // Only count as tie if both teams have nonzero score
     });
 
     // Build map of remaining scheduled H2H matchups up to playoffs
@@ -91,7 +92,7 @@ const ProjectedPlayoffBracket = () => {
       // Use all-play win% if available as a skill proxy, else current win%
       const allPlayWinPct = typeof stats.allPlayWinPercentage === 'number' && !isNaN(stats.allPlayWinPercentage) && stats.allPlayWinPercentage > 0
         ? stats.allPlayWinPercentage
-        : (rec.games > 0 ? ((rec.wins + 0.5 * rec.ties) / rec.games) : 0.5);
+        : (rec.games > 0 ? ((rec.wins + (rec.ties > 0 ? 0.5 * rec.ties : 0)) / rec.games) : 0.5);
 
       const avgScore = (stats.averageScore && !isNaN(stats.averageScore) && stats.averageScore > 0)
         ? stats.averageScore
@@ -122,7 +123,7 @@ const ProjectedPlayoffBracket = () => {
         avatar: getTeamDetails(ownerId, season)?.avatar,
         currentWins: rec.wins,
         currentLosses: rec.losses,
-        currentTies: rec.ties,
+  currentTies: rec.ties,
         currentPoints: rec.pointsFor,
         projectedWins: projectedWinsTotal,
         projectedPoints: projectedPointsTotal,
@@ -222,7 +223,7 @@ const ProjectedPlayoffBracket = () => {
         <div className="pointer-events-none absolute z-10 hidden group-hover:block bg-white border border-gray-200 shadow-lg rounded-md p-3 w-72 -left-2 top-10">
           <div className="text-sm font-semibold text-gray-800 mb-1">{team.name}</div>
           <div className="grid grid-cols-2 gap-2 text-xs text-gray-700">
-            <div>Current Record</div><div className="text-right">{team.currentWins}-{team.currentLosses}{team.currentTies?`-${team.currentTies}`:''}</div>
+            <div>Current Record</div><div className="text-right">{team.currentWins}-{team.currentLosses}{team.currentTies > 0 ? `-${team.currentTies}` : ''}</div>
             <div>Current Points</div><div className="text-right">{team.currentPoints.toFixed(1)}</div>
             <div>Avg Score</div><div className="text-right">{team.avgScore.toFixed(1)}</div>
             <div>All-Play Win%</div><div className="text-right">{(team.allPlayWinPct*100).toFixed(1)}%</div>

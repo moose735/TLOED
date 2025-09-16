@@ -7,13 +7,13 @@ const DEBUG_FINANCIAL = false;
  * Get the total value of a transaction, accounting for quantity and team count
  */
 export const getTransactionTotal = (transaction) => {
-    // If the category is Waiver/FA Fee, multiply amount by the quantity.
-    if (transaction.category === 'Waiver/FA Fee') {
-        return Number(transaction.amount || 0) * Number(transaction.quantity || 1);
+    // If the category is Waiver/FA Fee, multiply amount by the quantity and number of teams.
+    if (transaction.category === 'Waiver/FA Fee' && Array.isArray(transaction.team)) {
+        return Number(transaction.amount || 0) * Number(transaction.quantity || 1) * transaction.team.length;
     }
-    // If the category is Trade Fee, multiply amount by the number of teams.
+    // If the category is Trade Fee, multiply amount by the quantity and number of teams.
     if (transaction.category === 'Trade Fee' && Array.isArray(transaction.team)) {
-        return Number(transaction.amount || 0) * transaction.team.length;
+        return Number(transaction.amount || 0) * Number(transaction.quantity || 1) * transaction.team.length;
     }
     // For all other cases, the total is just the amount.
     return Number(transaction.amount || 0);
@@ -43,8 +43,10 @@ export const calculateTeamTransactionCountsByOwnerId = (transactions, ownerId) =
     });
 
     // Count transactions by category
-    // For Trade Fees: count each transaction as 1 (regardless of team count)
-    const tradeFees = teamTransactions.filter(t => t.category === 'Trade Fee').length;
+    // For Trade Fees: multiply by quantity to account for multiple trades in one transaction
+    const tradeFees = teamTransactions
+        .filter(t => t.category === 'Trade Fee')
+        .reduce((sum, t) => sum + Number(t.quantity || 1), 0);
     
     // For Waiver/FA Fees: multiply by quantity to account for multiple pickups in one transaction
     const waiverFees = teamTransactions
@@ -133,18 +135,20 @@ export const calculateTeamFinancialTotalsByOwnerId = (transactions, ownerId) => 
         }
     }
 
-    // Calculate totals
-    // NOTE: Use amount directly (not getTransactionTotal) to match FinancialTracker member calculations
-    // The amount field represents each team's individual share, not the total transaction value
-    // For Trade Fees: amount is per-team share, team array has multiple members
-    // For Waiver/FA Fees: amount is per-team share (already calculated per unit * quantity)
+    // Calculate totals using getTransactionTotal and divide by team count for each transaction
     const totalFees = teamTransactions
         .filter(t => t.type === 'Fee')
-        .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+        .reduce((sum, t) => {
+            const teamCount = Array.isArray(t.team) ? t.team.length : 1;
+            return sum + (getTransactionTotal(t) / teamCount);
+        }, 0);
 
     const totalPayouts = teamTransactions
         .filter(t => t.type === 'Payout')
-        .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+        .reduce((sum, t) => {
+            const teamCount = Array.isArray(t.team) ? t.team.length : 1;
+            return sum + (Number(t.amount || 0) / teamCount);
+        }, 0);
 
     const netTotal = totalPayouts - totalFees; // Positive means team received more than they paid
 
