@@ -1,6 +1,7 @@
 // src/services/financialService.js
 import { initializeApp } from 'firebase/app';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
+import logger from '../utils/logger';
 
 // Firebase Config (same as in FinancialTracker)
 const firebaseConfig = {
@@ -37,34 +38,34 @@ const initializeFirebase = () => {
  * @returns {Promise<Object>} Financial data for the year
  */
 export const fetchFinancialDataForYear = async (year) => {
-    console.log(`Fetching financial data for year: ${year}`);
+    logger.debug(`Fetching financial data for year: ${year}`);
     try {
         const database = initializeFirebase();
-        console.log('Firebase initialized, attempting to fetch document...');
+        logger.debug('Firebase initialized, attempting to fetch document...');
         
         const docRef = doc(database, 'league_finances', year);
-        console.log('Document reference created:', docRef.path);
+        logger.debug('Document reference created:', docRef.path);
         
         const docSnap = await getDoc(docRef);
-        console.log('Document snapshot received:', docSnap.exists() ? 'EXISTS' : 'DOES NOT EXIST');
+        logger.debug('Document snapshot received:', docSnap.exists() ? 'EXISTS' : 'DOES NOT EXIST');
         
         if (docSnap.exists()) {
             const data = docSnap.data();
-            console.log(`Raw financial data for ${year}:`, Object.keys(data || {}));
-            console.log(`Transactions count for ${year}:`, data?.transactions?.length || 0);
+            logger.debug(`Raw financial data for ${year}:`, Object.keys(data || {}));
+            logger.debug(`Transactions count for ${year}:`, data?.transactions?.length || 0);
             
             if (data?.transactions && data.transactions.length > 0) {
-                console.log(`Sample transaction for ${year}:`, data.transactions[0]);
+                logger.debug(`Sample transaction for ${year}:`, data.transactions[0]);
             }
             
             return data && data.transactions ? data : { transactions: [], potentialFees: [], potentialPayouts: [] };
         } else {
-            console.log(`No financial document found for year ${year} in Firestore`);
+            logger.debug(`No financial document found for year ${year} in Firestore`);
             return { transactions: [], potentialFees: [], potentialPayouts: [] };
         }
     } catch (error) {
-        console.error(`Error fetching financial data for year ${year}:`, error);
-        console.error('Error details:', error.message, error.code);
+        logger.error(`Error fetching financial data for year ${year}:`, error);
+        logger.error('Error details:', error.message, error.code);
         return { transactions: [], potentialFees: [], potentialPayouts: [] };
     }
 };
@@ -76,11 +77,10 @@ export const fetchFinancialDataForYear = async (year) => {
  */
 export const fetchFinancialDataForYears = async (years) => {
     if (!years || !Array.isArray(years) || years.length === 0) {
-        console.log('No years provided for financial data fetch');
+        logger.debug('No years provided for financial data fetch');
         return {};
     }
-
-    console.log('Fetching financial data for multiple years:', years);
+    logger.debug('Fetching financial data for multiple years:', years);
     try {
         const promises = years.map(year => fetchFinancialDataForYear(year));
         const results = await Promise.all(promises);
@@ -90,10 +90,10 @@ export const fetchFinancialDataForYears = async (years) => {
             financialDataByYear[year] = results[index];
         });
         
-        console.log('Final financial data by year:', financialDataByYear);
+        logger.debug('Final financial data by year:', financialDataByYear);
         return financialDataByYear;
     } catch (error) {
-        console.error('Error fetching financial data for multiple years:', error);
+        logger.error('Error fetching financial data for multiple years:', error);
         return {};
     }
 };

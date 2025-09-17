@@ -22,7 +22,7 @@ const VersusRecords = ({ historicalMatchups, getDisplayTeamName }) => {
 
       // Skip invalid matchups
       if (!team1 || !team2 || isNaN(year) || isNaN(week) || isNaN(team1Score) || isNaN(team2Score)) {
-        console.warn('Skipping invalid matchup data in VersusRecords:', match);
+        try { const logger = require('../utils/logger').default; logger.warn('Skipping invalid matchup data in VersusRecords:', match); } catch(e) {}
         return;
       }
 

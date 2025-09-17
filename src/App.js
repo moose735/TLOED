@@ -21,6 +21,7 @@ import DesktopNav from './components/DesktopNav';
 
 // Import the custom hook from your SleeperDataContext
 import { SleeperDataProvider, useSleeperData } from './contexts/SleeperDataContext';
+import logger from './utils/logger';
 
 // Define the available tabs and their categories
 const NAV_CATEGORIES = {
@@ -116,7 +117,7 @@ const AppContent = () => {
 
         // Handle browser back/forward buttons
         const handlePopState = (event) => {
-            console.log('Pop state event:', event.state);
+            logger.debug('Pop state event:', event.state);
             
             if (event.state) {
                 setActiveTab(event.state.tab || TABS.DASHBOARD);

@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Area, ResponsiveContainer, Customized, ComposedChart, BarChart, Bar, Cell } from 'recharts';
 import { useSleeperData } from '../contexts/SleeperDataContext';
+import logger from '../utils/logger';
 
 // Helper function to render record (W-L-T)
 const renderRecord = (record) => {
@@ -404,7 +405,7 @@ const Head2HeadGrid = () => {
                 };
             });
 
-        console.log('Net Points Data for chart:', netPointsData); // Debugging: Check data before chart
+    logger.debug('Net Points Data for chart:', netPointsData); // Debugging: Check data before chart
 
         sortedMatches.forEach(match => {
             let scoreAValue, scoreBValue;

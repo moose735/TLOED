@@ -1,4 +1,5 @@
 // src/utils/sleeperPlayerStats.js
+import logger from './logger';
 
 /**
  * Fetches weekly player statistics from the Sleeper API for a given player and season.
@@ -11,7 +12,7 @@
  */
 export const fetchPlayerStats = async (playerId, season, seasonType = 'regular', playerNameForLog = 'Unknown Player') => {
     if (!playerId || !season) {
-        console.warn('fetchPlayerStats: Player ID and season are required.');
+        logger.warn('fetchPlayerStats: Player ID and season are required.');
         return null;
     }
 
@@ -22,22 +23,22 @@ export const fetchPlayerStats = async (playerId, season, seasonType = 'regular',
 
         if (!response.ok) {
             // Log more details if the HTTP response is not OK
-            console.error(`Error fetching stats for ${playerNameForLog} (ID: ${playerId}), season ${season}: HTTP Status ${response.status} - ${response.statusText}`);
+            logger.error(`Error fetching stats for ${playerNameForLog} (ID: ${playerId}), season ${season}: HTTP Status ${response.status} - ${response.statusText}`);
             // Attempt to read the response body for more error details, but don't block
             try {
                 const errorBody = await response.text();
-                console.error(`Error response body for ${playerNameForLog} (ID: ${playerId}):`, errorBody);
+                logger.error(`Error response body for ${playerNameForLog} (ID: ${playerId}):`, errorBody);
             } catch (readError) {
-                console.error(`Could not read error response body for ${playerNameForLog} (ID: ${playerId}):`, readError);
+                logger.error(`Could not read error response body for ${playerNameForLog} (ID: ${playerId}):`, readError);
             }
             return null;
         }
 
         const stats = await response.json();
-        console.log(`Successfully fetched stats for ${playerNameForLog} (ID: ${playerId}), season ${season}:`, stats); // Log the fetched data
+        logger.debug(`Successfully fetched stats for ${playerNameForLog} (ID: ${playerId}), season ${season}:`, stats); // Log the fetched data
         return stats;
     } catch (error) {
-        console.error(`Failed to fetch stats for ${playerNameForLog} (ID: ${playerId}), season ${season} (network or JSON parse error):`, error);
+        logger.error(`Failed to fetch stats for ${playerNameForLog} (ID: ${playerId}), season ${season} (network or JSON parse error):`, error);
         return null;
     }
 };
@@ -50,21 +51,21 @@ export const fetchPlayerStats = async (playerId, season, seasonType = 'regular',
  */
 export const fetchLeagueScoringSettings = async (leagueId) => {
     if (!leagueId) {
-        console.error('fetchLeagueScoringSettings: League ID is required.');
+        logger.error('fetchLeagueScoringSettings: League ID is required.');
         return null;
     }
     const url = `https://api.sleeper.app/v1/league/${leagueId}`;
     try {
         const response = await fetch(url);
         if (!response.ok) {
-            console.error(`Error fetching league settings for league ${leagueId}: HTTP Status ${response.status} - ${response.statusText}`);
+            logger.error(`Error fetching league settings for league ${leagueId}: HTTP Status ${response.status} - ${response.statusText}`);
             return null;
         }
         const leagueData = await response.json();
-        console.log(`Successfully fetched league settings for league ${leagueId}:`, leagueData.scoring_settings);
+        logger.debug(`Successfully fetched league settings for league ${leagueId}:`, leagueData.scoring_settings);
         return leagueData.scoring_settings || null;
     } catch (error) {
-        console.error(`Failed to fetch league settings for league ${leagueId}:`, error);
+        logger.error(`Failed to fetch league settings for league ${leagueId}:`, error);
         return null;
     }
 };
@@ -77,14 +78,14 @@ export const fetchLeagueScoringSettings = async (leagueId) => {
  */
 export const fetchLeagueRosterSettings = async (leagueId) => {
     if (!leagueId) {
-        console.error('fetchLeagueRosterSettings: League ID is required.');
+        logger.error('fetchLeagueRosterSettings: League ID is required.');
         return null;
     }
     const url = `https://api.sleeper.app/v1/league/${leagueId}`;
     try {
         const response = await fetch(url);
         if (!response.ok) {
-            console.error(`Error fetching league roster settings for league ${leagueId}: HTTP Status ${response.status} - ${response.statusText}`);
+            logger.error(`Error fetching league roster settings for league ${leagueId}: HTTP Status ${response.status} - ${response.statusText}`);
             return null;
         }
         const leagueData = await response.json();
@@ -92,10 +93,10 @@ export const fetchLeagueRosterSettings = async (leagueId) => {
             roster_positions: leagueData.roster_positions || [],
             total_rosters: leagueData.total_rosters || 0
         };
-        console.log(`Successfully fetched league roster settings for league ${leagueId}:`, rosterSettings);
+        logger.debug(`Successfully fetched league roster settings for league ${leagueId}:`, rosterSettings);
         return rosterSettings;
     } catch (error) {
-        console.error(`Failed to fetch league roster settings for league ${leagueId}:`, error);
+        logger.error(`Failed to fetch league roster settings for league ${leagueId}:`, error);
         return null;
     }
 };
@@ -137,7 +138,7 @@ export const calculateFantasyPoints = (playerStats, scoringSettings, playerPosit
             }
 
             // Handle tiered defensive scoring for DEF position
-            if (playerPosition.toUpperCase() === 'DEF') {
+            if (typeof playerPosition === 'string' && playerPosition.toUpperCase() === 'DEF') {
                 const ptsAllowed = weeklyStats.pts_allow;
                 const ydsAllowed = weeklyStats.yds_allow;
 
@@ -211,7 +212,7 @@ export const rankPlayersByFantasyPoints = (processedPicks) => {
 
     // Filter out picks without fantasy points or position, and add to overall
     const playersWithPoints = processedPicks.filter(pick =>
-        typeof pick.fantasy_points === 'number' && pick.player_position
+        typeof pick.fantasy_points === 'number' && (typeof pick.player_position === 'string' && pick.player_position)
     );
 
     // Populate overall rankings
@@ -219,7 +220,7 @@ export const rankPlayersByFantasyPoints = (processedPicks) => {
 
     // Group by position
     playersWithPoints.forEach(pick => {
-        const position = pick.player_position.toUpperCase();
+    const position = (typeof pick.player_position === 'string') ? pick.player_position.toUpperCase() : '';
         if (!positionalRankings[position]) {
             positionalRankings[position] = [];
         }
@@ -260,7 +261,7 @@ export const rankPlayersByFantasyPoints = (processedPicks) => {
  */
 export const calculateVORP = (positionalRankings, leagueRosterSettings) => {
     if (!positionalRankings || !leagueRosterSettings || !Array.isArray(leagueRosterSettings.roster_positions) || typeof leagueRosterSettings.total_rosters !== 'number') {
-        console.warn('calculateVORP: Missing or invalid positional rankings or league roster settings.');
+        logger.warn('calculateVORP: Missing or invalid positional rankings or league roster settings.');
         return {};
     }
 
@@ -276,7 +277,7 @@ export const calculateVORP = (positionalRankings, leagueRosterSettings) => {
         'DEF': 12 // DEF12 (assuming 12 team league, 1 starter per team)
     };
 
-    console.log('VORP Calculation - Fixed Replacement Ranks:', fixedReplacementRanks);
+    logger.debug('VORP Calculation - Fixed Replacement Ranks:', fixedReplacementRanks);
 
     for (const position in positionalRankings) {
         const playersForPosition = positionalRankings[position];
@@ -293,13 +294,13 @@ export const calculateVORP = (positionalRankings, leagueRosterSettings) => {
         let replacementPlayerName = 'N/A';
 
         // Check if the calculated replacement index is valid and within the array bounds
-        if (replacementLevelIndex >= 0 && replacementLevelIndex < playersForPosition.length) {
+            if (replacementLevelIndex >= 0 && replacementLevelIndex < playersForPosition.length) {
             const replacementPlayer = playersForPosition[replacementLevelIndex];
             replacementPoints = replacementPlayer.fantasy_points;
             replacementPlayerName = replacementPlayer.player_name;
-            console.log(`Replacement player for ${upperPos} (rank ${replacementLevelIndex + 1}): ${replacementPlayerName} with ${replacementPoints.toFixed(2)} points.`);
+            logger.debug(`Replacement player for ${upperPos} (rank ${replacementLevelIndex + 1}): ${replacementPlayerName} with ${replacementPoints.toFixed(2)} points.`);
         } else {
-            console.warn(`Could not find a valid replacement player for ${upperPos} at calculated rank ${replacementRank}. Not enough players ranked or rank is 0. Setting replacement points to 0.`);
+            logger.warn(`Could not find a valid replacement player for ${upperPos} at calculated rank ${replacementRank}. Not enough players ranked or rank is 0. Setting replacement points to 0.`);
             // If no valid replacement player is found, replacement points default to 0.
             // This means VORP for all players in this position will be their raw fantasy points.
         }

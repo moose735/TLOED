@@ -1,6 +1,7 @@
 // src/lib/StreaksRecords.js
 import React, { useState, useEffect } from 'react';
 import { useSleeperData } from '../contexts/SleeperDataContext'; // Import useSleeperData context hook
+import logger from '../utils/logger';
 
 const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is now the primary data source
     // Consume historicalData, getTeamName, loading, and error from the context
@@ -33,7 +34,7 @@ const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is no
         allHistoricalMatchupsFlat.forEach(match => {
             // Ensure match has necessary properties (season and week are now expected to be on the object)
             if (!match || !match.matchup_id || !match.team1_roster_id || match.team1_score === undefined || !match.team2_roster_id || match.team2_score === undefined || match.season === undefined || match.week === undefined) {
-                console.warn("StreaksRecords: Skipping invalid or incomplete matchup. Missing data:", {
+                logger.warn("StreaksRecords: Skipping invalid or incomplete matchup. Missing data:", {
                     matchup_id: match?.matchup_id,
                     team1_roster_id: match?.team1_roster_id,
                     team1_score: match?.team1_score,
@@ -55,7 +56,7 @@ const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is no
 
             // Skip if data is not valid numbers
             if (isNaN(year) || isNaN(week) || isNaN(team1Score) || isNaN(team2Score)) {
-                console.warn(`StreaksRecords: Skipping matchup due to invalid numerical data. Match:`, match);
+                logger.warn(`StreaksRecords: Skipping matchup due to invalid numerical data. Match:`, match);
                 return;
             }
 
@@ -64,7 +65,7 @@ const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is no
             const team2OwnerId = historicalData.rostersBySeason?.[year]?.find(r => String(r.roster_id) === team2RosterId)?.owner_id;
 
             if (!team1OwnerId || !team2OwnerId) {
-                console.warn(`StreaksRecords: Skipping matchup due to missing owner ID for year ${year}. Team1Roster: ${team1RosterId}, Team2Roster: ${team2RosterId}`);
+                logger.warn(`StreaksRecords: Skipping matchup due to missing owner ID for year ${year}. Team1Roster: ${team1RosterId}, Team2Roster: ${team2RosterId}`);
                 return;
             }
 

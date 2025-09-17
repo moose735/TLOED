@@ -35,6 +35,7 @@ function getMeanAndVariance(rosterId, season, matchups, N = null) {
 	return { mean, variance, count: scores.length, recentMean };
 }
 import React, { useState, useEffect } from 'react';
+import logger from '../utils/logger';
 import { useSleeperData } from '../contexts/SleeperDataContext';
 import { calculateAllLeagueMetrics } from '../utils/calculations';
 
@@ -344,12 +345,12 @@ const PowerRankings = () => {
 
 					// Get current and previous week rankings
 
-					// DEBUG: Log actualWins, projectedFutureWins, and ownerIds in currentRankings
-					console.log('DEBUG actualWins:', actualWins);
-					console.log('DEBUG projectedFutureWins:', projectedFutureWins);
+					// DEBUG: Log actualWins, projectedFutureWins, and ownerIds in currentRankings (gated)
+					logger.debug('DEBUG actualWins:', actualWins);
+					logger.debug('DEBUG projectedFutureWins:', projectedFutureWins);
 
 					const currentRankings = getRankedTeams(completedWeek);
-					console.log('DEBUG currentRankings ownerIds:', currentRankings.map(t => t.ownerId));
+					logger.debug('DEBUG currentRankings ownerIds:', currentRankings.map(t => t.ownerId));
 					const prevRankings = completedWeek > 1 ? getRankedTeams(completedWeek - 1) : [];
 
 					// Map ownerId to previous rank

@@ -28,7 +28,7 @@ const Transactions = ({ leagueId, week }) => {
         const fetchedTransactions = await fetchTransactions(leagueId, week);
         setTransactions(fetchedTransactions);
       } catch (err) {
-        console.error("Failed to fetch transactions:", err);
+  logger.error("Failed to fetch transactions:", err);
         setError("Failed to load transactions. Please try again.");
       } finally {
         setLoading(false);

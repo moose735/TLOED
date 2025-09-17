@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { calculateAllLeagueMetrics } from '../utils/calculations'; // For career DPR
 import { useSleeperData } from '../contexts/SleeperDataContext'; // Import the custom hook
+import logger from '../utils/logger';
 import { calculatePlayoffFinishes } from '../utils/playoffRankings'; // Import the playoff calculation function
 
 // Recharts for charting
@@ -68,7 +69,7 @@ const LeagueHistory = ({ onTeamNameClick }) => {
 
         // Ensure getDisplayTeamNameFromContext is a function
         if (typeof getDisplayTeamNameFromContext !== 'function') {
-            console.error("LeagueHistory: getDisplayTeamNameFromContext is not a function. Cannot process data.");
+            logger.error("LeagueHistory: getDisplayTeamNameFromContext is not a function. Cannot process data.");
             setAllTimeStandings([]);
             setSeasonalDPRChartData([]);
             setUniqueTeamsForChart([]);
@@ -81,7 +82,7 @@ const LeagueHistory = ({ onTeamNameClick }) => {
         // NEW: Pass nflState to calculateAllLeagueMetrics
         const { seasonalMetrics, careerDPRData: calculatedCareerDPRs } = calculateAllLeagueMetrics(historicalData, allDraftHistory, getDisplayTeamNameFromContext, nflState);
 
-        console.log("LeagueHistory: calculatedCareerDPRs after initial calculation:", calculatedCareerDPRs); // NEW LOG
+    logger.debug("LeagueHistory: calculatedCareerDPRs after initial calculation:", calculatedCareerDPRs); // NEW LOG
 
         const allYears = Object.keys(historicalData.matchupsBySeason).map(Number).sort((a, b) => a - b);
 
@@ -92,7 +93,7 @@ const LeagueHistory = ({ onTeamNameClick }) => {
             const teamName = getDisplayTeamNameFromContext(ownerId, null); // Get current team name for overall stats
 
             if (!teamName || teamName.startsWith('Unknown Team (ID:')) {
-                console.warn(`LeagueHistory: Skipping career stats for ownerId ${ownerId} due to unresolved team name.`);
+                logger.warn(`LeagueHistory: Skipping career stats for ownerId ${ownerId} due to unresolved team name.`);
                 return;
             }
 
@@ -116,7 +117,7 @@ const LeagueHistory = ({ onTeamNameClick }) => {
                 ownerId: ownerId // Keep ownerId for awards lookup
             };
         });
-        console.log("LeagueHistory: teamOverallStats after population:", teamOverallStats); // NEW LOG
+    logger.debug("LeagueHistory: teamOverallStats after population:", teamOverallStats); // NEW LOG
 
 
         // Populate seasonsPlayed for each team from historicalData.rostersBySeason
@@ -199,7 +200,7 @@ const LeagueHistory = ({ onTeamNameClick }) => {
                     }
                 });
             } else {
-                console.warn(`LeagueHistory: No seasonal metrics found for year ${year}. Cannot determine points awards.`);
+                logger.warn(`LeagueHistory: No seasonal metrics found for year ${year}. Cannot determine points awards.`);
             }
 
             // If a year has no awards at all (N/A for everything), remove it from the summary
@@ -216,7 +217,7 @@ const LeagueHistory = ({ onTeamNameClick }) => {
                 delete newSeasonAwardsSummary[year];
             }
         });
-        console.log("LeagueHistory: newSeasonAwardsSummary after processing:", newSeasonAwardsSummary);
+    logger.debug("LeagueHistory: newSeasonAwardsSummary after processing:", newSeasonAwardsSummary);
 
 
         // Final compilation for All-Time Standings display (SORTED BY WIN PERCENTAGE)
@@ -662,7 +663,7 @@ const LeagueHistory = ({ onTeamNameClick }) => {
                                     <tbody>
                                         {sortedYearsForAwards.map((year, index) => {
                                             const awards = seasonAwardsSummary[year];
-                                            console.log(`LeagueHistory: Season Awards - Year: ${year}, Champion: ${awards.champion}, PointsChamp: ${awards.pointsChamp}`); // NEW LOG
+                                            logger.debug(`LeagueHistory: Season Awards - Year: ${year}, Champion: ${awards.champion}, PointsChamp: ${awards.pointsChamp}`); // NEW LOG
                                             return (
                                                 <tr key={year} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                                                     <td className="py-2 px-3 text-sm text-gray-800 font-semibold text-center whitespace-nowrap">{year}</td>

@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useSleeperData } from '../contexts/SleeperDataContext';
+import logger from '../utils/logger';
 
 const PlayerRecords = () => {
     const {
@@ -23,14 +24,14 @@ const PlayerRecords = () => {
     // Calculate player records from available data
     const playerRecords = useMemo(() => {
         if (!historicalData?.matchupsBySeason || !nflPlayers) {
-            console.log('Missing data for player records:', {
+            logger.debug('Missing data for player records:', {
                 hasMatchups: !!historicalData?.matchupsBySeason,
                 hasNflPlayers: !!nflPlayers
             });
             return null;
         }
 
-        console.log('Available seasons:', Object.keys(historicalData.matchupsBySeason));
+        logger.debug('Available seasons:', Object.keys(historicalData.matchupsBySeason));
         
         const weeklyRecords = {
             QB: [], RB: [], WR: [], TE: [], K: [], 'D/ST': []
@@ -126,7 +127,7 @@ const PlayerRecords = () => {
             result.seasonal[position] = getTopRecords(seasonalRecords[position]);
         });
 
-        console.log('Generated player records:', result);
+    logger.debug('Generated player records:', result);
 
         return result;
     }, [historicalData, nflPlayers, getTeamName]);

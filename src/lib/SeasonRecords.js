@@ -1,6 +1,7 @@
 // src/lib/SeasonRecords.js
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSleeperData } from '../contexts/SleeperDataContext';
+import logger from '../utils/logger';
 import { formatNumber } from '../utils/formatUtils';
 import { fetchFinancialDataForYears } from '../services/financialService';
 import { calculateTeamTransactionCountsByOwnerId } from '../utils/financialCalculations';
@@ -212,7 +213,7 @@ const SeasonRecords = () => {
         const allYears = Object.keys(historicalRecords);
         
         const finishCalculationsWithFinancialData = (financialData = {}) => {
-            console.log("Season Records: Processing with financial data for", Object.keys(financialData).length, "years");
+            logger.debug("Season Records: Processing with financial data for", Object.keys(financialData).length, "years");
             setFinancialDataByYear(financialData);
             setLoadingFinancial(false);
             
@@ -347,9 +348,9 @@ const SeasonRecords = () => {
                 mostWaiversSeason: currentMostWaiversSeason,
             });
             
-            console.log("Season Records - Final transaction counts:");
-            console.log("Most Trades Season:", currentMostTradesSeason);
-            console.log("Most Waivers Season:", currentMostWaiversSeason);
+            logger.debug("Season Records - Final transaction counts:");
+            logger.debug("Most Trades Season:", currentMostTradesSeason);
+            logger.debug("Most Waivers Season:", currentMostWaiversSeason);
             
             setAllSeasonData(tempAllSeasonData);
         };
@@ -358,7 +359,7 @@ const SeasonRecords = () => {
             fetchFinancialDataForYears(allYears)
                 .then(finishCalculationsWithFinancialData)
                 .catch(financialError => {
-                    console.warn("Could not load financial data for Season Records transaction counts:", financialError);
+                    logger.warn("Could not load financial data for Season Records transaction counts:", financialError);
                     finishCalculationsWithFinancialData({});
                 });
         } else {

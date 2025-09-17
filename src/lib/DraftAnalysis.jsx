@@ -1,7 +1,9 @@
 // src/lib/DraftAnalysis.jsx
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import logger from '../utils/logger';
 import { useSleeperData } from '../contexts/SleeperDataContext';
 import { getSleeperAvatarUrl, getSleeperPlayerHeadshotUrl, fetchAllTradedPicksMerged } from '../utils/sleeperApi';
+// Draft insights component removed per request; analytics are now shown on team pages
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'; // Import FontAwesomeIcon
 import { faRepeat } from '@fortawesome/free-solid-svg-icons'; // Import the specific icon
 
@@ -43,13 +45,13 @@ const DraftAnalysis = () => {
     const [draftYearSummary, setDraftYearSummary] = useState(null);
 
 
-    // Log raw data from context
-    console.log('--- DraftAnalysis Component Render ---');
-    console.log('Loading:', loading);
-    console.log('Error:', error);
-    console.log('Historical Data (raw):', historicalData);
-    console.log('Users Data (raw):', usersData);
-    console.log('------------------------------------');
+    // Log raw data from context (gated)
+    logger.debug('--- DraftAnalysis Component Render ---');
+    logger.debug('Loading:', loading);
+    logger.debug('Error:', error);
+    logger.debug('Historical Data (raw):', historicalData);
+    logger.debug('Users Data (raw):', usersData);
+    logger.debug('------------------------------------');
 
     // Helper to get user ID from roster ID for a specific season
     const getUserIdFromRosterId = useCallback((rosterId, season, historicalRostersBySeason) => {
@@ -60,10 +62,10 @@ const DraftAnalysis = () => {
 
     // Effect to populate seasons dropdown and set default
     useEffect(() => {
-        console.log('useEffect: Populating seasons and setting default season.');
-        console.log('Current loading status:', loading);
-        console.log('Current error status:', error);
-        console.log('Historical Data in season useEffect:', historicalData);
+    logger.debug('useEffect: Populating seasons and setting default season.');
+    logger.debug('Current loading status:', loading);
+    logger.debug('Current error status:', error);
+    logger.debug('Historical Data in season useEffect:', historicalData);
 
         if (!loading && !error && historicalData && historicalData.draftsBySeason) {
             const allYears = Object.keys(historicalData.draftsBySeason)
@@ -83,7 +85,7 @@ const DraftAnalysis = () => {
             if (selectedSeason && typeof selectedSeason === 'number' && historicalData && historicalData.draftsBySeason) {
                 const seasonDrafts = historicalData.draftsBySeason[selectedSeason];
                 if (seasonDrafts && seasonDrafts.league_id) {
-                    console.log(`Fetching league settings for league ID: ${seasonDrafts.league_id}`);
+                    logger.debug(`Fetching league settings for league ID: ${seasonDrafts.league_id}`);
                     const scoringSettings = await fetchLeagueScoringSettings(seasonDrafts.league_id);
                     setLeagueScoringSettings(scoringSettings);
 
@@ -91,7 +93,7 @@ const DraftAnalysis = () => {
                     setLeagueRosterSettings(rosterSettings);
 
                 } else {
-                    console.log(`No league ID found for season ${selectedSeason} to fetch league settings.`);
+                    logger.debug(`No league ID found for season ${selectedSeason} to fetch league settings.`);
                     setLeagueScoringSettings(null);
                     setLeagueRosterSettings(null);
                 }
@@ -107,18 +109,20 @@ const DraftAnalysis = () => {
 
     // Effect to process draft data and structure it for the board
     useEffect(() => {
-        console.log('useEffect: Processing draft data for selected season and board structure.');
-        console.log('Current selectedSeason:', selectedSeason);
-        console.log('Historical Data in draft processing useEffect:', historicalData);
-        console.log('Users Data in draft processing useEffect:', usersData);
-        console.log('League Scoring Settings:', leagueScoringSettings);
-        console.log('League Roster Settings:', leagueRosterSettings);
+    logger.debug('useEffect: Processing draft data for selected season and board structure.');
+    logger.debug('Current selectedSeason:', selectedSeason);
+    logger.debug('Historical Data in draft processing useEffect:', historicalData);
+    logger.debug('Users Data in draft processing useEffect:', usersData);
+    logger.debug('League Scoring Settings:', leagueScoringSettings);
+    logger.debug('League Roster Settings:', leagueRosterSettings);
 
 
 
         const processDraftBoardData = async () => {
-            if (!selectedSeason || selectedSeason === "Overview" || !historicalData || !historicalData.draftsBySeason || !historicalData.draftPicksBySeason || !usersData || !leagueScoringSettings || !leagueRosterSettings) {
-                console.log('Missing data dependencies for draft processing or Overview selected (selectedSeason, historicalData.draftsBySeason, historicalData.draftPicksBySeason, usersData, leagueScoringSettings, or leagueRosterSettings are not fully loaded or available).');
+            // Allow processing even when league scoring/roster settings are missing —
+            // we can still build the draft board and a basic draft summary without those settings.
+            if (!selectedSeason || selectedSeason === "Overview" || !historicalData || !historicalData.draftsBySeason || !historicalData.draftPicksBySeason || !usersData) {
+                logger.debug('Missing data dependencies for draft processing or Overview selected (selectedSeason, historicalData.draftsBySeason, historicalData.draftPicksBySeason, usersData, leagueScoringSettings, or leagueRosterSettings are not fully loaded or available).');
                 setDraftSummary(null);
                 setDraftPicks([]);
                 setOrderedTeamColumns([]);
@@ -219,9 +223,9 @@ const DraftAnalysis = () => {
                 enrichedPick.calculated_pick_slot_value = pickSlotValue;
 
                 // --- DEBUGGING START ---
-                console.log(`Processed Pick ${pick.pick_no} (${enrichedPick.player_name}):`);
-                console.log(`  Fantasy Points: ${enrichedPick.fantasy_points}`);
-                console.log(`  Calculated Player Value: ${enrichedPick.calculated_player_value}`);
+                logger.debug(`Processed Pick ${pick.pick_no} (${enrichedPick.player_name}):`);
+                logger.debug(`  Fantasy Points: ${enrichedPick.fantasy_points}`);
+                logger.debug(`  Calculated Player Value: ${enrichedPick.calculated_player_value}`);
                 // --- DEBUGGING END ---
 
                 return enrichedPick;
@@ -346,7 +350,7 @@ const DraftAnalysis = () => {
                     };
                 });
             } catch (keeperErr) {
-                console.warn('Error computing keeper history:', keeperErr);
+                logger.warn('Error computing keeper history:', keeperErr);
             }
 
             // Build a lookup for picks: round -> pick_in_round -> pick object
@@ -382,6 +386,57 @@ const DraftAnalysis = () => {
 
             setPicksGroupedByRound(newPicksGroupedByRound);
             setDraftPicks(finalProcessedPicks.sort((a, b) => a.pick_no - b.pick_no));
+
+            // Compute draft year summary (best/worst picks and teams, round summaries)
+            try {
+                const nonKeeperPicks = finalProcessedPicks.filter(p => !p.is_keeper && typeof p.scaled_vorp_delta === 'number');
+
+                if (!nonKeeperPicks || nonKeeperPicks.length === 0) {
+                    setDraftYearSummary(null);
+                } else {
+                    // Best and worst pick by scaled_vorp_delta
+                    const bestPick = nonKeeperPicks.slice().sort((a, b) => b.scaled_vorp_delta - a.scaled_vorp_delta)[0];
+                    const worstPick = nonKeeperPicks.slice().sort((a, b) => a.scaled_vorp_delta - b.scaled_vorp_delta)[0];
+
+                    // Team aggregates (sum of scaled_vorp_delta per owner for this season)
+                    const ownerTotals = {};
+                    nonKeeperPicks.forEach(p => {
+                        const owner = p.picked_by || 'unknown';
+                        if (!ownerTotals[owner]) ownerTotals[owner] = { total: 0, count: 0, teamName: p.picked_by_team_name || 'Unknown' };
+                        ownerTotals[owner].total += p.scaled_vorp_delta;
+                        ownerTotals[owner].count += 1;
+                        if (p.season && (!ownerTotals[owner].latestSeason || p.season > ownerTotals[owner].latestSeason)) {
+                            ownerTotals[owner].teamName = p.picked_by_team_name || ownerTotals[owner].teamName;
+                            ownerTotals[owner].latestSeason = p.season;
+                        }
+                    });
+
+                    const ownersArray = Object.entries(ownerTotals).map(([ownerId, agg]) => ({ ownerId, team: agg.teamName, totalScaledVorp: agg.total }));
+                    ownersArray.sort((a, b) => b.totalScaledVorp - a.totalScaledVorp);
+                    const bestTeam = ownersArray[0] || { team: 'Unknown', totalScaledVorp: 0 };
+                    const worstTeam = ownersArray[ownersArray.length - 1] || { team: 'Unknown', totalScaledVorp: 0 };
+
+                    // Round summaries
+                    const roundSummaries = [];
+                    const roundsCount = draftSummary?.settings?.rounds || totalRounds || 0;
+                    for (let r = 1; r <= roundsCount; r++) {
+                        const picksThisRound = nonKeeperPicks.filter(p => (p.round || Math.ceil(p.pick_no / (draftSummary?.settings?.teams || 12))) === r);
+                        if (!picksThisRound || picksThisRound.length === 0) {
+                            roundSummaries.push(null);
+                            continue;
+                        }
+                        const best = picksThisRound.slice().sort((a, b) => b.scaled_vorp_delta - a.scaled_vorp_delta)[0];
+                        const worst = picksThisRound.slice().sort((a, b) => a.scaled_vorp_delta - b.scaled_vorp_delta)[0];
+                        const avg = picksThisRound.reduce((s, p) => s + (p.scaled_vorp_delta || 0), 0) / picksThisRound.length;
+                        roundSummaries.push({ round: r, best, worst, avgScaledVorp: avg });
+                    }
+
+                    setDraftYearSummary({ bestTeam, worstTeam, bestPick, worstPick, roundSummaries });
+                }
+                    } catch (summaryErr) {
+                logger.warn('Error computing draftYearSummary:', summaryErr);
+                setDraftYearSummary(null);
+            }
         };
 
         processDraftBoardData();
@@ -401,10 +456,10 @@ const DraftAnalysis = () => {
     // Compute Overview data across all seasons (top/worst picks and team rankings)
     useEffect(() => {
         const computeOverviewData = async () => {
-            console.log('Computing overview data...');
-            console.log('allDraftHistory:', allDraftHistory);
-            console.log('usersData:', usersData);
-            console.log('historicalData:', historicalData);
+            logger.debug('Computing overview data...');
+            logger.debug('allDraftHistory:', allDraftHistory);
+            logger.debug('usersData:', usersData);
+            logger.debug('historicalData:', historicalData);
             
             // Skip if we don't have required data or if we're in a seasonal view
             if (selectedSeason !== "Overview" || !historicalData?.draftsBySeason || !historicalData?.draftPicksBySeason || !usersData) {
@@ -430,7 +485,7 @@ const DraftAnalysis = () => {
                         const leagueRosterSettings = await fetchLeagueRosterSettings(seasonDrafts.league_id);
                         
                         if (!leagueScoringSettings || !leagueRosterSettings) {
-                            console.log(`Missing league settings for season ${season}`);
+                            logger.debug(`Missing league settings for season ${season}`);
                             return [];
                         }
 
@@ -526,7 +581,7 @@ const DraftAnalysis = () => {
 
                         return finalProcessedPicks;
                     } catch (err) {
-                        console.error(`Error processing season ${season}:`, err);
+                        logger.error(`Error processing season ${season}:`, err);
                         return [];
                     }
                 });
@@ -535,8 +590,8 @@ const DraftAnalysis = () => {
                 const allSeasonResults = await Promise.all(seasonPromises);
                 const allProcessedPicks = allSeasonResults.flat().filter(Boolean);
 
-                console.log('Total processed picks with real VORP:', allProcessedPicks.length);
-                console.log('Sample processed pick:', allProcessedPicks[0]);
+                logger.debug('Total processed picks with real VORP:', allProcessedPicks.length);
+                logger.debug('Sample processed pick:', allProcessedPicks[0]);
 
                 if (allProcessedPicks.length === 0) {
                     setOverviewData({ topPicks: [], worstPicks: [], teamRankings: [], draftsSummaries: [] });
@@ -630,7 +685,7 @@ const DraftAnalysis = () => {
                 
                 draftsSummaries.sort((a, b) => b.totalScaledVorp - a.totalScaledVorp);
 
-                console.log('Overview data computed with real VORP values:', { 
+                logger.debug('Overview data computed with real VORP values:', { 
                     topPicks: topPicks.length, 
                     worstPicks: worstPicks.length, 
                     teamRankings: teamRankings.length,
@@ -639,7 +694,7 @@ const DraftAnalysis = () => {
 
                 setOverviewData({ topPicks, worstPicks, teamRankings, draftsSummaries });
             } catch (err) {
-                console.error('Overview computation error:', err);
+                logger.error('Overview computation error:', err);
                 setOverviewData({ topPicks: [], worstPicks: [], teamRankings: [], draftsSummaries: [] });
             } finally {
                 setOverviewLoading(false);
@@ -649,17 +704,17 @@ const DraftAnalysis = () => {
         computeOverviewData();
     }, [allDraftHistory, usersData, historicalData, getTeamName, selectedSeason]);
 
-    console.log('Rendering: Main content');
-    console.log('Current seasons state:', seasons);
-    console.log('Current selectedSeason state:', selectedSeason);
-    console.log('Current draftSummary state:', draftSummary);
-    console.log('Current draftPicks state (flat):', draftPicks.length);
-    console.log('Current orderedTeamColumns state:', orderedTeamColumns.length);
-    console.log('Current picksGroupedByRound state (rounds):', Object.keys(picksGroupedByRound).length);
-    console.log('Current tradedPicksData state:', tradedPicksData.length);
-    console.log('Current leagueScoringSettings state:', leagueScoringSettings);
-    console.log('Current leagueRosterSettings state:', leagueRosterSettings);
-    console.log('Current activeTab state:', activeTab);
+    logger.debug('Rendering: Main content');
+    logger.debug('Current seasons state:', seasons);
+    logger.debug('Current selectedSeason state:', selectedSeason);
+    logger.debug('Current draftSummary state:', draftSummary);
+    logger.debug('Current draftPicks state (flat):', draftPicks.length);
+    logger.debug('Current orderedTeamColumns state:', orderedTeamColumns.length);
+    logger.debug('Current picksGroupedByRound state (rounds):', Object.keys(picksGroupedByRound).length);
+    logger.debug('Current tradedPicksData state:', tradedPicksData.length);
+    logger.debug('Current leagueScoringSettings state:', leagueScoringSettings);
+    logger.debug('Current leagueRosterSettings state:', leagueRosterSettings);
+    logger.debug('Current activeTab state:', activeTab);
 
 
     if (loading) {
@@ -716,7 +771,8 @@ const DraftAnalysis = () => {
     };
 
     const getPositionColorClass = (position) => {
-        return positionColors[position.toUpperCase()] || 'bg-gray-700'; // Default to gray if position not found
+    const posKey = (typeof position === 'string') ? position.toUpperCase() : '';
+    return positionColors[posKey] || 'bg-gray-700'; // Default to gray if position not found
     };
 
 
@@ -748,12 +804,12 @@ const DraftAnalysis = () => {
 
             {/* All-Time Draft Overview - Show when Overview is selected */}
             {selectedSeason === "Overview" && (
-                <div className="bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
+                <div className="p-6 mb-8">
                     <h2 className="text-3xl font-semibold mb-6 text-center text-yellow-400">All-Time Draft Overview</h2>
                     
                     {overviewLoading ? (
                         <div className="text-center py-8">
-                            <p className="text-gray-400">Computing all-time draft data with real VORP values...</p>
+                            <p className="text-gray-400">Computing all-time draft data with real Draft Value...</p>
                         </div>
                     ) : overviewData ? (
                         <div className="space-y-8">
@@ -773,8 +829,9 @@ const DraftAnalysis = () => {
                                                     <div className="text-sm text-gray-300">
                                                         {pick.season} · Round {pick.round}, Pick {pick.pick_in_round}
                                                     </div>
-                                                    <div className="text-2xl font-bold text-green-400">
-                                                        {pick.scaled_vorp_delta.toFixed(2)}
+                                                    <div className="text-sm text-gray-200">
+                                                        <div className="text-xs">Draft Value</div>
+                                                        <div className="text-2xl font-bold text-green-400">{pick.scaled_vorp_delta.toFixed(2)}</div>
                                                     </div>
                                                     <div className="text-base font-medium text-blue-300">
                                                         {pick.team}
@@ -799,8 +856,9 @@ const DraftAnalysis = () => {
                                                     <div className="text-sm text-gray-300">
                                                         {pick.season} · Round {pick.round}, Pick {pick.pick_in_round}
                                                     </div>
-                                                    <div className="text-2xl font-bold text-red-400">
-                                                        {pick.scaled_vorp_delta.toFixed(2)}
+                                                    <div className="text-sm text-gray-200">
+                                                        <div className="text-xs">Draft Value</div>
+                                                        <div className="text-2xl font-bold text-red-400">{pick.scaled_vorp_delta.toFixed(2)}</div>
                                                     </div>
                                                     <div className="text-base font-medium text-blue-300">
                                                         {pick.team}
@@ -864,7 +922,12 @@ const DraftAnalysis = () => {
                                     </div>
                                 </div>
                             </div>
-                        </div>
+
+                        {/* Draft insights for overview */}
+                                                <div className="mt-6">
+                                                    {/* DraftInsights removed per user request */}
+                                                </div>
+                            </div>
                     ) : (
                         <div className="text-center py-8">
                             <p className="text-gray-400">No all-time draft data available.</p>
@@ -874,7 +937,7 @@ const DraftAnalysis = () => {
             )}
 
             {selectedSeason !== "Overview" && selectedSeason && draftSummary ? (
-                <div className="bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
+                <div className="p-6 mb-8">
                     <h2 className="text-3xl font-semibold mb-4 text-center text-green-400">{selectedSeason} Draft Summary</h2>
 
                     {/* Tab Navigation - Removed Overview tab */}
@@ -891,12 +954,7 @@ const DraftAnalysis = () => {
                         >
                             Draft Summary
                         </button>
-                        <button
-                            className={`py-2 px-4 text-lg font-medium ${activeTab === 'keepers' ? 'border-b-2 border-yellow-400 text-yellow-400' : 'text-gray-400 hover:text-gray-200'}`}
-                            onClick={() => setActiveTab('keepers')}
-                        >
-                            Keepers
-                        </button>
+                        {/* Keepers tab removed per user request */}
                     </div>
 
                     {/* Conditional Rendering of Tabs */}
@@ -904,18 +962,18 @@ const DraftAnalysis = () => {
                         <div className="mt-6">
                             <h3 className="text-2xl font-semibold mb-4 text-center text-purple-400">Draft Board</h3>
                             {orderedTeamColumns.length > 0 && totalRounds > 0 ? (
-                                <div className="w-full overflow-auto -mx-2 px-2">
+                                <div className="w-full overflow-auto">
                                     <div
-                                        className="grid gap-1 p-2 rounded-lg bg-gray-700"
+                                        className="grid gap-1 p-2"
                                         style={{
                                             gridTemplateColumns: `auto repeat(${orderedTeamColumns.length}, minmax(100px, 1fr))`,
                                             minWidth: `${Math.max(100 * (orderedTeamColumns.length + 1), 480)}px`
                                         }}
                                     >
-                                        {/* Header Row: Round and Team Names */}
-                                        <div className="bg-gray-600 text-gray-200 font-bold py-1 px-1 text-center rounded-tl-md text-xs">Round</div>
+                                        {/* Header Row: Round and Team Names (sticky) */}
+                                        <div className="bg-gray-600 text-gray-200 font-bold py-1 px-2 text-center rounded-tl-md text-xs sticky left-0 z-30 shadow-sm" style={{ left: 0 }}>Round</div>
                                         {orderedTeamColumns.map(team => (
-                                            <div key={team.userId} className="bg-gray-600 text-gray-200 font-bold py-1 px-1 text-center flex flex-col items-center justify-center rounded-t-md min-h-[40px]">
+                                            <div key={team.userId} className="bg-gray-600 text-gray-200 font-bold py-1 px-1 text-center flex flex-col items-center justify-center rounded-t-md min-h-[40px] sticky top-0 z-10">
                                                 <span className="text-xs leading-tight break-words text-center max-w-full block" style={{ wordBreak: 'break-word', hyphens: 'auto' }}>
                                                     {team.teamName}
                                                 </span>
@@ -925,7 +983,7 @@ const DraftAnalysis = () => {
                                         {/* Draft Picks Rows */}
                                         {roundsArray.map(round => (
                                             <React.Fragment key={round}>
-                                                <div className="bg-gray-600 text-gray-200 font-bold py-2 px-1 text-center flex items-center justify-center rounded-bl-md text-xs">
+                                                <div className="bg-gray-600 text-gray-200 font-bold py-2 px-2 text-center flex items-center justify-center rounded-bl-md text-xs sticky left-0 z-30 shadow-sm" style={{ left: 0 }}>
                                                     {round}
                                                 </div>
 
@@ -986,46 +1044,38 @@ const DraftAnalysis = () => {
                                                                         KEEPER
                                                                     </div>
                                                                 ) : (
-                                                                    <>
-                                                                        {/* Position - Top Left */}
-                                                                        <div className="absolute top-0.5 left-0.5 text-xs text-gray-200 text-left">
-                                                                            {pick.player_position}
-                                                                        </div>
-                                                                        {/* Team - Top Right */}
-                                                                        <div className="absolute top-0.5 right-0.5 text-xs text-gray-200 text-right">
-                                                                            {pick.player_team}
+                                                                    <div className="flex flex-col h-full w-full p-1">
+                                                                        {/* Top row: position and team */}
+                                                                        <div className="flex justify-between items-center text-xs text-gray-200 mb-1">
+                                                                            <div className="font-medium">{pick.player_position}</div>
+                                                                            <div className="font-medium">{pick.player_team}</div>
                                                                         </div>
 
-                                                                        {/* Player First Name - Centered */}
-                                                                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 font-medium text-white text-center w-full mt-[-6px] text-xs leading-tight">
-                                                                            {displayFirstName}
-                                                                        </div>
-                                                                        {/* Player Last Name - Centered, larger font */}
-                                                                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-sm font-bold text-white text-center w-full mt-[6px] leading-tight">
-                                                                            {displayLastName}
+                                                                        {/* Middle: name area - allow truncation and wrapping safely */}
+                                                                        <div className="flex-1 flex flex-col items-center justify-center min-w-0 text-center px-1">
+                                                                            <div className="w-full truncate text-xs text-white font-medium leading-tight">{displayFirstName}</div>
+                                                                            <div className={`w-full truncate text-sm font-bold text-white leading-tight ${lastNameFontSizeClass}`}>{displayLastName}</div>
                                                                         </div>
 
-                                                                        {/* VORP Delta Bubble - Bottom Left */}
-                                                                        {typeof pick.scaled_vorp_delta === 'number' && (
-                                                                            <div
-                                                                                className={`absolute bottom-0.5 left-0.5 inline-flex items-center justify-center text-xs font-bold text-white px-1 py-0.5 rounded
-                                                                                            ${pick.scaled_vorp_delta >= 0 ? 'bg-green-500' : 'bg-red-500'}`}
-                                                                                title={`VORP Delta: ${pick.scaled_vorp_delta.toFixed(2)}`}
-                                                                            >
-                                                                                {pick.scaled_vorp_delta.toFixed(1)}
-                                                                            </div>
-                                                                        )}
+                                                                        {/* Bottom row: VORP bubble (left) and traded icon (right) */}
+                                                                        <div className="flex items-center justify-between mt-2 w-full">
+                                                                            {typeof pick.scaled_vorp_delta === 'number' ? (
+                                                                                <div
+                                                                                    className={`flex-shrink-0 inline-flex items-center justify-center text-[10px] font-bold text-white px-1.5 py-0.5 rounded ${pick.scaled_vorp_delta >= 0 ? 'bg-green-500' : 'bg-red-500'}`}
+                                                                                    style={{ minWidth: '28px', maxWidth: '48px' }}
+                                                                                    title={`Draft Value: ${pick.scaled_vorp_delta.toFixed(2)}`}
+                                                                                >
+                                                                                    {parseFloat(pick.scaled_vorp_delta).toFixed(1)}
+                                                                                </div>
+                                                                            ) : <div className="text-xs text-gray-400 w-6">&nbsp;</div>}
 
-                                                                        {/* Traded Icon for player picks (remains bottom right) */}
-                                                                        {isTradedPickForPlayer && (
-                                                                            <div
-                                                                                className="absolute bottom-0.5 right-0.5 cursor-help"
-                                                                                title={`Pick acquired by: ${pick.picked_by_team_name}`}
-                                                                            >
-                                                                                <FontAwesomeIcon icon={faRepeat} className="w-3 h-3 text-yellow-400" />
-                                                                            </div>
-                                                                        )}
-                                                                    </>
+                                                                            {isTradedPickForPlayer ? (
+                                                                                <div className="flex-shrink-0 cursor-help ml-2" title={`Pick acquired by: ${pick.picked_by_team_name}`}>
+                                                                                    <FontAwesomeIcon icon={faRepeat} className="w-3 h-3 text-yellow-400" />
+                                                                                </div>
+                                                                            ) : <div className="w-3" />}
+                                                                        </div>
+                                                                    </div>
                                                                 )
                                                             ) : tradedPickInfo ? (
                                                                 // Only show the icon and tooltip for empty traded picks
@@ -1057,22 +1107,22 @@ const DraftAnalysis = () => {
                             <h3 className="text-2xl font-semibold mb-4 text-center text-green-400">Draft Year Summary</h3>
                             {draftYearSummary ? (
                                 <div className="space-y-8">
-                                    {/* Best/Worst Team by VORP */}
+                                    {/* Best/Worst Team by Draft Value */}
                                     <div className="flex flex-col md:flex-row md:space-x-8 justify-center items-center">
                                         <div className="bg-gray-700 rounded-lg p-4 shadow-md mb-4 md:mb-0 w-full md:w-1/2">
-                                            <h4 className="text-xl font-bold text-blue-300 mb-2">Best Team by Total Scaled Δ</h4>
+                                            <h4 className="text-xl font-bold text-blue-300 mb-2">Best Team by Total Draft Value</h4>
                                             <p className="text-lg">{draftYearSummary.bestTeam.team} <span className="text-green-400 font-semibold">({draftYearSummary.bestTeam.totalScaledVorp.toFixed(2)})</span></p>
                                         </div>
                                         <div className="bg-gray-700 rounded-lg p-4 shadow-md w-full md:w-1/2">
-                                            <h4 className="text-xl font-bold text-red-300 mb-2">Worst Team by Total Scaled Δ</h4>
+                                            <h4 className="text-xl font-bold text-red-300 mb-2">Worst Team by Total Draft Value</h4>
                                             <p className="text-lg">{draftYearSummary.worstTeam.team} <span className="text-red-400 font-semibold">({draftYearSummary.worstTeam.totalScaledVorp.toFixed(2)})</span></p>
                                         </div>
                                     </div>
 
-                                    {/* Best/Worst Pick by VORP Delta */}
+                                    {/* Best/Worst Pick by Draft Value */}
                                     <div className="flex flex-col md:flex-row md:space-x-8 justify-center items-center">
                                         <div className="bg-gray-700 rounded-lg p-4 shadow-md mb-4 md:mb-0 w-full md:w-1/2">
-                                            <h4 className="text-xl font-bold text-blue-300 mb-2">Best Pick (VORP Delta)</h4>
+                                            <h4 className="text-xl font-bold text-blue-300 mb-2">Best Pick (Draft Value)</h4>
                                             <p className="text-lg">
                                                 {draftYearSummary.bestPick.player_name} ({draftYearSummary.bestPick.player_position})
                                                 <span className="ml-2 text-green-400 font-semibold">{(typeof draftYearSummary.bestPick.scaled_vorp_delta === 'number' ? draftYearSummary.bestPick.scaled_vorp_delta : draftYearSummary.bestPick.vorp_delta).toFixed(2)}</span>
@@ -1081,7 +1131,7 @@ const DraftAnalysis = () => {
                                             </p>
                                         </div>
                                         <div className="bg-gray-700 rounded-lg p-4 shadow-md w-full md:w-1/2">
-                                            <h4 className="text-xl font-bold text-red-300 mb-2">Worst Pick (VORP Delta)</h4>
+                                            <h4 className="text-xl font-bold text-red-300 mb-2">Worst Pick (Draft Value)</h4>
                                             <p className="text-lg">
                                                 {draftYearSummary.worstPick.player_name} ({draftYearSummary.worstPick.player_position})
                                                 <span className="ml-2 text-red-400 font-semibold">{(typeof draftYearSummary.worstPick.scaled_vorp_delta === 'number' ? draftYearSummary.worstPick.scaled_vorp_delta : draftYearSummary.worstPick.vorp_delta).toFixed(2)}</span>
@@ -1099,29 +1149,36 @@ const DraftAnalysis = () => {
                                                 <thead>
                                                     <tr className="bg-gray-800">
                                                         <th className="py-2 px-4">Round</th>
-                                                        <th className="py-2 px-4">Best Pick (VORP Δ)</th>
-                                                        <th className="py-2 px-4">Worst Pick (VORP Δ)</th>
-                                                        <th className="py-2 px-4">Avg Scaled Δ</th>
+                                                        <th className="py-2 px-4">Best Pick (Draft Value)</th>
+                                                        <th className="py-2 px-4">Worst Pick (Draft Value)</th>
+                                                        <th className="py-2 px-4">Avg Draft Value</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
                                                     {draftYearSummary.roundSummaries.map((round, idx) => round && (
                                                         <React.Fragment key={idx}>
-                                                            <tr className="border-b border-gray-600">
-                                                                <td className="py-2 px-4 text-center font-bold">{round.round}</td>
-                                                                <td className="py-2 px-4">
-                                                                    {round.best.player_name} ({round.best.player_position})
-                                                                    <span className="ml-2 text-green-400 font-semibold">{(typeof round.best.scaled_vorp_delta === 'number' ? round.best.scaled_vorp_delta : round.best.vorp_delta).toFixed(2)}</span>
-                                                                    <br />
-                                                                    <span className="text-xs text-gray-400">Team: {round.best.picked_by_team_name} | Pick: {round.best.pick_no}</span>
+                                                            <tr className="border-b border-gray-600 align-top">
+                                                                <td className="py-2 px-4 text-center font-bold align-top">{round.round}</td>
+
+                                                                {/* Best Pick cell: stacked layout */}
+                                                                <td className="py-2 px-4 align-top">
+                                                                    <div className="flex flex-col space-y-1">
+                                                                        <div className="text-sm font-semibold text-white truncate">{round.best.player_name} <span className="text-xs text-gray-400">({round.best.player_position})</span></div>
+                                                                        <div className="text-sm font-bold text-green-400">Draft Value: {typeof round.best?.scaled_vorp_delta === 'number' ? round.best.scaled_vorp_delta.toFixed(2) : (typeof round.best?.vorp_delta === 'number' ? round.best.vorp_delta.toFixed(2) : '—')}</div>
+                                                                        <div className="text-xs text-gray-400">Team: {round.best.picked_by_team_name || 'Unknown'} | Pick: {round.best.pick_no || '—'}</div>
+                                                                    </div>
                                                                 </td>
-                                                                <td className="py-2 px-4">
-                                                                    {round.worst.player_name} ({round.worst.player_position})
-                                                                    <span className="ml-2 text-red-400 font-semibold">{(typeof round.worst.scaled_vorp_delta === 'number' ? round.worst.scaled_vorp_delta : round.worst.vorp_delta).toFixed(2)}</span>
-                                                                    <br />
-                                                                    <span className="text-xs text-gray-400">Team: {round.worst.picked_by_team_name} | Pick: {round.worst.pick_no}</span>
+
+                                                                {/* Worst Pick cell: stacked layout */}
+                                                                <td className="py-2 px-4 align-top">
+                                                                    <div className="flex flex-col space-y-1">
+                                                                        <div className="text-sm font-semibold text-white truncate">{round.worst.player_name} <span className="text-xs text-gray-400">({round.worst.player_position})</span></div>
+                                                                        <div className="text-sm font-bold text-red-400">Draft Value: {typeof round.worst?.scaled_vorp_delta === 'number' ? round.worst.scaled_vorp_delta.toFixed(2) : (typeof round.worst?.vorp_delta === 'number' ? round.worst.vorp_delta.toFixed(2) : '—')}</div>
+                                                                        <div className="text-xs text-gray-400">Team: {round.worst.picked_by_team_name || 'Unknown'} | Pick: {round.worst.pick_no || '—'}</div>
+                                                                    </div>
                                                                 </td>
-                                                                <td className="py-2 px-4 text-center">{typeof round.avgScaledVorp === 'number' ? round.avgScaledVorp : '—'}</td>
+
+                                                                <td className="py-2 px-4 text-center align-top">{typeof round.avgScaledVorp === 'number' ? round.avgScaledVorp.toFixed(2) : '—'}</td>
                                                             </tr>
                                                         </React.Fragment>
                                                     ))}
@@ -1136,41 +1193,7 @@ const DraftAnalysis = () => {
                         </div>
                     )}
 
-                    {activeTab === 'keepers' && (
-                        <div className="mt-6">
-                            <h3 className="text-2xl font-semibold mb-4 text-center text-yellow-400">Keeper List</h3>
-                            {draftPicks && draftPicks.length > 0 ? (
-                                <div className="overflow-x-auto bg-gray-700 rounded-lg p-4">
-                                    <table className="min-w-full text-sm text-gray-200">
-                                        <thead>
-                                            <tr className="bg-gray-800">
-                                                <th className="py-2 px-4 text-left">Player</th>
-                                                <th className="py-2 px-4">Player ID</th>
-                                                <th className="py-2 px-4">Team</th>
-                                                <th className="py-2 px-4">Is Keeper</th>
-                                                <th className="py-2 px-4">Keeper Years</th>
-                                                <th className="py-2 px-4">Keeper Remaining</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {draftPicks.filter(p => p.player_id).map((p, idx) => (
-                                                <tr key={`${p.player_id}-${idx}`} className="border-b border-gray-600">
-                                                    <td className="py-2 px-4 text-left">{p.player_name || `${p.metadata?.first_name || ''} ${p.metadata?.last_name || ''}`}</td>
-                                                    <td className="py-2 px-4 text-center">{p.player_id}</td>
-                                                    <td className="py-2 px-4 text-center">{p.picked_by_team_name || p.picked_by || 'Unknown'}</td>
-                                                    <td className="py-2 px-4 text-center">{p.is_keeper ? 'Yes' : 'No'}</td>
-                                                    <td className="py-2 px-4 text-center">{typeof p.keeper_years === 'number' ? p.keeper_years : 0}</td>
-                                                    <td className="py-2 px-4 text-center">{typeof p.keeper_remaining === 'number' ? p.keeper_remaining : 0}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            ) : (
-                                <p className="text-center text-gray-400">No players found for this season.</p>
-                            )}
-                        </div>
-                    )}
+                    {/* Keepers tab removed */}
 
                 </div>
             ) : selectedSeason !== "Overview" ? (

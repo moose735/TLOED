@@ -5,6 +5,7 @@
 // Advanced calculations for sportsbook odds using keeper league dynamics
 
 import { calculateAllLeagueMetrics } from './calculations';
+import logger from './logger';
 
 // Cache for DPR calculations to prevent expensive recalculation
 let dprCache = {
@@ -40,7 +41,7 @@ export const calculateTeamDPRValues = (historicalData, currentSeason, getTeamNam
     }
 
     try {
-        console.log(`Calculating DPR values for season ${currentSeason}, week ${currentWeek}`);
+    logger.debug(`Calculating DPR values for season ${currentSeason}, week ${currentWeek}`);
         const { seasonalMetrics } = calculateAllLeagueMetrics(historicalData, null, getTeamName, nflState);
         const currentSeasonMetrics = seasonalMetrics[currentSeason] || {};
         
@@ -86,10 +87,10 @@ export const calculateTeamDPRValues = (historicalData, currentSeason, getTeamNam
             cacheKey: cacheKey
         };
         
-        console.log(`DPR calculation complete. Cached ${Object.keys(teamDPRValues).length} teams.`);
+    logger.debug(`DPR calculation complete. Cached ${Object.keys(teamDPRValues).length} teams.`);
         return teamDPRValues;
     } catch (error) {
-        console.error('Error calculating team DPR values:', error);
+        logger.error('Error calculating team DPR values:', error);
         return {};
     }
 };
@@ -104,7 +105,7 @@ export const clearDPRCache = () => {
         season: null,
         cacheKey: null
     };
-    console.log('DPR cache cleared');
+    logger.info('DPR cache cleared');
 };
 
 /**
@@ -881,7 +882,7 @@ export const generateKeeperBettingMarkets = (matchup, teamStats, eloRatings = {}
         try {
             teamDPRValues = calculateTeamDPRValues(historicalData, currentSeason, getTeamName, nflState);
         } catch (error) {
-            console.warn('DPR calculation failed, using fallback', error);
+            try { const logger = require('./logger').default; logger.warn('DPR calculation failed, using fallback', error); } catch(e) {}
             // Continue without DPR values - function will fallback to basic stats
         }
     }
@@ -1133,7 +1134,7 @@ export const generateBettingMarkets = (matchup, teamStats, eloRatings = {}, hist
         try {
             teamDPRValues = calculateTeamDPRValues(historicalData, currentSeason, getTeamName, nflState);
         } catch (error) {
-            console.warn('DPR calculation failed, using fallback', error);
+            try { const logger = require('./logger').default; logger.warn('DPR calculation failed, using fallback', error); } catch(e) {}
             // Continue without DPR values - function will fallback to basic stats
         }
     }
@@ -1533,7 +1534,7 @@ export const generateEnhancedKeeperMarkets = (matchup, teamStats) => {
     const team1Stats = teamStats[matchup.team1.rosterId];
     const team2Stats = teamStats[matchup.team2.rosterId];
     
-    console.log('Team stats for enhanced calculation:', {
+    logger.debug('Team stats for enhanced calculation:', {
         team1: team1Stats,
         team2: team2Stats
     });
@@ -1556,7 +1557,7 @@ export const generateEnhancedKeeperMarkets = (matchup, teamStats) => {
     const winDifferential = team1GamesPlayed > 0 && team2GamesPlayed > 0 ? 
         (team1Wins / team1GamesPlayed) - (team2Wins / team2GamesPlayed) : 0;
     
-    console.log('Differentials:', {
+    logger.debug('Differentials:', {
         score: scoreDifferential,
         power: powerDifferential,
         winRate: winDifferential
@@ -1569,7 +1570,7 @@ export const generateEnhancedKeeperMarkets = (matchup, teamStats) => {
     // Combine score differential with power rankings and win rate
     let totalDifferential = scoreDifferential + (powerDifferential * 3) + (winDifferential * 15);
     
-    console.log('Total differential before adjustments:', totalDifferential);
+    logger.debug('Total differential before adjustments:', totalDifferential);
     
     // Season stage multiplier - trust the data more as season progresses
     let confidenceMultiplier;
@@ -1609,7 +1610,7 @@ export const generateEnhancedKeeperMarkets = (matchup, teamStats) => {
         totalDifferential *= 1.4; // Big boost for extreme matchups
     }
     
-    console.log('Final total differential:', totalDifferential);
+    logger.debug('Final total differential:', totalDifferential);
     
     // Apply maximums based on season stage (much higher than before)
     let maxSpread;
@@ -1630,7 +1631,7 @@ export const generateEnhancedKeeperMarkets = (matchup, teamStats) => {
     const spread = Math.round(Math.abs(totalDifferential) * 2) / 2;
     const hasSpread = spread >= 1; // Minimum 1 point spread
     
-    console.log('Final spread calculation:', {
+    logger.debug('Final spread calculation:', {
         rawDifferential: totalDifferential,
         spread,
         hasSpread
@@ -1704,7 +1705,7 @@ export const generateEnhancedKeeperMarkets = (matchup, teamStats) => {
         }
     };
     
-    console.log('Generated markets:', markets);
+    logger.debug('Generated markets:', markets);
     
     return markets;
 };
@@ -1811,7 +1812,7 @@ export const generateAdvancedBettingMarkets = (matchup, rosterAnalysis) => {
  * @returns {Object} Enhanced betting markets for keeper leagues
  */
 export const generateLegacyBettingMarkets = (matchup, teamStats) => {
-    console.log('Using legacy calculation with keeper league enhancements');
+    logger.debug('Using legacy calculation with keeper league enhancements');
     
     const team1Stats = teamStats[matchup.team1.rosterId];
     const team2Stats = teamStats[matchup.team2.rosterId];
@@ -1833,7 +1834,7 @@ export const generateLegacyBettingMarkets = (matchup, teamStats) => {
     const spread = Math.round(Math.abs(rawSpread) * 2) / 2;
     const hasSpread = spread >= 1; // Minimum 1 point spread
     
-    console.log('Legacy calculation:', {
+    logger.debug('Legacy calculation:', {
         scoreDiff,
         powerDiff,
         totalDiff,
@@ -2428,7 +2429,7 @@ export const calculateChampionshipOdds = (
     const isMathematicallyEliminated = isEliminatedFromRecord && isEliminatedFromPoints;
     
     if (isMathematicallyEliminated) {
-        console.log(`Team ${rosterId} mathematically eliminated: Record path blocked: ${isEliminatedFromRecord}, Points path blocked: ${isEliminatedFromPoints}`);
+    logger.debug(`Team ${rosterId} mathematically eliminated: Record path blocked: ${isEliminatedFromRecord}, Points path blocked: ${isEliminatedFromPoints}`);
         return {
             championshipProbability: 0,
             playoffProbability: 0,

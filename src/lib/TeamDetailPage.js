@@ -1,5 +1,7 @@
+import TeamDraftStats from '../components/TeamDraftStats';
 // src/lib/TeamDetailPage.js
 import React, { useState, useEffect, useMemo } from 'react';
+import logger from '../utils/logger';
 import { calculateAllLeagueMetrics } from '../utils/calculations';
 import { fetchFinancialDataForYears } from '../services/financialService';
 import { calculateTeamFinancialTotalsByOwnerId, calculateTeamTransactionCountsByOwnerId, formatCurrency } from '../utils/financialCalculations';
@@ -340,7 +342,7 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
 
         // Ensure getTeamNameFromContext is a function
         if (typeof getTeamNameFromContext !== 'function') {
-            console.error("TeamDetailPage: getTeamNameFromContext is not a function. Cannot process data.");
+            logger.error("TeamDetailPage: getTeamNameFromContext is not a function. Cannot process data.");
             setLoadingStats(false);
             return;
         }
@@ -360,7 +362,7 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
         }
 
         if (!currentTeamOwnerId) {
-            console.warn(`TeamDetailPage: Could not find ownerId for teamName: ${currentTeamName}. Displaying no data.`);
+            logger.warn(`TeamDetailPage: Could not find ownerId for teamName: ${currentTeamName}. Displaying no data.`);
             setLoadingStats(false);
             setTeamOverallStats(null);
             setTeamSeasonHistory([]);
@@ -395,7 +397,7 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
                 isLatestSeasonPlayoffsComplete = true;
             }
         }
-        console.log(`TeamDetailPage: Latest season is ${latestSeason}. Playoff completion status: ${isLatestSeasonPlayoffsComplete ? 'COMPLETE' : 'IN PROGRESS/INCOMPLETE'}`);
+    logger.debug(`TeamDetailPage: Latest season is ${latestSeason}. Playoff completion status: ${isLatestSeasonPlayoffsComplete ? 'COMPLETE' : 'IN PROGRESS/INCOMPLETE'}`);
 
 
         // First, aggregate stats for ALL teams from seasonalMetrics for overall ranks
@@ -717,7 +719,7 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
     // Aggregate all-time, playoff, streak, and season records for this team
     aggregateTeamCareerRecords(currentTeamName, currentTeamOwnerId).then(setTeamCareerRecords);
     setLoadingStats(false);
-    console.log(`TeamDetailPage: Final teamOverallStats for ${currentTeamName}:`, overallStats);
+    logger.debug(`TeamDetailPage: Final teamOverallStats for ${currentTeamName}:`, overallStats);
 
 
     }, [teamName, historicalData, allDraftHistory, nflState, getTeamNameFromContext, contextLoading, contextError]); // Dependencies updated with nflState
@@ -725,33 +727,33 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
     // Fetch financial data for all years
     useEffect(() => {
         const fetchFinancialData = async () => {
-            if (!historicalData || !historicalData.matchupsBySeason) {
-                console.log('No historical data available for financial fetch');
+                if (!historicalData || !historicalData.matchupsBySeason) {
+                logger.debug('No historical data available for financial fetch');
                 setLoadingFinancial(false);
                 return;
             }
 
-            console.log('Starting financial data fetch...');
+            logger.debug('Starting financial data fetch...');
             setLoadingFinancial(true);
             try {
                 // Get all available years from historical data
                 const allYears = Object.keys(historicalData.matchupsBySeason).map(String);
-                console.log('Available years for financial data:', allYears);
+                logger.debug('Available years for financial data:', allYears);
                 
                 if (allYears.length === 0) {
-                    console.log('No years found in historical data');
+                    logger.debug('No years found in historical data');
                     setFinancialDataByYear({});
                     setLoadingFinancial(false);
                     return;
                 }
 
                 // Fetch financial data for all years
-                console.log('Fetching financial data for years:', allYears);
+                logger.debug('Fetching financial data for years:', allYears);
                 const financialData = await fetchFinancialDataForYears(allYears);
-                console.log('Received financial data:', financialData);
+                logger.debug('Received financial data:', financialData);
                 setFinancialDataByYear(financialData);
             } catch (error) {
-                console.error('Error fetching financial data:', error);
+                logger.error('Error fetching financial data:', error);
                 setFinancialDataByYear({});
             } finally {
                 setLoadingFinancial(false);
@@ -918,6 +920,7 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
                     <StatCard title="Championships" value={teamOverallStats.totalChampionships} rank={teamOverallStats.championshipRank} />
                 </div>
             </section>
+            {/* Team Draft Habits (moved to bottom) */}
 
             {/* Season by Season History Table */}
             <section className="mb-6 sm:mb-8">
@@ -1159,6 +1162,8 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
                     )}
                 </div>
             </section>
+            {/* Team Draft Habits (moved to bottom) */}
+            <TeamDraftStats ownerId={teamOverallStats.ownerId} allDraftHistory={allDraftHistory} totalRounds={12} totalTeams={12} />
         </div>
     );
 };

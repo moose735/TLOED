@@ -7,6 +7,7 @@ import StreaksRecords from '../lib/StreaksRecords';
 import MatchupRecords from '../lib/MatchupRecords';
 import PlayoffRecords from '../lib/PlayoffRecords'; // Import the PlayoffRecords component
 import PlayerRecords from '../lib/PlayerRecords'; // Import the new PlayerRecords component
+import MilestoneRecords from '../lib/MilestoneRecords'; // Import MilestoneRecords to expose milestones in Record Book
 
 // IMPORTANT: This import is absolutely crucial for calculateAllLeagueMetrics to be defined.
 import { calculateAllLeagueMetrics } from '../utils/calculations';
@@ -274,6 +275,18 @@ const RecordBook = () => {
                                 <span className="block text-center">Player Records</span>
                                 <span className="block text-xs opacity-80 mt-1">Individual Stars</span>
                             </button>
+                            <button
+                                className={`w-full sm:flex-1 py-3 px-4 sm:py-4 sm:px-6 text-sm font-semibold rounded-xl transition-all duration-200 ${
+                                    activeTab === 'milestones'
+                                        ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-white shadow-lg'
+                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                }`}
+                                onClick={() => setActiveTab('milestones')}
+                                aria-current={activeTab === 'milestones' ? 'page' : undefined}
+                            >
+                                <span className="block text-center">Milestones</span>
+                                <span className="block text-xs opacity-80 mt-1">Career Milestones</span>
+                            </button>
                         </nav>
                     </div>
                 </div>
@@ -295,6 +308,8 @@ const RecordBook = () => {
                             </div>
                         )
                     )}
+
+                    
 
                     {activeTab === 'seasonal' && (
                         hasSeasonalData ? (
@@ -357,6 +372,18 @@ const RecordBook = () => {
                                 <div className="text-6xl mb-4">⭐</div>
                                 <h3 className="text-xl font-semibold text-gray-700 mb-2">No Player Data</h3>
                                 <p className="text-gray-500">No historical player data available.</p>
+                            </div>
+                        )
+                    )}
+
+                    {activeTab === 'milestones' && (
+                        historicalData ? (
+                            <MilestoneRecords />
+                        ) : (
+                            <div className="text-center py-16 px-6">
+                                <div className="text-6xl mb-4">🏆</div>
+                                <h3 className="text-xl font-semibold text-gray-700 mb-2">No Milestone Data</h3>
+                                <p className="text-gray-500">No historical data available to compute milestones.</p>
                             </div>
                         )
                     )}

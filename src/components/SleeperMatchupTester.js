@@ -1,5 +1,6 @@
 // src/contexts/SleeperDataContext.js
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import logger from '../utils/logger';
 import { getLeagueData, getMatchupsForAllWeeks, getRosters, getUsers, getDraftPicks, getLeagueMetadata, getWinnersBracket, getLosersBracket } from '../api/sleeperApi';
 import { calculateAllLeagueMetrics } from '../utils/calculations';
 
@@ -18,16 +19,16 @@ let app;
 let db;
 let auth;
 
-try {
+    try {
     if (Object.keys(firebaseConfig).length > 0) {
         app = initializeApp(firebaseConfig);
         db = getFirestore(app);
         auth = getAuth(app);
     } else {
-        console.warn("Firebase config not found. Firestore features will be disabled.");
+        logger.warn("Firebase config not found. Firestore features will be disabled.");
     }
 } catch (e) {
-    console.error("Failed to initialize Firebase:", e);
+    logger.error("Failed to initialize Firebase:", e);
     db = null; // Ensure db is null if initialization fails
     auth = null; // Ensure auth is null if initialization fails
 }
@@ -161,9 +162,9 @@ export const SleeperDataProvider = ({ children }) => {
                     const yahooDocRef = doc(db, `artifacts/${appId}/users/${currentUser.uid}/yahoo_data/custom_data`);
                     const docSnap = await getDoc(yahooDocRef);
                     if (docSnap.exists()) {
-                        loadedYahooData = docSnap.data().data || {};
-                        console.log("SleeperDataContext: Loaded Yahoo data from Firestore:", loadedYahooData);
-                    }
+                            loadedYahooData = docSnap.data().data || {};
+                            logger.info("SleeperDataContext: Loaded Yahoo data from Firestore:", loadedYahooData);
+                        }
                 }
                 setYahooHistoricalData(loadedYahooData); // Set this state so it can be merged below
 
@@ -190,8 +191,8 @@ export const SleeperDataProvider = ({ children }) => {
 
                 setHistoricalData(mergedHistoricalData); // Set the final merged data
 
-            } catch (err) {
-                console.error("Failed to load initial Sleeper data:", err);
+                } catch (err) {
+                logger.error("Failed to load initial Sleeper data:", err);
                 setError(err);
             } finally {
                 setLoading(false);
@@ -202,15 +203,15 @@ export const SleeperDataProvider = ({ children }) => {
         if (auth && db) {
             const unsubscribe = onAuthStateChanged(auth, async (user) => {
                 if (user) {
-                    // User is signed in
-                    console.log("Firebase: User signed in:", user.uid);
-                    if (isInitialLoad.current) {
-                        await loadAllSleeperData(user);
-                        isInitialLoad.current = false;
-                    }
-                } else {
-                    // User is signed out, attempt anonymous sign-in
-                    console.log("Firebase: No user signed in. Attempting anonymous sign-in.");
+                        // User is signed in
+                        logger.info("Firebase: User signed in:", user.uid);
+                        if (isInitialLoad.current) {
+                            await loadAllSleeperData(user);
+                            isInitialLoad.current = false;
+                        }
+                    } else {
+                        // User is signed out, attempt anonymous sign-in
+                        logger.info("Firebase: No user signed in. Attempting anonymous sign-in.");
                     try {
                         if (initialAuthToken) {
                             await signInWithCustomToken(auth, initialAuthToken);
@@ -218,7 +219,7 @@ export const SleeperDataProvider = ({ children }) => {
                             await signInAnonymously(auth);
                         }
                     } catch (signInError) {
-                        console.error("Firebase: Anonymous sign-in failed:", signInError);
+                        logger.error("Firebase: Anonymous sign-in failed:", signInError);
                         setError(new Error("Failed to authenticate with Firebase."));
                         setLoading(false);
                     }
@@ -239,9 +240,9 @@ export const SleeperDataProvider = ({ children }) => {
                 try {
                     const yahooDocRef = doc(db, `artifacts/${appId}/users/${userId}/yahoo_data/custom_data`);
                     await setDoc(yahooDocRef, { data: yahooHistoricalData }, { merge: false }); // Overwrite existing
-                    console.log("SleeperDataContext: Yahoo data saved to Firestore successfully.");
+                    logger.info("SleeperDataContext: Yahoo data saved to Firestore successfully.");
                 } catch (e) {
-                    console.error("SleeperDataContext: Failed to save Yahoo data to Firestore:", e);
+                    logger.error("SleeperDataContext: Failed to save Yahoo data to Firestore:", e);
                 }
             }
         };
@@ -257,7 +258,7 @@ export const SleeperDataProvider = ({ children }) => {
     // and available to components consuming this context.
     const calculatedMetrics = useMemo(() => {
         if (historicalData && allDraftHistory && usersData && nflState && typeof getTeamName === 'function') {
-            console.log("SleeperDataContext: Recalculating all league metrics...");
+            logger.debug("SleeperDataContext: Recalculating all league metrics...");
             return calculateAllLeagueMetrics(historicalData, allDraftHistory, getTeamName, nflState);
         }
         return { seasonalMetrics: {}, careerDPRData: [] };

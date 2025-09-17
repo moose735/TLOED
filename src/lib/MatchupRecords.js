@@ -1,6 +1,7 @@
 // src/lib/MatchupRecords.js
 import React, { useState, useEffect } from 'react';
 import { useSleeperData } from '../contexts/SleeperDataContext'; // Import useSleeperData context hook
+import logger from '../utils/logger';
 
 const MatchupRecords = () => {
     const { historicalData, getTeamName, loading, error } = useSleeperData();
@@ -144,7 +145,7 @@ const MatchupRecords = () => {
                 skipReason.push(`Invalid data point (year: ${year}, week: ${week}, scores: ${team1Score}, ${team2Score})`);
             }
             if (skipReason.length > 0) {
-                console.warn('MatchupRecords: Skipping matchup due to:', skipReason.join('; '), '. Match:', match);
+                logger.warn('MatchupRecords: Skipping matchup due to:', skipReason.join('; '), '. Match:', match);
                 return;
             }
 

@@ -18,6 +18,8 @@ import { enrichPickForCalculations, calculatePlayerValue, calculatePickSlotValue
 import { fetchPlayerStats, fetchLeagueScoringSettings, fetchLeagueRosterSettings, calculateFantasyPoints, rankPlayersByFantasyPoints, calculateVORP } from '../utils/sleeperPlayerStats';
 
 
+import logger from '../utils/logger';
+
 // 1. Create the Context
 const SleeperDataContext = createContext();
 
@@ -27,7 +29,7 @@ const FALLBACK_LEAGUE_ID = '1074092015093413888'; // Example ID, replace with a 
 
 // --- NEW UTILITY FUNCTION TO FETCH TRANSACTIONS ---
 // This function fetches transactions for a specific league and week.
-const fetchTransactions = async (leagueId, week) => {
+    const fetchTransactions = async (leagueId, week) => {
     const url = `https://api.sleeper.app/v1/league/${leagueId}/transactions/${week}`;
     try {
         const response = await fetch(url);
@@ -36,7 +38,7 @@ const fetchTransactions = async (leagueId, week) => {
         }
         return await response.json();
     } catch (error) {
-        console.error(`Error fetching transactions for week ${week}:`, error);
+            logger.error(`Error fetching transactions for week ${week}:`, error);
         return [];
     }
 };
@@ -432,7 +434,7 @@ export const SleeperDataProvider = ({ children }) => {
                 }
 
                 if (!CURRENT_LEAGUE_ID) {
-                    console.warn(`SleeperDataContext: CURRENT_LEAGUE_ID is undefined in config.js. Using fallback ID: ${FALLBACK_LEAGUE_ID}`);
+                    logger.warn(`SleeperDataContext: CURRENT_LEAGUE_ID is undefined in config.js. Using fallback ID: ${FALLBACK_LEAGUE_ID}`);
                 }
 
                 const [
@@ -477,7 +479,7 @@ export const SleeperDataProvider = ({ children }) => {
                     }
                 }
                 setTransactions(allTransactions);
-                console.log("SleeperDataContext: Fetched transactions:", allTransactions);
+                logger.debug("SleeperDataContext: Fetched transactions:", allTransactions);
                 // --- END: FETCH TRANSACTIONS ---
 
                 // --- START: Process Draft Data for DraftAnalysis Component ---
@@ -572,14 +574,14 @@ export const SleeperDataProvider = ({ children }) => {
                 setLoading(false);
 
                 // --- DEBUGGING START: Log final state before context provides it ---
-                console.log('SleeperDataContext: Final nflPlayers state:', players);
-                console.log('SleeperDataContext: Final draftsBySeason state:', processedDraftsBySeason);
-                console.log('SleeperDataContext: Final draftPicksBySeason state:', processedDraftPicksBySeason);
-                console.log('SleeperDataContext: Final historicalMatchups (merged historicalData) state:', mergedHistoricalData);
-                // --- DEBUGGING END ---
+                logger.debug('SleeperDataContext: Final nflPlayers state:', players);
+                logger.debug('SleeperDataContext: Final draftsBySeason state:', processedDraftsBySeason);
+                logger.debug('SleeperDataContext: Final draftPicksBySeason state:', processedDraftPicksBySeason);
+                logger.debug('SleeperDataContext: Final historicalMatchups (merged historicalData) state:', mergedHistoricalData);
+                // --- DEBUGGING END --
 
             } catch (err) {
-                console.error("Failed to load initial Sleeper data:", err);
+                logger.error("Failed to load initial Sleeper data:", err);
                 setError(err);
                 setLoading(false);
             }
@@ -626,8 +628,9 @@ export const SleeperDataProvider = ({ children }) => {
         return result;
     };
 
-    // Compose allDraftHistory for consumers (DraftAnalysis, SeasonBreakdown, etc)
-    const allDraftHistory = useMemo(() => ({
+    // Compose all draft history structures for consumers
+    // Keep per-season structures but also provide a flattened array `allDraftHistory` for convenience
+    const draftHistoryBySeason = useMemo(() => ({
         draftsBySeason,
         draftPicksBySeason,
         // expose traded picks per season for consumers
@@ -643,7 +646,19 @@ export const SleeperDataProvider = ({ children }) => {
             }
             return t;
         })()
-    }), [draftsBySeason, draftPicksBySeason]);
+    }), [draftsBySeason, draftPicksBySeason, historicalMatchups]);
+
+    // Flatten picks across all seasons to a simple array for components that expect a list of picks
+    const allDraftHistory = useMemo(() => {
+        try {
+            const seasonPicksArrays = Object.values(draftPicksBySeason || {});
+            // flatten and ensure we have an array
+            const flat = Array.isArray(seasonPicksArrays) ? seasonPicksArrays.flat() : [];
+            return flat || [];
+        } catch (e) {
+            return [];
+        }
+    }, [draftPicksBySeason]);
 
     // Helper: Get scheduled matchups for the upcoming week in the current season
     const getUpcomingWeekMatchups = (season, week) => {
@@ -667,6 +682,9 @@ export const SleeperDataProvider = ({ children }) => {
         historicalData: historicalMatchups,
         draftsBySeason,
         draftPicksBySeason,
+        // Per-season and flattened draft history
+        draftHistoryBySeason,
+        allDraftHistory,
         processedSeasonalRecords,
         careerDPRData,
         transactions,
@@ -684,6 +702,8 @@ export const SleeperDataProvider = ({ children }) => {
         historicalMatchups,
         draftsBySeason,
         draftPicksBySeason,
+        draftHistoryBySeason,
+        allDraftHistory,
         processedSeasonalRecords,
         careerDPRData,
         transactions,

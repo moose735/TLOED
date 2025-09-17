@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import logger from '../utils/logger';
 import { useSleeperData } from '../contexts/SleeperDataContext';
 import { calculateAllLeagueMetrics } from '../utils/calculations';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -70,13 +71,16 @@ const MilestoneRecords = () => {
     // Function to generate dynamic milestones based on current achievements
     const generateDynamicMilestones = (teamStats) => {
         const updatedMilestones = JSON.parse(JSON.stringify(baseMilestones)); // Deep clone
-        
+
+        const totalTeams = Object.keys(teamStats || {}).length;
+
         Object.keys(updatedMilestones).forEach(milestoneKey => {
             const milestone = updatedMilestones[milestoneKey];
             const currentThresholds = [...milestone.thresholds];
-            
+
             // Find the highest achieved value for this milestone type
             let highestAchieved = 0;
+            let teamsAtOrAboveMax = 0;
             Object.values(teamStats).forEach(stats => {
                 let currentValue = 0;
                 switch (milestoneKey) {
@@ -101,16 +105,33 @@ const MilestoneRecords = () => {
                 }
                 highestAchieved = Math.max(highestAchieved, currentValue);
             });
-            
-            // Check if we need to add new thresholds
+
             const maxThreshold = Math.max(...currentThresholds);
+
+            // Count how many teams are at or above the current max threshold
+            if (totalTeams > 0) {
+                teamsAtOrAboveMax = Object.values(teamStats).filter(stats => {
+                    let val = 0;
+                    switch (milestoneKey) {
+                        case 'totalWins': val = stats.totalWins || 0; break;
+                        case 'totalLosses': val = stats.totalLosses || 0; break;
+                        case 'allPlayWins': val = stats.allPlayWins || 0; break;
+                        case 'allPlayLosses': val = stats.allPlayLosses || 0; break;
+                        case 'totalPoints': val = stats.totalPoints || 0; break;
+                        case 'highScores': val = stats.highScores || 0; break;
+                    }
+                    return val >= maxThreshold;
+                }).length;
+            }
+
+            // Only generate additional thresholds when the highest achieved exceeds or equals the current max.
+            // This ensures new tiers populate when the first team breaks the current top threshold.
             if (highestAchieved >= maxThreshold) {
-                // Generate new thresholds based on milestone type
                 const newThresholds = generateNewThresholds(milestoneKey, maxThreshold, highestAchieved);
                 milestone.thresholds = [...new Set([...currentThresholds, ...newThresholds])].sort((a, b) => a - b);
             }
         });
-        
+
         return updatedMilestones;
     };
 
@@ -157,20 +178,20 @@ const MilestoneRecords = () => {
         try {
             calculateMilestones();
         } catch (err) {
-            console.error('Error calculating milestones:', err);
+                logger.error('Error calculating milestones:', err);
         } finally {
             setLoading(false);
         }
     }, [historicalData, contextLoading]);
 
     const calculateMilestones = () => {
-        console.log('=== SIMPLE MILESTONE TRACKER START ===');
+        logger.debug('=== SIMPLE MILESTONE TRACKER START ===');
         
         // Get career data for final stats and team info
         const { careerDPRData } = calculateAllLeagueMetrics(historicalData, null, getTeamName, nflState);
         
         if (!careerDPRData || careerDPRData.length === 0) {
-            console.warn('No career data found');
+              logger.warn('No career data found');
             return;
         }
 
@@ -179,13 +200,10 @@ const MilestoneRecords = () => {
         const allRosters = {};
         const achievementTimeline = {};
 
-        // Initialize milestone achievement tracking
-        Object.keys(baseMilestones).forEach(milestoneKey => {
-            achievementTimeline[milestoneKey] = {};
-            baseMilestones[milestoneKey].thresholds.forEach(threshold => {
-                achievementTimeline[milestoneKey][threshold] = [];
-            });
-        });
+        // NOTE: generateDynamicMilestones requires teamStats to be populated. We'll initialize
+        // teamStats first (below) from career data, then create generatedMilestones and
+        // prepare the achievementTimeline buckets. During week processing we'll re-generate
+        // milestones so thresholds expand the moment a team reaches the current top tier.
 
         // Set up team info and final stats
         careerDPRData.forEach(careerStats => {
@@ -217,11 +235,20 @@ const MilestoneRecords = () => {
             };
         });
 
+        // Initialize generated milestones after teamStats is populated from career data
+        let generatedMilestones = generateDynamicMilestones(teamStats);
+        Object.keys(generatedMilestones).forEach(milestoneKey => {
+            achievementTimeline[milestoneKey] = {};
+            generatedMilestones[milestoneKey].thresholds.forEach(threshold => {
+                achievementTimeline[milestoneKey][threshold] = [];
+            });
+        });
+
         // Process matchups chronologically
         const allSeasons = Object.keys(historicalData.matchupsBySeason || {}).sort((a, b) => parseInt(a) - parseInt(b));
         let globalWeek = 0;
 
-        console.log(`Processing ${allSeasons.length} seasons chronologically`);
+    logger.debug(`Processing ${allSeasons.length} seasons chronologically`);
 
         allSeasons.forEach(season => {
             const matchups = historicalData.matchupsBySeason?.[season] || [];
@@ -245,38 +272,47 @@ const MilestoneRecords = () => {
 
                 // Process matchups for this week
                 weekMatchups.forEach(matchup => {
-                    const team1Roster = rosters.find(r => r.roster_id === matchup.team1_roster_id);
-                    const team2Roster = rosters.find(r => r.roster_id === matchup.team2_roster_id);
-                    
-                    if (!team1Roster || !team2Roster) return;
+                    // Normalize roster id comparisons to strings to avoid type mismatch (number vs string)
+                    const team1Roster = rosters.find(r => String(r.roster_id) === String(matchup.team1_roster_id));
+                    // team2 may be null for bye weeks
+                    const team2Roster = matchup.team2_roster_id !== null && matchup.team2_roster_id !== undefined
+                        ? rosters.find(r => String(r.roster_id) === String(matchup.team2_roster_id))
+                        : null;
 
-                    const team1Id = team1Roster.owner_id;
-                    const team2Id = team2Roster.owner_id;
+                    // If primary roster (team1) not found, skip this matchup
+                    if (!team1Roster) return;
+
+                    const team1Id = String(team1Roster.owner_id);
+                    const team2Id = team2Roster ? String(team2Roster.owner_id) : null;
                     const team1Score = parseFloat(matchup.team1_score) || 0;
                     const team2Score = parseFloat(matchup.team2_score) || 0;
 
-                    // Ensure teams exist
-                    if (!teamStats[team1Id] || !teamStats[team2Id]) return;
+                    // Ensure primary team exists in our tracked stats
+                    if (!teamStats[team1Id]) return;
 
-                    // Update wins/losses
-                    if (team1Score > team2Score) {
-                        teamStats[team1Id].wins++;
-                        teamStats[team2Id].losses++;
-                    } else if (team2Score > team1Score) {
-                        teamStats[team2Id].wins++;
-                        teamStats[team1Id].losses++;
-                    } else {
-                        teamStats[team1Id].ties++;
-                        teamStats[team2Id].ties++;
+                    // Update points (always add points for team1 even if opponent missing)
+                    teamStats[team1Id].points += team1Score;
+                    if (team2Id && teamStats[team2Id]) {
+                        teamStats[team2Id].points += team2Score;
                     }
 
-                    // Update points
-                    teamStats[team1Id].points += team1Score;
-                    teamStats[team2Id].points += team2Score;
+                    // Update wins/losses/ties only when opponent exists and is tracked
+                    if (team2Id && teamStats[team2Id]) {
+                        if (team1Score > team2Score) {
+                            teamStats[team1Id].wins++;
+                            teamStats[team2Id].losses++;
+                        } else if (team2Score > team1Score) {
+                            teamStats[team2Id].wins++;
+                            teamStats[team1Id].losses++;
+                        } else {
+                            teamStats[team1Id].ties++;
+                            teamStats[team2Id].ties++;
+                        }
+                    }
 
                     // Track scores for all-play and high-score calculations
                     weekScores.push({ ownerId: team1Id, score: team1Score });
-                    weekScores.push({ ownerId: team2Id, score: team2Score });
+                    if (team2Id) weekScores.push({ ownerId: team2Id, score: team2Score });
                 });
 
                 // Calculate all-play wins/losses for this week
@@ -298,6 +334,19 @@ const MilestoneRecords = () => {
                     teamStats[sortedScores[i].ownerId].highScores++;
                 }
 
+                // Re-generate milestones based on updated running teamStats for this week.
+                // This allows thresholds to expand immediately when a team first reaches the top.
+                generatedMilestones = generateDynamicMilestones(teamStats);
+                // Ensure achievementTimeline has buckets for any newly added thresholds
+                Object.keys(generatedMilestones).forEach(milestoneKey => {
+                    if (!achievementTimeline[milestoneKey]) achievementTimeline[milestoneKey] = {};
+                    generatedMilestones[milestoneKey].thresholds.forEach(threshold => {
+                        if (achievementTimeline[milestoneKey][threshold] === undefined) {
+                            achievementTimeline[milestoneKey][threshold] = [];
+                        }
+                    });
+                });
+
                 // Check for milestone achievements this week
                 Object.keys(teamStats).forEach(ownerId => {
                     const stats = teamStats[ownerId];
@@ -314,14 +363,16 @@ const MilestoneRecords = () => {
 
                     Object.keys(milestoneValues).forEach(milestoneKey => {
                         const currentValue = milestoneValues[milestoneKey];
-                        
-                        baseMilestones[milestoneKey].thresholds.forEach(threshold => {
+
+                        // Use current generated milestones thresholds so achievements keep rolling when needed
+                        const thresholdsToCheck = (generatedMilestones[milestoneKey] || baseMilestones[milestoneKey]).thresholds;
+                        thresholdsToCheck.forEach(threshold => {
                             // Check if milestone just achieved
                             if (currentValue >= threshold) {
                                 const alreadyAchieved = achievementTimeline[milestoneKey][threshold].some(
                                     achievement => achievement.ownerId === ownerId
                                 );
-                                
+
                                 if (!alreadyAchieved) {
                                     achievementTimeline[milestoneKey][threshold].push({
                                         ownerId,
@@ -331,8 +382,8 @@ const MilestoneRecords = () => {
                                         value: currentValue,
                                         teamName: allRosters[ownerId]?.name || `Team ${ownerId}`
                                     });
-                                    
-                                    console.log(`🏆 ${milestoneKey} ${threshold}: ${allRosters[ownerId]?.name} achieved in S${season}W${week} (value: ${currentValue})`);
+
+                                    logger.info(`🏆 ${milestoneKey} ${threshold}: ${allRosters[ownerId]?.name} achieved in S${season}W${week} (value: ${currentValue})`);
                                 }
                             }
                         });
@@ -372,15 +423,16 @@ const MilestoneRecords = () => {
             stats.achievements = achievements[ownerId];
         });
 
-        setDynamicMilestones(baseMilestones);
+    // Persist the generated milestones so UI shows extended thresholds when appropriate
+    setDynamicMilestones(generatedMilestones);
         setMilestoneData({ 
             teamStats, 
             allRosters, 
             achievementHistory: achievementTimeline 
         });
 
-        console.log('=== MILESTONE TRACKING COMPLETE ===');
-        console.log('Achievement timeline summary:', Object.keys(achievementTimeline).map(key => ({
+        logger.debug('=== MILESTONE TRACKING COMPLETE ===');
+        logger.debug('Achievement timeline summary:', Object.keys(achievementTimeline).map(key => ({
             milestone: key,
             achievements: Object.keys(achievementTimeline[key]).map(threshold => ({
                 threshold,
@@ -486,6 +538,46 @@ const MilestoneRecords = () => {
         return value.toString();
     };
 
+    // Compute which thresholds to show for a milestone: include everything up to the
+    // first threshold that is greater than the highest achieved value across teams.
+    // This hides unreachable higher tiers (e.g., 75/100/150) until a team reaches 50.
+    const getDisplayedThresholds = (milestoneKey) => {
+        const sourceMilestones = Object.keys(dynamicMilestones).length > 0 ? dynamicMilestones : baseMilestones;
+        const thresholds = sourceMilestones[milestoneKey]?.thresholds || [];
+
+        if (!milestoneData?.teamStats) return thresholds.slice().sort((a, b) => b - a);
+
+        // Determine highest final value across teams for this milestone
+        let highest = 0;
+        Object.keys(milestoneData.teamStats).forEach(ownerId => {
+            const stats = milestoneData.teamStats[ownerId];
+            if (!stats) return;
+
+            let val = 0;
+            switch (milestoneKey) {
+                case 'totalWins': val = stats.finalWins || 0; break;
+                case 'totalLosses': val = stats.finalLosses || 0; break;
+                case 'allPlayWins': val = stats.finalAllPlayWins || 0; break;
+                case 'allPlayLosses': val = stats.finalAllPlayLosses || 0; break;
+                case 'totalPoints': val = stats.finalPoints || 0; break;
+                case 'highScores': val = stats.finalHighScores || 0; break;
+                default: val = 0;
+            }
+            highest = Math.max(highest, val);
+        });
+
+        // Find the first threshold greater than highest; include thresholds up to that one
+        const sortedAsc = thresholds.slice().sort((a, b) => a - b);
+        let cutoffIndex = sortedAsc.findIndex(t => t > highest);
+        if (cutoffIndex === -1) {
+            // No threshold greater than highest: show all
+            return sortedAsc.slice().sort((a, b) => b - a);
+        }
+
+        const toShow = sortedAsc.slice(0, cutoffIndex + 1); // include the next threshold above highest
+        return toShow.sort((a, b) => b - a);
+    };
+
     const getMilestoneProgress = (milestoneKey, threshold) => {
         if (!milestoneData.teamStats) return [];
 
@@ -585,7 +677,7 @@ const MilestoneRecords = () => {
 
                     {/* Milestone thresholds */}
                     <div className="space-y-4">
-                        {milestones[activeMilestone].thresholds.map(threshold => {
+                        {(getDisplayedThresholds(activeMilestone) || []).map(threshold => {
                                             const achievers = getMilestoneAchievers(activeMilestone, threshold);
                                             const watchers = getMilestoneWatchers(activeMilestone, threshold);
                                             const progress = getMilestoneProgress(activeMilestone, threshold);
@@ -597,13 +689,13 @@ const MilestoneRecords = () => {
                                 <div key={threshold} className="bg-white rounded-lg shadow-sm border border-gray-200">
                                     {/* Threshold header */}
                                     <div 
-                                        className="p-4 sm:p-6 cursor-pointer hover:bg-gray-50 transition-colors"
+                                        className="p-3 sm:p-4 cursor-pointer hover:bg-gray-50 transition-colors"
                                         onClick={() => toggleThresholdExpansion(activeMilestone, threshold)}
                                     >
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center space-x-3">
                                                 <div className={`w-3 h-3 rounded-full bg-${milestones[activeMilestone].color}-500`}></div>
-                                                <h3 className="text-lg sm:text-xl font-semibold text-gray-900">
+                                                <h3 className="text-base sm:text-lg font-semibold text-gray-900">
                                                     {formatStatValue(threshold, activeMilestone)} {milestones[activeMilestone].title}
                                                 </h3>
                                                 {achievers.length > 0 && (
@@ -785,11 +877,16 @@ const MilestoneRecords = () => {
                                                                             {formatStatValue(team.currentValue, activeMilestone)} / {formatStatValue(threshold, activeMilestone)}
                                                                         </span>
                                                                     </div>
-                                                                    <div className="w-full bg-gray-200 rounded-full h-2">
-                                                                        <div
-                                                                            className={`bg-${milestones[activeMilestone].color}-500 h-2 rounded-full transition-all duration-300`}
-                                                                            style={{ width: `${Math.min(100, team.progress)}%` }}
-                                                                        ></div>
+                                                                    <div className="flex items-center gap-3">
+                                                                        <div className="flex-1 w-full bg-gray-200 rounded-full h-2">
+                                                                            <div
+                                                                                className={`bg-${milestones[activeMilestone].color}-500 h-2 rounded-full transition-all duration-300`}
+                                                                                style={{ width: `${Math.min(100, team.progress)}%` }}
+                                                                            ></div>
+                                                                        </div>
+                                                                        <div className="w-12 text-right">
+                                                                            <span className="text-xs font-medium text-gray-700">{Math.min(100, Math.round(team.progress))}%</span>
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                             ))}

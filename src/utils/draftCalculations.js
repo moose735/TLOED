@@ -78,7 +78,7 @@ export const generateExpectedVorpByPickSlot = (totalDraftPicks) => {
     const expectedVorpByPick = new Map();
 
     if (totalDraftPicks === 0) {
-        console.warn('generateExpectedVorpByPickSlot: No picks to assign expected VORP values.');
+        try { const logger = require('./logger').default; logger.warn('generateExpectedVorpByPickSlot: No picks to assign expected VORP values.'); } catch(e) {}
         return expectedVorpByPick;
     }
 

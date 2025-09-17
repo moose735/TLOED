@@ -9,7 +9,7 @@ const FinancialDebug = () => {
     const [loading, setLoading] = useState(false);
 
     const testYear = async (year) => {
-        console.log(`Testing year: ${year}`);
+    logger.debug(`Testing year: ${year}`);
         try {
             const data = await fetchFinancialDataForYear(year);
             setTestResults(prev => ({
@@ -39,7 +39,7 @@ const FinancialDebug = () => {
         
         // Get all seasons from historicalData (same as FinancialTracker)
         const allSeasons = Object.keys(historicalData.rostersBySeason).sort((a, b) => b - a);
-        console.log('Available seasons from historicalData:', allSeasons);
+    logger.debug('Available seasons from historicalData:', allSeasons);
         
         // Test each available season
         const testPromises = allSeasons.map(year => testYear(year));

@@ -72,7 +72,8 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
 
 
         if (!matchups || !leagueMetadata || !rosters || !users) {
-            console.error(`calculateAllLeagueMetrics: Missing critical data for year ${year}. Skipping this year.`);
+            // Use logger to avoid noisy console output
+            try { const logger = require('../utils/logger').default; logger.error(`calculateAllLeagueMetrics: Missing critical data for year ${year}. Skipping this year.`); } catch(e) {}
             return; // Skip this year if data is incomplete
         }
 
@@ -99,7 +100,7 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
             const rosterId = roster.roster_id; // Get rosterId here
 
             if (!ownerId || !rosterId) { // Check both ownerId and rosterId
-                console.warn(`Roster entry in year ${year} is missing owner_id or roster_id. Skipping initialization. Roster:`, roster);
+                try { const logger = require('../utils/logger').default; logger.warn(`Roster entry in year ${year} is missing owner_id or roster_id. Skipping initialization. Roster:` , roster); } catch(e) {}
                 return; // Skip this roster if no owner_id or roster_id
             }
 

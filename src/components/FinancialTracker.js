@@ -1,5 +1,6 @@
 // src/components/FinancialTracker.js
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import logger from '../utils/logger';
 import { useSleeperData } from '../contexts/SleeperDataContext';
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 import { initializeApp } from 'firebase/app';
@@ -248,7 +249,7 @@ const FinancialTracker = () => {
 			}
 			setFirestoreLoading(false);
 		}, (error) => {
-            console.error("Error fetching Firestore data:", error);
+			logger.error("Error fetching Firestore data:", error);
             setFirestoreLoading(false);
         });
 
@@ -386,7 +387,7 @@ const FinancialTracker = () => {
 			await setDoc(docRef, { ...currentYearData, transactions: newTransactions }, { merge: true });
 			setTransactionMessage({ text: messageText, type: 'success' });
 		} catch (e) {
-			console.error("Error saving transaction: ", e);
+			logger.error("Error saving transaction: ", e);
 			setTransactionMessage({ text: 'Error saving transaction.', type: 'error' });
 		}
 	
@@ -420,7 +421,7 @@ const FinancialTracker = () => {
 			await setDoc(docRef, { ...currentYearData, transactions: newTransactions }, { merge: true });
 			setTransactionMessage({ text: 'Transaction(s) deleted successfully!', type: 'success' });
 		} catch (e) {
-			console.error("Error deleting transaction: ", e);
+			logger.error("Error deleting transaction: ", e);
 			setTransactionMessage({ text: 'Error deleting transaction.', type: 'error' });
 		}
 
@@ -467,7 +468,7 @@ const FinancialTracker = () => {
 			}, { merge: true });
 			setTransactionMessage({ text: `Potential ${type.slice(0, -1)} added successfully!`, type: 'success' });
 		} catch (e) {
-			console.error("Error saving potential transaction: ", e);
+			logger.error("Error saving potential transaction: ", e);
 			setTransactionMessage({ text: `Error saving potential ${type.slice(0, -1)}.`, type: 'error' });
 		}
 
@@ -488,7 +489,7 @@ const FinancialTracker = () => {
 			}, { merge: true });
 			setTransactionMessage({ text: `Potential ${type.slice(0, -1)} deleted successfully!`, type: 'success' });
 		} catch (e) {
-			console.error("Error deleting potential transaction: ", e);
+			logger.error("Error deleting potential transaction: ", e);
 			setTransactionMessage({ text: `Error deleting potential ${type.slice(0, -1)}.`, type: 'error' });
 		}
 	};

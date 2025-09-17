@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { calculateAllLeagueMetrics } from '../utils/calculations'; // Import the new utility
 import { useSleeperData } from '../contexts/SleeperDataContext'; // Import the custom hook
+import logger from '../utils/logger';
 
 const LuckRatingAnalysis = ({ onTeamNameClick }) => {
   // Consume necessary data from context
@@ -40,8 +41,8 @@ const LuckRatingAnalysis = ({ onTeamNameClick }) => {
     }
 
     // Add a defensive check to ensure getTeamName is a function
-    if (typeof getTeamName !== 'function') {
-        console.error("LuckRatingAnalysis: getTeamName is not a function from SleeperDataContext. Cannot perform calculations.");
+  if (typeof getTeamName !== 'function') {
+    logger.error("LuckRatingAnalysis: getTeamName is not a function from SleeperDataContext. Cannot perform calculations.");
         setLoading(false);
         setCareerLuckData([]);
         setSeasonalLuckData([]);
@@ -65,7 +66,7 @@ const LuckRatingAnalysis = ({ onTeamNameClick }) => {
       if (year === currentNFLSeason) {
         const week1Matchups = historicalData.matchupsBySeason?.[year]?.['1'];
         if (!week1Matchups || week1Matchups.length === 0) {
-          console.log(`LuckRatingAnalysis: Skipping year ${year} (current season) as Week 1 data is not available.`);
+          logger.debug(`LuckRatingAnalysis: Skipping year ${year} (current season) as Week 1 data is not available.`);
           return; // Skip this year
         }
       }

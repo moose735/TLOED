@@ -3,6 +3,7 @@ import { useSleeperData } from '../contexts/SleeperDataContext';
 import { calculateAllLeagueMetrics } from '../utils/calculations';
 import { fetchFinancialDataForYears } from '../services/financialService';
 import { calculateCareerTransactionCountsByOwnerId } from '../utils/financialCalculations';
+import logger from '../utils/logger';
 
 const LeagueRecords = () => {
     const { historicalData, allDraftHistory, getTeamName, getTeamDetails, currentSeason, loading, error, nflState } = useSleeperData();
@@ -253,7 +254,7 @@ const LeagueRecords = () => {
                 const transactionCounts = calculateCareerTransactionCountsByOwnerId(financialData, ownerId);
                 careerStats.careerTradeFees = transactionCounts.careerTradeFees;
                 careerStats.careerWaiverFees = transactionCounts.careerWaiverFees;
-                console.log(`Transaction counts for ${careerStats.teamName}:`, transactionCounts);
+                logger.debug(`Transaction counts for ${careerStats.teamName}:`, transactionCounts);
             } else {
                 careerStats.careerTradeFees = 0;
                 careerStats.careerWaiverFees = 0;
@@ -404,7 +405,7 @@ const LeagueRecords = () => {
             const allYears = Object.keys(historicalData.matchupsBySeason || {});
             
             const finishCalculations = (financialData = {}) => {
-                console.log("League Records: Processing with financial data for", Object.keys(financialData).length, "years");
+                logger.debug("League Records: Processing with financial data for", Object.keys(financialData).length, "years");
                 setFinancialDataByYear(financialData);
                 setLoadingFinancial(false);
                 
@@ -417,7 +418,7 @@ const LeagueRecords = () => {
                 fetchFinancialDataForYears(allYears)
                     .then(finishCalculations)
                     .catch(financialError => {
-                        console.warn("Could not load financial data for transaction counts:", financialError);
+                        logger.warn("Could not load financial data for transaction counts:", financialError);
                         finishCalculations({});
                     });
             } else {
@@ -425,7 +426,7 @@ const LeagueRecords = () => {
             }
 
         } catch (error) {
-            console.error("Error calculating league records:", error);
+            logger.error("Error calculating league records:", error);
             setAllTimeRecords({});
             setRecordHistory({});
             setIsLoading(false);

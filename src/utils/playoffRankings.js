@@ -39,11 +39,11 @@ export const calculatePlayoffFinishes = (bracketData, rosterIdToOwnerIdMap, getT
         // This ensures absolute uniqueness for the top two spots.
         if (!finalRanks.has(championRosterId)) {
             finalRanks.set(championRosterId, 1);
-            console.log(`[playoffRankings] Year ${currentYear}: Explicit Champion: ${getTeamDetails(championRosterId).teamName}`);
+            try { const logger = require('./logger').default; logger.info(`[playoffRankings] Year ${currentYear}: Explicit Champion: ${getTeamDetails(championRosterId).teamName}`); } catch(e) {}
         }
         if (!finalRanks.has(runnerUpRosterId)) {
             finalRanks.set(runnerUpRosterId, 2);
-            console.log(`[playoffRankings] Year ${currentYear}: Explicit Runner-Up: ${getTeamDetails(runnerUpRosterId).teamName}`);
+            try { const logger = require('./logger').default; logger.info(`[playoffRankings] Year ${currentYear}: Explicit Runner-Up: ${getTeamDetails(runnerUpRosterId).teamName}`); } catch(e) {}
         }
     } else {
         // Championship match not found or incomplete in winners bracket.
@@ -60,12 +60,12 @@ export const calculatePlayoffFinishes = (bracketData, rosterIdToOwnerIdMap, getT
         // Assign rank 3 only if it hasn't been assigned and the team doesn't already have a better rank
         if (!finalRanks.has(thirdPlaceRosterId) || finalRanks.get(thirdPlaceRosterId) > 3) {
             finalRanks.set(thirdPlaceRosterId, 3);
-            console.log(`[playoffRankings] Year ${currentYear}: Explicit 3rd Place: ${getTeamDetails(thirdPlaceRosterId).teamName}`);
+            try { const logger = require('./logger').default; logger.info(`[playoffRankings] Year ${currentYear}: Explicit 3rd Place: ${getTeamDetails(thirdPlaceRosterId).teamName}`); } catch(e) {}
         }
         // Assign rank 4 only if it hasn't been assigned and the team doesn't already have a better rank
         if (!finalRanks.has(fourthPlaceRosterId) || finalRanks.get(fourthPlaceRosterId) > 4) {
             finalRanks.set(fourthPlaceRosterId, 4);
-            console.log(`[playoffRankings] Year ${currentYear}: Explicit 4th Place: ${getTeamDetails(fourthPlaceRosterId).teamName}`);
+            try { const logger = require('./logger').default; logger.info(`[playoffRankings] Year ${currentYear}: Explicit 4th Place: ${getTeamDetails(fourthPlaceRosterId).teamName}`); } catch(e) {}
         }
     } else {
         // 3rd Place match not found or incomplete in winners bracket.

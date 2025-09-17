@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSleeperData } from '../contexts/SleeperDataContext';
+import logger from '../utils/logger';
 
 const Gamecenter = () => {
     const { historicalData, leagueData, getTeamDetails, processedSeasonalRecords, nflState, loading, nflPlayers } = useSleeperData();
@@ -16,9 +17,9 @@ const Gamecenter = () => {
 
     // Effect 1: Initialize state when context data is ready and not loading.
     useEffect(() => {
-        console.log('Gamecenter useEffect 1 - loading:', loading, 'leagueData:', leagueData, 'nflState:', nflState);
+        logger.debug('Gamecenter useEffect 1 - loading:', loading, 'leagueData:', leagueData, 'nflState:', nflState);
         if (!loading && leagueData && Array.isArray(leagueData) && leagueData[0]?.season && nflState?.week) {
-            console.log('Setting selectedSeason to:', leagueData[0].season, 'and selectedWeek to:', nflState.week);
+            logger.debug('Setting selectedSeason to:', leagueData[0].season, 'and selectedWeek to:', nflState.week);
             setSelectedSeason(leagueData[0].season);
             setSelectedWeek(nflState.week);
         }
@@ -179,7 +180,7 @@ const Gamecenter = () => {
             }
 
             if (!leagueId) {
-                console.error(`No league ID available for season ${season}`);
+                logger.warn(`No league ID available for season ${season}`);
                 // Set a fallback message for years without detailed roster data (like Yahoo years)
                 setMatchupRosterData({ 
                     error: true, 
@@ -189,7 +190,7 @@ const Gamecenter = () => {
             }
 
             // Fetch detailed matchup data from Sleeper API for the specific season and week
-            console.log(`Fetching roster data for season ${season}, week ${week}, league ${leagueId}`);
+            logger.debug(`Fetching roster data for season ${season}, week ${week}, league ${leagueId}`);
             const rosterResponse = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/matchups/${week}`);
             
             if (!rosterResponse.ok) {
@@ -211,21 +212,21 @@ const Gamecenter = () => {
                     };
                     setMatchupRosterData(processedData);
                 } else {
-                    console.warn(`Could not find roster data for teams ${matchup.team1_roster_id} and ${matchup.team2_roster_id} in week ${week} of season ${season}`);
+                    logger.warn(`Could not find roster data for teams ${matchup.team1_roster_id} and ${matchup.team2_roster_id} in week ${week} of season ${season}`);
                     setMatchupRosterData({ 
                         error: true, 
                         message: `Roster details for this matchup are not available. The teams may not have been active in week ${week} of the ${season} season.` 
                     });
                 }
             } else {
-                console.warn(`No roster data returned for season ${season}, week ${week}`);
+                logger.warn(`No roster data returned for season ${season}, week ${week}`);
                 setMatchupRosterData({ 
                     error: true, 
                     message: `No roster data available for week ${week} of the ${season} season. The data may not be accessible or this week may not have occurred yet.` 
                 });
             }
         } catch (error) {
-            console.error('Error fetching matchup roster data:', error);
+            logger.error('Error fetching matchup roster data:', error);
             setMatchupRosterData({ 
                 error: true, 
                 message: `Failed to load detailed roster data: ${error.message}. This may be due to data not being available for historical seasons or network issues.` 

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { calculateAllLeagueMetrics } from '../utils/calculations';
 import PowerRankings from './PowerRankings';
 import { useSleeperData } from '../contexts/SleeperDataContext'; // Import the custom hook
+import logger from '../utils/logger';
 
 // Always define metrics at the top level so it's available everywhere
 let metricsResult = {};
@@ -53,7 +54,7 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
 
     // FIXED: Add a defensive check to ensure getTeamName is a function
     if (typeof getTeamName !== 'function') {
-        console.error("DPRAnalysis: getTeamName is not a function from SleeperDataContext. Cannot perform calculations.");
+    logger.error("DPRAnalysis: getTeamName is not a function from SleeperDataContext. Cannot perform calculations.");
         setLoading(false);
         setCareerDPRData([]);
         setSeasonalDPRData([]);

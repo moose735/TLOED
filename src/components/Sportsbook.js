@@ -535,7 +535,7 @@ import {
 
                 return matchupData;
             } catch (error) {
-                console.error('Error generating matchup odds:', error);
+                logger.error('Error generating matchup odds:', error);
                 return null;
             }
         }).filter(Boolean); // Remove any null entries

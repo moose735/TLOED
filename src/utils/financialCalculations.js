@@ -1,4 +1,5 @@
 // src/utils/financialCalculations.js
+import logger from './logger';
 
 // Debug flag for financial calculations
 const DEBUG_FINANCIAL = false;
@@ -114,7 +115,7 @@ export const calculateTeamFinancialTotalsByOwnerId = (transactions, ownerId) => 
     }
 
     if (DEBUG_FINANCIAL) {
-        console.log(`Financial calculation: Looking for owner ID "${ownerId}"`);
+        logger.debug(`Financial calculation: Looking for owner ID "${ownerId}"`);
     }
 
     // Filter transactions for this owner ID
@@ -129,9 +130,9 @@ export const calculateTeamFinancialTotalsByOwnerId = (transactions, ownerId) => 
     });
 
     if (DEBUG_FINANCIAL) {
-        console.log(`Financial calculation: Found ${teamTransactions.length} transactions for owner "${ownerId}"`);
+        logger.debug(`Financial calculation: Found ${teamTransactions.length} transactions for owner "${ownerId}"`);
         if (teamTransactions.length > 0) {
-            console.log('Sample transaction for this owner:', teamTransactions[0]);
+            logger.debug('Sample transaction for this owner:', teamTransactions[0]);
         }
     }
 
@@ -153,7 +154,7 @@ export const calculateTeamFinancialTotalsByOwnerId = (transactions, ownerId) => 
     const netTotal = totalPayouts - totalFees; // Positive means team received more than they paid
 
     if (DEBUG_FINANCIAL) {
-        console.log(`Financial calculation results for owner "${ownerId}": Fees: $${totalFees}, Payouts: $${totalPayouts}, Net: $${netTotal}`);
+        logger.debug(`Financial calculation results for owner "${ownerId}": Fees: $${totalFees}, Payouts: $${totalPayouts}, Net: $${netTotal}`);
     }
 
     return {
@@ -190,14 +191,14 @@ export const calculateTeamFinancialTotals = (transactions, teamDisplayName, user
     
     if (!teamUser) {
         if (DEBUG_FINANCIAL) {
-            console.log(`Financial calculation: Could not find user for team "${teamDisplayName}"`);
-            console.log('Available users:', usersData.map(u => ({ 
+            logger.debug(`Financial calculation: Could not find user for team "${teamDisplayName}"`);
+                logger.debug('Available users:', usersData.map(u => ({ 
                 id: u.user_id, 
                 display: u.display_name, 
                 username: u.username 
             })));
-            console.log('Searching for exact match with:', teamDisplayName);
-            console.log('Available display names:', usersData.map(u => u.display_name || u.username || u.user_id));
+                logger.debug('Searching for exact match with:', teamDisplayName);
+                logger.debug('Available display names:', usersData.map(u => u.display_name || u.username || u.user_id));
         }
         return {
             totalFees: 0,
@@ -209,7 +210,7 @@ export const calculateTeamFinancialTotals = (transactions, teamDisplayName, user
 
     const teamUserId = teamUser.user_id;
     if (DEBUG_FINANCIAL) {
-        console.log(`Financial calculation: Found user ID "${teamUserId}" for team "${teamDisplayName}"`);
+        logger.debug(`Financial calculation: Found user ID "${teamUserId}" for team "${teamDisplayName}"`);
     }
 
     // Filter transactions for this team
@@ -224,7 +225,7 @@ export const calculateTeamFinancialTotals = (transactions, teamDisplayName, user
     });
 
     if (DEBUG_FINANCIAL) {
-        console.log(`Financial calculation: Found ${teamTransactions.length} transactions for team "${teamDisplayName}" (${teamUserId})`);
+        logger.debug(`Financial calculation: Found ${teamTransactions.length} transactions for team "${teamDisplayName}" (${teamUserId})`);
     }
 
     // Calculate totals
@@ -243,7 +244,7 @@ export const calculateTeamFinancialTotals = (transactions, teamDisplayName, user
     const netTotal = totalPayouts - totalFees; // Positive means team received more than they paid
 
     if (DEBUG_FINANCIAL) {
-        console.log(`Financial calculation results for "${teamDisplayName}": Fees: $${totalFees}, Payouts: $${totalPayouts}, Net: $${netTotal}`);
+        logger.debug(`Financial calculation results for "${teamDisplayName}": Fees: $${totalFees}, Payouts: $${totalPayouts}, Net: $${netTotal}`);
     }
 
     return {
@@ -280,7 +281,7 @@ export const calculateAllTeamFinancialTotals = (allYearData, usersData) => {
         const yearTransactions = allYearData[year]?.transactions || [];
         
         if (DEBUG_FINANCIAL) {
-            console.log(`Calculating financial totals for year ${year}, found ${yearTransactions.length} transactions`);
+            logger.debug(`Calculating financial totals for year ${year}, found ${yearTransactions.length} transactions`);
         }
         
         allTeams.forEach(teamName => {

@@ -19,7 +19,7 @@ const RosterCard = ({ roster }) => {
                 onError={(e) => {
                     e.target.onerror = null;
                     e.target.src = '/LeagueLogo.PNG';
-                    console.warn(`Failed to load avatar for ${ownerDisplayName}. Using default.`);
+                    logger.warn(`Failed to load avatar for ${ownerDisplayName}. Using default.`);
                 }}
             />
             <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-1 truncate w-full">{ownerTeamName}</h2>
