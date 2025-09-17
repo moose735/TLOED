@@ -516,7 +516,7 @@ const AppContent = () => {
                 <div className="max-w-6xl w-full mx-auto">
                     {/* Mobile Navigation */}
                     <ul className="md:hidden flex flex-col">
-                        {/* Main Nav Items */}
+                        {/* Dashboard */}
                         <li>
                             <button 
                                 className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600"
@@ -525,33 +525,44 @@ const AppContent = () => {
                                 <span className="text-base font-medium">🏠 {NAV_CATEGORIES.HOME.label}</span>
                             </button>
                         </li>
+                        {/* Games Dropdown */}
                         <li>
                             <button 
-                                className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600"
-                                onClick={() => handleTabClick(NAV_CATEGORIES.GAMECENTER.tab)}
+                                className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600 flex items-center justify-between"
+                                onClick={() => toggleSubMenu('games')}
                             >
-                                <span className="text-base font-medium">🎮 {NAV_CATEGORIES.GAMECENTER.label}</span>
+                                <span className="text-base font-medium">🎮 Games</span>
+                                <span className={`transform transition-transform duration-200 ${openSubMenu === 'games' ? 'rotate-180' : ''}`}>▼</span>
                             </button>
+                            {openSubMenu === 'games' && (
+                                <ul className="bg-gray-600">
+                                    <li>
+                                        <button 
+                                            className="w-full px-8 py-3 text-left hover:bg-gray-500 active:bg-gray-400 touch-friendly text-sm border-b border-gray-500 last:border-b-0"
+                                            onClick={(e) => { e.stopPropagation(); handleTabClick(NAV_CATEGORIES.GAMECENTER.tab); }}
+                                        >
+                                            {NAV_CATEGORIES.GAMECENTER.label}
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button 
+                                            className="w-full px-8 py-3 text-left hover:bg-gray-500 active:bg-gray-400 touch-friendly text-sm border-b border-gray-500 last:border-b-0"
+                                            onClick={(e) => { e.stopPropagation(); handleTabClick(NAV_CATEGORIES.SPORTSBOOK.tab); }}
+                                        >
+                                            {NAV_CATEGORIES.SPORTSBOOK.label}
+                                        </button>
+                                    </li>
+                                </ul>
+                            )}
                         </li>
-                        <li>
-                            <button 
-                                className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600"
-                                onClick={() => handleTabClick(NAV_CATEGORIES.SPORTSBOOK.tab)}
-                            >
-                                <span className="text-base font-medium">💰 {NAV_CATEGORIES.SPORTSBOOK.label}</span>
-                            </button>
-                        </li>
-                        
-                        {/* League Data Submenu */}
+                        {/* League Dropdown */}
                         <li>
                             <button 
                                 className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600 flex items-center justify-between"
                                 onClick={() => toggleSubMenu('leagueData')}
                             >
                                 <span className="text-base font-medium">📊 {NAV_CATEGORIES.LEAGUE_DATA.label}</span>
-                                <span className={`transform transition-transform duration-200 ${openSubMenu === 'leagueData' ? 'rotate-180' : ''}`}>
-                                    ▼
-                                </span>
+                                <span className={`transform transition-transform duration-200 ${openSubMenu === 'leagueData' ? 'rotate-180' : ''}`}>▼</span>
                             </button>
                             {openSubMenu === 'leagueData' && (
                                 <ul className="bg-gray-600">
@@ -568,7 +579,7 @@ const AppContent = () => {
                                 </ul>
                             )}
                         </li>
-                        
+                        {/* Teams */}
                         <li>
                             <button 
                                 className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600"
@@ -577,6 +588,7 @@ const AppContent = () => {
                                 <span className="text-base font-medium">👥 {NAV_CATEGORIES.TEAMS.label}</span>
                             </button>
                         </li>
+                        {/* Season Breakdown */}
                         <li>
                             <button 
                                 className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600"
@@ -585,6 +597,7 @@ const AppContent = () => {
                                 <span className="text-base font-medium">📈 {NAV_CATEGORIES.SEASON_BREAKDOWN.label}</span>
                             </button>
                         </li>
+                        {/* Draft */}
                         <li>
                             <button 
                                 className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600"
@@ -593,13 +606,52 @@ const AppContent = () => {
                                 <span className="text-base font-medium">🎯 {NAV_CATEGORIES.DRAFT.label}</span>
                             </button>
                         </li>
+                        {/* Financials */}
                         <li>
                             <button 
-                                className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly"
+                                className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600"
                                 onClick={() => handleTabClick(NAV_CATEGORIES.FINANCIALS.tab)}
                             >
                                 <span className="text-base font-medium">💸 {NAV_CATEGORIES.FINANCIALS.label}</span>
                             </button>
+                        </li>
+                        {/* Analysis Dropdown */}
+                        <li>
+                            <button 
+                                className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600 flex items-center justify-between"
+                                onClick={() => toggleSubMenu('analysis')}
+                            >
+                                <span className="text-base font-medium">📊 Analysis</span>
+                                <span className={`transform transition-transform duration-200 ${openSubMenu === 'analysis' ? 'rotate-180' : ''}`}>▼</span>
+                            </button>
+                            {openSubMenu === 'analysis' && (
+                                <ul className="bg-gray-600">
+                                    <li>
+                                        <button 
+                                            className="w-full px-8 py-3 text-left hover:bg-gray-500 active:bg-gray-400 touch-friendly text-sm border-b border-gray-500 last:border-b-0"
+                                            onClick={(e) => { e.stopPropagation(); handleTabClick('draftAnalysis'); }}
+                                        >
+                                            Draft
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button 
+                                            className="w-full px-8 py-3 text-left hover:bg-gray-500 active:bg-gray-400 touch-friendly text-sm border-b border-gray-500 last:border-b-0"
+                                            onClick={(e) => { e.stopPropagation(); handleTabClick('dprAnalysis'); }}
+                                        >
+                                            DPR Analysis
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button 
+                                            className="w-full px-8 py-3 text-left hover:bg-gray-500 active:bg-gray-400 touch-friendly text-sm border-b border-gray-500 last:border-b-0"
+                                            onClick={(e) => { e.stopPropagation(); handleTabClick('luckRating'); }}
+                                        >
+                                            Luck Rating
+                                        </button>
+                                    </li>
+                                </ul>
+                            )}
                         </li>
                     </ul>
 
