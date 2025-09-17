@@ -518,7 +518,8 @@ const renderMovement = (movement) => {
 												</div>
 											</div>
 											
-											<div className="grid grid-cols-2 gap-3 text-sm">
+											{/* Top row: Record / Points For / Points Against */}
+											<div className="grid grid-cols-3 gap-3 text-sm">
 												<div className="bg-gray-50 rounded-lg p-2">
 													<div className="text-xs text-gray-500 mb-1">Record</div>
 													<div className="font-semibold">{renderRecord(row.wins, row.losses, row.ties)}</div>
@@ -531,11 +532,31 @@ const renderMovement = (movement) => {
 													<div className="text-xs text-gray-500 mb-1">Points Against</div>
 													<div className="font-semibold text-red-700">{formatPoints(row.pointsAgainst)}</div>
 												</div>
+											</div>
+
+											{/* Bottom row: Proj Record / Luck / Rem. SOS */}
+											<div className="mt-3 grid grid-cols-3 gap-3 text-sm">
 												<div className="bg-gray-50 rounded-lg p-2">
-													<div className="text-xs text-gray-500 mb-1">Luck Rating</div>
+													<div className="text-xs text-gray-500 mb-1">Proj. Record</div>
+													<div className="font-semibold text-blue-700">{row.projectedRecord}</div>
+												</div>
+												<div className="bg-gray-50 rounded-lg p-2">
+													<div className="text-xs text-gray-500 mb-1">Luck</div>
 													<div className={`font-semibold ${row.luckRating > 0 ? 'text-green-600' : row.luckRating < 0 ? 'text-red-600' : 'text-gray-700'}`}>
 														{formatLuckRating(row.luckRating)}
 													</div>
+												</div>
+												<div className="bg-gray-50 rounded-lg p-2">
+													<div className="text-xs text-gray-500 mb-1">Rem. SOS</div>
+													{(() => {
+														const min = 1, max = 12;
+														const percent = (row.sosRank - min) / (max - min);
+														const r = Math.round(220 + (22 - 220) * percent);
+														const g = Math.round(38 + (163 - 38) * percent);
+														const b = Math.round(38 + (74 - 38) * percent);
+														const color = `rgb(${r},${g},${b})`;
+														return <div className="font-bold" style={{color}}>{row.sosRank}</div>;
+													})()}
 												</div>
 											</div>
 										</div>
