@@ -18,9 +18,9 @@ const HallOfChampions = () => {
     const championImages = {
         // Example: 2024: require('../assets/images/champions/2024-champion.jpg'),
         // Add images by uncommenting and adding files:
-        // 2023: require('../assets/images/champions/2023-champion.jpg'),
-        // 2022: require('../assets/images/champions/2022-champion.jpg'),
-        // 2021: require('../assets/images/champions/2021-champion.jpg'),
+        2023: require('../assets/images/hall-of-champions/2023-champion.jpg'),
+        2022: require('../assets/images/hall-of-champions/2022-champion.jpg'),
+        2021: require('../assets/images/hall-of-champions/2021-champion.jpg'),
     };
 
     // Fallback function to get champion image
@@ -33,16 +33,7 @@ const HallOfChampions = () => {
         }
     };
 
-    // Trophy variations for different achievements
-    const getTrophyIcon = (year, isRecent = false) => {
-        if (isRecent && year >= 2023) {
-            return '🏆'; // Gold trophy for recent champions
-        } else if (year >= 2020) {
-            return '🥇'; // Gold medal for modern era
-        } else {
-            return '🏅'; // Medal for historical champions
-        }
-    };
+    // Trophy/medal icon function removed
 
     // Function to get bracket data for a specific year
     const getBracketForYear = (year) => {
@@ -298,7 +289,7 @@ const HallOfChampions = () => {
                     <div className="p-6 border-b border-gray-200">
                         <div className="flex items-center justify-between">
                             <h3 className="text-2xl font-bold text-gray-800">
-                                🏆 {year} Tournament Bracket
+                                {year} Tournament Bracket
                             </h3>
                             <button
                                 onClick={onClose}
@@ -325,9 +316,7 @@ const HallOfChampions = () => {
                                                 <h4 className={`font-bold ${isChampionship ? 'text-lg text-yellow-600' : 'text-sm text-gray-600'}`}>
                                                     {roundName}
                                                 </h4>
-                                                {isChampionship && (
-                                                    <div className="text-xs text-yellow-500 mt-1">🏆</div>
-                                                )}
+                                                {/* Trophy icon removed from round header */}
                                             </div>
                                             
                                             {/* Round Games - Clean vertical layout */}
@@ -402,23 +391,22 @@ const HallOfChampions = () => {
                     >
                         {/* Champion Image */}
                         {champion.image ? (
-                            <div className="w-24 h-24 sm:w-32 sm:h-32 mb-4 rounded-full overflow-hidden border-4 border-yellow-400 shadow-lg">
+                            <div className="mb-4 overflow-hidden border-4 border-yellow-400 shadow-lg flex items-center justify-center bg-white">
                                 <img
                                     src={champion.image}
                                     alt={`${champion.year} Champion`}
-                                    className="w-full h-full object-cover"
+                                    className="block w-auto h-auto max-w-full max-h-48"
+                                    style={{ display: 'block' }}
                                     onError={(e) => {
                                         e.target.style.display = 'none';
                                         e.target.nextElementSibling.style.display = 'flex';
                                     }}
                                 />
-                                <div className="w-full h-full bg-gradient-to-br from-yellow-300 to-yellow-500 flex items-center justify-center text-4xl hidden">
-                                    {getTrophyIcon(champion.year, champion.year >= 2023)}
-                                </div>
+                                {/* Trophy/medal icon removed */}
                             </div>
                         ) : (
                             /* Fallback: Team Avatar or Trophy Icon */
-                            <div className="w-24 h-24 sm:w-32 sm:h-32 mb-4 rounded-full overflow-hidden border-4 border-yellow-400 shadow-lg bg-gradient-to-br from-yellow-300 to-yellow-500 flex items-center justify-center">
+                            <div className="w-24 h-24 sm:w-32 sm:h-32 mb-4 overflow-hidden border-4 border-yellow-400 shadow-lg bg-gradient-to-br from-yellow-300 to-yellow-500 flex items-center justify-center">
                                 {champion.avatar ? (
                                     <img
                                         src={champion.avatar}
@@ -426,13 +414,10 @@ const HallOfChampions = () => {
                                         className="w-full h-full object-cover"
                                         onError={(e) => {
                                             e.target.style.display = 'none';
-                                            e.target.nextElementSibling.style.display = 'flex';
                                         }}
                                     />
                                 ) : null}
-                                <div className={`text-4xl ${champion.avatar ? 'hidden' : 'flex'} items-center justify-center w-full h-full`}>
-                                    {getTrophyIcon(champion.year, champion.year >= 2023)}
-                                </div>
+                                {/* Trophy/medal icon removed */}
                             </div>
                         )}
                         
@@ -442,10 +427,7 @@ const HallOfChampions = () => {
                         {/* Champion Name */}
                         <div className="text-gray-700 text-lg font-semibold mb-2">{champion.name}</div>
                         
-                        {/* Trophy Icon */}
-                        <div className="text-3xl mb-2">
-                            {getTrophyIcon(champion.year, champion.year >= 2023)}
-                        </div>
+                        {/* Trophy icon removed from champion card */}
                         
                         {/* Click to view bracket hint */}
                         {champion.hasBracket && (

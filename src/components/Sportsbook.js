@@ -328,11 +328,50 @@ import {
         return rankings;
     }, [processedSeasonalRecords, currentSeason, eloRatings, historicalData]);
 
-    // Generate matchup odds for a specific week
+    // Helper: Calculate recent average for a team (last N weeks)
+    const getRecentAverage = (rosterId, season, N = 2) => {
+        if (!historicalData?.matchupsBySeason?.[season]) return 0;
+        const matchups = historicalData.matchupsBySeason[season].filter(
+            m => m.t1 === rosterId || m.t2 === rosterId
+        );
+        const recent = matchups.slice(-N);
+        if (recent.length === 0) return 0;
+        const total = recent.reduce((sum, m) => {
+            const score = m.t1 === rosterId ? m.t1_score : m.t2_score;
+            return sum + (typeof score === 'number' ? score : 0);
+        }, 0);
+        return total / recent.length;
+    };
+
+    // Helper: Calculate mean and variance for a team (season or recent)
+    const getMeanAndVariance = (rosterId, season, N = null) => {
+        if (!historicalData?.matchupsBySeason?.[season]) return { mean: 0, variance: 0, count: 0 };
+        let matchups = historicalData.matchupsBySeason[season].filter(
+            m => m.t1 === rosterId || m.t2 === rosterId
+        );
+        if (N) matchups = matchups.slice(-N);
+        const scores = matchups.map(m => m.t1 === rosterId ? m.t1_score : m.t2_score).filter(s => typeof s === 'number');
+        if (scores.length === 0) return { mean: 0, variance: 0, count: 0 };
+        const mean = scores.reduce((a, b) => a + b, 0) / scores.length;
+        const variance = scores.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / scores.length;
+        return { mean, variance, count: scores.length };
+    };
+
+    // Error function approximation
+    function erf(x) {
+        // Abramowitz and Stegun formula 7.1.26
+        const sign = x >= 0 ? 1 : -1;
+        x = Math.abs(x);
+        const a1 =  0.254829592, a2 = -0.284496736, a3 = 1.421413741;
+        const a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
+        const t = 1.0 / (1.0 + p * x);
+        const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+        return sign * y;
+    }
+
+    // Enhanced: Generate matchup odds for a specific week using error function and variance
     const generateMatchupOdds = (week) => {
-        if (!historicalData?.matchupsBySeason?.[currentSeason] || !teamPowerRankings || !currentSeason) {
-            return [];
-        }
+        if (!processedSeasonalRecords || !historicalData) return [];
 
         // Create getTeamName function for DPR calculation
         const getTeamName = (ownerId, season) => {
@@ -345,6 +384,37 @@ import {
             .filter(m => parseInt(m.week) === week);
 
         return weekMatchups.map(matchup => {
+            const t1 = matchup.t1;
+            const t2 = matchup.t2;
+            // Use last 4 games for recent stats
+            const t1Stats = getMeanAndVariance(t1, currentSeason, 4);
+            const t2Stats = getMeanAndVariance(t2, currentSeason, 4);
+            // If not enough games, fallback to season
+            const t1Season = getMeanAndVariance(t1, currentSeason);
+            const t2Season = getMeanAndVariance(t2, currentSeason);
+            const t1Mean = t1Stats.count >= 2 ? t1Stats.mean : t1Season.mean;
+            const t2Mean = t2Stats.count >= 2 ? t2Stats.mean : t2Season.mean;
+            const t1Var = t1Stats.count >= 2 ? t1Stats.variance : t1Season.variance;
+            const t2Var = t2Stats.count >= 2 ? t2Stats.variance : t2Season.variance;
+            const t1N = t1Stats.count >= 2 ? t1Stats.count : t1Season.count;
+            const t2N = t2Stats.count >= 2 ? t2Stats.count : t2Season.count;
+            // Calculate win probability using error function
+            const diff = t1Mean - t2Mean;
+            const stdErr = Math.sqrt((t1Var / t1N) + (t2Var / t2N));
+            let winProb = 0.5;
+            if (stdErr > 0) {
+                winProb = 0.5 + 0.5 * erf(diff / (Math.sqrt(2) * stdErr));
+            }
+            // Spread: just use the mean difference
+            const spread = diff;
+            // Moneyline calculation
+            let t1ML = winProb > 0.5 ? -Math.round(100 * winProb / (1 - winProb)) : Math.round(100 * (1 - winProb) / winProb);
+            let t2ML = winProb < 0.5 ? -Math.round(100 * (1 - winProb) / winProb) : Math.round(100 * winProb / (1 - winProb));
+            // Add juice
+            const juice = 15;
+            t1ML = t1ML > 0 ? t1ML + juice : t1ML - juice;
+            t2ML = t2ML > 0 ? t2ML + juice : t2ML - juice;
+
             try {
                 const team1RosterId = String(matchup.team1_roster_id);
                 const team2RosterId = String(matchup.team2_roster_id);
@@ -409,7 +479,10 @@ import {
                         momentum: calculateTeamMomentum(team2RosterId, currentSeason, historicalData),
                         probability: team2WinProb,
                         odds: team2OddsData.americanOdds
-                    }
+                    },
+                    spread: spread,
+                    moneyline: { [t1]: t1ML, [t2]: t2ML },
+                    winProb,
                 };
 
                 // Generate clean betting markets with proper spread-to-moneyline relationships

@@ -15,7 +15,7 @@ import DraftAnalysis from './lib/DraftAnalysis';
 import HallOfChampions from './lib/HallOfChampions';
 import Gamecenter from './components/Gamecenter';
 import Sportsbook from './components/Sportsbook';
-import MobileSidebarNav from './components/MobileSidebarNav';
+// import MobileSidebarNav from './components/MobileSidebarNav';
 import DesktopNav from './components/DesktopNav';
 
 // Import the custom hook from your SleeperDataContext
@@ -603,11 +603,7 @@ const AppContent = () => {
                         </li>
                     </ul>
 
-                    {/* Mobile Sidebar Navigation */}
-                    <div className="md:hidden">
-                        <MobileSidebarNav />
-                    </div>
-                    {/* Desktop Navigation */}
+                    {/* Unified Navigation */}
                     <DesktopNav
                         handleTabClick={handleTabClick}
                         handleSubTabClick={handleSubTabClick}
