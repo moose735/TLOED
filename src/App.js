@@ -15,6 +15,7 @@ import DraftAnalysis from './lib/DraftAnalysis';
 import HallOfChampions from './lib/HallOfChampions';
 import Gamecenter from './components/Gamecenter';
 import Sportsbook from './components/Sportsbook';
+import KeeperList from './lib/KeeperList';
 // import MobileSidebarNav from './components/MobileSidebarNav';
 import DesktopNav from './components/DesktopNav';
 
@@ -31,6 +32,7 @@ const NAV_CATEGORIES = {
         subTabs: [
             { label: 'League History', tab: 'leagueHistory' },
             { label: 'Hall of Champions', tab: 'hallOfChampions' }, // New Hall of Champions sub-tab
+            { label: 'Keepers', tab: 'keepers' },
             { label: 'Record Book', tab: 'recordBook' },
             { label: 'Head-to-Head', tab: 'headToHead' },
             { label: 'DPR Analysis', tab: 'dprAnalysis' },
@@ -64,6 +66,7 @@ const TABS = {
     TRANSACTIONS: 'transactions',
     SEASON_BREAKDOWN: 'seasonBreakdown',
     DRAFT_ANALYSIS: 'draftAnalysis',
+    KEEPERS: 'keepers',
 };
 
 const AppContent = () => {
@@ -437,6 +440,8 @@ const AppContent = () => {
                 return <DPRAnalysis onTeamNameClick={handleTeamNameClick} />;
             case TABS.LUCK_RATING:
                 return <LuckRatingAnalysis onTeamNameClick={handleTeamNameClick} />;
+            case TABS.KEEPERS:
+                return <KeeperList />;
             case TABS.TEAMS_OVERVIEW:
                 return <TeamsOverviewPage selectedTeamName={selectedTeamName} />;
             case TABS.FINANCIALS:
@@ -572,6 +577,14 @@ const AppContent = () => {
                                             onClick={(e) => { e.stopPropagation(); handleTabClick('hallOfChampions'); }}
                                         >
                                             Hall of Champions
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button 
+                                            className="w-full px-8 py-3 text-left hover:bg-gray-500 active:bg-gray-400 touch-friendly text-sm border-b border-gray-500 last:border-b-0"
+                                            onClick={(e) => { e.stopPropagation(); handleTabClick('keepers'); }}
+                                        >
+                                            Keepers
                                         </button>
                                     </li>
                                     <li>

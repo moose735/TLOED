@@ -539,6 +539,18 @@ export const SleeperDataProvider = ({ children }) => {
                     // IMPORTANT: Pass the processed draft data into historicalData
                     draftsBySeason: processedDraftsBySeason,
                     draftPicksBySeason: processedDraftPicksBySeason,
+                    // Include traded picks per season (if present in the raw fetch)
+                    tradedPicksBySeason: (() => {
+                        const t = {};
+                        if (allHistoricalDraftsRaw) {
+                            for (const s in allHistoricalDraftsRaw) {
+                                if (!allHistoricalDraftsRaw.hasOwnProperty(s)) continue;
+                                const seasonData = allHistoricalDraftsRaw[s];
+                                t[s] = seasonData.tradedPicks || seasonData.traded_picks || [];
+                            }
+                        }
+                        return t;
+                    })(),
                 };
                 setHistoricalMatchups(mergedHistoricalData); // Update historicalMatchups state with the merged data
 
@@ -617,7 +629,20 @@ export const SleeperDataProvider = ({ children }) => {
     // Compose allDraftHistory for consumers (DraftAnalysis, SeasonBreakdown, etc)
     const allDraftHistory = useMemo(() => ({
         draftsBySeason,
-        draftPicksBySeason
+        draftPicksBySeason,
+        // expose traded picks per season for consumers
+        tradedPicksBySeason: (() => {
+            // try to derive from draftsBySeason if available, otherwise empty
+            const t = {};
+            if (draftsBySeason) {
+                Object.keys(draftsBySeason).forEach(s => { t[s] = draftsBySeason[s]?.tradedPicks || [] });
+            }
+            // also include the processed state if we set it elsewhere
+            if (historicalMatchups && historicalMatchups.tradedPicksBySeason) {
+                Object.assign(t, historicalMatchups.tradedPicksBySeason);
+            }
+            return t;
+        })()
     }), [draftsBySeason, draftPicksBySeason]);
 
     // Helper: Get scheduled matchups for the upcoming week in the current season

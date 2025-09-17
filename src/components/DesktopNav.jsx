@@ -35,6 +35,10 @@ export default function DesktopNav({ handleTabClick, handleSubTabClick, openSubM
               onClick={e => { e.stopPropagation(); handleTabClick('hallOfChampions'); }}>
               Hall of Champions
             </li>
+                <li className="px-4 py-2 hover:bg-gray-600 cursor-pointer rounded-md text-base touch-friendly"
+                  onClick={e => { e.stopPropagation(); handleTabClick('keepers'); }}>
+                  Keepers
+                </li>
             <li className="px-4 py-2 hover:bg-gray-600 cursor-pointer rounded-md text-base touch-friendly"
               onClick={e => { e.stopPropagation(); handleTabClick('leagueHistory'); }}>
               League History

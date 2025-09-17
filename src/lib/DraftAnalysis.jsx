@@ -41,77 +41,6 @@ const DraftAnalysis = () => {
 
     // State for draft summary stats
     const [draftYearSummary, setDraftYearSummary] = useState(null);
-    // Effect to calculate draft year summary for the summary tab
-    useEffect(() => {
-        if (!selectedSeason || !historicalData || !usersData || !draftSummary || !draftPicks.length) {
-            setDraftYearSummary(null);
-            return;
-        }
-        try {
-            // Use the already-calculated VORP delta and assigned VORP from draftPicks (matches board)
-            // Do NOT mutate or recalculate vorp_delta or draft_pick_assigned_vorp
-            // Always sort by pick_no to match board order
-            const picks = [...draftPicks].sort((a, b) => a.pick_no - b.pick_no);
-
-            // Group by team (sum scaled VORP delta; fall back to raw vorp_delta if scaled missing)
-            const teamVorpTotals = {};
-            picks.forEach(pick => {
-                const team = pick.picked_by_team_name || 'Unknown';
-                if (!teamVorpTotals[team]) teamVorpTotals[team] = 0;
-                const v = (typeof pick.scaled_vorp_delta === 'number') ? pick.scaled_vorp_delta : (typeof pick.vorp_delta === 'number' ? pick.vorp_delta : 0);
-                teamVorpTotals[team] += v;
-            });
-
-            // Best/worst team by total scaled VORP delta
-            const teamVorpArr = Object.entries(teamVorpTotals).map(([team, totalVorp]) => ({ team, totalScaledVorp: totalVorp }));
-            const bestTeam = teamVorpArr.reduce((a, b) => (a.totalScaledVorp > b.totalScaledVorp ? a : b), { team: '', totalScaledVorp: -Infinity });
-            const worstTeam = teamVorpArr.reduce((a, b) => (a.totalScaledVorp < b.totalScaledVorp ? a : b), { team: '', totalScaledVorp: Infinity });
-
-            // Best/worst pick by VORP delta (use the same metric the board shows: scaled_vorp_delta when available)
-            const pickComparableValue = p => (typeof p.scaled_vorp_delta === 'number' ? p.scaled_vorp_delta : p.vorp_delta);
-            const bestPick = picks.reduce((a, b) => (pickComparableValue(a) > pickComparableValue(b) ? a : b), picks[0]);
-            const worstPick = picks.reduce((a, b) => (pickComparableValue(a) < pickComparableValue(b) ? a : b), picks[0]);
-
-            // Round-by-round summaries (use pick.vorp_delta and draft_pick_assigned_vorp)
-            const rounds = draftSummary?.settings?.rounds || 0;
-            const picksByRound = Array.from({ length: rounds }, (_, i) => i + 1).map(roundNum =>
-                picks.filter(pick => pick.round === roundNum)
-            );
-            const roundSummaries = picksByRound.map((roundPicks, idx) => {
-                if (!roundPicks.length) return null;
-                const best = roundPicks.reduce((a, b) => (pickComparableValue(a) > pickComparableValue(b) ? a : b), roundPicks[0]);
-                const worst = roundPicks.reduce((a, b) => (pickComparableValue(a) < pickComparableValue(b) ? a : b), roundPicks[0]);
-                // Average the raw VORP delta for the round (use p.vorp_delta when available,
-                // otherwise fall back to the board metric for that pick)
-                // Prefer the scaled VORP delta (scaled_vorp_delta) when computing the round average.
-                // Fall back to vorp_delta if scaled is not available for a pick.
-                const sumScaledVorpForRound = roundPicks.reduce((sum, p) => {
-                    const v = (typeof p.scaled_vorp_delta === 'number') ? p.scaled_vorp_delta : (typeof p.vorp_delta === 'number' ? p.vorp_delta : 0);
-                    return sum + v;
-                }, 0);
-                const sumPlayerActualVorp = roundPicks.reduce((sum, p) => sum + (typeof p.player_actual_vorp === 'number' ? p.player_actual_vorp : 0), 0);
-                const sumAssignedVorp = roundPicks.reduce((sum, p) => sum + (typeof p.draft_pick_assigned_vorp === 'number' ? p.draft_pick_assigned_vorp : 0), 0);
-                const avgScaledVorp = sumScaledVorpForRound / roundPicks.length;
-                return {
-                    round: idx + 1,
-                    best,
-                    worst,
-                    avgScaledVorp: Number(avgScaledVorp.toFixed(2))
-                };
-            });
-
-            setDraftYearSummary({
-                bestTeam,
-                worstTeam,
-                bestPick,
-                worstPick,
-                roundSummaries,
-            });
-        } catch (err) {
-            console.error('Draft summary calculation error:', err);
-            setDraftYearSummary(null);
-        }
-    }, [selectedSeason, historicalData, usersData, draftSummary, draftPicks]);
 
 
     // Log raw data from context
@@ -361,6 +290,64 @@ const DraftAnalysis = () => {
                     scaled_vorp_delta: scaledVorpDelta
                 };
             });
+
+            // --- Keeper contract tracking ---
+            // We need to compute for each player how many consecutive keeper years they have been kept
+            // Rules:
+            // - A keeper pick (pick.is_keeper === true) counts toward consecutive keeper years for that owner/team.
+            // - If a player appears in the draft with is_keeper === false, their keeper counter resets to 0.
+            // - Max keepers allowed per team is enforced elsewhere; here we only compute years kept and years remaining.
+            // We'll scan historicalData.draftPicksBySeason from oldest to newest to build keeper history.
+
+            try {
+                const keeperHistory = {}; // player_id -> { yearsKept, lastPickedBy }
+
+                // Gather seasons sorted ascending (old -> new)
+                const seasonsList = Object.keys(historicalData.draftPicksBySeason || {}).map(s => Number(s)).sort((a, b) => a - b);
+                for (const s of seasonsList) {
+                    const picksForSeason = historicalData.draftPicksBySeason[s] || [];
+                    // Process picks in pick_no order to follow draft chronology
+                    const sortedPicks = picksForSeason.slice().sort((a, b) => (a.pick_no || 0) - (b.pick_no || 0));
+                    for (const p of sortedPicks) {
+                        const pid = p.player_id;
+                        if (!pid) continue;
+
+                        // If player is drafted without keeper flag, reset their keeper years
+                        if (!p.is_keeper) {
+                            keeperHistory[pid] = keeperHistory[pid] || { yearsKept: 0, lastPickedBy: p.picked_by || null };
+                            keeperHistory[pid].yearsKept = 0;
+                            keeperHistory[pid].lastPickedBy = p.picked_by || keeperHistory[pid].lastPickedBy || null;
+                            continue;
+                        }
+
+                        // If is_keeper === true: increment the player's keeper counter regardless of owner changes
+                        if (!keeperHistory[pid]) {
+                            keeperHistory[pid] = { yearsKept: 1, lastPickedBy: p.picked_by || null };
+                        } else {
+                            keeperHistory[pid].yearsKept = (keeperHistory[pid].yearsKept || 0) + 1;
+                            keeperHistory[pid].lastPickedBy = p.picked_by || keeperHistory[pid].lastPickedBy || null;
+                        }
+                    }
+                }
+
+                // Annotate finalProcessedPicks for the selected season with keeper info
+                finalProcessedPicks = finalProcessedPicks.map(pick => {
+                    const pid = pick.player_id;
+                    if (!pid) return pick;
+                    const hist = keeperHistory[pid] || { yearsKept: 0 };
+                    // Keeper contract rules: kept for up to 3 years (1 draft year + 2 keeper years)
+                    const maxKeeperYears = 3;
+                    const yearsKept = hist.yearsKept || 0;
+                    const keeperRemaining = Math.max(0, maxKeeperYears - yearsKept);
+                    return {
+                        ...pick,
+                        keeper_years: yearsKept,
+                        keeper_remaining: keeperRemaining
+                    };
+                });
+            } catch (keeperErr) {
+                console.warn('Error computing keeper history:', keeperErr);
+            }
 
             // Build a lookup for picks: round -> pick_in_round -> pick object
             const pickLookup = {};
@@ -904,6 +891,12 @@ const DraftAnalysis = () => {
                         >
                             Draft Summary
                         </button>
+                        <button
+                            className={`py-2 px-4 text-lg font-medium ${activeTab === 'keepers' ? 'border-b-2 border-yellow-400 text-yellow-400' : 'text-gray-400 hover:text-gray-200'}`}
+                            onClick={() => setActiveTab('keepers')}
+                        >
+                            Keepers
+                        </button>
                     </div>
 
                     {/* Conditional Rendering of Tabs */}
@@ -1139,6 +1132,42 @@ const DraftAnalysis = () => {
                                 </div>
                             ) : (
                                 <p className="text-center text-gray-400">No draft summary data available for this season.</p>
+                            )}
+                        </div>
+                    )}
+
+                    {activeTab === 'keepers' && (
+                        <div className="mt-6">
+                            <h3 className="text-2xl font-semibold mb-4 text-center text-yellow-400">Keeper List</h3>
+                            {draftPicks && draftPicks.length > 0 ? (
+                                <div className="overflow-x-auto bg-gray-700 rounded-lg p-4">
+                                    <table className="min-w-full text-sm text-gray-200">
+                                        <thead>
+                                            <tr className="bg-gray-800">
+                                                <th className="py-2 px-4 text-left">Player</th>
+                                                <th className="py-2 px-4">Player ID</th>
+                                                <th className="py-2 px-4">Team</th>
+                                                <th className="py-2 px-4">Is Keeper</th>
+                                                <th className="py-2 px-4">Keeper Years</th>
+                                                <th className="py-2 px-4">Keeper Remaining</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {draftPicks.filter(p => p.player_id).map((p, idx) => (
+                                                <tr key={`${p.player_id}-${idx}`} className="border-b border-gray-600">
+                                                    <td className="py-2 px-4 text-left">{p.player_name || `${p.metadata?.first_name || ''} ${p.metadata?.last_name || ''}`}</td>
+                                                    <td className="py-2 px-4 text-center">{p.player_id}</td>
+                                                    <td className="py-2 px-4 text-center">{p.picked_by_team_name || p.picked_by || 'Unknown'}</td>
+                                                    <td className="py-2 px-4 text-center">{p.is_keeper ? 'Yes' : 'No'}</td>
+                                                    <td className="py-2 px-4 text-center">{typeof p.keeper_years === 'number' ? p.keeper_years : 0}</td>
+                                                    <td className="py-2 px-4 text-center">{typeof p.keeper_remaining === 'number' ? p.keeper_remaining : 0}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ) : (
+                                <p className="text-center text-gray-400">No players found for this season.</p>
                             )}
                         </div>
                     )}

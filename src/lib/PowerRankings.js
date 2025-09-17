@@ -189,6 +189,11 @@ const PowerRankings = () => {
 		'bg-red-400'    // Tier 8 (bottom)
 	];
 
+	// Determine team count dynamically from historical data when available
+	const teamCount = (historicalData && historicalData.rostersBySeason && historicalData.rostersBySeason[currentSeason])
+		? historicalData.rostersBySeason[currentSeason].length
+		: (powerRankings && powerRankings.length) ? powerRankings.length : 12;
+
 	useEffect(() => {
 		if (contextLoading || !historicalData || !historicalData.matchupsBySeason) {
 			setLoading(true);
@@ -534,8 +539,8 @@ const renderMovement = (movement) => {
 												<div className="bg-gray-50 rounded-lg p-2">
 													<div className="text-xs text-gray-500 mb-1">Rem. SOS</div>
 													{(() => {
-														const min = 1, max = 12;
-														const percent = (row.sosRank - min) / (max - min);
+														const min = 1, max = teamCount || 12;
+														const percent = (row.sosRank - min) / (max - min || 1);
 														const r = Math.round(220 + (22 - 220) * percent);
 														const g = Math.round(38 + (163 - 38) * percent);
 														const b = Math.round(38 + (74 - 38) * percent);
@@ -618,8 +623,8 @@ const renderMovement = (movement) => {
 													{/* Smooth red-to-green gradient for SOS rank: 1 (hardest, red) to 12 (easiest, green) */}
 													{(() => {
 														// 1 = hardest (red), 12 = easiest (green)
-														const min = 1, max = 12;
-														const percent = (row.sosRank - min) / (max - min);
+														const min = 1, max = teamCount || 12;
+														const percent = (row.sosRank - min) / (max - min || 1);
 														// Interpolate from red (rgb(220,38,38)) to green (rgb(22,163,74))
 														const r = Math.round(220 + (22 - 220) * percent);
 														const g = Math.round(38 + (163 - 38) * percent);
