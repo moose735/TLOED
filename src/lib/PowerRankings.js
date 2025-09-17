@@ -491,7 +491,27 @@ const renderMovement = (movement) => {
 														<h3 className="font-semibold text-gray-800 text-sm truncate">{getTeamName(row.ownerId, row.year)}</h3>
 														<p className="text-xs text-gray-500">Tier {row.tier}</p>
 													</div>
-												</div>
+													</div>
+
+													{/* Projected Record and Remaining SOS for mobile */}
+													<div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+														<div className="bg-gray-50 rounded-lg p-2">
+															<div className="text-xs text-gray-500 mb-1">Proj. Record</div>
+															<div className="font-semibold text-blue-700">{row.projectedRecord}</div>
+														</div>
+														<div className="bg-gray-50 rounded-lg p-2">
+															<div className="text-xs text-gray-500 mb-1">Rem. SOS</div>
+															{(() => {
+																const min = 1, max = 12;
+																const percent = (row.sosRank - min) / (max - min);
+																const r = Math.round(220 + (22 - 220) * percent);
+																const g = Math.round(38 + (163 - 38) * percent);
+																const b = Math.round(38 + (74 - 38) * percent);
+																const color = `rgb(${r},${g},${b})`;
+																return <div className="font-bold" style={{color}}>{row.sosRank}</div>;
+															})()}
+														</div>
+													</div>
 												<div className="text-right">
 													<div className="text-lg font-bold text-blue-800">{formatDPR(row.dpr)}</div>
 													<div className="text-xs text-gray-500">DPR</div>

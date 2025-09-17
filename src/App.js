@@ -555,27 +555,57 @@ const AppContent = () => {
                                 </ul>
                             )}
                         </li>
-                        {/* League Dropdown */}
+                        {/* League Dropdown (with Season Breakdown & Financials) */}
                         <li>
                             <button 
                                 className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600 flex items-center justify-between"
-                                onClick={() => toggleSubMenu('leagueData')}
+                                onClick={() => toggleSubMenu('league')}
                             >
-                                <span className="text-base font-medium">📊 {NAV_CATEGORIES.LEAGUE_DATA.label}</span>
-                                <span className={`transform transition-transform duration-200 ${openSubMenu === 'leagueData' ? 'rotate-180' : ''}`}>▼</span>
+                                <span className="text-base font-medium">🏆 League</span>
+                                <span className={`transform transition-transform duration-200 ${openSubMenu === 'league' ? 'rotate-180' : ''}`}>▼</span>
                             </button>
-                            {openSubMenu === 'leagueData' && (
+                            {openSubMenu === 'league' && (
                                 <ul className="bg-gray-600">
-                                    {NAV_CATEGORIES.LEAGUE_DATA.subTabs.map(subTab => (
-                                        <li key={subTab.tab}>
-                                            <button 
-                                                className="w-full px-8 py-3 text-left hover:bg-gray-500 active:bg-gray-400 touch-friendly text-sm border-b border-gray-500 last:border-b-0"
-                                                onClick={(e) => { e.stopPropagation(); handleSubTabClick(subTab.tab); }}
-                                            >
-                                                {subTab.label}
-                                            </button>
-                                        </li>
-                                    ))}
+                                    <li>
+                                        <button 
+                                            className="w-full px-8 py-3 text-left hover:bg-gray-500 active:bg-gray-400 touch-friendly text-sm border-b border-gray-500 last:border-b-0"
+                                            onClick={(e) => { e.stopPropagation(); handleTabClick('hallOfChampions'); }}
+                                        >
+                                            Hall of Champions
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button 
+                                            className="w-full px-8 py-3 text-left hover:bg-gray-500 active:bg-gray-400 touch-friendly text-sm border-b border-gray-500 last:border-b-0"
+                                            onClick={(e) => { e.stopPropagation(); handleTabClick('leagueHistory'); }}
+                                        >
+                                            League History
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button 
+                                            className="w-full px-8 py-3 text-left hover:bg-gray-500 active:bg-gray-400 touch-friendly text-sm border-b border-gray-500 last:border-b-0"
+                                            onClick={(e) => { e.stopPropagation(); handleTabClick('recordBook'); }}
+                                        >
+                                            Record Book
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button 
+                                            className="w-full px-8 py-3 text-left hover:bg-gray-500 active:bg-gray-400 touch-friendly text-sm border-b border-gray-500 last:border-b-0"
+                                            onClick={(e) => { e.stopPropagation(); handleTabClick('seasonBreakdown'); }}
+                                        >
+                                            Season Breakdown
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button 
+                                            className="w-full px-8 py-3 text-left hover:bg-gray-500 active:bg-gray-400 touch-friendly text-sm border-b border-gray-500 last:border-b-0"
+                                            onClick={(e) => { e.stopPropagation(); handleTabClick('financials'); }}
+                                        >
+                                            Finances
+                                        </button>
+                                    </li>
                                 </ul>
                             )}
                         </li>
@@ -585,34 +615,7 @@ const AppContent = () => {
                                 className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600"
                                 onClick={() => handleTabClick(NAV_CATEGORIES.TEAMS.tab)}
                             >
-                                <span className="text-base font-medium">👥 {NAV_CATEGORIES.TEAMS.label}</span>
-                            </button>
-                        </li>
-                        {/* Season Breakdown */}
-                        <li>
-                            <button 
-                                className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600"
-                                onClick={() => handleTabClick(NAV_CATEGORIES.SEASON_BREAKDOWN.tab)}
-                            >
-                                <span className="text-base font-medium">📈 {NAV_CATEGORIES.SEASON_BREAKDOWN.label}</span>
-                            </button>
-                        </li>
-                        {/* Draft */}
-                        <li>
-                            <button 
-                                className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600"
-                                onClick={() => handleTabClick(NAV_CATEGORIES.DRAFT.tab)}
-                            >
-                                <span className="text-base font-medium">🎯 {NAV_CATEGORIES.DRAFT.label}</span>
-                            </button>
-                        </li>
-                        {/* Financials */}
-                        <li>
-                            <button 
-                                className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600"
-                                onClick={() => handleTabClick(NAV_CATEGORIES.FINANCIALS.tab)}
-                            >
-                                <span className="text-base font-medium">💸 {NAV_CATEGORIES.FINANCIALS.label}</span>
+                                <span className="text-base font-medium">� {NAV_CATEGORIES.TEAMS.label}</span>
                             </button>
                         </li>
                         {/* Analysis Dropdown */}
