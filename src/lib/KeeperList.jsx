@@ -242,7 +242,7 @@ export default function KeeperList() {
     const [playerQuery, setPlayerQuery] = useState('');
 
     return (
-        <div className="bg-gray-900 p-6 rounded-lg shadow-lg">
+        <div className="bg-gray-900 p-4 rounded-lg shadow-lg">
             <h2 className="text-2xl font-semibold mb-4 text-yellow-300">Keepers</h2>
             <p className="text-sm text-gray-200 mb-4">Rules: 3 players are to be kept from 3 different positions. Draft year + 2 keeper years for a total of 3 years max. Starting in 2028, <span className="underline decoration-dotted decoration-gray-400 cursor-help" title={"2026 = 1 player kept at round value\n2027 = 2 players kept at round value\n2028 = 3 players kept at round value\nIf you do not have a pick in the assigned round, it will cost -1 round.\nFree Agent keepers are assigned the 10th round."}>F Jon</span> Rule will be completely implemented with draft pick values assigned to players.</p>
 
@@ -289,13 +289,13 @@ export default function KeeperList() {
                 </div>
             </div>
 
-            <div className="overflow-x-auto bg-gray-800 rounded-lg p-4">
+            <div className="overflow-x-auto bg-gray-800 rounded-lg p-3">
                 {rows.length === 0 ? (
                     <div className="py-8 text-center text-gray-300">No keeper data available for current season.</div>
                 ) : (
                     <div className="w-full">
                         {/* Determine which teams to show as columns */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                             {rosterOptions
                                 .filter(r => selectedRosterId === 'all' ? true : String(r.id) === String(selectedRosterId))
                                 .map(team => {
@@ -310,7 +310,7 @@ export default function KeeperList() {
                                         return true;
                                     });
                                     return (
-                                        <div key={team.id} className="bg-white/5 border border-gray-700 rounded p-3">
+                                        <div key={team.id} className="bg-white/5 border border-gray-700 rounded p-2">
                                             <div className="flex items-center justify-center mb-2">
                                                 {team.ownerId && getTeamDetails ? (
                                                     (() => {
@@ -323,9 +323,9 @@ export default function KeeperList() {
                                                 ) : (
                                                     <img src={'/LeagueLogo.PNG'} alt="league logo" className="w-6 h-6 mr-2 object-contain" />
                                                 )}
-                                                <div className="font-semibold text-yellow-300 text-center text-gray-100">{team.name}</div>
+                                                <div className="font-semibold text-yellow-300 text-center text-gray-100 text-sm">{team.name}</div>
                                             </div>
-                                            <div className="space-y-2">
+                                            <div className="space-y-1">
                                                 {teamPlayers.length === 0 ? (
                                                     <div className="text-sm text-gray-400">No players</div>
                                                 ) : (
@@ -429,7 +429,7 @@ export default function KeeperList() {
                                                             const smallTeam = teamAbbr || nfl?.team || '';
 
                                                             return (
-                                                                <div key={r.player_id} className={`flex justify-between items-center p-2 rounded border ${containerClass}`}>
+                                                                <div key={r.player_id} className={`flex justify-between items-center p-1 rounded border ${containerClass}`}>
                                                                     {/* Left: flexible name block that can wrap or truncate */}
                                                                     <div className={`min-w-0 flex-1 text-sm text-left ${nameClass}`}>
                                                                         <div className="break-words sm:truncate">
@@ -441,7 +441,7 @@ export default function KeeperList() {
                                                                     </div>
 
                                                                     {/* Right: fixed narrow column for year/pick info */}
-                                                                    <div className="ml-3 flex-shrink-0 w-20 text-xs text-right">
+                                                                    <div className="ml-3 flex-shrink-0 w-16 text-xs text-right">
                                                                         <div className={`font-semibold ${expirationClass}`}>{expirationYear || '—'}</div>
                                                                         {/* If we have draft picks for the expiration year, attempt to resolve exact pick; otherwise show Round Cost */}
                                                                         {expirationYear && assignedRound ? (

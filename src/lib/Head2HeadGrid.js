@@ -42,6 +42,7 @@ const Head2HeadGrid = () => {
         error: contextError,
         historicalData,
         getTeamName,
+        getTeamDetails,
         careerDPRData,
         nflState // Use nflState from context
     } = useSleeperData();
@@ -84,7 +85,8 @@ const Head2HeadGrid = () => {
                 const matchYear = parseInt(year);
                 if (currentSeason) {
                     if (matchYear > currentSeason) return;
-                    if (matchYear === currentSeason && currentWeek && matchupWeek > currentWeek) return;
+                    // Exclude future weeks and the current week until it's final
+                    if (matchYear === currentSeason && currentWeek && matchupWeek >= currentWeek) return;
                 }
                 if (!matchup.week) return;
                 if (!matchupsByWeek[matchup.week]) matchupsByWeek[matchup.week] = [];
@@ -131,7 +133,8 @@ const Head2HeadGrid = () => {
                 const matchYear = parseInt(year);
                 if (currentSeason) {
                     if (matchYear > currentSeason) return; // Skip future seasons
-                    if (matchYear === currentSeason && currentWeek && matchupWeek > currentWeek) return; // Skip future weeks in current season
+                    // Skip future weeks and current week (not final) in current season
+                    if (matchYear === currentSeason && currentWeek && matchupWeek >= currentWeek) return; // Skip current or future weeks in current season
                 }
 
                 const team1RosterId = String(matchup.team1_roster_id);
@@ -367,7 +370,20 @@ const Head2HeadGrid = () => {
 
         // Prepare net points data for line graph, showing cumulative net points and excluding unplayed/future games
         let cumulativeNetPoints = 0;
-        const netPointsData = sortedMatches
+        // Create playedMatches which excludes current-week/future and unplayed (0-0) games
+        const playedMatches = sortedMatches.filter(match => {
+            const matchYear = parseInt(match.year);
+            const matchWeek = parseInt(match.week);
+            // Exclude future seasons or current/future weeks
+            if (currentSeason && matchYear > currentSeason) return false;
+            if (currentSeason && matchYear === currentSeason && currentWeek && matchWeek >= currentWeek) return false;
+            // Exclude matches that clearly have not been played
+            if (match.team1Score === 0 && match.team2Score === 0) return false;
+            // Ensure both scores are numbers
+            return typeof match.team1Score === 'number' && !isNaN(match.team1Score) && typeof match.team2Score === 'number' && !isNaN(match.team2Score);
+        });
+
+        const netPointsData = playedMatches
             .filter(match => {
                 // Only include games that have been played (both scores are valid numbers and not in the future)
                 const matchYear = parseInt(match.year);
@@ -376,7 +392,8 @@ const Head2HeadGrid = () => {
                                  typeof match.team2Score === 'number' && !isNaN(match.team2Score);
                 // Exclude future matchups: if match is in current season and week > currentWeek, or if both scores are 0
                 if (currentSeason && matchYear > currentSeason) return false;
-                if (currentSeason && matchYear === currentSeason && currentWeek && matchWeek > currentWeek) return false;
+                // Exclude current week and future weeks until they're final
+                if (currentSeason && matchYear === currentSeason && currentWeek && matchWeek >= currentWeek) return false;
                 if (match.team1Score === 0 && match.team2Score === 0) return false;
                 return isPlayed;
             })
@@ -407,7 +424,7 @@ const Head2HeadGrid = () => {
 
     logger.debug('Net Points Data for chart:', netPointsData); // Debugging: Check data before chart
 
-        sortedMatches.forEach(match => {
+    playedMatches.forEach(match => {
             let scoreAValue, scoreBValue;
 
             // Assign scores based on whether team1OwnerId or team2OwnerId in the match is ownerA in the rivalry
@@ -503,8 +520,22 @@ const Head2HeadGrid = () => {
                 </button>
 
                 {/* Header Section */}
-                <div className="text-center mb-6">
-                    <h3 className="text-2xl font-extrabold text-gray-800 mb-2">{teamADisplayName} vs {teamBDisplayName}</h3>
+                <div className="text-center mb-6 flex flex-col items-center">
+                    <div className="flex items-center gap-3">
+                        <img
+                            src={getTeamDetails ? (getTeamDetails(ownerA, null)?.avatar || `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`) : `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`}
+                            alt={`${teamADisplayName} logo`}
+                            className="w-12 h-12 object-contain rounded-full border border-gray-200 shadow-sm"
+                            onError={(e) => { e.target.onerror = null; e.target.src = `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`; }}
+                        />
+                        <h3 className="text-2xl font-extrabold text-gray-800 mb-2">{teamADisplayName} <span className="text-lg font-normal">vs</span> {teamBDisplayName}</h3>
+                        <img
+                            src={getTeamDetails ? (getTeamDetails(ownerB, null)?.avatar || `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`) : `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`}
+                            alt={`${teamBDisplayName} logo`}
+                            className="w-12 h-12 object-contain rounded-full border border-gray-200 shadow-sm"
+                            onError={(e) => { e.target.onerror = null; e.target.src = `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`; }}
+                        />
+                    </div>
                     <p className="text-sm text-gray-600">Performance, stats, and records</p>
                 </div>
 
@@ -612,9 +643,12 @@ const Head2HeadGrid = () => {
                         );
                         return (
                             <div className="bg-white p-5 rounded-lg shadow-md border border-gray-200 flex flex-col items-center text-center">
-                                <div className="w-16 h-16 bg-blue-200 rounded-full flex items-center justify-center text-blue-800 font-bold text-2xl mb-3">
-                                    {currentTeamDisplayName.charAt(0)}
-                                </div>
+                                <img
+                                            src={getTeamDetails ? (getTeamDetails(currentOwnerId, null)?.avatar || `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`) : `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`}
+                                            alt={`${currentTeamDisplayName} logo`}
+                                            className="w-16 h-16 object-contain rounded-full mb-3 border border-gray-200 shadow-sm"
+                                            onError={(e) => { e.target.onerror = null; e.target.src = `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`; }}
+                                        />
                                 <h4 className="text-xl font-bold text-gray-800 mb-2">{currentTeamDisplayName}</h4>
                                 <div className="grid grid-cols-3 gap-3 w-full text-xs font-medium text-gray-700">
                                     {statBubble(totalWinsRank, 'Total Wins', totalWins !== null ? totalWins : 'N/A', getComparisonClass(totalWins, oppTotalWins))}
@@ -646,13 +680,13 @@ const Head2HeadGrid = () => {
                                 Playoff Record: <span className="font-bold">
                                     {(() => {
                                         // Only count Playoff and Championship games
-                                        const playoffWins = rivalry.allMatches.filter(m => (
+                                        const playoffWins = playedMatches.filter(m => (
                                             m.matchType === 'Playoffs' || m.matchType === 'Championship Game') && m.winnerOwnerId === ownerA
                                         ).length;
-                                        const playoffLosses = rivalry.allMatches.filter(m => (
+                                        const playoffLosses = playedMatches.filter(m => (
                                             m.matchType === 'Playoffs' || m.matchType === 'Championship Game') && m.loserOwnerId === ownerA
                                         ).length;
-                                        const playoffTies = rivalry.allMatches.filter(m => (
+                                        const playoffTies = playedMatches.filter(m => (
                                             m.matchType === 'Playoffs' || m.matchType === 'Championship Game') && m.isTie
                                         ).length;
                                         if (playoffTies > 0) {
@@ -767,9 +801,12 @@ const Head2HeadGrid = () => {
                         );
                         return (
                             <div className="bg-white p-5 rounded-lg shadow-md border border-gray-200 flex flex-col items-center text-center">
-                                <div className="w-16 h-16 bg-blue-200 rounded-full flex items-center justify-center text-blue-800 font-bold text-2xl mb-3">
-                                    {currentTeamDisplayName.charAt(0)}
-                                </div>
+                                <img
+                                            src={getTeamDetails ? (getTeamDetails(currentOwnerId, null)?.avatar || `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`) : `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`}
+                                            alt={`${currentTeamDisplayName} logo`}
+                                            className="w-16 h-16 object-contain rounded-full mb-3 border border-gray-200 shadow-sm"
+                                            onError={(e) => { e.target.onerror = null; e.target.src = `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`; }}
+                                        />
                                 <h4 className="text-xl font-bold text-gray-800 mb-2">{currentTeamDisplayName}</h4>
                                 <div className="grid grid-cols-3 gap-3 w-full text-xs font-medium text-gray-700">
                                     {statBubble(totalWinsRank, 'Total Wins', totalWins !== null ? totalWins : 'N/A', getComparisonClass(totalWins, oppTotalWins))}
@@ -867,7 +904,18 @@ const Head2HeadGrid = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {rivalry.allMatches.sort((a,b) => b.year - a.year || b.week - a.week).map((match, idx) => {
+                            {rivalry.allMatches
+                                .filter(match => {
+                                    const matchYear = parseInt(match.year);
+                                    const matchWeek = parseInt(match.week);
+                                    // Exclude matches in future seasons or current week/future weeks
+                                    if (currentSeason && matchYear > currentSeason) return false;
+                                    if (currentSeason && matchYear === currentSeason && currentWeek && matchWeek >= currentWeek) return false;
+                                    // Exclude matches with both scores 0 (likely unplayed)
+                                    if (match.team1Score === 0 && match.team2Score === 0) return false;
+                                    return true;
+                                })
+                                .sort((a,b) => b.year - a.year || b.week - a.week).map((match, idx) => {
                                 let currentTeamAScore = (match.team1OwnerId === ownerA) ? match.team1Score : match.team2Score;
                                 let currentTeamBScore = (match.team1OwnerId === ownerB) ? match.team1Score : match.team2Score;
 
@@ -887,7 +935,7 @@ const Head2HeadGrid = () => {
                 </div>
             </div>
         );
-    }, [selectedRivalryKey, headToHeadRecords, careerDPRData, getTeamName, historicalData]);
+    }, [selectedRivalryKey, headToHeadRecords, careerDPRData, getTeamName, getTeamDetails, historicalData, nflState]);
 
     if (loading) {
         return (

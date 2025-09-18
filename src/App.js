@@ -29,6 +29,7 @@ const NAV_CATEGORIES = {
     HOME: { label: 'Dashboard', tab: 'dashboard' },
     GAMECENTER: { label: 'Gamecenter', tab: 'gamecenter' },
     SPORTSBOOK: { label: 'Sportsbook', tab: 'sportsbook' },
+    HEAD_TO_HEAD: { label: 'Head-to-Head', tab: 'headToHead' },
     LEAGUE_DATA: {
         label: 'League Data',
         subTabs: [
@@ -571,6 +572,14 @@ const AppContent = () => {
                                             onClick={(e) => { e.stopPropagation(); handleTabClick(NAV_CATEGORIES.SPORTSBOOK.tab); }}
                                         >
                                             {NAV_CATEGORIES.SPORTSBOOK.label}
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button
+                                            className="w-full px-8 py-3 text-left hover:bg-gray-500 active:bg-gray-400 touch-friendly text-sm border-b border-gray-500 last:border-b-0"
+                                            onClick={(e) => { e.stopPropagation(); handleTabClick(NAV_CATEGORIES.HEAD_TO_HEAD.tab); }}
+                                        >
+                                            {NAV_CATEGORIES.HEAD_TO_HEAD.label}
                                         </button>
                                     </li>
                                 </ul>
