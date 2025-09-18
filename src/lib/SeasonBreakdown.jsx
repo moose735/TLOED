@@ -19,7 +19,7 @@ const SeasonBreakdown = () => {
     const [seasonChampion, setSeasonChampion] = useState('N/A');
     const [seasonRunnerUp, setSeasonRunnerUp] = useState('N/A');
     const [seasonThirdPlace, setSeasonThirdPlace] = useState('N/A');
-    const [mockSubject, setMockSubject] = useState('');
+    const [hypoSubject, setHypoSubject] = useState('');
     const [mockResults, setMockResults] = useState([]);
 
     // Memoize the result of calculateAllLeagueMetrics
@@ -206,6 +206,11 @@ const SeasonBreakdown = () => {
         return team ? team.teamName : 'Unknown';
     };
 
+    const formatPct = (v) => {
+        if (typeof v === 'number' && !isNaN(v)) return `${(v * 100).toFixed(1)}%`;
+        return 'N/A';
+    };
+
     // Compute season stats summary
     let seasonStats = null;
     if (selectedSeason && seasonalMetrics[selectedSeason]) {
@@ -362,8 +367,10 @@ const SeasonBreakdown = () => {
 
         let weeksToUse = fullyCompletedWeeks;
         // If nflState.week is available, exclude the current NFL week (in-progress)
+        // But only exclude when viewing the currentSeason; for past seasons we want all completed weeks
         const currentNFLWeek = nflState && nflState.week ? Number(nflState.week) : null;
-        if (currentNFLWeek && !isNaN(currentNFLWeek)) {
+        const isCurrentSeason = Number(selectedSeason) === Number(currentSeason);
+        if (isCurrentSeason && currentNFLWeek && !isNaN(currentNFLWeek)) {
             weeksToUse = weeksToUse.filter(w => Number(w) < currentNFLWeek);
         }
 
@@ -425,19 +432,21 @@ const SeasonBreakdown = () => {
     result.weeksUsed = weeksToUse;
     result.tieMatchups = filteredTieMatchups;
         return result;
-    }, [selectedSeason, historicalData]);
+    }, [selectedSeason, historicalData, nflState, getTeamName, seasonStandings, currentSeason]);
 
     // Mock schedule: apply subject team's weekly points against each other team's schedule
     const computeMockAgainstSchedule = useCallback((subjectRosterId, scheduleOwnerRosterId) => {
         if (!subjectRosterId || !scheduleOwnerRosterId) return null;
         const weeks = scheduleMap[scheduleOwnerRosterId] ? Object.keys(scheduleMap[scheduleOwnerRosterId]) : [];
         let wins = 0, losses = 0, ties = 0, pointsFor = 0, pointsAgainst = 0, countedWeeks = 0;
-        // Exclude current in-progress NFL week from mock results
+    // Exclude current in-progress NFL week from hypothetical results
         const currentNFLWeek = nflState && nflState.week ? Number(nflState.week) : null;
+        const isCurrentSeason = Number(selectedSeason) === Number(currentSeason);
 
         weeks.forEach(w => {
             const wn = Number(w);
-            if (!isNaN(currentNFLWeek) && currentNFLWeek && wn >= currentNFLWeek) return; // skip in-progress or future
+            // Only skip in-progress/future weeks when looking at the current season
+            if (isCurrentSeason && !isNaN(currentNFLWeek) && currentNFLWeek && wn >= currentNFLWeek) return; // skip in-progress or future
 
             const oppEntry = scheduleMap[scheduleOwnerRosterId][w];
             // If the opponent's schedule for this week is playing the subject team, skip counting it (don't count head-to-head ties/wins)
@@ -462,7 +471,7 @@ const SeasonBreakdown = () => {
         const total = wins + losses + ties;
         const pct = total > 0 ? (wins + 0.5 * ties) / total : 0;
         return { wins, losses, ties, pointsFor, pointsAgainst, pct, totalWeeks: countedWeeks };
-    }, [weeklyPointsMap, scheduleMap, nflState]);
+    }, [weeklyPointsMap, scheduleMap, nflState, selectedSeason, currentSeason]);
 
     // Determine if any podium results exist
     const hasPodiumResults = seasonChampion !== 'N/A' || seasonRunnerUp !== 'N/A' || seasonThirdPlace !== 'N/A';
@@ -581,35 +590,56 @@ const SeasonBreakdown = () => {
                         </div>
                     )}
 
-                    {/* Season Standings Table */}
+                    {/* Season Standings - responsive (mobile cards + desktop table) */}
                     <h3 className="text-2xl font-bold text-gray-800 mb-4 text-center">Season Standings</h3>
                     {seasonStandings.length > 0 ? (
-                        <div className="overflow-x-auto rounded-lg shadow-md">
-                            <table className="min-w-full bg-white border border-gray-200">
-                                <thead className="bg-gray-200 text-gray-700 uppercase text-sm leading-normal">
-                                    <tr>
-                                        <th className="py-3 px-6 text-left">Rank</th>
-                                        <th className="py-3 px-6 text-left">Team</th>
-                                        <th className="py-3 px-6 text-center">W</th>
-                                        <th className="py-3 px-6 text-center">L</th>
-                                        {seasonHasTies && <th className="py-3 px-6 text-center">T</th>}
-                                        <th className="py-3 px-6 text-center">PA</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="text-gray-700 text-sm font-light">
-                                    {seasonStandings.map((team, index) => (
-                                        <tr key={team.rosterId} className="border-b border-gray-200 hover:bg-gray-100">
-                                            <td className="py-3 px-6 text-left whitespace-nowrap font-medium">{index + 1}</td>
-                                            <td className="py-3 px-6 text-left">{team.teamName}</td>
-                                            <td className="py-3 px-6 text-center">{team.wins}</td>
-                                            <td className="py-3 px-6 text-center">{team.losses}</td>
-                                            {seasonHasTies && <td className="py-3 px-6 text-center">{team.ties}</td>}
-                                            <td className="py-3 px-6 text-center">{team.pointsAgainst.toFixed(2)}</td>
+                        <>
+                            {/* Mobile Card List */}
+                            <div className="sm:hidden space-y-3">
+                                {seasonStandings.map((team, idx) => (
+                                    <div key={team.rosterId} className="bg-white rounded-lg shadow-md p-4 border-l-4 border-blue-500">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center space-x-3 min-w-0">
+                                                <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">{idx + 1}</div>
+                                                <div className="min-w-0">
+                                                    <div className="font-semibold text-sm truncate">{team.teamName}</div>
+                                                    <div className="text-xs text-gray-500">Record: {team.wins}-{team.losses}{team.ties?`-${team.ties}`:''}</div>
+                                                </div>
+                                            </div>
+                                            <div className="text-right text-sm text-gray-600">PA: {team.pointsAgainst.toFixed(2)}</div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Desktop Table */}
+                            <div className="hidden sm:block overflow-x-auto shadow-lg rounded-lg">
+                                <table className="min-w-full bg-white border border-gray-200 rounded-lg">
+                                    <thead className="bg-gray-100 sticky top-0 z-10">
+                                        <tr>
+                                            <th className="py-3 px-4 text-left text-xs font-bold uppercase tracking-wider border-b">Rank</th>
+                                            <th className="py-3 px-4 text-left text-xs font-bold uppercase tracking-wider border-b">Team</th>
+                                            <th className="py-3 px-4 text-center text-xs font-bold uppercase tracking-wider border-b">W</th>
+                                            <th className="py-3 px-4 text-center text-xs font-bold uppercase tracking-wider border-b">L</th>
+                                            {seasonHasTies && <th className="py-3 px-4 text-center text-xs font-bold uppercase tracking-wider border-b">T</th>}
+                                            <th className="py-3 px-4 text-center text-xs font-bold uppercase tracking-wider border-b">PA</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                                    </thead>
+                                    <tbody>
+                                        {seasonStandings.map((team, index) => (
+                                            <tr key={team.rosterId} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                                                <td className="py-3 px-4 font-medium">{index + 1}</td>
+                                                <td className="py-3 px-4">{team.teamName}</td>
+                                                <td className="py-3 px-4 text-center">{team.wins}</td>
+                                                <td className="py-3 px-4 text-center">{team.losses}</td>
+                                                {seasonHasTies && <td className="py-3 px-4 text-center">{team.ties}</td>}
+                                                <td className="py-3 px-4 text-center">{team.pointsAgainst.toFixed(2)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </>
                     ) : (
                         <p className="text-center text-gray-600">No standings data available for this season.</p>
                     )}
@@ -620,37 +650,60 @@ const SeasonBreakdown = () => {
                     <div className="mt-8">
                         <h3 className="text-xl font-bold text-gray-800 mb-4">All-Play Standings</h3>
                         {allPlayStandings && allPlayStandings.length > 0 ? (
-                            <div className="overflow-x-auto rounded-lg shadow-md mb-6">
-                                <table className="min-w-full bg-white border border-gray-200">
-                                    <thead className="bg-gray-100 text-gray-700 uppercase text-sm">
-                                        <tr>
-                                            <th className="py-2 px-4 text-left">Rank</th>
-                                            <th className="py-2 px-4 text-left">Team</th>
-                                            <th className="py-2 px-4 text-center">Wins</th>
-                                            <th className="py-2 px-4 text-center">Losses</th>
-                                            {allPlayHasTies && <th className="py-2 px-4 text-center">Ties</th>}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {allPlayStandings.map((t, idx) => (
-                                            <tr key={t.rosterId} className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                                <td className="py-2 px-4 font-semibold">{idx + 1}</td>
-                                                <td className="py-2 px-4">{t.teamName}</td>
-                                                <td className="py-2 px-4 text-center">{t.wins}</td>
-                                                <td className="py-2 px-4 text-center">{t.losses}</td>
-                                                {allPlayHasTies && <td className="py-2 px-4 text-center">{t.ties}</td>}
+                            <>
+                                {/* Mobile */}
+                                <div className="sm:hidden space-y-3 mb-4">
+                                    {allPlayStandings.map((t, idx) => (
+                                        <div key={t.rosterId} className="bg-white rounded-lg shadow-md p-3 border-l-4 border-purple-500">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center space-x-3">
+                                                    <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold">{idx + 1}</div>
+                                                    <div className="min-w-0">
+                                                        <div className="font-semibold text-sm truncate">{t.teamName}</div>
+                                                        <div className="text-xs text-gray-500">W/L: {t.wins}/{t.losses}</div>
+                                                    </div>
+                                                </div>
+                                                <div className="text-sm text-gray-600">Pct: {formatPct(t.pct)}</div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Desktop Table */}
+                                <div className="hidden sm:block overflow-x-auto rounded-lg shadow-md mb-6">
+                                    <table className="min-w-full bg-white border border-gray-200">
+                                        <thead className="bg-gray-100 text-gray-700 uppercase text-sm">
+                                            <tr>
+                                                <th className="py-2 px-4 text-left">Rank</th>
+                                                <th className="py-2 px-4 text-left">Team</th>
+                                                <th className="py-2 px-4 text-center">Wins</th>
+                                                <th className="py-2 px-4 text-center">Losses</th>
+                                                {allPlayHasTies && <th className="py-2 px-4 text-center">Ties</th>}
+                                                <th className="py-2 px-4 text-center">Pct</th>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
+                                        </thead>
+                                        <tbody>
+                                            {allPlayStandings.map((t, idx) => (
+                                                <tr key={t.rosterId} className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                                                    <td className="py-2 px-4 font-semibold">{idx + 1}</td>
+                                                    <td className="py-2 px-4">{t.teamName}</td>
+                                                    <td className="py-2 px-4 text-center">{t.wins}</td>
+                                                    <td className="py-2 px-4 text-center">{t.losses}</td>
+                                                    {allPlayHasTies && <td className="py-2 px-4 text-center">{t.ties}</td>}
+                                                    <td className="py-2 px-4 text-center">{formatPct(t.pct)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </>
                         ) : (
                             <p className="text-sm text-gray-500">All-play data is not available for this season.</p>
                         )}
 
                         <div className="mt-3">
                             <button className="text-sm text-gray-600 underline" onClick={() => setShowDebug(s => !s)}>{showDebug ? 'Hide' : 'Show'} debug</button>
-                            {showDebug && (
+                                {showDebug && (
                                 <div className="mt-2 p-2 bg-white border rounded">
                                     <div className="text-sm mb-2">Weeks used for All-Play: {(memoWeeksUsed || []).join(', ') || 'none'}</div>
                                     <div className="text-sm">Head-to-head ties per roster:</div>
@@ -663,57 +716,65 @@ const SeasonBreakdown = () => {
                             )}
                         </div>
 
-                        {/* Mock Schedule Tool: pick a subject team and show simulated records vs all other teams' schedules */}
+                        {/* Hypothetical Schedule Tool: pick a subject team and show simulated W/L vs other teams' schedules */}
                         <div className="mt-4 bg-gray-50 p-4 rounded-lg shadow">
-                            <h4 className="font-semibold mb-2">Mock Schedule</h4>
-                            <p className="text-sm text-gray-600 mb-3">Select a subject team below to simulate how they'd perform against each other team's schedule.</p>
+                            <h4 className="font-semibold mb-2">Hypothetical Schedule</h4>
+                            <p className="text-sm text-gray-600 mb-3">Select a subject team below to simulate hypothetical W/L results against each other team's schedules.</p>
                             <div className="mb-3">
                                 <label className="block text-xs text-gray-500 mb-1">Subject Team</label>
                                 <select
                                     className="w-full p-2 border rounded"
-                                    value={mockSubject}
-                                    onChange={(e) => setMockSubject(e.target.value)}
+                                    value={hypoSubject}
+                                    onChange={(e) => setHypoSubject(e.target.value)}
                                 >
                                     <option value="">Select team</option>
                                     {allPlayStandings.map(t => (<option key={t.rosterId} value={t.rosterId}>{t.teamName}</option>))}
                                 </select>
                             </div>
 
-                            <div id="mock-results">
-                                {!mockSubject ? (
-                                    <p className="text-sm text-gray-500">Choose a subject team to see mock results vs the other schedules.</p>
+                            <div id="hypo-results">
+                                {!hypoSubject ? (
+                                    <p className="text-sm text-gray-500">Choose a subject team to see hypothetical results vs the other schedules.</p>
                                 ) : (
-                                    <div className="overflow-x-auto rounded-lg shadow-md mt-3">
-                                        <table className="min-w-full bg-white border border-gray-200">
-                                            <thead className="bg-gray-100 text-gray-700 uppercase text-sm">
-                                                <tr>
-                                                    <th className="py-2 px-3 text-left">Opponent</th>
-                                                    <th className="py-2 px-3 text-center">W</th>
-                                                    <th className="py-2 px-3 text-center">L</th>
-                                                    <th className="py-2 px-3 text-center">T</th>
-                                                    <th className="py-2 px-3 text-center">Pts For</th>
-                                                    <th className="py-2 px-3 text-center">Pts Against</th>
-                                                    <th className="py-2 px-3 text-center">Pct</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {allPlayStandings.filter(o => o.rosterId !== mockSubject).map((o, idx) => {
-                                                    const res = computeMockAgainstSchedule(mockSubject, o.rosterId) || { wins: 0, losses: 0, ties: 0, pointsFor: 0, pointsAgainst: 0, totalWeeks: 0, pct:0 };
-                                                    return (
-                                                        <tr key={o.rosterId} className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                                            <td className="py-2 px-3 font-semibold">{o.teamName}</td>
-                                                            <td className="py-2 px-3 text-center">{res.wins}</td>
-                                                            <td className="py-2 px-3 text-center">{res.losses}</td>
-                                                            <td className="py-2 px-3 text-center">{res.ties}</td>
-                                                            <td className="py-2 px-3 text-center">{res.pointsFor.toFixed(2)}</td>
-                                                            <td className="py-2 px-3 text-center">{res.pointsAgainst.toFixed(2)}</td>
-                                                            <td className="py-2 px-3 text-center">{res.totalWeeks>0? (res.pct*100).toFixed(1) : 'N/A'}%</td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
+                                    <>
+                                        {/* Mobile: simple stacked list */}
+                                        <div className="sm:hidden space-y-2 mt-3">
+                                            {allPlayStandings.filter(o => o.rosterId !== hypoSubject).map((o, idx) => {
+                                                const res = computeMockAgainstSchedule(hypoSubject, o.rosterId) || { wins: 0, losses: 0 };
+                                                return (
+                                                    <div key={o.rosterId} className="bg-white rounded-lg shadow-sm p-3 flex items-center justify-between">
+                                                        <div className="font-semibold truncate">{o.teamName}</div>
+                                                        <div className="text-sm text-gray-600">{res.wins} - {res.losses}</div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+
+                                        {/* Desktop table */}
+                                        <div className="hidden sm:block overflow-x-auto rounded-lg shadow-md mt-3">
+                                            <table className="min-w-full bg-white border border-gray-200">
+                                                <thead className="bg-gray-100 text-gray-700 uppercase text-sm">
+                                                    <tr>
+                                                        <th className="py-2 px-3 text-left">Opponent</th>
+                                                        <th className="py-2 px-3 text-center">W</th>
+                                                        <th className="py-2 px-3 text-center">L</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {allPlayStandings.filter(o => o.rosterId !== hypoSubject).map((o, idx) => {
+                                                        const res = computeMockAgainstSchedule(hypoSubject, o.rosterId) || { wins: 0, losses: 0 };
+                                                        return (
+                                                            <tr key={o.rosterId} className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                                                                <td className="py-2 px-3 font-semibold">{o.teamName}</td>
+                                                                <td className="py-2 px-3 text-center">{res.wins}</td>
+                                                                <td className="py-2 px-3 text-center">{res.losses}</td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </>
                                 )}
                             </div>
                         </div>
