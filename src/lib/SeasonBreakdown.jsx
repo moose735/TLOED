@@ -19,6 +19,8 @@ const SeasonBreakdown = () => {
     const [seasonChampion, setSeasonChampion] = useState('N/A');
     const [seasonRunnerUp, setSeasonRunnerUp] = useState('N/A');
     const [seasonThirdPlace, setSeasonThirdPlace] = useState('N/A');
+    const [mockSubject, setMockSubject] = useState('');
+    const [mockResults, setMockResults] = useState([]);
 
     // Memoize the result of calculateAllLeagueMetrics
     const { seasonalMetrics, careerDPRData } = useMemo(() => {
@@ -265,8 +267,210 @@ const SeasonBreakdown = () => {
         };
     }
 
+    // --- All-Play and Mock Schedule computations ---
+    const { allPlayStandings, weeklyPointsMap, scheduleMap, headToHeadTies: memoHeadToHeadTies, weeksUsed: memoWeeksUsed } = useMemo(() => {
+        const result = { allPlayStandings: [], weeklyPointsMap: {}, scheduleMap: {} };
+        if (!selectedSeason || !historicalData || !historicalData.matchupsBySeason || !historicalData.matchupsBySeason[selectedSeason]) return result;
+
+        const matchupsRaw = historicalData.matchupsBySeason[selectedSeason] || [];
+        // Deduplicate matchups by week and roster pair (sort pair so order doesn't matter)
+        const uniqueMatchups = [];
+        const seenMatchupKeys = new Set();
+        matchupsRaw.forEach(m => {
+            const wk = String(m.week);
+            const a = String(m.team1_roster_id);
+            const b = String(m.team2_roster_id);
+            // skip self-matchups (data errors where a team is listed against itself)
+            if (a === b) return;
+            const key = `${wk}:${[a,b].sort().join('-')}`;
+            if (seenMatchupKeys.has(key)) return;
+            seenMatchupKeys.add(key);
+            uniqueMatchups.push(m);
+        });
+
+        // Use the season's rosters as the canonical roster set (prevents stray roster ids)
+        const currentSeasonRosters = historicalData.rostersBySeason?.[selectedSeason] || [];
+        const rosterIds = currentSeasonRosters.map(r => String(r.roster_id));
+        const rosterIdSet = new Set(rosterIds);
+
+        // Build rosterId -> ownerId/name maps for correct historical team naming
+        const rosterIdToOwner = {};
+        const rosterIdToName = {};
+        currentSeasonRosters.forEach(r => {
+            const rid = String(r.roster_id);
+            rosterIdToOwner[rid] = r.owner_id;
+            rosterIdToName[rid] = getTeamName ? getTeamName(r.owner_id, selectedSeason) : (r.team_name || `Roster ${rid}`);
+        });
+
+    // Build weekly points map: rosterId -> { week: points }
+        const weeklyPoints = {};
+        // Build schedule map: rosterId -> { week: { opponentId, opponentPoints } }
+        const schedule = {};
+        // Track head-to-head ties (real matchup ties) separately from pairwise all-play ties
+    const headToHeadTies = {};
+    const tieMatchups = [];
+
+    // initialize weeklyPoints, schedule and tie counter for only canonical roster ids
+    rosterIds.forEach(rid => { weeklyPoints[rid] = {}; schedule[rid] = {}; headToHeadTies[rid] = 0; });
+
+    // Only include regular-season (weeks 1-14) completed matchups: both sides have numeric scores
+    uniqueMatchups.forEach(m => {
+            const weekNum = Number(m.week);
+            if (isNaN(weekNum) || weekNum < 1 || weekNum > 14) return; // skip playoffs or invalid weeks
+            const hasP1 = typeof m.team1_score === 'number' && !isNaN(m.team1_score);
+            const hasP2 = typeof m.team2_score === 'number' && !isNaN(m.team2_score);
+            if (!hasP1 || !hasP2) return; // skip incomplete games
+
+            const w = String(weekNum);
+            const r1 = String(m.team1_roster_id);
+            const r2 = String(m.team2_roster_id);
+            const p1 = Number(m.team1_score);
+            const p2 = Number(m.team2_score);
+
+            // only include points/schedule for rosterIds that exist in this season
+            if (rosterIdSet.has(r1)) weeklyPoints[r1][w] = p1;
+            if (rosterIdSet.has(r2)) weeklyPoints[r2][w] = p2;
+            if (rosterIdSet.has(r1)) schedule[r1][w] = { opponentId: r2, opponentPoints: p2 };
+            if (rosterIdSet.has(r2)) schedule[r2][w] = { opponentId: r1, opponentPoints: p1 };
+
+            // track head-to-head tie (the actual matchup was a tie)
+            if (rosterIdSet.has(r1) && rosterIdSet.has(r2) && p1 === p2) {
+                headToHeadTies[r1] = (headToHeadTies[r1] || 0) + 1;
+                headToHeadTies[r2] = (headToHeadTies[r2] || 0) + 1;
+                tieMatchups.push({ week: w, roster1: r1, roster2: r2, score: p1 });
+            }
+        });
+
+        // Compute all-play standings: for each week, compare each team's points to all other canonical teams
+        const allPlay = {};
+        rosterIds.forEach(rid => { allPlay[rid] = { wins: 0, losses: 0, ties: 0, pointsFor: 0 }; });
+
+        // Collect only the regular-season weeks present in weeklyPoints (1-14)
+        const weeksSet = new Set();
+        rosterIds.forEach(rid => {
+            Object.keys(weeklyPoints[rid] || {}).forEach(w => {
+                const wn = Number(w);
+                if (!isNaN(wn) && wn >= 1 && wn <= 14) weeksSet.add(String(wn));
+            });
+        });
+        const weeks = Array.from(weeksSet).sort((a,b) => Number(a) - Number(b));
+
+        // Keep only weeks that are fully completed for all canonical roster ids
+        const fullyCompletedWeeks = weeks.filter(w => rosterIds.every(rid => {
+            return weeklyPoints[rid] && Object.prototype.hasOwnProperty.call(weeklyPoints[rid], w);
+        }));
+
+        let weeksToUse = fullyCompletedWeeks;
+        // If nflState.week is available, exclude the current NFL week (in-progress)
+        const currentNFLWeek = nflState && nflState.week ? Number(nflState.week) : null;
+        if (currentNFLWeek && !isNaN(currentNFLWeek)) {
+            weeksToUse = weeksToUse.filter(w => Number(w) < currentNFLWeek);
+        }
+
+        weeksToUse.forEach(week => {
+            // Build array of [rid, pts] for this week
+            const scores = rosterIds.map(rid => ({ rid, pts: weeklyPoints[rid][week] ?? 0 }));
+            // Compare pairwise: for each team, count how many they'd beat/tie/lose
+            scores.forEach(s => {
+                const my = s.pts;
+                let w = 0, l = 0, t = 0;
+                scores.forEach(o => {
+                    if (o.rid === s.rid) return;
+                    if (my > o.pts) w++;
+                    else if (my < o.pts) l++;
+                    else t++;
+                });
+                allPlay[s.rid].wins += w;
+                allPlay[s.rid].losses += l;
+                allPlay[s.rid].ties += t;
+                allPlay[s.rid].pointsFor += my;
+            });
+            });
+
+        // Filter tieMatchups to only include those in weeksToUse, then recompute head-to-head tie counts
+        const filteredTieMatchups = tieMatchups.filter(tm => weeksToUse.includes(String(tm.week)));
+        const headToHeadCounts = {};
+        rosterIds.forEach(rid => { headToHeadCounts[rid] = 0; });
+        filteredTieMatchups.forEach(tm => {
+            if (rosterIdSet.has(tm.roster1)) headToHeadCounts[tm.roster1] = (headToHeadCounts[tm.roster1] || 0) + 1;
+            if (rosterIdSet.has(tm.roster2)) headToHeadCounts[tm.roster2] = (headToHeadCounts[tm.roster2] || 0) + 1;
+        });
+
+        // Convert to standings array (use rosterIdToName for historical accuracy)
+    const standingsArr = rosterIds.map(rid => {
+            const name = rosterIdToName[rid] || getTeamNameByRosterId(rid) || rid;
+            const rec = allPlay[rid];
+            const totalMatches = rec.wins + rec.losses + rec.ties;
+            const pct = totalMatches > 0 ? (rec.wins + 0.5 * rec.ties) / totalMatches : 0;
+            // Use head-to-head ties for display (smaller, more intuitive number)
+            // Clamp ties to the number of regular-season weeks captured to avoid anomalous values
+            const maxRegularWeeks = weeksToUse.length || 14;
+            const rawH2h = headToHeadCounts[rid] || 0;
+            const h2hTies = Math.max(0, Math.min(rawH2h, maxRegularWeeks));
+            return {
+                rosterId: rid,
+                teamName: name,
+                wins: rec.wins,
+                losses: rec.losses,
+                ties: h2hTies,
+                pointsFor: rec.pointsFor,
+                pct
+            };
+        }).sort((a, b) => b.pct - a.pct || b.pointsFor - a.pointsFor);
+
+        result.allPlayStandings = standingsArr;
+        result.weeklyPointsMap = weeklyPoints;
+        result.scheduleMap = schedule;
+    result.headToHeadTies = headToHeadCounts;
+    result.weeksUsed = weeksToUse;
+    result.tieMatchups = filteredTieMatchups;
+        return result;
+    }, [selectedSeason, historicalData]);
+
+    // Mock schedule: apply subject team's weekly points against each other team's schedule
+    const computeMockAgainstSchedule = useCallback((subjectRosterId, scheduleOwnerRosterId) => {
+        if (!subjectRosterId || !scheduleOwnerRosterId) return null;
+        const weeks = scheduleMap[scheduleOwnerRosterId] ? Object.keys(scheduleMap[scheduleOwnerRosterId]) : [];
+        let wins = 0, losses = 0, ties = 0, pointsFor = 0, pointsAgainst = 0, countedWeeks = 0;
+        // Exclude current in-progress NFL week from mock results
+        const currentNFLWeek = nflState && nflState.week ? Number(nflState.week) : null;
+
+        weeks.forEach(w => {
+            const wn = Number(w);
+            if (!isNaN(currentNFLWeek) && currentNFLWeek && wn >= currentNFLWeek) return; // skip in-progress or future
+
+            const oppEntry = scheduleMap[scheduleOwnerRosterId][w];
+            // If the opponent's schedule for this week is playing the subject team, skip counting it (don't count head-to-head ties/wins)
+            if (oppEntry && String(oppEntry.opponentId) === String(subjectRosterId)) return;
+
+            const subjPts = weeklyPointsMap[subjectRosterId]?.[w];
+            const oppPts = oppEntry ? (weeklyPointsMap[oppEntry.opponentId]?.[w] ?? oppEntry.opponentPoints ?? null) : null;
+
+            // Only count if we have numeric points for both sides
+            const hasSubj = typeof subjPts === 'number' && !isNaN(subjPts);
+            const hasOpp = typeof oppPts === 'number' && !isNaN(oppPts);
+            if (!hasSubj || !hasOpp) return;
+
+            pointsFor += subjPts;
+            pointsAgainst += oppPts;
+            countedWeeks++;
+            if (subjPts > oppPts) wins++;
+            else if (subjPts < oppPts) losses++;
+            else ties++;
+        });
+
+        const total = wins + losses + ties;
+        const pct = total > 0 ? (wins + 0.5 * ties) / total : 0;
+        return { wins, losses, ties, pointsFor, pointsAgainst, pct, totalWeeks: countedWeeks };
+    }, [weeklyPointsMap, scheduleMap, nflState]);
+
     // Determine if any podium results exist
     const hasPodiumResults = seasonChampion !== 'N/A' || seasonRunnerUp !== 'N/A' || seasonThirdPlace !== 'N/A';
+
+    const seasonHasTies = seasonStandings.some(t => t.ties && t.ties > 0);
+    // allPlayStandings comes from useMemo above; ensure we handle missing value safely
+    const allPlayHasTies = (allPlayStandings || []).some(t => t.ties && t.ties > 0);
+    const [showDebug, setShowDebug] = useState(false);
 
     return (
         <div className="p-4 bg-white rounded-lg shadow-md">
@@ -388,8 +592,7 @@ const SeasonBreakdown = () => {
                                         <th className="py-3 px-6 text-left">Team</th>
                                         <th className="py-3 px-6 text-center">W</th>
                                         <th className="py-3 px-6 text-center">L</th>
-                                        <th className="py-3 px-6 text-center">T</th>
-                                        <th className="py-3 px-6 text-center">PF</th>
+                                        {seasonHasTies && <th className="py-3 px-6 text-center">T</th>}
                                         <th className="py-3 px-6 text-center">PA</th>
                                     </tr>
                                 </thead>
@@ -400,8 +603,7 @@ const SeasonBreakdown = () => {
                                             <td className="py-3 px-6 text-left">{team.teamName}</td>
                                             <td className="py-3 px-6 text-center">{team.wins}</td>
                                             <td className="py-3 px-6 text-center">{team.losses}</td>
-                                            <td className="py-3 px-6 text-center">{team.ties}</td>
-                                            <td className="py-3 px-6 text-center">{team.pointsFor.toFixed(2)}</td>
+                                            {seasonHasTies && <td className="py-3 px-6 text-center">{team.ties}</td>}
                                             <td className="py-3 px-6 text-center">{team.pointsAgainst.toFixed(2)}</td>
                                         </tr>
                                     ))}
@@ -411,6 +613,111 @@ const SeasonBreakdown = () => {
                     ) : (
                         <p className="text-center text-gray-600">No standings data available for this season.</p>
                     )}
+
+
+
+                    {/* All-Play Standings */}
+                    <div className="mt-8">
+                        <h3 className="text-xl font-bold text-gray-800 mb-4">All-Play Standings</h3>
+                        {allPlayStandings && allPlayStandings.length > 0 ? (
+                            <div className="overflow-x-auto rounded-lg shadow-md mb-6">
+                                <table className="min-w-full bg-white border border-gray-200">
+                                    <thead className="bg-gray-100 text-gray-700 uppercase text-sm">
+                                        <tr>
+                                            <th className="py-2 px-4 text-left">Rank</th>
+                                            <th className="py-2 px-4 text-left">Team</th>
+                                            <th className="py-2 px-4 text-center">Wins</th>
+                                            <th className="py-2 px-4 text-center">Losses</th>
+                                            {allPlayHasTies && <th className="py-2 px-4 text-center">Ties</th>}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {allPlayStandings.map((t, idx) => (
+                                            <tr key={t.rosterId} className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                                                <td className="py-2 px-4 font-semibold">{idx + 1}</td>
+                                                <td className="py-2 px-4">{t.teamName}</td>
+                                                <td className="py-2 px-4 text-center">{t.wins}</td>
+                                                <td className="py-2 px-4 text-center">{t.losses}</td>
+                                                {allPlayHasTies && <td className="py-2 px-4 text-center">{t.ties}</td>}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            <p className="text-sm text-gray-500">All-play data is not available for this season.</p>
+                        )}
+
+                        <div className="mt-3">
+                            <button className="text-sm text-gray-600 underline" onClick={() => setShowDebug(s => !s)}>{showDebug ? 'Hide' : 'Show'} debug</button>
+                            {showDebug && (
+                                <div className="mt-2 p-2 bg-white border rounded">
+                                    <div className="text-sm mb-2">Weeks used for All-Play: {(memoWeeksUsed || []).join(', ') || 'none'}</div>
+                                    <div className="text-sm">Head-to-head ties per roster:</div>
+                                    <ul className="text-sm list-disc ml-5">
+                                        {Object.keys(memoHeadToHeadTies || {}).map(rid => (
+                                            <li key={rid}>{getTeamNameByRosterId(rid)} ({rid}): {memoHeadToHeadTies[rid]}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Mock Schedule Tool: pick a subject team and show simulated records vs all other teams' schedules */}
+                        <div className="mt-4 bg-gray-50 p-4 rounded-lg shadow">
+                            <h4 className="font-semibold mb-2">Mock Schedule</h4>
+                            <p className="text-sm text-gray-600 mb-3">Select a subject team below to simulate how they'd perform against each other team's schedule.</p>
+                            <div className="mb-3">
+                                <label className="block text-xs text-gray-500 mb-1">Subject Team</label>
+                                <select
+                                    className="w-full p-2 border rounded"
+                                    value={mockSubject}
+                                    onChange={(e) => setMockSubject(e.target.value)}
+                                >
+                                    <option value="">Select team</option>
+                                    {allPlayStandings.map(t => (<option key={t.rosterId} value={t.rosterId}>{t.teamName}</option>))}
+                                </select>
+                            </div>
+
+                            <div id="mock-results">
+                                {!mockSubject ? (
+                                    <p className="text-sm text-gray-500">Choose a subject team to see mock results vs the other schedules.</p>
+                                ) : (
+                                    <div className="overflow-x-auto rounded-lg shadow-md mt-3">
+                                        <table className="min-w-full bg-white border border-gray-200">
+                                            <thead className="bg-gray-100 text-gray-700 uppercase text-sm">
+                                                <tr>
+                                                    <th className="py-2 px-3 text-left">Opponent</th>
+                                                    <th className="py-2 px-3 text-center">W</th>
+                                                    <th className="py-2 px-3 text-center">L</th>
+                                                    <th className="py-2 px-3 text-center">T</th>
+                                                    <th className="py-2 px-3 text-center">Pts For</th>
+                                                    <th className="py-2 px-3 text-center">Pts Against</th>
+                                                    <th className="py-2 px-3 text-center">Pct</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {allPlayStandings.filter(o => o.rosterId !== mockSubject).map((o, idx) => {
+                                                    const res = computeMockAgainstSchedule(mockSubject, o.rosterId) || { wins: 0, losses: 0, ties: 0, pointsFor: 0, pointsAgainst: 0, totalWeeks: 0, pct:0 };
+                                                    return (
+                                                        <tr key={o.rosterId} className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                                                            <td className="py-2 px-3 font-semibold">{o.teamName}</td>
+                                                            <td className="py-2 px-3 text-center">{res.wins}</td>
+                                                            <td className="py-2 px-3 text-center">{res.losses}</td>
+                                                            <td className="py-2 px-3 text-center">{res.ties}</td>
+                                                            <td className="py-2 px-3 text-center">{res.pointsFor.toFixed(2)}</td>
+                                                            <td className="py-2 px-3 text-center">{res.pointsAgainst.toFixed(2)}</td>
+                                                            <td className="py-2 px-3 text-center">{res.totalWeeks>0? (res.pct*100).toFixed(1) : 'N/A'}%</td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
             {!selectedSeason && !loading && !error && (

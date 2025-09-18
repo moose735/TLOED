@@ -735,6 +735,137 @@ const Gamecenter = () => {
                                     
                                     const team1Won = selectedMatchup.team1_score > selectedMatchup.team2_score;
                                     const team2Won = selectedMatchup.team2_score > selectedMatchup.team1_score;
+
+                                    // Compute optimal bench players (position-by-position)
+                                    const computeOptimalBench = (team) => {
+                                        if (!team) return new Set();
+                                        const starters = team.lineup || [];
+                                        const bench = team.bench || [];
+                                        // Count starters by their lineup slot (use lineupPosition primarily)
+                                        const starterCountByPos = {};
+                                        starters.forEach(s => {
+                                            const pos = s.lineupPosition || s.position || 'FLEX';
+                                            starterCountByPos[pos] = (starterCountByPos[pos] || 0) + 1;
+                                        });
+
+                                        const optimal = new Set();
+                                        Object.keys(starterCountByPos).forEach(pos => {
+                                            const need = starterCountByPos[pos];
+                                            if (!need) return;
+
+                                            let startersPos = [];
+                                            let benchPos = [];
+
+                                            if (pos === 'FLEX') {
+                                                // FLEX starters are those with lineupPosition === 'FLEX'
+                                                startersPos = starters.filter(s => s.lineupPosition === 'FLEX');
+                                                // Bench players eligible for FLEX: RB, WR, TE (include TE as requested)
+                                                benchPos = bench.filter(b => ['RB', 'WR', 'TE'].includes(b.position));
+                                            } else {
+                                                startersPos = starters.filter(s => (s.lineupPosition || s.position) === pos);
+                                                benchPos = bench.filter(b => b.position === pos);
+                                            }
+
+                                            const combined = [...startersPos, ...benchPos].sort((a, b) => (b.points || 0) - (a.points || 0));
+                                            const topN = combined.slice(0, need);
+                                            topN.forEach(p => {
+                                                if (benchPos.find(b => b.playerId === p.playerId)) {
+                                                    optimal.add(p.playerId);
+                                                }
+                                            });
+                                        });
+
+                                        return optimal;
+                                    };
+
+                                    // Compute potential points (sum of the top-N scorers per slot / position)
+                                    const computePotentialPoints = (team) => {
+                                        if (!team) return 0;
+                                        const starters = team.lineup || [];
+                                        const bench = team.bench || [];
+                                        const starterCountByPos = {};
+                                        starters.forEach(s => {
+                                            const pos = s.lineupPosition || s.position || 'FLEX';
+                                            starterCountByPos[pos] = (starterCountByPos[pos] || 0) + 1;
+                                        });
+
+                                        let total = 0;
+                                        Object.keys(starterCountByPos).forEach(pos => {
+                                            const need = starterCountByPos[pos];
+                                            if (!need) return;
+
+                                            let startersPos = [];
+                                            let benchPos = [];
+
+                                            if (pos === 'FLEX') {
+                                                startersPos = starters.filter(s => s.lineupPosition === 'FLEX');
+                                                benchPos = bench.filter(b => ['RB', 'WR', 'TE'].includes(b.position));
+                                                // Also include starters of eligible positions
+                                                startersPos = startersPos.concat(starters.filter(s => ['RB', 'WR', 'TE'].includes(s.position)));
+                                            } else {
+                                                startersPos = starters.filter(s => (s.lineupPosition || s.position) === pos);
+                                                benchPos = bench.filter(b => b.position === pos);
+                                            }
+
+                                            const combined = [...startersPos, ...benchPos].sort((a, b) => (b.points || 0) - (a.points || 0));
+                                            const topN = combined.slice(0, need);
+                                            topN.forEach(p => {
+                                                total += (p.points || 0);
+                                            });
+                                        });
+
+                                        return total;
+                                    };
+
+                                    const team1OptimalBench = computeOptimalBench(matchupRosterData?.team1);
+                                    const team2OptimalBench = computeOptimalBench(matchupRosterData?.team2);
+
+                                    const team1Potential = computePotentialPoints(matchupRosterData?.team1);
+                                    const team2Potential = computePotentialPoints(matchupRosterData?.team2);
+
+                                    const team1Actual = matchupRosterData?.team1?.totalPoints ?? selectedMatchup.team1_score ?? 0;
+                                    const team2Actual = matchupRosterData?.team2?.totalPoints ?? selectedMatchup.team2_score ?? 0;
+
+                                    const team1CoachScore = team1Potential > 0 ? (team1Actual / team1Potential) * 100 : 0;
+                                    const team2CoachScore = team2Potential > 0 ? (team2Actual / team2Potential) * 100 : 0;
+
+                                    // Persist coach scores locally for a simple "career" average per roster
+                                    try {
+                                        const persist = (rosterId, score) => {
+                                            if (!rosterId) return;
+                                            const key = `coachScore:${rosterId}`;
+                                            const raw = localStorage.getItem(key);
+                                            let arr = raw ? JSON.parse(raw) : [];
+                                            // Keep last 200 entries to avoid unbounded growth
+                                            arr.push({ ts: Date.now(), score });
+                                            if (arr.length > 200) arr = arr.slice(arr.length - 200);
+                                            localStorage.setItem(key, JSON.stringify(arr));
+                                        };
+
+                                        const getCareerAverage = (rosterId) => {
+                                            if (!rosterId) return null;
+                                            const raw = localStorage.getItem(`coachScore:${rosterId}`);
+                                            if (!raw) return null;
+                                            const arr = JSON.parse(raw);
+                                            if (!Array.isArray(arr) || arr.length === 0) return null;
+                                            const sum = arr.reduce((s, r) => s + (r.score || 0), 0);
+                                            return sum / arr.length;
+                                        };
+
+                                        // Persist for teams if we have roster IDs
+                                        const team1RosterIdForPersist = rosterForTeam1?.roster_id || team1RosterId;
+                                        const team2RosterIdForPersist = rosterForTeam2?.roster_id || team2RosterId;
+
+                                        if (team1RosterIdForPersist) persist(team1RosterIdForPersist, team1CoachScore);
+                                        if (team2RosterIdForPersist) persist(team2RosterIdForPersist, team2CoachScore);
+
+                                        var team1Career = getCareerAverage(team1RosterIdForPersist);
+                                        var team2Career = getCareerAverage(team2RosterIdForPersist);
+                                    } catch (e) {
+                                        // localStorage may be unavailable in some environments; ignore failures
+                                        var team1Career = null;
+                                        var team2Career = null;
+                                    }
                                     
                                     return (
                                         <div className="space-y-4 sm:space-y-6">
@@ -753,6 +884,7 @@ const Gamecenter = () => {
                                                         {selectedMatchup.team1_score.toFixed(2)}
                                                     </div>
                                                     <div className="text-xs sm:text-sm text-gray-500 mt-1">POINTS</div>
+                                                    <div className="text-xs sm:text-sm text-gray-500 mt-1">Coach Score: <span className="font-semibold text-gray-800">{team1Potential > 0 ? `${team1CoachScore.toFixed(1)}%` : 'N/A'}</span></div>
                                                 </div>
                                                 
                                                 {/* Team 2 */}
@@ -768,6 +900,7 @@ const Gamecenter = () => {
                                                         {selectedMatchup.team2_score.toFixed(2)}
                                                     </div>
                                                     <div className="text-xs sm:text-sm text-gray-500 mt-1">POINTS</div>
+                                                    <div className="text-xs sm:text-sm text-gray-500 mt-1">Coach Score: <span className="font-semibold text-gray-800">{team2Potential > 0 ? `${team2CoachScore.toFixed(1)}%` : 'N/A'}</span></div>
                                                 </div>
                                             </div>
                                             
@@ -840,7 +973,7 @@ const Gamecenter = () => {
                                                 </div>
                                             </div>
                                             
-                                            {/* Roster Breakdown */}
+                                            {/* Roster Breakdown: show both teams side-by-side on large screens, stacked on mobile */}
                                             {matchupRosterData ? (
                                                 matchupRosterData.error ? (
                                                     <div className="text-center py-6 sm:py-8">
@@ -852,39 +985,53 @@ const Gamecenter = () => {
                                                         <p className="text-gray-600 max-w-md mx-auto text-sm sm:text-base px-4">{matchupRosterData.message}</p>
                                                     </div>
                                                 ) : (
-                                                <div className="space-y-4 sm:space-y-6">
-                                                    {/* Team 1 Roster */}
-                                                    <div className="space-y-3 sm:space-y-4">
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    {/* Team 1 Column */}
+                                                    <div className="space-y-3">
                                                         <h4 className="text-lg sm:text-xl font-bold text-gray-800 border-b pb-2">{team1Details.name} Roster</h4>
-                                                        
-                                                        {/* Starting Lineup */}
+
                                                         <div className="bg-gray-50 rounded-lg p-3 sm:p-4 mobile-card">
                                                             <h5 className="font-semibold text-gray-700 mb-3 text-sm sm:text-base">Starting Lineup</h5>
                                                             <div className="space-y-1 sm:space-y-2">
-                                                                {matchupRosterData.team1.lineup.map((player, index) => (
+                                                                {matchupRosterData.team1.lineup.map((player, idx) => {
+                                                                    const opp = matchupRosterData.team2.lineup[idx];
+                                                                    const oppPts = opp?.points ?? 0;
+                                                                    const myPts = player?.points ?? 0;
+                                                                    const outcome = myPts > oppPts ? 'win' : myPts < oppPts ? 'loss' : 'tie';
+
+                                                                    return (
                                                                     <div key={player.playerId} className="flex justify-between items-center py-2 border-b border-gray-200 last:border-b-0">
                                                                         <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
                                                                             <span className="w-8 sm:w-10 text-xs font-medium text-gray-500 flex-shrink-0">{player.lineupPosition}</span>
                                                                             <div className="min-w-0 flex-1">
-                                                                                <div className="font-medium text-gray-800 text-sm sm:text-base truncate">{player.name}</div>
+                                                                                <div className="font-medium text-gray-800 text-sm sm:text-base truncate">
+                                                                                    <span>{player.name}</span>
+                                                                                </div>
                                                                                 <div className="text-xs text-gray-500">{player.position} · {player.team || 'FA'}</div>
                                                                             </div>
                                                                         </div>
-                                                                        <div className="text-right flex-shrink-0">
+                                                                        <div className="text-right flex-shrink-0 flex items-center gap-2">
                                                                             <div className="font-semibold text-gray-800 text-sm sm:text-base">{player.points.toFixed(2)}</div>
+                                                                            {outcome === 'win' ? (
+                                                                                <span className="inline-block w-3 h-3 rounded-full bg-green-600" aria-label="scored more" />
+                                                                            ) : outcome === 'loss' ? (
+                                                                                <span className="inline-block w-3 h-3 rounded-full bg-red-600" aria-label="scored less" />
+                                                                            ) : (
+                                                                                <span className="inline-block w-3 h-3 rounded-full bg-gray-300" aria-label="tied" />
+                                                                            )}
                                                                         </div>
                                                                     </div>
-                                                                ))}
+                                                                    );
+                                                                })}
                                                             </div>
                                                         </div>
 
-                                                        {/* Bench - Collapsible on mobile */}
                                                         <details className="bg-gray-50 rounded-lg mobile-card">
                                                             <summary className="font-semibold text-gray-700 p-3 sm:p-4 text-sm sm:text-base cursor-pointer hover:bg-gray-100 rounded-lg touch-friendly">
                                                                 Bench ({matchupRosterData.team1.bench.length} players)
                                                             </summary>
                                                             <div className="p-3 sm:p-4 pt-0 space-y-1">
-                                                                {matchupRosterData.team1.bench.map((player, index) => (
+                                                                {matchupRosterData.team1.bench.map((player) => (
                                                                     <div key={player.playerId} className="flex justify-between items-center py-1">
                                                                         <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
                                                                             <span className="w-8 sm:w-10 text-xs font-medium text-gray-400 flex-shrink-0">BN</span>
@@ -893,8 +1040,11 @@ const Gamecenter = () => {
                                                                                 <div className="text-xs text-gray-400">{player.position} · {player.team || 'FA'}</div>
                                                                             </div>
                                                                         </div>
-                                                                        <div className="text-right flex-shrink-0">
+                                                                        <div className="text-right flex-shrink-0 flex items-center gap-2">
                                                                             <div className="text-sm text-gray-600">{player.points > 0 ? player.points.toFixed(2) : '---'}</div>
+                                                                            {team1OptimalBench.has(player.playerId) && (
+                                                                                <span className="inline-block w-3 h-3 rounded-full bg-yellow-400" aria-label="optimal start" />
+                                                                            )}
                                                                         </div>
                                                                     </div>
                                                                 ))}
@@ -902,38 +1052,52 @@ const Gamecenter = () => {
                                                         </details>
                                                     </div>
 
-                                                    {/* Team 2 Roster */}
-                                                    <div className="space-y-3 sm:space-y-4">
+                                                    {/* Team 2 Column */}
+                                                    <div className="space-y-3">
                                                         <h4 className="text-lg sm:text-xl font-bold text-gray-800 border-b pb-2">{team2Details.name} Roster</h4>
-                                                        
-                                                        {/* Starting Lineup */}
+
                                                         <div className="bg-gray-50 rounded-lg p-3 sm:p-4 mobile-card">
                                                             <h5 className="font-semibold text-gray-700 mb-3 text-sm sm:text-base">Starting Lineup</h5>
                                                             <div className="space-y-1 sm:space-y-2">
-                                                                {matchupRosterData.team2.lineup.map((player, index) => (
+                                                                {matchupRosterData.team2.lineup.map((player, idx) => {
+                                                                    const opp = matchupRosterData.team1.lineup[idx];
+                                                                    const oppPts = opp?.points ?? 0;
+                                                                    const myPts = player?.points ?? 0;
+                                                                    const outcome = myPts > oppPts ? 'win' : myPts < oppPts ? 'loss' : 'tie';
+
+                                                                    return (
                                                                     <div key={player.playerId} className="flex justify-between items-center py-2 border-b border-gray-200 last:border-b-0">
                                                                         <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
                                                                             <span className="w-8 sm:w-10 text-xs font-medium text-gray-500 flex-shrink-0">{player.lineupPosition}</span>
                                                                             <div className="min-w-0 flex-1">
-                                                                                <div className="font-medium text-gray-800 text-sm sm:text-base truncate">{player.name}</div>
+                                                                                <div className="font-medium text-gray-800 text-sm sm:text-base truncate">
+                                                                                    <span className="truncate">{player.name}</span>
+                                                                                </div>
                                                                                 <div className="text-xs text-gray-500">{player.position} · {player.team || 'FA'}</div>
                                                                             </div>
                                                                         </div>
-                                                                        <div className="text-right flex-shrink-0">
+                                                                        <div className="text-right flex-shrink-0 flex items-center gap-2">
                                                                             <div className="font-semibold text-gray-800 text-sm sm:text-base">{player.points.toFixed(2)}</div>
+                                                                            {outcome === 'win' ? (
+                                                                                <span className="inline-block w-3 h-3 rounded-full bg-green-600" aria-label="scored more" />
+                                                                            ) : outcome === 'loss' ? (
+                                                                                <span className="inline-block w-3 h-3 rounded-full bg-red-600" aria-label="scored less" />
+                                                                            ) : (
+                                                                                <span className="inline-block w-3 h-3 rounded-full bg-gray-300" aria-label="tied" />
+                                                                            )}
                                                                         </div>
                                                                     </div>
-                                                                ))}
+                                                                    );
+                                                                })}
                                                             </div>
                                                         </div>
 
-                                                        {/* Bench - Collapsible on mobile */}
                                                         <details className="bg-gray-50 rounded-lg mobile-card">
                                                             <summary className="font-semibold text-gray-700 p-3 sm:p-4 text-sm sm:text-base cursor-pointer hover:bg-gray-100 rounded-lg touch-friendly">
                                                                 Bench ({matchupRosterData.team2.bench.length} players)
                                                             </summary>
                                                             <div className="p-3 sm:p-4 pt-0 space-y-1">
-                                                                {matchupRosterData.team2.bench.map((player, index) => (
+                                                                {matchupRosterData.team2.bench.map((player) => (
                                                                     <div key={player.playerId} className="flex justify-between items-center py-1">
                                                                         <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
                                                                             <span className="w-8 sm:w-10 text-xs font-medium text-gray-400 flex-shrink-0">BN</span>
@@ -942,8 +1106,11 @@ const Gamecenter = () => {
                                                                                 <div className="text-xs text-gray-400">{player.position} · {player.team || 'FA'}</div>
                                                                             </div>
                                                                         </div>
-                                                                        <div className="text-right flex-shrink-0">
+                                                                        <div className="text-right flex-shrink-0 flex items-center gap-2">
                                                                             <div className="text-sm text-gray-600">{player.points > 0 ? player.points.toFixed(2) : '---'}</div>
+                                                                            {team2OptimalBench.has(player.playerId) && (
+                                                                                <span className="inline-block w-3 h-3 rounded-full bg-yellow-400" aria-label="optimal start" />
+                                                                            )}
                                                                         </div>
                                                                     </div>
                                                                 ))}

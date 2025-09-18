@@ -221,6 +221,45 @@ const LeagueHistory = ({ onTeamNameClick }) => {
     logger.debug("LeagueHistory: newSeasonAwardsSummary after processing:", newSeasonAwardsSummary);
 
 
+        // Build owner -> rosterId map to aggregate persisted coach scores from localStorage
+        const ownerToRosterIds = {};
+        const rosterIdToYear = {};
+        Object.keys(historicalData.rostersBySeason).forEach(year => {
+            const rostersForYear = historicalData.rostersBySeason[year] || [];
+            rostersForYear.forEach(r => {
+                const owner = String(r.owner_id);
+                const rosterId = String(r.roster_id);
+                if (!ownerToRosterIds[owner]) ownerToRosterIds[owner] = new Set();
+                ownerToRosterIds[owner].add(rosterId);
+                // remember which year this roster id came from
+                rosterIdToYear[rosterId] = String(year);
+            });
+        });
+
+        const computeCareerCoachForOwner = (ownerId) => {
+            try {
+                const rosterSet = ownerToRosterIds[String(ownerId)] || new Set();
+                let allScores = [];
+                rosterSet.forEach(rid => {
+                    // Skip rosters from 2021 — no game-by-game logs for that year
+                    if (rosterIdToYear[String(rid)] === '2021') return;
+
+                    const raw = localStorage.getItem(`coachScore:${rid}`);
+                    if (!raw) return;
+                    const arr = JSON.parse(raw);
+                    if (!Array.isArray(arr)) return;
+                    arr.forEach(entry => {
+                        if (typeof entry?.score === 'number') allScores.push(entry.score);
+                    });
+                });
+                if (allScores.length === 0) return null;
+                const sum = allScores.reduce((s, v) => s + v, 0);
+                return sum / allScores.length;
+            } catch (e) {
+                return null;
+            }
+        };
+
         // Final compilation for All-Time Standings display (SORTED BY WIN PERCENTAGE)
         const compiledStandings = Object.keys(teamOverallStats).map(teamName => {
             const stats = teamOverallStats[teamName];
@@ -279,6 +318,7 @@ const LeagueHistory = ({ onTeamNameClick }) => {
                 record: `${stats.totalWins}-${stats.totalLosses}-${stats.totalTies}`,
                 totalWins: stats.totalWins,
                 winPercentage: winPercentage,
+                // coachScore removed from league history compilation
                 awards: awardsToDisplay, // Add awards to all-time standings
                 ownerId: stats.ownerId // Ensure ownerId is passed here for logging
             };
@@ -546,7 +586,8 @@ const LeagueHistory = ({ onTeamNameClick }) => {
                                         </div>
                                         <div className="text-right">
                                             <div className="text-lg font-bold text-blue-800">{formatDPR(team.totalDPR)}</div>
-                                            <div className="text-xs text-gray-500">Career DPR</div>
+                                                <div className="text-xs text-gray-500">Career DPR</div>
+                                                {/* Coach (Career) removed from league history mobile view */}
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-3 text-sm mb-2">
@@ -611,6 +652,7 @@ const LeagueHistory = ({ onTeamNameClick }) => {
                                     <th className="py-3 md:py-4 px-3 md:px-4 text-left text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
                                     <th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Seasons</th>
                                     <th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Career DPR</th>
+                                    {/* Coach % column removed */}
                                     <th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record</th>
                                     <th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Win %</th>
                                     <th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Awards</th>
@@ -639,6 +681,7 @@ const LeagueHistory = ({ onTeamNameClick }) => {
                                             </td>
                                             <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold">{team.seasons}</td>
                                             <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold text-blue-800">{formatDPR(team.totalDPR)}</td>
+                                            {/* Coach % cell removed */}
                                             <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold">{team.record}</td>
                                             <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold text-blue-700">{formatPercentage(team.winPercentage)}</td>
                                             <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold">
