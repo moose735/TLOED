@@ -50,6 +50,7 @@ const LeagueHistory = ({ onTeamNameClick }) => {
     const [uniqueTeamsForChart, setUniqueTeamsForChart] = useState([]);
     const [seasonAwardsSummary, setSeasonAwardsSummary] = useState({});
     const [sortedYearsForAwards, setSortedYearsForAwards] = useState([]);
+    const [showAllSeasons, setShowAllSeasons] = useState(false);
 
     // A color palette for the teams in the chart
     const teamColors = [
@@ -511,9 +512,8 @@ const LeagueHistory = ({ onTeamNameClick }) => {
     };
 
     return (
-        <div className="w-full max-w-full mt-8 mx-auto">
+        <div className="w-full max-w-5xl mx-auto p-2 sm:p-4 md:p-8 font-inter">
             <h2 className="text-2xl font-bold text-blue-700 mb-4 text-center">League History & Awards</h2>
-
             {contextLoading ? (
                 <p className="text-center text-gray-600">Loading league history data...</p>
             ) : contextError ? (
@@ -522,163 +522,287 @@ const LeagueHistory = ({ onTeamNameClick }) => {
                 <p className="text-center text-gray-600">No historical matchup data found to display league history. Please check your Sleeper API configuration.</p>
             ) : (
                 <>
-                    {/* All-Time League Standings */}
-                    <section className="mb-8">
-                        <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">All-Time Standings & Awards (Sorted by Win %)</h3>
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
-                                <thead className="bg-blue-50">
-                                    <tr>
-                                        <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap cursor-pointer" onClick={() => handleSort('rank')}>
-                                            Rank {sortBy === 'rank' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
-                                        </th>
-                                        <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap cursor-pointer" onClick={() => handleSort('team')}>
-                                            Team {sortBy === 'team' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
-                                        </th>
-                                        <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap cursor-pointer" onClick={() => handleSort('seasons')}>
-                                            Seasons {sortBy === 'seasons' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
-                                        </th>
-                                        <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap cursor-pointer" onClick={() => handleSort('totalDPR')}>
-                                            Career DPR {sortBy === 'totalDPR' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
-                                        </th>
-                                        <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap cursor-pointer" onClick={() => handleSort('record')}>
-                                            Record {sortBy === 'record' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
-                                        </th>
-                                        <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap cursor-pointer" onClick={() => handleSort('winPercentage')}>
-                                            Win % {sortBy === 'winPercentage' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
-                                        </th>
-                                        <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap cursor-pointer" onClick={() => handleSort('awards')}>
-                                            Awards {sortBy === 'awards' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {getSortedStandings().map((team, index) => {
-                                        // Get team details (name, avatar) using ownerId
-                                        const teamDetails = getTeamDetails ? getTeamDetails(team.ownerId, null) : { name: team.team, avatar: undefined };
-                                        return (
-                                            <tr key={team.team} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                                <td className="py-2 px-3 text-sm text-gray-800 text-center font-semibold whitespace-nowrap">{index + 1}</td>
-                                                <td className="py-2 px-3 text-sm text-gray-800 font-semibold whitespace-nowrap flex items-center gap-2">
+                    {/* Mobile Card View */}
+                    <div className="sm:hidden space-y-3 mb-8">
+                        {getSortedStandings().map((team, idx) => {
+                            const teamDetails = getTeamDetails ? getTeamDetails(team.ownerId, null) : { name: team.team, avatar: undefined };
+                            return (
+                                <div key={team.team} className="bg-white rounded-lg shadow-md mobile-card p-4 border-l-4 border-blue-500">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <div className="flex items-center space-x-3">
+                                            <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">{idx + 1}</div>
+                                            {teamDetails.avatar && (
+                                                <img
+                                                    src={teamDetails.avatar}
+                                                    alt={teamDetails.name + ' logo'}
+                                                    className="w-10 h-10 rounded-full border-2 border-blue-300 shadow-sm object-cover flex-shrink-0"
+                                                    onError={e => { e.target.onerror = null; e.target.src = '/LeagueLogo.PNG'; }}
+                                                />
+                                            )}
+                                            <div className="min-w-0 flex-1">
+                                                <h3 className="font-semibold text-gray-800 text-sm truncate">{team.team}</h3>
+                                                <p className="text-xs text-gray-500">Seasons: {team.seasons}</p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <div className="text-lg font-bold text-blue-800">{formatDPR(team.totalDPR)}</div>
+                                            <div className="text-xs text-gray-500">Career DPR</div>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3 text-sm mb-2">
+                                        <div className="bg-gray-50 rounded-lg p-2">
+                                            <div className="text-xs text-gray-500 mb-1">Record</div>
+                                            <div className="font-semibold">{team.record}</div>
+                                        </div>
+                                        <div className="bg-gray-50 rounded-lg p-2">
+                                            <div className="text-xs text-gray-500 mb-1">Win %</div>
+                                            <div className="font-semibold text-blue-700">{formatPercentage(team.winPercentage)}</div>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-2 mt-2 text-xs">
+                                        {/* Awards icons */}
+                                        {team.awards.championships > 0 && (
+                                            <span title={`Sween Bowl Championship${team.awards.championshipsYears.length > 0 ? ' (' + team.awards.championshipsYears.join(', ') + ')' : ''}`} className="flex items-center space-x-1 whitespace-nowrap">
+                                                <i className="fas fa-trophy text-yellow-500 text-lg"></i>
+                                                <span className="text-xs font-medium">{team.awards.championships}x</span>
+                                            </span>
+                                        )}
+                                        {team.awards.runnerUps > 0 && (
+                                            <span title={`Sween Bowl Runner-Up${team.awards.runnerUpsYears.length > 0 ? ' (' + team.awards.runnerUpsYears.join(', ') + ')' : ''}`} className="flex items-center space-x-1 whitespace-nowrap">
+                                                <i className="fas fa-trophy text-gray-400 text-lg"></i>
+                                                <span className="text-xs font-medium">{team.awards.runnerUps}x</span>
+                                            </span>
+                                        )}
+                                        {team.awards.thirdPlace > 0 && (
+                                            <span title={`3rd Place Finish${team.awards.thirdPlaceYears.length > 0 ? ' (' + team.awards.thirdPlaceYears.join(', ') + ')' : ''}`} className="flex items-center space-x-1 whitespace-nowrap">
+                                                <i className="fas fa-trophy text-amber-800 text-lg"></i>
+                                                <span className="text-xs font-medium">{team.awards.thirdPlace}x</span>
+                                            </span>
+                                        )}
+                                        {team.awards.firstPoints > 0 && (
+                                            <span title={`1st Place - Points${team.awards.firstPointsYears.length > 0 ? ' (' + team.awards.firstPointsYears.join(', ') + ')' : ''}`} className="flex items-center space-x-1 whitespace-nowrap">
+                                                <i className="fas fa-medal text-yellow-500 text-lg"></i>
+                                                <span className="text-xs font-medium">{team.awards.firstPoints}x</span>
+                                            </span>
+                                        )}
+                                        {team.awards.secondPoints > 0 && (
+                                            <span title={`2nd Place - Points${team.awards.secondPointsYears.length > 0 ? ' (' + team.awards.secondPointsYears.join(', ') + ')' : ''}`} className="flex items-center space-x-1 whitespace-nowrap">
+                                                <i className="fas fa-medal text-gray-400 text-lg"></i>
+                                                <span className="text-xs font-medium">{team.awards.secondPoints}x</span>
+                                            </span>
+                                        )}
+                                        {team.awards.thirdPoints > 0 && (
+                                            <span title={`3rd Place - Points${team.awards.thirdPointsYears.length > 0 ? ' (' + team.awards.thirdPointsYears.join(', ') + ')' : ''}`} className="flex items-center space-x-1 whitespace-nowrap">
+                                                <i className="fas fa-medal text-amber-800 text-lg"></i>
+                                                <span className="text-xs font-medium">{team.awards.thirdPoints}x</span>
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                    {/* Desktop Table View */}
+                    <div className="hidden sm:block overflow-x-auto shadow-lg rounded-lg mb-8">
+                        <table className="min-w-full bg-white border border-gray-200 rounded-lg">
+                            <thead className="bg-blue-100 sticky top-0 z-10">
+                                <tr>
+                                    <th className="py-3 md:py-4 px-3 md:px-4 text-left text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Rank</th>
+                                    <th className="py-3 md:py-4 px-3 md:px-4 text-left text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
+                                    <th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Seasons</th>
+                                    <th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Career DPR</th>
+                                    <th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record</th>
+                                    <th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Win %</th>
+                                    <th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Awards</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {getSortedStandings().map((team, index) => {
+                                    const teamDetails = getTeamDetails ? getTeamDetails(team.ownerId, null) : { name: team.team, avatar: undefined };
+                                    return (
+                                        <tr key={team.team} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                                            <td className="py-2 md:py-3 px-3 md:px-4 text-sm text-blue-700 font-bold border-b border-gray-200">{index + 1}</td>
+                                            <td className="py-2 md:py-3 px-3 md:px-4 text-sm text-gray-800 font-medium border-b border-gray-200">
+                                                <div className="flex items-center gap-2 md:gap-3">
                                                     {teamDetails.avatar && (
                                                         <img
                                                             src={teamDetails.avatar}
                                                             alt={teamDetails.name + ' logo'}
-                                                            className="w-8 h-8 rounded-full border border-gray-300 mr-2 bg-white object-cover"
+                                                            className="w-6 h-6 md:w-8 md:h-8 rounded-full border-2 border-blue-300 shadow-sm object-cover flex-shrink-0"
                                                             onError={e => { e.target.onerror = null; e.target.src = '/LeagueLogo.PNG'; }}
                                                         />
                                                     )}
-                                                    {onTeamNameClick ? (
-                                                        <button
-                                                            onClick={() => onTeamNameClick(team.team)}
-                                                            className="text-gray-800 hover:text-gray-600 cursor-pointer bg-transparent border-none p-0 text-left"
-                                                        >
-                                                            {team.team}
-                                                        </button>
-                                                    ) : (
-                                                        team.team
+                                                    <span className="truncate font-semibold text-xs md:text-sm flex items-center gap-1">
+                                                        {team.team}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold">{team.seasons}</td>
+                                            <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold text-blue-800">{formatDPR(team.totalDPR)}</td>
+                                            <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold">{team.record}</td>
+                                            <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold text-blue-700">{formatPercentage(team.winPercentage)}</td>
+                                            <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold">
+                                                <div className="flex flex-wrap justify-center items-center gap-2 whitespace-nowrap">
+                                                    {team.awards.championships > 0 && (
+                                                        <span title={`Sween Bowl Championship${team.awards.championshipsYears.length > 0 ? ' (' + team.awards.championshipsYears.join(', ') + ')' : ''}`} className="flex items-center space-x-1 whitespace-nowrap">
+                                                            <i className="fas fa-trophy text-yellow-500 text-lg"></i>
+                                                            <span className="text-xs font-medium">{team.awards.championships}x</span>
+                                                        </span>
                                                     )}
-                                                </td>
-                                                <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{team.seasons}</td>
-                                                <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatDPR(team.totalDPR)}</td>
-                                                <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{team.record}</td>
-                                                <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{formatPercentage(team.winPercentage)}</td>
-                                                <td className="py-2 px-3 text-sm text-gray-700 text-center">
-                                                    <div className="flex justify-center items-center gap-2 whitespace-nowrap">
-                                                        {team.awards.championships > 0 && (
-                                                            <span title={`Sween Bowl Championship${team.awards.championshipsYears.length > 0 ? ' (' + team.awards.championshipsYears.join(', ') + ')' : ''}`} className="flex items-center space-x-1 whitespace-nowrap">
-                                                                <i className="fas fa-trophy text-yellow-500 text-lg"></i>
-                                                                <span className="text-xs font-medium">{team.awards.championships}x</span>
-                                                            </span>
-                                                        )}
-                                                        {team.awards.runnerUps > 0 && (
-                                                            <span title={`Sween Bowl Runner-Up${team.awards.runnerUpsYears.length > 0 ? ' (' + team.awards.runnerUpsYears.join(', ') + ')' : ''}`} className="flex items-center space-x-1 whitespace-nowrap">
-                                                                <i className="fas fa-trophy text-gray-400 text-lg"></i>
-                                                                <span className="text-xs font-medium">{team.awards.runnerUps}x</span>
-                                                            </span>
-                                                        )}
-                                                        {team.awards.thirdPlace > 0 && (
-                                                            <span title={`3rd Place Finish${team.awards.thirdPlaceYears.length > 0 ? ' (' + team.awards.thirdPlaceYears.join(', ') + ')' : ''}`} className="flex items-center space-x-1 whitespace-nowrap">
-                                                                <i className="fas fa-trophy text-amber-800 text-lg"></i>
-                                                                <span className="text-xs font-medium">{team.awards.thirdPlace}x</span>
-                                                            </span>
-                                                        )}
-                                                        {team.awards.firstPoints > 0 && (
-                                                            <span title={`1st Place - Points${team.awards.firstPointsYears.length > 0 ? ' (' + team.awards.firstPointsYears.join(', ') + ')' : ''}`} className="flex items-center space-x-1 whitespace-nowrap">
-                                                                <i className="fas fa-medal text-yellow-500 text-lg"></i>
-                                                                <span className="text-xs font-medium">{team.awards.firstPoints}x</span>
-                                                            </span>
-                                                        )}
-                                                        {team.awards.secondPoints > 0 && (
-                                                            <span title={`2nd Place - Points${team.awards.secondPointsYears.length > 0 ? ' (' + team.awards.secondPointsYears.join(', ') + ')' : ''}`} className="flex items-center space-x-1 whitespace-nowrap">
-                                                                <i className="fas fa-medal text-gray-400 text-lg"></i>
-                                                                <span className="text-xs font-medium">{team.awards.secondPoints}x</span>
-                                                            </span>
-                                                        )}
-                                                        {team.awards.thirdPoints > 0 && (
-                                                            <span title={`3rd Place - Points${team.awards.thirdPointsYears.length > 0 ? ' (' + team.awards.thirdPointsYears.join(', ') + ')' : ''}`} className="flex items-center space-x-1 whitespace-nowrap">
-                                                                <i className="fas fa-medal text-amber-800 text-lg"></i>
-                                                                <span className="text-xs font-medium">{team.awards.thirdPoints}x</span>
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                    </section>
+                                                    {team.awards.runnerUps > 0 && (
+                                                        <span title={`Sween Bowl Runner-Up${team.awards.runnerUpsYears.length > 0 ? ' (' + team.awards.runnerUpsYears.join(', ') + ')' : ''}`} className="flex items-center space-x-1 whitespace-nowrap">
+                                                            <i className="fas fa-trophy text-gray-400 text-lg"></i>
+                                                            <span className="text-xs font-medium">{team.awards.runnerUps}x</span>
+                                                        </span>
+                                                    )}
+                                                    {team.awards.thirdPlace > 0 && (
+                                                        <span title={`3rd Place Finish${team.awards.thirdPlaceYears.length > 0 ? ' (' + team.awards.thirdPlaceYears.join(', ') + ')' : ''}`} className="flex items-center space-x-1 whitespace-nowrap">
+                                                            <i className="fas fa-trophy text-amber-800 text-lg"></i>
+                                                            <span className="text-xs font-medium">{team.awards.thirdPlace}x</span>
+                                                        </span>
+                                                    )}
+                                                    {team.awards.firstPoints > 0 && (
+                                                        <span title={`1st Place - Points${team.awards.firstPointsYears.length > 0 ? ' (' + team.awards.firstPointsYears.join(', ') + ')' : ''}`} className="flex items-center space-x-1 whitespace-nowrap">
+                                                            <i className="fas fa-medal text-yellow-500 text-lg"></i>
+                                                            <span className="text-xs font-medium">{team.awards.firstPoints}x</span>
+                                                        </span>
+                                                    )}
+                                                    {team.awards.secondPoints > 0 && (
+                                                        <span title={`2nd Place - Points${team.awards.secondPointsYears.length > 0 ? ' (' + team.awards.secondPointsYears.join(', ') + ')' : ''}`} className="flex items-center space-x-1 whitespace-nowrap">
+                                                            <i className="fas fa-medal text-gray-400 text-lg"></i>
+                                                            <span className="text-xs font-medium">{team.awards.secondPoints}x</span>
+                                                        </span>
+                                                    )}
+                                                    {team.awards.thirdPoints > 0 && (
+                                                        <span title={`3rd Place - Points${team.awards.thirdPointsYears.length > 0 ? ' (' + team.awards.thirdPointsYears.join(', ') + ')' : ''}`} className="flex items-center space-x-1 whitespace-nowrap">
+                                                            <i className="fas fa-medal text-amber-800 text-lg"></i>
+                                                            <span className="text-xs font-medium">{team.awards.thirdPoints}x</span>
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                    {/* ...existing code for season-by-season and chart... */}
 
                     {/* Season-by-Season Champions & Awards */}
                     <section className="mb-8">
                         <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Season-by-Season Champions & Awards</h3>
                         {Object.keys(seasonAwardsSummary).length > 0 ? (
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
-                                    <thead className="bg-blue-50">
-                                        <tr>
-                                            <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">Year</th>
-                                            <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">
-                                                <i className="fas fa-trophy text-yellow-500 mr-1"></i> Champion
-                                            </th>
-                                            <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">
-                                                <i className="fas fa-trophy text-gray-400 mr-1"></i> 2nd Place
-                                            </th>
-                                            <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">
-                                                <i className="fas fa-trophy text-amber-800 mr-1"></i> 3rd Place
-                                            </th>
-                                            <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">
-                                                <i className="fas fa-medal text-yellow-500 mr-1"></i> Points Champ
-                                            </th>
-                                            <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">
-                                                <i className="fas fa-medal text-gray-400 mr-1"></i> Points 2nd
-                                            </th>
-                                            <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 whitespace-nowrap">
-                                                <i className="fas fa-medal text-amber-800 mr-1"></i> Points 3rd
-                                            </th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {sortedYearsForAwards.map((year, index) => {
-                                            const awards = seasonAwardsSummary[year];
-                                            logger.debug(`LeagueHistory: Season Awards - Year: ${year}, Champion: ${awards.champion}, PointsChamp: ${awards.pointsChamp}`); // NEW LOG
-                                            return (
-                                                <tr key={year} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                                    <td className="py-2 px-3 text-sm text-gray-800 font-semibold text-center whitespace-nowrap">{year}</td>
-                                                    <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{awards.champion}</td>
-                                                    <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{awards.secondPlace}</td>
-                                                    <td className="py-2 px-3 text-sm text-gray-700 text-center whitespace-nowrap">{awards.thirdPlace}</td>
-                                                    <td className="py-2 px-3 text-sm text-gray-700 text-center">{awards.pointsChamp}</td>
-                                                    <td className="py-2 px-3 text-sm text-gray-700 text-center">{awards.pointsSecond}</td>
-                                                    <td className="py-2 px-3 text-sm text-gray-700 text-center">{awards.pointsThird}</td>
+                            <>
+                                {/* Mobile stacked cards */}
+                                <div className="sm:hidden space-y-3 mb-4">
+                                    {(showAllSeasons ? sortedYearsForAwards : sortedYearsForAwards.slice(0, 8)).map((year) => {
+                                        const awards = seasonAwardsSummary[year];
+                                        return (
+                                            <div key={`mobile-awards-${year}`} className="bg-white rounded-lg shadow-sm p-3 border-l-4 border-blue-500">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <div className="text-sm font-semibold text-gray-800">{year}</div>
+                                                    <div className="text-xs text-gray-500">Awards</div>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2 text-sm text-gray-700">
+                                                    <div className="flex items-center gap-2">
+                                                        <i className="fas fa-trophy text-yellow-500"></i>
+                                                        <div>
+                                                            <div className="text-xs text-gray-500">Champion</div>
+                                                            <div className="font-medium truncate" title={awards.champion}>{awards.champion}</div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <i className="fas fa-trophy text-gray-400"></i>
+                                                        <div>
+                                                            <div className="text-xs text-gray-500">2nd Place</div>
+                                                            <div className="font-medium truncate" title={awards.secondPlace}>{awards.secondPlace}</div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <i className="fas fa-trophy text-amber-800"></i>
+                                                        <div>
+                                                            <div className="text-xs text-gray-500">3rd Place</div>
+                                                            <div className="font-medium truncate" title={awards.thirdPlace}>{awards.thirdPlace}</div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <i className="fas fa-medal text-yellow-500"></i>
+                                                        <div>
+                                                            <div className="text-xs text-gray-500">Points Champ</div>
+                                                            <div className="font-medium truncate" title={awards.pointsChamp}>{awards.pointsChamp}</div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <i className="fas fa-medal text-gray-400"></i>
+                                                        <div>
+                                                            <div className="text-xs text-gray-500">Points 2nd</div>
+                                                            <div className="font-medium truncate" title={awards.pointsSecond}>{awards.pointsSecond}</div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <i className="fas fa-medal text-amber-800"></i>
+                                                        <div>
+                                                            <div className="text-xs text-gray-500">Points 3rd</div>
+                                                            <div className="font-medium truncate" title={awards.pointsThird}>{awards.pointsThird}</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    {sortedYearsForAwards.length > 8 && (
+                                        <div className="flex justify-center mt-2">
+                                            <button
+                                                className="text-blue-600 text-sm font-medium"
+                                                onClick={() => setShowAllSeasons(!showAllSeasons)}
+                                            >
+                                                {showAllSeasons ? 'Show less' : `Show all ${sortedYearsForAwards.length}`}
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Desktop compact table */}
+                                <div className="hidden sm:block overflow-x-auto">
+                                    <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
+                                        <thead className="bg-blue-50">
+                                            <tr>
+                                                <th className="py-2 px-2 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Year</th>
+                                                <th className="py-2 px-2 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Champion</th>
+                                                <th className="py-2 px-2 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">2nd</th>
+                                                <th className="py-2 px-2 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">3rd</th>
+                                                <th className="py-2 px-2 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Points Champ</th>
+                                                <th className="py-2 px-2 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Points 2nd</th>
+                                                <th className="py-2 px-2 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Points 3rd</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {(showAllSeasons ? sortedYearsForAwards : sortedYearsForAwards.slice(0, 8)).map((year, index) => {
+                                                const awards = seasonAwardsSummary[year];
+                                                return (
+                                                    <tr key={`desktop-awards-${year}`} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                                                        <td className="py-2 px-2 text-sm text-gray-800 font-semibold text-center whitespace-nowrap">{year}</td>
+                                                        <td className="py-2 px-2 text-sm text-gray-700 font-medium truncate" title={awards.champion}>{awards.champion}</td>
+                                                        <td className="py-2 px-2 text-sm text-gray-700 truncate" title={awards.secondPlace}>{awards.secondPlace}</td>
+                                                        <td className="py-2 px-2 text-sm text-gray-700 truncate" title={awards.thirdPlace}>{awards.thirdPlace}</td>
+                                                        <td className="py-2 px-2 text-sm text-gray-700 truncate" title={awards.pointsChamp}>{awards.pointsChamp}</td>
+                                                        <td className="py-2 px-2 text-sm text-gray-700 truncate" title={awards.pointsSecond}>{awards.pointsSecond}</td>
+                                                        <td className="py-2 px-2 text-sm text-gray-700 truncate" title={awards.pointsThird}>{awards.pointsThird}</td>
+                                                    </tr>
+                                                );
+                                            })}
+                                            {(!showAllSeasons && sortedYearsForAwards.length > 8) && (
+                                                <tr>
+                                                    <td colSpan={7} className="py-2 px-2 text-center">
+                                                        <button className="text-blue-600 text-sm font-medium" onClick={() => setShowAllSeasons(true)}>{`Show all ${sortedYearsForAwards.length}`}</button>
+                                                    </td>
                                                 </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </>
                         ) : (
                             <p className="text-center text-gray-600">No season-by-season award data available.</p>
                         )}

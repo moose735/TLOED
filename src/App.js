@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import LOADING_SAYINGS from './data/loadingSayings';
 
 // Import all your components
 import LeagueHistory from './lib/LeagueHistory';
@@ -106,6 +107,16 @@ const AppContent = () => {
         };
     }, [loading]);
 
+    // Pick a random loading saying when loading begins
+    useEffect(() => {
+        if (loading) {
+            const pick = LOADING_SAYINGS[Math.floor(Math.random() * LOADING_SAYINGS.length)];
+            setLoadingSaying(pick);
+        } else {
+            setLoadingSaying('');
+        }
+    }, [loading]);
+
     // Set up browser history handling
     useEffect(() => {
         // Push initial state
@@ -160,6 +171,9 @@ const AppContent = () => {
 
     // State to hold the top 3 finishers
     const [topFinishers, setTopFinishers] = useState([]); // Changed to array for top 3
+
+    // loading saying selected from external data file
+    const [loadingSaying, setLoadingSaying] = useState('');
 
     // Effect to determine the top 3 finishers once historicalData and usersData are loaded
     useEffect(() => {
@@ -347,7 +361,6 @@ const AppContent = () => {
                                 className="h-16 w-16 mx-auto mb-4 object-contain"
                             />
                             <p className="text-lg font-semibold text-white mb-2">Loading Sleeper fantasy data...</p>
-                            <p className="text-sm text-gray-300">This might take a moment as we fetch historical league information.</p>
                         </div>
                         
                         {/* Progress Bar */}
@@ -355,9 +368,11 @@ const AppContent = () => {
                             <div className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full animate-progress shadow-sm"></div>
                         </div>
                         
-                        <div className="text-xs text-gray-300 mb-4">
-                            Fetching league data and historical matchups...
-                        </div>
+                        {/* Removed extra explanatory text to keep the loading screen clean. */}
+
+                        {loadingSaying && (
+                            <div className="text-sm text-gray-200 italic mb-4">{loadingSaying}</div>
+                        )}
 
                         {/* Loading timeout alert */}
                         {showLoadingAlert && (

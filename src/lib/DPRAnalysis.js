@@ -17,8 +17,9 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
     error: contextError,      // Rename to avoid conflict with local error state
     historicalData,
     allDraftHistory, // FIXED: Import allDraftHistory from context
-    getTeamName,
-    nflState // Import nflState to get current week
+  getTeamName,
+  nflState, // Import nflState to get current week
+  getTeamDetails,
   } = useSleeperData();
 
   const [careerDPRData, setCareerDPRData] = useState([]);
@@ -315,47 +316,104 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
           <section className="mb-8">
             <h3 className="text-xl font-bold text-blue-800 mb-4 border-b pb-2">Career DPR Rankings</h3>
             {careerDPRData.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
-                  <thead className="bg-blue-100">
-                    <tr>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Rank</th>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Career DPR</th>
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Win %</th>
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record (W-L-T)</th>
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Points Avg </th>
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Highest Points Avg</th>
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Lowest Points Avg</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {careerDPRData.map((data, index) => (
-                      <tr key={data.ownerId} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                        <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{index + 1}</td>
-                        <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">
-                          {onTeamNameClick ? (
-                            <button
-                              onClick={() => onTeamNameClick(getTeamName(data.ownerId, null))}
-                              className="text-gray-800 hover:text-gray-600 cursor-pointer bg-transparent border-none p-0 text-left"
-                            >
-                              {getTeamName(data.ownerId, null)}
-                            </button>
-                          ) : (
-                            getTeamName(data.ownerId, null)
-                          )}
-                        </td>
-                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatDPR(data.dpr)}</td>
-                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPercentage(data.winPercentage)}</td>
-                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{renderRecord(data.wins, data.losses, data.ties)}</td>
-                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.pointsPerGame)}</td>
-                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.highestSeasonalPointsAvg)}</td>
-                        <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.lowestSeasonalPointsAvg)}</td>
-                      </tr>
+              <>
+                {/* Mobile Cards View (PowerRankings-style) */}
+                <div className="sm:hidden space-y-3">
+                  {careerDPRData
+                    .slice()
+                    .sort((a, b) => (b.dpr || 0) - (a.dpr || 0))
+                    .map((data, index) => (
+                      <div key={data.ownerId} className="bg-white rounded-lg shadow-md mobile-card p-4 border-l-4 border-blue-500">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">{index + 1}</div>
+                            <img
+                              src={getTeamDetails ? (getTeamDetails(data.ownerId, null)?.avatar || `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`) : `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`}
+                              alt={getTeamName(data.ownerId, null)}
+                              className="w-10 h-10 rounded-full border-2 border-blue-300 shadow-sm object-cover flex-shrink-0"
+                              onError={(e) => { e.target.src = `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`; }}
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="font-semibold text-sm truncate">
+                                {onTeamNameClick ? (
+                                  <button onClick={() => onTeamNameClick(getTeamName(data.ownerId, null))} className="text-gray-800 hover:underline p-0 bg-transparent border-none">
+                                    {getTeamName(data.ownerId, null)}
+                                  </button>
+                                ) : (
+                                  getTeamName(data.ownerId, null)
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-500">Record: {renderRecord(data.wins, data.losses, data.ties)}</div>
+                            </div>
+                          </div>
+
+                          <div className="text-right">
+                            <div className="text-lg font-bold text-blue-800">{formatDPR(data.dpr)}</div>
+                            <div className="text-xs text-gray-500">DPR • {formatPointsAvg(data.pointsPerGame)}</div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-3 text-sm mt-2">
+                          <div className="bg-gray-50 rounded-lg p-2 text-center">
+                            <div className="text-xs text-gray-500 mb-1">Points Avg</div>
+                            <div className="font-semibold text-green-700">{formatPointsAvg(data.pointsPerGame)}</div>
+                          </div>
+                          <div className="bg-gray-50 rounded-lg p-2 text-center">
+                            <div className="text-xs text-gray-500 mb-1">High / Low</div>
+                            <div className="font-semibold">{formatPointsAvg(data.highestSeasonalPointsAvg)} / {formatPointsAvg(data.lowestSeasonalPointsAvg)}</div>
+                          </div>
+                          <div className="bg-gray-50 rounded-lg p-2 text-center">
+                            <div className="text-xs text-gray-500 mb-1">Win %</div>
+                            <div className="font-semibold">{formatPercentage(data.winPercentage)}</div>
+                          </div>
+                        </div>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
-              </div>
+                </div>
+
+                {/* Desktop Table View */}
+                <div className="hidden sm:block overflow-x-auto">
+                  <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
+                    <thead className="bg-blue-100">
+                      <tr>
+                        <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Rank</th>
+                        <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
+                        <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Career DPR</th>
+                        <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Win %</th>
+                        <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record (W-L-T)</th>
+                        <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Points Avg </th>
+                        <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Highest Points Avg</th>
+                        <th className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Lowest Points Avg</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {careerDPRData.slice().sort((a,b)=>(b.dpr||0)-(a.dpr||0)).map((data, index) => (
+                        <tr key={data.ownerId} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                          <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{index + 1}</td>
+                          <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">
+                            {onTeamNameClick ? (
+                              <button
+                                onClick={() => onTeamNameClick(getTeamName(data.ownerId, null))}
+                                className="text-gray-800 hover:text-gray-600 cursor-pointer bg-transparent border-none p-0 text-left"
+                              >
+                                {getTeamName(data.ownerId, null)}
+                              </button>
+                            ) : (
+                              getTeamName(data.ownerId, null)
+                            )}
+                          </td>
+                          <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatDPR(data.dpr)}</td>
+                          <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPercentage(data.winPercentage)}</td>
+                          <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{renderRecord(data.wins, data.losses, data.ties)}</td>
+                          <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.pointsPerGame)}</td>
+                          <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.highestSeasonalPointsAvg)}</td>
+                          <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.lowestSeasonalPointsAvg)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             ) : (
               <p className="text-center text-gray-600">No career DPR data available.</p>
             )}
@@ -365,76 +423,125 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
           <section className="mb-8">
             <h3 className="text-xl font-bold text-green-800 mb-4 border-b pb-2">Best Seasons by DPR</h3>
             {seasonalDPRData.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
-                  <thead className="bg-green-100">
-                    <tr>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Rank</th>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Team</th>
-                      <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Season</th>
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Season DPR</th>
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Win %</th>
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Record (W-L-T)</th>
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Points Avg</th>
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Highest Points</th>
-                      <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Lowest Points</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(() => {
-                      let actualRank = 0;
-                      return displayedSeasonalDPRData.map((data, index) => {
-                        if (!data.isAverageRow) {
-                          actualRank++;
-                        }
-                        // Highlight current season row (matches LuckAnalysis logic)
-                        const isCurrentSeasonRow = data.year === currentNFLSeason && !data.isAverageRow;
-                        return (
-                          <tr
-                            key={`${data.rosterId}-${data.year}`}
-                            className={
-                              data.isAverageRow
-                                ? 'bg-yellow-100 font-bold'
-                                : isCurrentSeasonRow
-                                  ? `font-bold ${actualRank % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`
-                                  : (actualRank % 2 === 0 ? 'bg-gray-50' : 'bg-white')
-                            }
-                          >
-                            {data.isAverageRow ? (
-                              <td colSpan={numberOfSeasonalColumns} className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap text-center">
-                                {data.team}
-                              </td>
+              <>
+                {/* Mobile Cards View */}
+                <div className="sm:hidden space-y-3">
+                  {displayedSeasonalDPRData.map((data, idx) => {
+                    if (data.isAverageRow) {
+                      return (
+                        <div key={`avg-${idx}`} className="bg-yellow-100 rounded-lg p-3 text-center font-bold">{data.team}</div>
+                      );
+                    }
+                    return (
+                      <div key={`${data.rosterId}-${data.year}`} className="bg-white rounded-lg shadow p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="min-w-0">
+                            <div className="font-semibold text-sm truncate">{onTeamNameClick ? (
+                              <button onClick={() => onTeamNameClick(getTeamName(data.ownerId, data.year))} className="text-gray-800 hover:underline p-0 bg-transparent border-none">
+                                {getTeamName(data.ownerId, data.year)}
+                              </button>
                             ) : (
-                              <>
-                                <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{actualRank}</td>
-                                <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">
-                                  {onTeamNameClick ? (
-                                    <button
-                                      onClick={() => onTeamNameClick(getTeamName(data.ownerId, data.year))}
-                                      className="text-gray-800 hover:text-gray-600 cursor-pointer bg-transparent border-none p-0 text-left"
-                                    >
-                                      {getTeamName(data.ownerId, data.year)}
-                                    </button>
-                                  ) : (
-                                    getTeamName(data.ownerId, data.year)
-                                  )}
+                              getTeamName(data.ownerId, data.year)
+                            )}</div>
+                            <div className="text-xs text-gray-500">Season: {data.year}</div>
+                          </div>
+                          <div className="text-right min-w-[88px]">
+                            <div className="text-lg font-bold text-green-800">{formatDPR(data.dpr)}</div>
+                            <div className="text-xs text-gray-500">DPR • {formatPointsAvg(data.pointsPerGame)}</div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2 mt-3 text-sm">
+                          <div className="bg-gray-50 rounded p-2 text-center">
+                            <div className="text-xs text-gray-500">Record</div>
+                            <div className="font-semibold">{renderRecord(data.wins, data.losses, data.ties)}</div>
+                          </div>
+                          <div className="bg-gray-50 rounded p-2 text-center">
+                            <div className="text-xs text-gray-500">Win %</div>
+                            <div className="font-semibold">{formatPercentage(data.winPercentage)}</div>
+                          </div>
+                          <div className="bg-gray-50 rounded p-2 text-center">
+                            <div className="text-xs text-gray-500">High / Low</div>
+                            <div className="font-semibold">{formatPointsAvg(data.highestPointsGame)} / {formatPointsAvg(data.lowestPointsGame)}</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Desktop Table View */}
+                <div className="hidden sm:block overflow-x-auto">
+                  <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
+                    <thead className="bg-green-100">
+                      <tr>
+                        <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Rank</th>
+                        <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Team</th>
+                        <th className="py-2 px-3 text-left text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Season</th>
+                        <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Season DPR</th>
+                        <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Win %</th>
+                        <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Record (W-L-T)</th>
+                        <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Points Avg</th>
+                        <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Highest Points</th>
+                        <th className="py-2 px-3 text-center text-xs font-semibold text-green-700 uppercase tracking-wider border-b border-gray-200">Lowest Points</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(() => {
+                        let actualRank = 0;
+                        return displayedSeasonalDPRData.map((data, index) => {
+                          if (!data.isAverageRow) {
+                            actualRank++;
+                          }
+                          // Highlight current season row (matches LuckAnalysis logic)
+                          const isCurrentSeasonRow = data.year === currentNFLSeason && !data.isAverageRow;
+                          return (
+                            <tr
+                              key={`${data.rosterId}-${data.year}`}
+                              className={
+                                data.isAverageRow
+                                  ? 'bg-yellow-100 font-bold'
+                                  : isCurrentSeasonRow
+                                    ? `font-bold ${actualRank % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`
+                                    : (actualRank % 2 === 0 ? 'bg-gray-50' : 'bg-white')
+                              }
+                            >
+                              {data.isAverageRow ? (
+                                <td colSpan={numberOfSeasonalColumns} className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap text-center">
+                                  {data.team}
                                 </td>
-                                <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.year}</td>
-                                <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatDPR(data.dpr)}</td>
-                                <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPercentage(data.winPercentage)}</td>
-                                <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{renderRecord(data.wins, data.losses, data.ties)}</td>
-                                <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.pointsPerGame)}</td>
-                                <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.highestPointsGame)}</td>
-                                <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.lowestPointsGame)}</td>
-                              </>
-                            )}
-                          </tr>
-                        );
-                      });
-                    })()}
-                  </tbody>
-                </table>
-              </div>
+                              ) : (
+                                <>
+                                  <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{actualRank}</td>
+                                  <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">
+                                    {onTeamNameClick ? (
+                                      <button
+                                        onClick={() => onTeamNameClick(getTeamName(data.ownerId, data.year))}
+                                        className="text-gray-800 hover:text-gray-600 cursor-pointer bg-transparent border-none p-0 text-left"
+                                      >
+                                        {getTeamName(data.ownerId, data.year)}
+                                      </button>
+                                    ) : (
+                                      getTeamName(data.ownerId, data.year)
+                                    )}
+                                  </td>
+                                  <td className="py-2 px-3 text-sm text-gray-800 whitespace-nowrap">{data.year}</td>
+                                  <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatDPR(data.dpr)}</td>
+                                  <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPercentage(data.winPercentage)}</td>
+                                  <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{renderRecord(data.wins, data.losses, data.ties)}</td>
+                                  <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.pointsPerGame)}</td>
+                                  <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.highestPointsGame)}</td>
+                                  <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap text-center">{formatPointsAvg(data.lowestPointsGame)}</td>
+                                </>
+                              )}
+                            </tr>
+                          );
+                        });
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             ) : (
               <p className="text-center text-gray-600">No seasonal DPR data available.</p>
             )}

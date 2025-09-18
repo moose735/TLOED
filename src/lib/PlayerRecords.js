@@ -11,15 +11,10 @@ const PlayerRecords = () => {
         error
     } = useSleeperData();
 
-    const [expandedSections, setExpandedSections] = useState({});
+    // Collapse/expand removed: always show full content
     const [activeView, setActiveView] = useState('weekly'); // 'weekly' or 'seasonal'
 
-    const toggleSection = (sectionKey) => {
-        setExpandedSections(prev => ({
-            ...prev,
-            [sectionKey]: !prev[sectionKey]
-        }));
-    };
+    // toggleSection removed
 
     // Calculate player records from available data
     const playerRecords = useMemo(() => {
@@ -210,6 +205,7 @@ const PlayerRecords = () => {
             <div className="text-center mb-6 sm:mb-8">
                 <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">⭐ Player Records</h2>
                 <p className="text-sm sm:text-base text-gray-600">Individual player achievements and performances</p>
+                <p className="text-xs text-gray-500 mt-1">Note: only players who were in the starting lineup are counted toward these records.</p>
             </div>
 
             {/* View Toggle */}
@@ -242,80 +238,27 @@ const PlayerRecords = () => {
             <div className="space-y-4 sm:space-y-6">
                 {positions.map(position => {
                     const sectionKey = `${activeView}-${position}`;
-                    const isExpanded = expandedSections[sectionKey];
                     const records = playerRecords[activeView][position] || [];
-                    const topRecords = records.slice(0, 5);
                     
                     return (
                         <div key={position} className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
                             {/* Header */}
-                            <div 
-                                className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 sm:p-4 cursor-pointer hover:bg-blue-100 transition-colors border-b border-gray-200"
-                                onClick={() => toggleSection(sectionKey)}
-                            >
+                                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 sm:p-4 border-b border-gray-200">
                                 <div className="flex items-center justify-between">
-                                    <div className="flex items-center space-x-3">
-                                        <span className="text-xl sm:text-2xl">{positionEmojis[position]}</span>
-                                        <div>
-                                            <h3 className="text-base sm:text-lg font-bold text-gray-900">
-                                                {position} - {activeView === 'weekly' ? 'Best Weekly' : 'Best Seasonal'}
-                                            </h3>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center space-x-2 sm:space-x-4">
-                                        {topRecords.length > 0 && (
-                                            <div className="text-right text-xs sm:text-sm text-gray-600 hidden sm:block">
-                                                <div>Best: {topRecords[0].points.toFixed(1)} pts</div>
-                                                <div className="truncate max-w-20">{topRecords[0].playerName}</div>
+                                        <div className="flex items-center space-x-3">
+                                            <span className="text-xl sm:text-2xl">{positionEmojis[position]}</span>
+                                            <div>
+                                                <h3 className="text-base sm:text-lg font-bold text-gray-900">
+                                                    {position} - {activeView === 'weekly' ? 'Best Weekly' : 'Best Seasonal'}
+                                                </h3>
                                             </div>
-                                        )}
-                                        <svg 
-                                            className={`w-4 h-4 sm:w-5 sm:h-5 text-gray-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                                            fill="none" 
-                                            stroke="currentColor" 
-                                            viewBox="0 0 24 24"
-                                        >
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                                        </svg>
-                                    </div>
+                                        </div>
                                 </div>
                             </div>
-
-                            {/* Expandable Content */}
-                            {isExpanded && (
+                                {/* Always show full content for each position */}
                                 <div className="p-3 sm:p-4">
                                     {renderPlayerTable(records, activeView === 'weekly')}
                                 </div>
-                            )}
-
-                            {/* Top 5 Preview */}
-                            {!isExpanded && topRecords.length > 0 && (
-                                <div className="p-3 sm:p-4">
-                                    <div className="text-xs sm:text-sm text-gray-600 mb-3">Top 5:</div>
-                                    <div className="space-y-2">
-                                        {topRecords.map((record, index) => (
-                                            <div key={`${record.playerId}-${record.season}-${record.week || 'season'}`} 
-                                                 className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded">
-                                                <div className="flex items-center space-x-3 flex-1 min-w-0">
-                                                    <span className="w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-xs font-bold text-gray-600 flex-shrink-0">
-                                                        {index + 1}
-                                                    </span>
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className="font-medium text-sm sm:text-base truncate">{record.playerName}</div>
-                                                        <div className="text-xs text-blue-600 font-medium truncate">{record.teamName}</div>
-                                                    </div>
-                                                </div>
-                                                <div className="text-right flex-shrink-0">
-                                                    <div className="font-bold text-blue-600 text-sm sm:text-base">{record.points.toFixed(1)} pts</div>
-                                                    <div className="text-xs text-gray-500">
-                                                        {activeView === 'weekly' ? `Week ${record.week} ` : ''}{record.season}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
                         </div>
                     );
                 })}

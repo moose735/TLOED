@@ -275,69 +275,154 @@ const Dashboard = () => {
                                 {currentWeekMatchups.length > 0 ? (
                                     <>
                                         {/* First set of matchups */}
-                                        {currentWeekMatchups.map((matchup, idx) => (
-                                            <div key={`first-${idx}`} className="flex items-center space-x-4 mx-6 bg-gray-50 rounded-lg px-6 py-3 border border-gray-200 min-w-[280px]">
-                                                <div className="flex items-center space-x-3 min-w-0 flex-1">
-                                                    <img
-                                                        src={matchup.team1.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
-                                                        alt={matchup.team1.name}
-                                                        className="w-7 h-7 rounded-full border border-gray-300 flex-shrink-0"
-                                                        onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
-                                                    />
-                                                    <span className="text-sm font-medium text-gray-800 truncate max-w-[80px]">{matchup.team1.name}</span>
-                                                </div>
-                                                <div className="text-center px-2 flex-shrink-0">
-                                                    {matchup.isCompleted ? (
-                                                        <div className="text-sm font-bold text-gray-800 whitespace-nowrap">
-                                                            {matchup.team1.score.toFixed(1)} - {matchup.team2.score.toFixed(1)}
+                                        {currentWeekMatchups.map((matchup, idx) => {
+                                            const t1Score = Number(matchup.team1.score || 0);
+                                            const t2Score = Number(matchup.team2.score || 0);
+                                            const bothZero = t1Score === 0 && t2Score === 0;
+                                            return (
+                                                <div key={`first-${idx}`} className="mx-6 bg-gray-50 rounded-lg px-4 py-3 border border-gray-200 min-w-[260px]">
+                                                    {bothZero ? (
+                                                        // Vertical middle-aligned stack: Team1, 'vs', Team2
+                                                        <div className="flex flex-col items-center justify-center text-center space-y-1">
+                                                            <div className="flex items-center space-x-2">
+                                                                <img
+                                                                    src={matchup.team1.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
+                                                                    alt={matchup.team1.name}
+                                                                    className="w-6 h-6 rounded-full border border-gray-300 flex-shrink-0"
+                                                                    onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
+                                                                />
+                                                                <span className="text-sm font-medium text-gray-800 truncate max-w-[160px]">{matchup.team1.name}</span>
+                                                            </div>
+                                                            <div className="text-xs text-gray-500 font-semibold">vs</div>
+                                                            <div className="flex items-center space-x-2">
+                                                                <img
+                                                                    src={matchup.team2.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
+                                                                    alt={matchup.team2.name}
+                                                                    className="w-6 h-6 rounded-full border border-gray-300 flex-shrink-0"
+                                                                    onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
+                                                                />
+                                                                <span className="text-sm font-medium text-gray-800 truncate max-w-[160px]">{matchup.team2.name}</span>
+                                                            </div>
                                                         </div>
                                                     ) : (
-                                                        <div className="text-xs text-gray-500">vs</div>
+                                                        // Stacked layout with left-aligned names and right-aligned scores
+                                                        <>
+                                                            <div className="flex items-center justify-between">
+                                                                <div className="flex items-center space-x-3 min-w-0">
+                                                                    <img
+                                                                        src={matchup.team1.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
+                                                                        alt={matchup.team1.name}
+                                                                        className="w-7 h-7 rounded-full border border-gray-300 flex-shrink-0"
+                                                                        onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
+                                                                    />
+                                                                    <span className="text-sm font-medium text-gray-800 truncate max-w-[160px]">{matchup.team1.name}</span>
+                                                                </div>
+                                                                <div className="flex-shrink-0 text-right ml-4 w-20">
+                                                                    {t1Score > 0 ? (
+                                                                        <div className="text-sm font-bold text-gray-800">{t1Score.toFixed(1)}</div>
+                                                                    ) : (
+                                                                        <div className="text-xs text-gray-500">&nbsp;</div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="flex items-center justify-between mt-2">
+                                                                <div className="flex items-center space-x-3 min-w-0">
+                                                                    <img
+                                                                        src={matchup.team2.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
+                                                                        alt={matchup.team2.name}
+                                                                        className="w-7 h-7 rounded-full border border-gray-300 flex-shrink-0"
+                                                                        onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
+                                                                    />
+                                                                    <span className="text-sm font-medium text-gray-800 truncate max-w-[160px]">{matchup.team2.name}</span>
+                                                                </div>
+                                                                <div className="flex-shrink-0 text-right ml-4 w-20">
+                                                                    {t2Score > 0 ? (
+                                                                        <div className="text-sm font-bold text-gray-800">{t2Score.toFixed(1)}</div>
+                                                                    ) : (
+                                                                        <div className="text-xs text-gray-500">&nbsp;</div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </>
                                                     )}
                                                 </div>
-                                                <div className="flex items-center space-x-3 min-w-0 flex-1 justify-end">
-                                                    <span className="text-sm font-medium text-gray-800 truncate max-w-[80px]">{matchup.team2.name}</span>
-                                                    <img
-                                                        src={matchup.team2.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
-                                                        alt={matchup.team2.name}
-                                                        className="w-7 h-7 rounded-full border border-gray-300 flex-shrink-0"
-                                                        onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
-                                                    />
-                                                </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                         {/* Duplicate set for seamless loop */}
-                                        {currentWeekMatchups.map((matchup, idx) => (
-                                            <div key={`second-${idx}`} className="flex items-center space-x-4 mx-6 bg-gray-50 rounded-lg px-6 py-3 border border-gray-200 min-w-[280px]">
-                                                <div className="flex items-center space-x-3 min-w-0 flex-1">
-                                                    <img
-                                                        src={matchup.team1.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
-                                                        alt={matchup.team1.name}
-                                                        className="w-7 h-7 rounded-full border border-gray-300 flex-shrink-0"
-                                                        onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
-                                                    />
-                                                    <span className="text-sm font-medium text-gray-800 truncate max-w-[80px]">{matchup.team1.name}</span>
-                                                </div>
-                                                <div className="text-center px-2 flex-shrink-0">
-                                                    {matchup.isCompleted ? (
-                                                        <div className="text-sm font-bold text-gray-800 whitespace-nowrap">
-                                                            {matchup.team1.score.toFixed(1)} - {matchup.team2.score.toFixed(1)}
+                                        {currentWeekMatchups.map((matchup, idx) => {
+                                            const t1Score = Number(matchup.team1.score || 0);
+                                            const t2Score = Number(matchup.team2.score || 0);
+                                            const bothZero = t1Score === 0 && t2Score === 0;
+                                            return (
+                                                <div key={`second-${idx}`} className="mx-6 bg-gray-50 rounded-lg px-4 py-3 border border-gray-200 min-w-[260px]">
+                                                    {bothZero ? (
+                                                        // Vertical middle-aligned stack (match first block)
+                                                        <div className="flex flex-col items-center justify-center text-center space-y-1">
+                                                            <div className="flex items-center space-x-2">
+                                                                <img
+                                                                    src={matchup.team1.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
+                                                                    alt={matchup.team1.name}
+                                                                    className="w-6 h-6 rounded-full border border-gray-300 flex-shrink-0"
+                                                                    onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
+                                                                />
+                                                                <span className="text-sm font-medium text-gray-800 truncate max-w-[160px]">{matchup.team1.name}</span>
+                                                            </div>
+                                                            <div className="text-xs text-gray-500 font-semibold">vs</div>
+                                                            <div className="flex items-center space-x-2">
+                                                                <img
+                                                                    src={matchup.team2.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
+                                                                    alt={matchup.team2.name}
+                                                                    className="w-6 h-6 rounded-full border border-gray-300 flex-shrink-0"
+                                                                    onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
+                                                                />
+                                                                <span className="text-sm font-medium text-gray-800 truncate max-w-[160px]">{matchup.team2.name}</span>
+                                                            </div>
                                                         </div>
                                                     ) : (
-                                                        <div className="text-xs text-gray-500">vs</div>
+                                                        <>
+                                                            <div className="flex items-center justify-between">
+                                                                <div className="flex items-center space-x-3 min-w-0">
+                                                                    <img
+                                                                        src={matchup.team1.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
+                                                                        alt={matchup.team1.name}
+                                                                        className="w-7 h-7 rounded-full border border-gray-300 flex-shrink-0"
+                                                                        onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
+                                                                    />
+                                                                    <span className="text-sm font-medium text-gray-800 truncate max-w-[140px]">{matchup.team1.name}</span>
+                                                                </div>
+                                                                <div className="flex-shrink-0 text-right ml-4 w-20">
+                                                                    {t1Score > 0 ? (
+                                                                        <div className="text-sm font-bold text-gray-800">{t1Score.toFixed(1)}</div>
+                                                                    ) : (
+                                                                        <div className="text-xs text-gray-500">&nbsp;</div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="flex items-center justify-between mt-2">
+                                                                <div className="flex items-center space-x-3 min-w-0">
+                                                                    <img
+                                                                        src={matchup.team2.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
+                                                                        alt={matchup.team2.name}
+                                                                        className="w-7 h-7 rounded-full border border-gray-300 flex-shrink-0"
+                                                                        onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
+                                                                    />
+                                                                    <span className="text-sm font-medium text-gray-800 truncate max-w-[140px]">{matchup.team2.name}</span>
+                                                                </div>
+                                                                <div className="flex-shrink-0 text-right ml-4 w-20">
+                                                                    {t2Score > 0 ? (
+                                                                        <div className="text-sm font-bold text-gray-800">{t2Score.toFixed(1)}</div>
+                                                                    ) : (
+                                                                        <div className="text-xs text-gray-500">&nbsp;</div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </>
                                                     )}
                                                 </div>
-                                                <div className="flex items-center space-x-3 min-w-0 flex-1 justify-end">
-                                                    <span className="text-sm font-medium text-gray-800 truncate max-w-[80px]">{matchup.team2.name}</span>
-                                                    <img
-                                                        src={matchup.team2.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
-                                                        alt={matchup.team2.name}
-                                                        className="w-7 h-7 rounded-full border border-gray-300 flex-shrink-0"
-                                                        onError={(e) => { e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`; }}
-                                                    />
-                                                </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </>
                                 ) : (
                                     <div className="text-sm text-gray-500 mx-4">No matchups available for this week</div>
