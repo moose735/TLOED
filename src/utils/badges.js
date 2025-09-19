@@ -56,10 +56,10 @@ export function computeBadges({ historicalData, processedSeasonalRecords, draftP
       recentBadges.push(badge);
     }
 
-    // Points Title
+    // Points Title (Points Champion for full season weeks)
     const pointsTitle = [...rosterEntries].sort((a, b) => b.pointsFor - a.pointsFor)[0];
     if (pointsTitle) {
-      const badge = { id: `points_title_${season}`, name: 'Season Points Title', category: 'season', year: season, teamId: pointsTitle.ownerId };
+      const badge = { id: `points_title_${season}`, name: 'Points Title', category: 'season', year: season, teamId: pointsTitle.ownerId };
       (badgesByTeam[pointsTitle.ownerId] = badgesByTeam[pointsTitle.ownerId] || []).push(badge);
       recentBadges.push(badge);
     }
@@ -89,39 +89,77 @@ export function computeBadges({ historicalData, processedSeasonalRecords, draftP
 
     // Silverback-To-Back (runner-up consecutive seasons) will be computed in a second pass
 
-    // DPR-based season tiers (Bronze/Silver/Gold/Diamond)
-    const dprs = rosterEntries.map(r => r.adjustedDPR || 0).filter(v => typeof v === 'number');
-    const dprSorted = [...dprs].sort((a, b) => a - b);
+    // DPR-based season tiers using absolute DPR ranges (user requested):
+    // Bronze = 1.000 - 1.075
+    // Silver = 1.076 - 1.150
+    // Gold   = 1.151 - 1.225
+    // Diamond= 1.226+
     rosterEntries.forEach(r => {
-      const rank = percentileRank(dprSorted, r.adjustedDPR || 0) * 100; // 0-100
+      const dpr = Number(r.adjustedDPR || 0);
+      if (!dpr || isNaN(dpr)) return;
       let tier = null;
-      if (rank >= 96) tier = 'Diamond Season';
-      else if (rank >= 81) tier = 'Gold Season';
-      else if (rank >= 66) tier = 'Silver Season';
-      else if (rank >= 50) tier = 'Bronze Season';
+      if (dpr >= 1.226) tier = 'Diamond Season';
+      else if (dpr >= 1.151 && dpr <= 1.225) tier = 'Gold Season';
+      else if (dpr >= 1.076 && dpr <= 1.150) tier = 'Silver Season';
+      else if (dpr >= 1.000 && dpr <= 1.075) tier = 'Bronze Season';
       if (tier) {
         const badge = { id: `${tier.replace(/\s+/g,'_').toLowerCase()}_${season}_${r.ownerId}`, name: tier, category: 'season-tier', year: season, teamId: r.ownerId };
         (badgesByTeam[r.ownerId] = badgesByTeam[r.ownerId] || []).push(badge);
       }
     });
 
+    // Lucky Duck: roster with the highest luckRating in the season
+    try {
+      // DEBUG: Log luckRating values for this season's rosters to help diagnose why Lucky Duck
+      // may not be being awarded. This log is temporary and can be removed once verified.
+      try {
+  const luckLog = [...rosterEntries].map(r => ({ ownerId: r.ownerId, rosterId: r.rosterId, teamName: r.teamName, luckRating: r.luckRating }));
+        // Push to a global array so the logs are inspectable from DevTools even if console filtering hides them
+        try {
+          if (typeof window !== 'undefined') {
+            window.__BADGE_DEBUG__ = window.__BADGE_DEBUG__ || [];
+            window.__BADGE_DEBUG__.push({ type: 'luckRatings', season, data: luckLog });
+          }
+        } catch (e) { }
+        // Use console.info to make the log visible by default
+        if (typeof console !== 'undefined' && console.info) console.info(`computeBadges: season=${season} roster luckRatings:`, luckLog);
+      } catch (logErr) { /* ignore logging errors */ }
+
+      const luckiest = [...rosterEntries].sort((a, b) => (b.luckRating || 0) - (a.luckRating || 0))[0];
+      if (luckiest) {
+        try {
+          if (typeof window !== 'undefined') {
+            window.__BADGE_DEBUG__ = window.__BADGE_DEBUG__ || [];
+            window.__BADGE_DEBUG__.push({ type: 'lucky_duck_selected', season, data: { ownerId: luckiest.ownerId, rosterId: luckiest.rosterId, teamName: luckiest.teamName, luckRating: luckiest.luckRating } });
+          }
+        } catch (e) {}
+  if (typeof console !== 'undefined' && console.info) console.info(`computeBadges: season=${season} lucky_duck selected:`, { ownerId: luckiest.ownerId, rosterId: luckiest.rosterId, teamName: luckiest.teamName, luckRating: luckiest.luckRating });
+        // Use a distinct category so the UI can choose whether to hide/show this
+        // for the current season independently of champion/season-tier badges.
+  const badge = { id: `lucky_duck_${season}`, name: 'Lucky Duck', displayName: 'Lucky Duck', category: 'season-luck', year: season, teamId: luckiest.ownerId, accent: 'championAccent', metadata: { luckRating: luckiest.luckRating || 0 } };
+        (badgesByTeam[luckiest.ownerId] = badgesByTeam[luckiest.ownerId] || []).push(badge);
+        recentBadges.push(badge);
+      }
+    } catch (e) { /* ignore luck computation errors */ }
+
     // Peak Performance: team with highest single-game score in season. Need matchups to detect.
     const matchups = (historicalData && historicalData.matchupsBySeason && historicalData.matchupsBySeason[season]) || [];
-    let highestSingle = { score: -Infinity, rosterId: null };
-    let highestTotal = { total: -Infinity, t1: null, t2: null };
+    let highestSingle = { score: -Infinity, rosterId: null, week: null };
+    let highestTotal = { total: -Infinity, t1: null, t2: null, week: null };
     matchups.forEach(m => {
       const s1 = Number(m.team1_score || m.team1Score || 0);
       const s2 = Number(m.team2_score || m.team2Score || 0);
-      if (s1 > highestSingle.score) highestSingle = { score: s1, rosterId: String(m.team1_roster_id) };
-      if (s2 > highestSingle.score) highestSingle = { score: s2, rosterId: String(m.team2_roster_id) };
+      const wk = m.week || m.w || null;
+      if (s1 > highestSingle.score) highestSingle = { score: s1, rosterId: String(m.team1_roster_id), week: wk };
+      if (s2 > highestSingle.score) highestSingle = { score: s2, rosterId: String(m.team2_roster_id), week: wk };
       const total = (s1 || 0) + (s2 || 0);
-      if (total > highestTotal.total) highestTotal = { total, t1: String(m.team1_roster_id), t2: String(m.team2_roster_id) };
+      if (total > highestTotal.total) highestTotal = { total, t1: String(m.team1_roster_id), t2: String(m.team2_roster_id), week: wk };
     });
     if (highestSingle.rosterId) {
       // Map rosterId -> ownerId using processedSeasonalRecords
       const ownerEntry = Object.values(seasonMetrics).find(s => String(s.rosterId) === String(highestSingle.rosterId));
       if (ownerEntry) {
-        const badge = { id: `peak_performance_${season}`, name: 'Peak Performance', category: 'matchup', year: season, teamId: ownerEntry.ownerId, metadata: { score: highestSingle.score } };
+        const badge = { id: `peak_performance_${season}`, name: 'Peak Performance', category: 'matchup', year: season, teamId: ownerEntry.ownerId, metadata: { score: highestSingle.score, week: highestSingle.week } };
         (badgesByTeam[ownerEntry.ownerId] = badgesByTeam[ownerEntry.ownerId] || []).push(badge);
         recentBadges.push(badge);
       }
@@ -130,15 +168,144 @@ export function computeBadges({ historicalData, processedSeasonalRecords, draftP
       const o1 = Object.values(seasonMetrics).find(s => String(s.rosterId) === String(highestTotal.t1));
       const o2 = Object.values(seasonMetrics).find(s => String(s.rosterId) === String(highestTotal.t2));
       if (o1) {
-        const badge = { id: `shootout_${season}_${o1.ownerId}`, name: 'The Shootout', category: 'matchup', year: season, teamId: o1.ownerId, metadata: { total: highestTotal.total } };
+        const badge = { id: `shootout_${season}_${o1.ownerId}`, name: 'The Shootout', category: 'matchup', year: season, teamId: o1.ownerId, metadata: { total: highestTotal.total, week: highestTotal.week } };
         (badgesByTeam[o1.ownerId] = badgesByTeam[o1.ownerId] || []).push(badge);
         recentBadges.push(badge);
       }
       if (o2) {
-        const badge = { id: `shootout_${season}_${o2.ownerId}`, name: 'The Shootout', category: 'matchup', year: season, teamId: o2.ownerId, metadata: { total: highestTotal.total } };
+        const badge = { id: `shootout_${season}_${o2.ownerId}`, name: 'The Shootout', category: 'matchup', year: season, teamId: o2.ownerId, metadata: { total: highestTotal.total, week: highestTotal.week } };
         (badgesByTeam[o2.ownerId] = badgesByTeam[o2.ownerId] || []).push(badge);
         recentBadges.push(badge);
       }
+    }
+
+    // Additional matchup-based badges: Massacre, Double Up, Firing Squad, Micro/Small Victory
+    // We'll scan matchups again to find blowouts, doubles, and narrow wins.
+    try {
+    // Track highest blowout (largest margin) per season
+    let highestBlowout = { margin: -Infinity, rosterId: null, opponentRosterId: null, matchup: null, week: null };
+  // Track smallest non-zero margin (Thread The Needle)
+  let smallestMargin = { margin: Infinity, rosterId: null, opponentRosterId: null, matchup: null, week: null };
+    // Track highest points-share in a matchup (firing squad): max percentage of matchup points scored by a team
+    let highestPointsShare = { share: -Infinity, rosterId: null, total: 0, score: 0, week: null };
+  // Head-to-head wins: map of `${winnerRid}_${loserRid}` -> {count, weeks[]}
+  const headToHeadWins = {};
+
+      matchups.forEach(m => {
+        const s1 = Number(m.team1_score || m.team1Score || 0);
+        const s2 = Number(m.team2_score || m.team2Score || 0);
+        const r1 = String(m.team1_roster_id);
+        const r2 = String(m.team2_roster_id);
+        const wk = m.week || m.w || null;
+        const total = (s1 || 0) + (s2 || 0);
+
+        // blowout margin
+        const margin1 = s1 - s2;
+        const margin2 = s2 - s1;
+        if (margin1 > highestBlowout.margin) highestBlowout = { margin: margin1, rosterId: r1, opponentRosterId: r2, matchup: m, week: wk };
+        if (margin2 > highestBlowout.margin) highestBlowout = { margin: margin2, rosterId: r2, opponentRosterId: r1, matchup: m, week: wk };
+  // track smallest non-zero margin
+  if (margin1 > 0 && margin1 < smallestMargin.margin) smallestMargin = { margin: margin1, rosterId: r1, opponentRosterId: r2, matchup: m, week: wk };
+  if (margin2 > 0 && margin2 < smallestMargin.margin) smallestMargin = { margin: margin2, rosterId: r2, opponentRosterId: r1, matchup: m, week: wk };
+
+        // points share
+        if (total > 0) {
+          const share1 = s1 / total;
+          const share2 = s2 / total;
+          if (share1 > highestPointsShare.share) highestPointsShare = { share: share1, rosterId: r1, total, score: s1, week: wk };
+          if (share2 > highestPointsShare.share) highestPointsShare = { share: share2, rosterId: r2, total, score: s2, week: wk };
+        }
+
+        // Double Up: if one team's score is at least 2x the opponent's score
+        if ((s2 > 0 && s1 >= 2 * s2) || (s1 > 0 && s2 >= 2 * s1)) {
+          const winnerRid = s1 >= 2 * s2 ? r1 : r2;
+          const ownerEntry = Object.values(seasonMetrics).find(s => String(s.rosterId) === String(winnerRid));
+          if (ownerEntry) {
+            const badge = { id: `double_up_${season}_${ownerEntry.ownerId}_${wk || ''}`, name: 'Double Up', category: 'matchup', year: season, teamId: ownerEntry.ownerId, metadata: { opponent: s1 >= 2 * s2 ? r2 : r1, scores: { s1, s2, total }, week: wk } };
+            (badgesByTeam[ownerEntry.ownerId] = badgesByTeam[ownerEntry.ownerId] || []).push(badge);
+            recentBadges.push(badge);
+          }
+        }
+
+        // Micro / Small Victory: narrow wins (<0.5 and <1 respectively)
+        const diff = Math.abs(s1 - s2);
+        if (diff > 0 && diff < 0.5) {
+          const winnerRid = s1 > s2 ? r1 : r2;
+          const ownerEntry = Object.values(seasonMetrics).find(s => String(s.rosterId) === String(winnerRid));
+          if (ownerEntry) {
+            const badge = { id: `micro_victory_${season}_${ownerEntry.ownerId}_${wk || ''}`, name: 'Micro Victory', category: 'matchup', year: season, teamId: ownerEntry.ownerId, metadata: { margin: diff, week: wk } };
+            (badgesByTeam[ownerEntry.ownerId] = badgesByTeam[ownerEntry.ownerId] || []).push(badge);
+            recentBadges.push(badge);
+          }
+        } else if (diff > 0 && diff < 1) {
+          const winnerRid = s1 > s2 ? r1 : r2;
+          const ownerEntry = Object.values(seasonMetrics).find(s => String(s.rosterId) === String(winnerRid));
+          if (ownerEntry) {
+            const badge = { id: `small_victory_${season}_${ownerEntry.ownerId}_${wk || ''}`, name: 'Small Victory', category: 'matchup', year: season, teamId: ownerEntry.ownerId, metadata: { margin: diff, week: wk } };
+            (badgesByTeam[ownerEntry.ownerId] = badgesByTeam[ownerEntry.ownerId] || []).push(badge);
+            recentBadges.push(badge);
+          }
+        }
+
+        // Track head-to-head wins for Bully: winner defeats same opponent; store weeks
+        if (!isNaN(s1) && !isNaN(s2) && s1 !== s2) {
+          const winner = s1 > s2 ? r1 : r2;
+          const loser = s1 > s2 ? r2 : r1;
+          const key = `${winner}_${loser}`;
+          if (!headToHeadWins[key]) headToHeadWins[key] = { count: 0, weeks: [] };
+          headToHeadWins[key].count += 1;
+          headToHeadWins[key].weeks.push(wk);
+        }
+      });
+
+      // Massacre: the single highest-margin win in the season
+      if (highestBlowout.rosterId) {
+        const ownerEntry = Object.values(seasonMetrics).find(s => String(s.rosterId) === String(highestBlowout.rosterId));
+        if (ownerEntry) {
+          const badge = { id: `massacre_${season}_${ownerEntry.ownerId}`, name: 'Massacre', category: 'matchup', year: season, teamId: ownerEntry.ownerId, metadata: { margin: highestBlowout.margin, opponentRosterId: highestBlowout.opponentRosterId, week: highestBlowout.week } };
+          (badgesByTeam[ownerEntry.ownerId] = badgesByTeam[ownerEntry.ownerId] || []).push(badge);
+          recentBadges.push(badge);
+        }
+      }
+
+      // Firing Squad: highest points share in a matchup for the season
+      if (highestPointsShare.rosterId) {
+        const ownerEntry = Object.values(seasonMetrics).find(s => String(s.rosterId) === String(highestPointsShare.rosterId));
+        if (ownerEntry) {
+          const badge = { id: `firing_squad_${season}_${ownerEntry.ownerId}`, name: 'Firing Squad', category: 'matchup', year: season, teamId: ownerEntry.ownerId, metadata: { share: highestPointsShare.share, score: highestPointsShare.score, total: highestPointsShare.total, week: highestPointsShare.week } };
+          (badgesByTeam[ownerEntry.ownerId] = badgesByTeam[ownerEntry.ownerId] || []).push(badge);
+          recentBadges.push(badge);
+        }
+      }
+
+      // Thread The Needle: the smallest non-zero margin win in the season
+      if (smallestMargin.rosterId) {
+        const ownerEntry = Object.values(seasonMetrics).find(s => String(s.rosterId) === String(smallestMargin.rosterId));
+        if (ownerEntry) {
+          const badge = { id: `thread_the_needle_${season}_${ownerEntry.ownerId}`, name: 'Thread The Needle', category: 'matchup', year: season, teamId: ownerEntry.ownerId, metadata: { margin: smallestMargin.margin, opponentRosterId: smallestMargin.opponentRosterId, week: smallestMargin.week } };
+          (badgesByTeam[ownerEntry.ownerId] = badgesByTeam[ownerEntry.ownerId] || []).push(badge);
+          recentBadges.push(badge);
+        }
+      }
+
+      // Bully: any pairing where one roster beat the same opponent 3 or more times in a season
+      Object.keys(headToHeadWins).forEach(k => {
+        const rec = headToHeadWins[k] || { count: 0, weeks: [] };
+        const count = rec.count || 0;
+        if (count >= 3) {
+          const [winnerRid, loserRid] = k.split('_');
+          const ownerEntry = Object.values(seasonMetrics).find(s => String(s.rosterId) === String(winnerRid));
+          if (ownerEntry) {
+            // pick the week of the 3rd recorded win if available
+            const wk = (rec.weeks && rec.weeks.length >= 3) ? rec.weeks[2] : (rec.weeks && rec.weeks.length ? rec.weeks[rec.weeks.length - 1] : null);
+            const badge = { id: `bully_${season}_${ownerEntry.ownerId}_${loserRid}`, name: 'Bully', category: 'matchup', year: season, teamId: ownerEntry.ownerId, metadata: { opponentRosterId: loserRid, winsAgainst: count, week: wk } };
+            (badgesByTeam[ownerEntry.ownerId] = badgesByTeam[ownerEntry.ownerId] || []).push(badge);
+            recentBadges.push(badge);
+          }
+        }
+      });
+    } catch (e) {
+      try { const logger = require('./logger').default; logger.error('computeBadges: error computing matchup-derived badges', e); } catch (err) { }
     }
 
     // Heavyweight Champion: if champion and scheduleStrength >= 75th percentile
@@ -289,10 +456,19 @@ export function computeBadges({ historicalData, processedSeasonalRecords, draftP
         });
         const actionKing = Object.keys(txCounts).sort((a, b) => txCounts[b] - txCounts[a])[0];
         if (actionKing && txCounts[actionKing] > 0) {
-          const badge = { id: `action_king_${season}`, name: 'Action King', displayName: 'Action King', category: 'transaction', year: season, teamId: actionKing, metadata: { txCount: txCounts[actionKing] } };
+          const badge = { id: `action_king_${season}`, name: 'Action King', displayName: 'Action King', category: 'transaction', year: season, teamId: actionKing, accent: 'blue', metadata: { txCount: txCounts[actionKing] } };
           (badgesByTeam[actionKing] = badgesByTeam[actionKing] || []).push(badge);
           recentBadges.push(badge);
         }
+        // Season Transactions: executed >=50 transactions in a single season
+        Object.keys(txCounts).forEach(owner => {
+          const count = txCounts[owner] || 0;
+          if (count >= 50) {
+            const badge = { id: `season_transactions_${season}_${owner}`, name: 'Season Transactions', displayName: 'Season Transactions', category: 'transaction', year: season, teamId: owner, metadata: { txCount: count } };
+            (badgesByTeam[owner] = badgesByTeam[owner] || []).push(badge);
+            recentBadges.push(badge);
+          }
+        });
       }
     });
   } catch (e) {
@@ -324,7 +500,7 @@ export function computeBadges({ historicalData, processedSeasonalRecords, draftP
   // Post-process all badges to ensure they have a human-friendly displayName, an icon, accent, and timestamp
   const tokenMap = {
     'season_title': 'Season Title',
-    'points_title': 'Season Points Title',
+  'points_title': 'Points Title',
     'allplay_title': 'Season All-Play Title',
     'triple_crown': 'Triple Crown',
     'champion': 'Champion',
@@ -340,11 +516,27 @@ export function computeBadges({ historicalData, processedSeasonalRecords, draftP
     'action_king': 'Action King'
   };
 
+  // Add explicit friendly mappings for new badges
+  tokenMap['massacre'] = 'Massacre';
+  tokenMap['double_up'] = 'Double Up';
+  tokenMap['micro_victory'] = 'Micro Victory';
+  tokenMap['small_victory'] = 'Small Victory';
+  tokenMap['firing_squad'] = 'Firing Squad';
+  tokenMap['thread_the_needle'] = 'Thread The Needle';
+  tokenMap['bully'] = 'Bully';
+  tokenMap['season_transactions'] = 'Season Transactions';
+
   const iconMap = {
     'season': '🏆',
     'season-tier': '🏅',
     'champion': '🏆',
-    'matchup': '⚔️',
+    // Use a token string for matchup so the UI can map it to a shared SVG asset
+    'matchup': 'matchup-icon',
+    'massacre': '💥',
+    'double_up': '2️⃣',
+    'micro_victory': '🔹',
+    'small_victory': '🔸',
+    'firing_squad': '🔥',
     'draft': '🧠',
     'draft-blunder': '💀',
     'transaction': '🔁',
@@ -382,7 +574,16 @@ export function computeBadges({ historicalData, processedSeasonalRecords, draftP
     }
     if (!b.accent) {
       // choose accent by category
-      if (b.category === 'champion' || b.category === 'season') b.accent = 'yellow';
+      // Default champions use a custom championAccent color (requested: #EFBF04)
+      if (b.id && String(b.id).toLowerCase().indexOf('season_all_play') !== -1) b.accent = 'championAccent';
+      else if (b.id && String(b.id).toLowerCase().indexOf('allplay') !== -1) b.accent = 'championAccent';
+      else if (b.id && String(b.id).toLowerCase().indexOf('season_title') !== -1) b.accent = 'championAccent';
+      else if (b.category === 'champion') b.accent = 'championAccent';
+      else if (b.category === 'season') b.accent = 'yellow';
+  // Matchup badges should use the matchupAccent so the UI can apply the special border
+  else if (b.id && (String(b.id).indexOf('massacre') !== -1 || String(b.id).indexOf('shootout') !== -1 || String(b.id).indexOf('peak_performance') !== -1)) b.accent = 'matchupAccent';
+  else if (b.id && (String(b.id).indexOf('double_up') !== -1 || String(b.id).indexOf('micro_victory') !== -1 || String(b.id).indexOf('small_victory') !== -1 || String(b.id).indexOf('nano_victory') !== -1 || String(b.id).indexOf('firing_squad') !== -1 || String(b.id).indexOf('perfectly_peaked') !== -1 || String(b.id).indexOf('thread_the_needle') !== -1 || String(b.id).indexOf('thread-the-needle') !== -1 || String(b.id).indexOf('thread') !== -1 || String(b.id).indexOf('bully') !== -1)) b.accent = 'matchupAccent';
+      else if (b.id && String(b.id).indexOf('diamond_season') !== -1) b.accent = 'diamond';
       else if (b.category === 'matchup') b.accent = 'red';
       else if (b.category && b.category.indexOf('draft') !== -1) b.accent = 'purple';
       else if (b.category === 'season-tier') b.accent = 'blue';
