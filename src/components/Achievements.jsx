@@ -245,11 +245,13 @@ const BadgeCard = ({ badge, count = 1, years = [] }) => {
         if (debugOn) console.debug('Badge candidateSources for', badge.displayName || badge.id, candidateSources);
     } catch (err) { }
 
-    const circleStyle = { backgroundColor: a.bg, border: `4px solid ${a.border}`, color: a.icon, width: 80, height: 80 };
+    // Responsive badge size: larger on mobile, scale up on larger screens
+    const badgeSize = typeof window !== 'undefined' && window.innerWidth < 500 ? 96 : 80;
+    const circleStyle = { backgroundColor: a.bg, border: `4px solid ${a.border}`, color: a.icon, width: badgeSize, height: badgeSize };
     // imageContainerStyle used when rendering an image so the image fills the circle
     // We use an absolutely-positioned overlay for the border so it sits _on top_
     // of the image (prevents anti-aliased transparent gap between svg and border).
-    const imageContainerStyle = { backgroundColor: 'transparent', width: 80, height: 80, position: 'relative' };
+    const imageContainerStyle = { backgroundColor: 'transparent', width: badgeSize, height: badgeSize, position: 'relative' };
 
     // Track sources that have failed to load so we don't keep retrying them (esp. forcedSrc)
     const [failedSources, setFailedSources] = React.useState([]);
@@ -293,23 +295,28 @@ const BadgeCard = ({ badge, count = 1, years = [] }) => {
 
     return (
         <Tooltip text={badge.description || badge.metadata?.description || title}>
-            <div className="relative flex flex-col items-center text-center p-2">
+            <div
+                className="relative flex flex-col items-center text-center p-2"
+                style={{ minWidth: badgeSize + 16, maxWidth: 160 }}
+            >
                 {count > 1 && (
                     <div className="absolute -top-1 -right-1 px-2 py-0.5 bg-gray-800 text-white text-xs rounded">x{count}</div>
                 )}
                 {/* If an image asset is available, render it directly (no circle/bg). Otherwise render circular badge */}
                 {currentSrc ? (
-                    // When an image asset exists, render it full-bleed and place the
-                    // accent border as an overlay on top of the image to avoid
-                    // any visible transparent/antialiased ring.
                     <div style={imageContainerStyle} className={`rounded-full overflow-hidden`}>
-                        <img src={currentSrc} alt={title} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onLoad={(e) => { try { console.debug('Badge image loaded:', currentSrc); } catch (err) {} }} onError={(e) => { e.target.onerror = null; handleImgError(currentSrc); }} />
+                        <img
+                            src={currentSrc}
+                            alt={title}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                            onLoad={(e) => { try { console.debug('Badge image loaded:', currentSrc); } catch (err) {} }}
+                            onError={(e) => { e.target.onerror = null; handleImgError(currentSrc); }}
+                        />
                         <div style={{ position: 'absolute', inset: 0, borderRadius: '9999px', border: `4px solid ${a.border}`, boxSizing: 'border-box', pointerEvents: 'none' }} />
                     </div>
                 ) : (
                     <div style={circleStyle} className={`rounded-full flex items-center justify-center`}>
-                        {/* try candidateSources in order; if none load, we fall back to badge.icon */}
-                        <div style={{ color: a.icon, fontSize: 28 }}>{(badge.icon && !badge.icon.startsWith('/')) ? badge.icon : '🏆'}</div>
+                        <div style={{ color: a.icon, fontSize: badgeSize * 0.35 }}>{(badge.icon && !badge.icon.startsWith('/')) ? badge.icon : '🏆'}</div>
                     </div>
                 )}
                 {debugOn && (
@@ -320,7 +327,7 @@ const BadgeCard = ({ badge, count = 1, years = [] }) => {
                         <div className="text-xs text-gray-600">{candidateSources.join(', ')}</div>
                     </div>
                 )}
-                <div className="mt-2 text-sm font-semibold text-gray-800">{title}</div>
+                <div className="mt-2 text-base font-semibold text-gray-800" style={{ fontSize: badgeSize < 90 ? 14 : 16 }}>{title}</div>
                 {years && years.length > 0 && <div className="text-xs text-gray-400 mt-1">{years.join(', ')}</div>}
             </div>
         </Tooltip>
@@ -421,7 +428,7 @@ const Achievements = () => {
                 <>
                     {/* currentSeasonHasChampion is computed at component scope */}
                     <SectionHeader title="Overview: Team Achievements Heatmap" />
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
+                    <div className="grid grid-cols-2 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4 mb-6">
                         {(() => {
                             // Build counts from careerDPRData (preferred) or fallback to processedSeasonalRecords
                             // Build counts from badgesByTeam and careerDPRData as fallback for names
@@ -484,7 +491,7 @@ const Achievements = () => {
 
                     {/* Badge Catalog: list all known badges with description and icon for review */}
                     <SectionHeader title="Badge Catalog (icons & descriptions)" />
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
+                    <div className="grid grid-cols-2 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4 mb-6">
                         {(() => {
                             const known = [
                                 'Season Title','Points Title','Season All-Play Title','Triple Crown','Champion','Runner Up','3rd Place',
@@ -551,7 +558,7 @@ const Achievements = () => {
                         return (
                             <>
                                 <SectionHeader title={title} />
-                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
+                                <div className="grid grid-cols-2 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4 mb-6">
                                     {Object.keys(grouped).map(k => {
                                         const g = grouped[k];
                                         // Attach a description for tooltip if available
@@ -625,7 +632,7 @@ const Achievements = () => {
                         renderedSections.push(
                             <React.Fragment key={sec.title}>
                                 <SectionHeader title={sec.title} />
-                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
+                                <div className="grid grid-cols-2 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4 mb-6">
                                     {Object.keys(grouped).map(k => {
                                         const g = grouped[k];
                                         if (!g.badge.description) g.badge.description = BADGE_DESCRIPTIONS[g.badge.displayName] || g.badge.metadata?.description || g.badge.displayName;
@@ -661,7 +668,7 @@ const Achievements = () => {
                         renderedSections.push(
                             <React.Fragment key="other">
                                 <SectionHeader title="Other Badges" />
-                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
+                                <div className="grid grid-cols-2 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4 mb-6">
                                     {Object.keys(grouped).map(k => {
                                         const g = grouped[k];
                                         if (!g.badge.description) g.badge.description = BADGE_DESCRIPTIONS[g.badge.displayName] || g.badge.metadata?.description || g.badge.displayName;
