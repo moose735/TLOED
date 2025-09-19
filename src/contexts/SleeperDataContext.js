@@ -576,7 +576,8 @@ export const SleeperDataProvider = ({ children }) => {
                             processedSeasonalRecords: seasonalMetrics,
                             draftPicksBySeason: processedDraftPicksBySeason,
                             transactions: allTransactions,
-                            usersData: users
+                            usersData: users,
+                            getTeamName
                         });
                         setBadgesByTeam(bbt || {});
                         setRecentBadges(rb || []);

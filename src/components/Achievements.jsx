@@ -19,6 +19,8 @@ const ACCENT_MAP = {
 
 // Accent used for matchup badges (requested border color #B069DB)
 ACCENT_MAP.matchupAccent = { bg: '#f7f3ff', border: '#B069DB', icon: '#6b21a8' };
+// Accent used for league-level badges (outer ring requested: #50C878)
+ACCENT_MAP.leagueAccent = { bg: '#f2fff7', border: '#50C878', icon: '#10784f' };
 
 // Forced mapping for specific badges where we know the exact asset path.
 // This is used by BadgeCard and the Overview catalog to prefer known SVG assets.
@@ -87,6 +89,30 @@ FORCED_BADGE_MAP['action-king.svg'] = '/badges/achievement/season-action-king.sv
 FORCED_BADGE_MAP['action_king'] = '/badges/achievement/season-action-king.svg';
 FORCED_BADGE_MAP['season-action-king'] = '/badges/achievement/season-action-king.svg';
 FORCED_BADGE_MAP['season-action-king.svg'] = '/badges/achievement/season-action-king.svg';
+
+// League badge assets
+FORCED_BADGE_MAP['veteran-presence'] = '/badges/achievement/veteran-presence.svg';
+FORCED_BADGE_MAP['veteran-presence.svg'] = '/badges/achievement/veteran-presence.svg';
+FORCED_BADGE_MAP['veteran_presence'] = '/badges/achievement/veteran-presence.svg';
+
+FORCED_BADGE_MAP['old-timer'] = '/badges/achievement/old-timer.svg';
+FORCED_BADGE_MAP['old-timer.svg'] = '/badges/achievement/old-timer.svg';
+FORCED_BADGE_MAP['old_timer'] = '/badges/achievement/old-timer.svg';
+
+// Career win flag (used for Total Wins badges every 25 wins)
+FORCED_BADGE_MAP['career-win-flag'] = '/badges/achievement/career-win-flag.svg';
+FORCED_BADGE_MAP['career-win-flag.svg'] = '/badges/achievement/career-win-flag.svg';
+FORCED_BADGE_MAP['career_win_flag'] = '/badges/achievement/career-win-flag.svg';
+FORCED_BADGE_MAP['total-wins'] = '/badges/achievement/career-win-flag.svg';
+
+// Best and Worst pick assets
+FORCED_BADGE_MAP['best-draft-pick'] = '/badges/achievement/best-pick-smiley.svg';
+FORCED_BADGE_MAP['best_draft_pick'] = '/badges/achievement/best-pick-smiley.svg';
+FORCED_BADGE_MAP['best-draft-pick.svg'] = '/badges/achievement/best-pick-smiley.svg';
+
+FORCED_BADGE_MAP['worst-draft-pick'] = '/badges/blunders/worst-pick-yuck.svg';
+FORCED_BADGE_MAP['worst_draft_pick'] = '/badges/blunders/worst-pick-yuck.svg';
+FORCED_BADGE_MAP['worst-draft-pick.svg'] = '/badges/blunders/worst-pick-yuck.svg';
 
 // Human-readable descriptions for tooltip hover. Keep at module scope so overview
 // rendering can reference these without ordering/hoisting problems.
@@ -174,6 +200,12 @@ const BADGE_DESCRIPTIONS = {
     'The Madman': 'Made an unorthodox series of moves that backfired spectacularly.'
 };
 
+// Add descriptions for new league badges
+BADGE_DESCRIPTIONS['Veteran Presence'] = 'Recognition for reaching five seasons of tenure with the league.';
+BADGE_DESCRIPTIONS['Old Timer'] = 'Recognition for reaching ten seasons of tenure with the league.';
+BADGE_DESCRIPTIONS['Total Wins - 25'] = 'Career milestone for accumulating 25 total wins.';
+BADGE_DESCRIPTIONS['Total Wins - 50'] = 'Career milestone for accumulating 50 total wins.';
+
 const Badge = ({ title, subtitle, year, accent = 'blue', icon = null }) => {
     const a = ACCENT_MAP[accent] || ACCENT_MAP.blue;
     const circleStyle = { backgroundColor: a.bg, border: `4px solid ${a.border}`, color: a.icon };
@@ -233,7 +265,14 @@ const BadgeCard = ({ badge, count = 1, years = [] }) => {
     candidateSources.push(...idVariants.flatMap(v => [`/badges/${v}.svg`, `/badges/${v}.png`, `/badges/achievement/${v}.svg`, `/badges/achievement/${v}.png`]));
 
     const forcedSlug = makeSlug(badge.displayName || title);
-    const forcedSrc = FORCED_BADGE_MAP[forcedSlug] || null;
+    let forcedSrc = FORCED_BADGE_MAP[forcedSlug] || null;
+    // Prefer the career win flag asset for any Total Wins milestone badges
+    try {
+        const dn = String(badge.displayName || badge.name || badge.id || '').toLowerCase();
+        if (!forcedSrc && (dn.indexOf('total wins') !== -1 || /^total_wins_/.test(String(badge.id || '')))) {
+            forcedSrc = FORCED_BADGE_MAP['career-win-flag'] || FORCED_BADGE_MAP['total-wins'] || null;
+        }
+    } catch (err) { /* ignore */ }
     // busted version to avoid stale/invalid cached responses; compute once per badge
     const forcedSrcBusted = React.useMemo(() => (forcedSrc ? `${forcedSrc}${forcedSrc.indexOf('?') === -1 ? '?' : '&'}cb=${Date.now()}` : null), [forcedSrc, badge.id, badge.displayName]);
 
@@ -346,6 +385,45 @@ const Achievements = () => {
     const { historicalData, usersData, getTeamName, getTeamDetails, processedSeasonalRecords, careerDPRData, badgesByTeam, recentBadges, currentSeason } = ctx || {};
     const [selectedTeam, setSelectedTeam] = useState('overview');
     const [showCatalog, setShowCatalog] = useState(false);
+    const [teamTab, setTeamTab] = useState('achievements'); // 'achievements' | 'blunders'
+    // Sorting state for the member totals table (hooks must be at top level)
+    const [sortBy, setSortBy] = useState({ key: 'totalBadges', dir: 'desc' });
+    const toggleSort = (key) => {
+        setSortBy(s => {
+            if (s.key === key) return { key, dir: s.dir === 'asc' ? 'desc' : 'asc' };
+            // default direction: blunder columns sort ascending by default (less is better)
+            const defaultDir = String(key).startsWith('blunders') ? 'asc' : 'desc';
+            return { key, dir: defaultDir };
+        });
+    };
+
+    // simple hex lerp helper (linear interpolation)
+    const lerpHex = (a, b, t) => {
+        const pa = parseInt(a.replace('#',''),16);
+        const pb = parseInt(b.replace('#',''),16);
+        const ra = (pa >> 16) & 0xff; const ga = (pa >> 8) & 0xff; const ba = pa & 0xff;
+        const rb = (pb >> 16) & 0xff; const gb = (pb >> 8) & 0xff; const bb = pb & 0xff;
+        const rc = Math.round(ra + (rb - ra) * t);
+        const gc = Math.round(ga + (gb - ga) * t);
+        const bc = Math.round(ba + (bb - ba) * t);
+        const hex = (rc << 16) + (gc << 8) + bc;
+        return `#${hex.toString(16).padStart(6,'0')}`;
+    };
+
+    const GREEN_MIN = '#dff6e9'; const GREEN_MAX = '#059669';
+    const RED_MIN = '#ffecec'; const RED_MAX = '#b91c1c';
+    const BLUE_MIN = '#eaf2ff'; const BLUE_MAX = '#2563eb';
+
+    const sortedRowsForRender = (rows) => {
+        const copy = Array.from(rows);
+        copy.sort((x,y) => {
+            const a = x[sortBy.key] || 0;
+            const b = y[sortBy.key] || 0;
+            if (a === b) return 0;
+            return (sortBy.dir === 'asc') ? (a - b) : (b - a);
+        });
+        return copy;
+    };
 
     // Determine whether the current season has recorded a champion yet.
     // Compute once per relevant inputs to avoid calling hooks conditionally.
@@ -364,19 +442,78 @@ const Achievements = () => {
     const teamOptions = useMemo(() => {
         // Only include Overview + the current league users to keep the dropdown to the active teams
         const opts = [{ key: 'overview', label: 'Overview' }];
+        const seen = new Set();
+        // prefer usersData ordering for active teams
         if (usersData && Array.isArray(usersData)) {
             usersData.forEach(u => {
+                const key = String(u.user_id);
+                seen.add(key);
                 const label = u.metadata?.team_name || u.display_name || `User ${u.user_id}`;
-                // Use user_id as the key to keep it simple and unique
-                opts.push({ key: u.user_id, label });
+                opts.push({ key, label });
             });
         }
+
+        // include any owners present in badgesByTeam that aren't in usersData
+        try {
+            const badgeOwners = Object.keys(badgesByTeam || {});
+            badgeOwners.forEach(ownerId => {
+                const key = String(ownerId);
+                if (seen.has(key)) return;
+                // try to resolve a friendly name from badge metadata or team details
+                let label = (getTeamDetails && getTeamDetails(key) && getTeamDetails(key).name) || null;
+                if (!label && usersData && Array.isArray(usersData)) {
+                    const u = usersData.find(x => String(x.user_id) === key);
+                    if (u) label = u.metadata?.team_name || u.display_name;
+                }
+                if (!label) {
+                    const badges = (badgesByTeam && badgesByTeam[key]) || [];
+                    for (let i = 0; i < badges.length && !label; i++) {
+                        const b = badges[i];
+                        if (b && b.metadata) {
+                            label = b.metadata.picked_by_team_name || b.metadata.picked_by_team || b.metadata.teamName || null;
+                        }
+                    }
+                }
+                if (!label) label = `Team ${key}`;
+                seen.add(key);
+                opts.push({ key, label });
+            });
+        } catch (e) { /* ignore */ }
 
         return opts;
     }, [historicalData, usersData]);
 
     const handleTeamChange = (e) => {
         setSelectedTeam(e.target.value);
+    };
+
+    // Resolve an ownerId to a friendly team name using getTeamDetails, usersData, badge metadata, or fallback
+    const resolveOwnerName = (ownerId) => {
+        const id = String(ownerId || '');
+        try {
+            if (getTeamDetails) {
+                const d = getTeamDetails(id);
+                if (d && d.name) return d.name;
+            }
+        } catch (e) {}
+        try {
+            if (usersData && Array.isArray(usersData)) {
+                const u = usersData.find(x => String(x.user_id) === id);
+                if (u) return u.metadata?.team_name || u.display_name || `User ${id}`;
+            }
+        } catch (e) {}
+        try {
+            const badges = (badgesByTeam && badgesByTeam[id]) || [];
+            for (let i = 0; i < badges.length; i++) {
+                const b = badges[i];
+                if (b && b.metadata) {
+                    if (b.metadata.picked_by_team_name) return b.metadata.picked_by_team_name;
+                    if (b.metadata.picked_by_team) return b.metadata.picked_by_team;
+                    if (b.metadata.teamName) return b.metadata.teamName;
+                }
+            }
+        } catch (e) {}
+        return `Team ${id}`;
     };
 
     return (
@@ -410,7 +547,7 @@ const Achievements = () => {
                         <img src={getTeamDetails ? getTeamDetails(selectedTeam)?.avatar : ''} alt="avatar" className="w-full h-full object-cover" />
                     </div>
                     <div>
-                        <div className="text-lg font-semibold text-gray-800">{getTeamDetails ? getTeamDetails(selectedTeam)?.name : 'Team'}</div>
+                        <div className="text-lg font-semibold text-gray-800">{resolveOwnerName(selectedTeam)}</div>
                         {(() => {
                             const badges = (badgesByTeam && badgesByTeam[selectedTeam]) || [];
                             const achievements = badges.filter(b => b.category !== 'blunder').length;
@@ -427,49 +564,106 @@ const Achievements = () => {
             {selectedTeam === 'overview' && (
                 <>
                     {/* currentSeasonHasChampion is computed at component scope */}
-                    <SectionHeader title="Overview: Team Achievements Heatmap" />
-                    <div className="grid grid-cols-2 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4 mb-6">
+                    <SectionHeader title="MEMBER BADGE TOTALS" />
+                    <div className="mb-6 overflow-x-auto">
                         {(() => {
-                            // Build counts from careerDPRData (preferred) or fallback to processedSeasonalRecords
-                            // Build counts from badgesByTeam and careerDPRData as fallback for names
                             const teamIds = Object.keys(badgesByTeam || {});
-                            if (teamIds.length === 0) {
-                                return <div className="text-sm text-gray-500">No team badge data available for overview.</div>;
-                            }
+                            if (teamIds.length === 0) return <div className="text-sm text-gray-500">No team badge data available for overview.</div>;
 
-                            const counts = teamIds.map(id => {
+                            // Compute unique (distinct displayName) and total counts per category
+                            const rows = teamIds.map(id => {
                                 const badges = badgesByTeam[id] || [];
-                                const achievements = badges.filter(b => b.category !== 'blunder').length;
-                                const blunders = badges.filter(b => b.category === 'blunder').length;
-                                const name = getTeamDetails ? getTeamDetails(id)?.name : id;
-                                return { ownerId: id, name, achievements, blunders };
+                                const achievementsBadges = badges.filter(b => b.category !== 'blunder');
+                                const blunderBadges = badges.filter(b => b.category === 'blunder');
+
+                                const uniqueAchievements = new Set(achievementsBadges.map(b => (b.displayName || b.name || b.id)));
+                                const uniqueBlunders = new Set(blunderBadges.map(b => (b.displayName || b.name || b.id)));
+
+                                const name = resolveOwnerName(id);
+                                return {
+                                    ownerId: id,
+                                    name,
+                                    achievementsUnique: uniqueAchievements.size,
+                                    achievementsTotal: achievementsBadges.length,
+                                    blundersUnique: uniqueBlunders.size,
+                                    blundersTotal: blunderBadges.length,
+                                    totalUnique: uniqueAchievements.size + uniqueBlunders.size,
+                                    totalBadges: badges.length
+                                };
                             });
 
-                            const maxA = counts.reduce((m, c) => Math.max(m, c.achievements), 0) || 1;
-                            const maxB = counts.reduce((m, c) => Math.max(m, c.blunders), 0) || 1;
+                            // Find maxima for proportional bars
+                            const maxAchievementsUnique = Math.max(...rows.map(r => r.achievementsUnique), 1);
+                            const maxAchievementsTotal = Math.max(...rows.map(r => r.achievementsTotal), 1);
+                            const maxBlundersUnique = Math.max(...rows.map(r => r.blundersUnique), 1);
+                            const maxBlundersTotal = Math.max(...rows.map(r => r.blundersTotal), 1);
+                            const maxTotalBadges = Math.max(...rows.map(r => r.totalBadges), 1);
 
-                            return counts.map(team => {
-                                const aRatio = team.achievements / maxA;
-                                const bRatio = team.blunders / maxB;
-                                const aOpacity = Math.min(0.95, 0.15 + aRatio * 0.85);
-                                const bOpacity = Math.min(0.95, 0.15 + bRatio * 0.85);
-                                return (
-                                    <div key={team.ownerId} className="p-3 rounded-md border border-gray-100 bg-white">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <div className="text-sm font-medium truncate">{team.name}</div>
-                                            <div className="text-xs text-gray-500">A: {team.achievements} • B: {team.blunders}</div>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <div className="w-full h-3 rounded-md bg-gray-200 overflow-hidden">
-                                                <div style={{ width: `${Math.round(aRatio * 100)}%`, backgroundColor: `rgba(16,185,129, ${aOpacity})`, height: '100%' }} />
-                                            </div>
-                                            <div className="w-full h-3 rounded-md bg-gray-200 overflow-hidden">
-                                                <div style={{ width: `${Math.round(bRatio * 100)}%`, backgroundColor: `rgba(239,68,68, ${bOpacity})`, height: '100%' }} />
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            });
+                            // Table header + rows
+                            return (
+                                <table className="w-full table-auto border-collapse bg-white rounded-md overflow-hidden">
+                                    <thead>
+                                        <tr className="bg-gray-800 text-white text-sm">
+                                            <th className="text-left px-4 py-3">MEMBER</th>
+                                            <th className="text-center px-4 py-3 cursor-pointer" onClick={() => toggleSort('achievementsUnique')}>
+                                                ACHIEVEMENTS {sortBy.key === 'achievementsUnique' ? (sortBy.dir === 'asc' ? '▲' : '▼') : ''}
+                                            </th>
+                                            <th className="text-center px-4 py-3 cursor-pointer" onClick={() => toggleSort('achievementsTotal')}># {sortBy.key === 'achievementsTotal' ? (sortBy.dir === 'asc' ? '▲' : '▼') : ''}</th>
+                                            <th className="text-center px-4 py-3 cursor-pointer" onClick={() => toggleSort('blundersUnique')}>BLUNDERS {sortBy.key === 'blundersUnique' ? (sortBy.dir === 'asc' ? '▲' : '▼') : ''}</th>
+                                            <th className="text-center px-4 py-3 cursor-pointer" onClick={() => toggleSort('blundersTotal')}># {sortBy.key === 'blundersTotal' ? (sortBy.dir === 'asc' ? '▲' : '▼') : ''}</th>
+                                            <th className="text-center px-4 py-3 cursor-pointer" onClick={() => toggleSort('totalUnique')}>TOTAL BADGES {sortBy.key === 'totalUnique' ? (sortBy.dir === 'asc' ? '▲' : '▼') : ''}</th>
+                                            <th className="text-center px-4 py-3 cursor-pointer" onClick={() => toggleSort('totalBadges')}># {sortBy.key === 'totalBadges' ? (sortBy.dir === 'asc' ? '▲' : '▼') : ''}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {sortedRowsForRender(rows).map(r => {
+                                            const achUniquePct = (r.achievementsUnique / maxAchievementsUnique) || 0;
+                                            const blUniquePct = (r.blundersUnique / maxBlundersUnique) || 0;
+                                            const totalUniquePct = (r.totalUnique / Math.max(...rows.map(x=>x.totalUnique),1)) || 0;
+
+                                            const achColor = lerpHex(GREEN_MIN, GREEN_MAX, achUniquePct);
+                                            const blColor = lerpHex(RED_MIN, RED_MAX, blUniquePct);
+                                            const totalColor = lerpHex(BLUE_MIN, BLUE_MAX, totalUniquePct);
+
+                                            const achBarPct = Math.round(achUniquePct * 100);
+                                            const blBarPct = Math.round(blUniquePct * 100);
+                                            const totalBarPct = Math.round(totalUniquePct * 100);
+
+                                            return (
+                                                <tr key={r.ownerId} className="border-t">
+                                                    <td className="px-4 py-3 flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-full bg-gray-200 overflow-hidden">
+                                                            <img src={getTeamDetails ? getTeamDetails(r.ownerId)?.avatar : ''} alt="avatar" className="w-full h-full object-cover" />
+                                                        </div>
+                                                        <div className="text-sm font-medium truncate">{r.name}</div>
+                                                    </td>
+                                                    <td className="px-2 py-3 align-middle">
+                                                        <div className="w-full h-8 bg-green-50 rounded-md overflow-hidden flex items-center">
+                                                            <div style={{ width: `${achBarPct}%`, backgroundColor: achColor, height: '100%' }} />
+                                                            <div className="absolute ml-2 text-sm font-semibold text-gray-800">{r.achievementsUnique}</div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-center text-sm font-semibold">{r.achievementsTotal}</td>
+                                                    <td className="px-2 py-3 align-middle">
+                                                        <div className="w-full h-8 bg-red-50 rounded-md overflow-hidden flex items-center">
+                                                            <div style={{ width: `${blBarPct}%`, backgroundColor: blColor, height: '100%' }} />
+                                                            <div className="absolute ml-2 text-sm font-semibold text-gray-800">{r.blundersUnique}</div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-center text-sm font-semibold">{r.blundersTotal}</td>
+                                                    <td className="px-2 py-3 align-middle">
+                                                        <div className="w-full h-8 bg-blue-50 rounded-md overflow-hidden flex items-center">
+                                                            <div style={{ width: `${totalBarPct}%`, backgroundColor: totalColor, height: '100%' }} />
+                                                            <div className="absolute ml-2 text-sm font-semibold text-gray-800">{r.totalUnique}</div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-center text-sm font-semibold">{r.totalBadges}</td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            );
                         })()}
                     </div>
 
@@ -497,11 +691,14 @@ const Achievements = () => {
                                 'Season Title','Points Title','Season All-Play Title','Triple Crown','Champion','Runner Up','3rd Place',
                                 'Bronze Season','Silver Season','Gold Season','Diamond Season',
                                 'Peak Performance','The Shootout','Massacre','Firing Squad','A Small Victory','A Micro Victory','A Nano Victory','Double Up',
-                                'Draft King','Worst Draft Pick','Action King','Season Transactions','Lucky Duck'
+                                'Draft King','Worst Draft Pick','Action King','Season Transactions','Lucky Duck',
+                                'Veteran Presence','Old Timer','Total Wins - 25','Total Wins - 50'
                             ];
                             return known.map(name => {
                                 const slug = String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-                                const forced = FORCED_BADGE_MAP[slug] || FORCED_BADGE_MAP[slug + '.svg'] || null;
+                                // Prefer the career-win-flag asset for Total Wins badges
+                                const isTotalWins = /^total-wins(-|\s)?/.test(slug) || String(name).toLowerCase().indexOf('total wins') !== -1;
+                                const forced = (isTotalWins ? FORCED_BADGE_MAP['career-win-flag'] : null) || FORCED_BADGE_MAP[slug] || FORCED_BADGE_MAP[slug + '.svg'] || null;
                                 // prefer forced asset if available and append cache-bust to ensure updates show
                                 const cb = Date.now();
                                 const candidate = forced ? `${forced}${forced.indexOf('?') === -1 ? '?' : '&'}cb=${cb}` : `/badges/achievement/${slug}.svg?cb=${cb}`;
@@ -527,8 +724,14 @@ const Achievements = () => {
             {(selectedTeam !== 'overview' || showCatalog) && (
                 (() => {
                     if (!selectedTeam || selectedTeam === 'overview') return null;
-                    const teamBadges = (badgesByTeam && badgesByTeam[selectedTeam]) || [];
-                    if (!teamBadges || teamBadges.length === 0) return <div className="text-sm text-gray-500">No badges found for this team.</div>;
+                    const allTeamBadges = (badgesByTeam && badgesByTeam[selectedTeam]) || [];
+
+                    // Filter badges by selected tab (achievements vs blunders)
+                    const teamBadges = allTeamBadges.filter(b => {
+                        if (teamTab === 'achievements') return b.category !== 'blunder';
+                        if (teamTab === 'blunders') return b.category === 'blunder';
+                        return true;
+                    });
 
                     // Helper to render a section if there are badges matching the given display names
                     const normalize = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -582,9 +785,24 @@ const Achievements = () => {
                     const matchupBadges = makeSet(['Peak Performance','The Shootout','Massacre','Firing Squad','A Small Victory','A Micro Victory','A Nano Victory','Double Up','Perfectly Peaked','Bully','Thread The Needle']);
                     const draftTxBadges = makeSet(['The Mastermind','Top Draft Pick','Top QB Draft','Top RB Draft','Top WR Draft','Top TE Draft','Top K Draft','Top DEF Draft','Draft King','Worst Draft Pick','Worst QB Draft','Worst RB Draft','Worst K Draft','Worst DL Draft','Worst DB Draft','Worst LB Draft','Worst WR Draft','Worst TE Draft']);
                     const rosterBadges = makeSet(['Top QB Roster','Top RB Roster','Top WR Roster','Top TE Roster','Top K Roster','Top DEF Roster']);
-                    const leagueBadges = makeSet(['Veteran Presence','Total Wins - 25','Total Wins - 50','All-Play Wins - 250','All-Play Wins - 500','Total Points - 10000','All-Play Wins - 1000','Total Wins - 100']);
+                    const leagueBadges = makeSet(['Veteran Presence','Old Timer','Total Wins - 25','Total Wins - 50','Total Wins - 75','Total Wins - 100','All-Play Wins - 250','All-Play Wins - 500','Total Points - 10000','All-Play Wins - 1000','Total Wins - 100']);
                     const blunderBadges = makeSet(['The Worst','Trash Trifecta','Flawless Garbage','Champion Drought - 5','Champion Drought - 10','Champion Drought - 15','The Cupcake','Season Worst Scores -5','Iron Season','Wood Season','Clay Season','Season Bottom-Half Scoring - 75%','Bye Week','Heartbreaker','The Snoozer','Doubled Up','True Lowlight','Spoiled Goods','Bullied','The Madman','Worst Draft Pick','Worst QB Draft','Worst RB Draft','Worst K Draft','Worst DL Draft','Worst DB Draft','Worst LB Draft','Worst WR Draft','Worst TE Draft','Worst QB Roster','Worst RB Roster','Worst WR Roster','Worst TE Roster','Worst K Roster','Worst DEF Roster','Worst DL Roster','Worst LB Roster','Worst DB Roster']);
                     const leagueBlunders = makeSet(['Total Losses - 25','Total Losses - 50','Total Losses - 100','All-Play Losses - 250','All-Play Losses - 500','All-Play Losses - 1000','Total Opponent Points - 10000']);
+
+                    // Tab controls
+                    const TabControls = () => (
+                        <div className="mb-4 flex items-center gap-2">
+                            <button onClick={() => setTeamTab('achievements')} className={`${teamTab === 'achievements' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'} px-3 py-2 rounded-md text-sm`}>Achievements</button>
+                            <button onClick={() => setTeamTab('blunders')} className={`${teamTab === 'blunders' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'} px-3 py-2 rounded-md text-sm`}>Blunders</button>
+                        </div>
+                    );
+                    // Render tab controls (used above when there are no badges and below when rendering sections)
+                    const tabControlsElement = <div className="mb-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2">
+                            <button onClick={() => setTeamTab('achievements')} className={`${teamTab === 'achievements' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'} w-full sm:w-auto px-3 py-2 rounded-md text-sm mb-2 sm:mb-0`}>Achievements</button>
+                            <button onClick={() => setTeamTab('blunders')} className={`${teamTab === 'blunders' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'} w-full sm:w-auto px-3 py-2 rounded-md text-sm`}>Blunders</button>
+                        </div>
+                    </div>;
 
                     // Render sections with precedence: once a badge is placed into a section
                     // it will not appear in later sections. This avoids duplicating the same
@@ -602,6 +820,16 @@ const Achievements = () => {
                     ];
 
                     let remaining = Array.from(teamBadges);
+
+                    // If there are no badges for the selected tab, render tabs and a message
+                    if ((!allTeamBadges || allTeamBadges.length === 0) || (!teamBadges || teamBadges.length === 0)) {
+                        return <>
+                            {tabControlsElement}
+                            <div className="text-sm text-gray-500">No badges found for this team in the selected tab.</div>
+                        </>;
+                    }
+
+                    
 
                     const renderedSections = [];
 
@@ -679,7 +907,7 @@ const Achievements = () => {
                         );
                     }
 
-                    return <>{renderedSections}</>;
+                    return <>{tabControlsElement}{renderedSections}</>;
                 })()
             )}
         </div>

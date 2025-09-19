@@ -21,9 +21,12 @@ function mean(arr) {
   return arr.reduce((s, v) => s + v, 0) / arr.length;
 }
 
-export function computeBadges({ historicalData, processedSeasonalRecords, draftPicksBySeason = {}, transactions = [], usersData = [] }) {
+export function computeBadges({ historicalData, processedSeasonalRecords, draftPicksBySeason = {}, transactions = [], usersData = [], getTeamName = () => '' }) {
   const badgesByTeam = {}; // ownerId -> [badges]
   const recentBadges = [];
+
+  // Unconditional log to help developers see that computeBadges ran in constrained preview environments
+  try { console.log('computeBadges called'); } catch (e) { /* ignore logging errors */ }
 
   if (!processedSeasonalRecords) return { badgesByTeam, recentBadges };
 
@@ -110,33 +113,11 @@ export function computeBadges({ historicalData, processedSeasonalRecords, draftP
 
     // Lucky Duck: roster with the highest luckRating in the season
     try {
-      // DEBUG: Log luckRating values for this season's rosters to help diagnose why Lucky Duck
-      // may not be being awarded. This log is temporary and can be removed once verified.
-      try {
-  const luckLog = [...rosterEntries].map(r => ({ ownerId: r.ownerId, rosterId: r.rosterId, teamName: r.teamName, luckRating: r.luckRating }));
-        // Push to a global array so the logs are inspectable from DevTools even if console filtering hides them
-        try {
-          if (typeof window !== 'undefined') {
-            window.__BADGE_DEBUG__ = window.__BADGE_DEBUG__ || [];
-            window.__BADGE_DEBUG__.push({ type: 'luckRatings', season, data: luckLog });
-          }
-        } catch (e) { }
-        // Use console.info to make the log visible by default
-        if (typeof console !== 'undefined' && console.info) console.info(`computeBadges: season=${season} roster luckRatings:`, luckLog);
-      } catch (logErr) { /* ignore logging errors */ }
-
       const luckiest = [...rosterEntries].sort((a, b) => (b.luckRating || 0) - (a.luckRating || 0))[0];
       if (luckiest) {
-        try {
-          if (typeof window !== 'undefined') {
-            window.__BADGE_DEBUG__ = window.__BADGE_DEBUG__ || [];
-            window.__BADGE_DEBUG__.push({ type: 'lucky_duck_selected', season, data: { ownerId: luckiest.ownerId, rosterId: luckiest.rosterId, teamName: luckiest.teamName, luckRating: luckiest.luckRating } });
-          }
-        } catch (e) {}
-  if (typeof console !== 'undefined' && console.info) console.info(`computeBadges: season=${season} lucky_duck selected:`, { ownerId: luckiest.ownerId, rosterId: luckiest.rosterId, teamName: luckiest.teamName, luckRating: luckiest.luckRating });
         // Use a distinct category so the UI can choose whether to hide/show this
         // for the current season independently of champion/season-tier badges.
-  const badge = { id: `lucky_duck_${season}`, name: 'Lucky Duck', displayName: 'Lucky Duck', category: 'season-luck', year: season, teamId: luckiest.ownerId, accent: 'championAccent', metadata: { luckRating: luckiest.luckRating || 0 } };
+        const badge = { id: `lucky_duck_${season}`, name: 'Lucky Duck', displayName: 'Lucky Duck', category: 'season-luck', year: season, teamId: luckiest.ownerId, accent: 'championAccent', metadata: { luckRating: luckiest.luckRating || 0 } };
         (badgesByTeam[luckiest.ownerId] = badgesByTeam[luckiest.ownerId] || []).push(badge);
         recentBadges.push(badge);
       }
@@ -403,16 +384,26 @@ export function computeBadges({ historicalData, processedSeasonalRecords, draftP
         const ownerDraftValue = {};
         const pickDeltas = [];
 
-        seasonPicks.forEach(pick => {
-          const pickNo = Number(pick.pick_no || pick.pick_number || pick.overall_pick || 0);
-          const owner = String(pick.picked_by || pick.owner_id || pick.picked_by || 'unknown');
-          // Use fantasy_points, player_value, or a fallback of 0
-          const playerValue = (typeof pick.fantasy_points === 'number' && pick.fantasy_points) || pick.player_value || pick.value || 0;
-          ownerDraftValue[owner] = (ownerDraftValue[owner] || 0) + (playerValue || 0);
-          // Keep track for worst single pick if negative relative to expected VORP
+        seasonPicks.forEach(rawPick => {
+          // Normalize pick number and owner
+          const pickNo = Number(rawPick.pick_no || rawPick.pick_number || rawPick.overall_pick || 0) || 0;
+          const owner = String(rawPick.picked_by || rawPick.owner_id || rawPick.picked_by || 'unknown');
+
+          // Enrich the pick for calculations (pass a safe getTeamName fallback)
+    // Pass through getTeamName so pick enrichment can resolve per-season team names correctly
+    const enriched = enrichPickForCalculations(rawPick, usersData || [], historicalData || {}, Number(season), getTeamName || (() => ''));
+
+          // Calculate player value using project utilities (this uses fantasy_points on the enriched pick)
+          const playerValue = calculatePlayerValue(enriched) || 0;
+
+          // Aggregate per-owner draft value for Draft King
+          ownerDraftValue[owner] = (ownerDraftValue[owner] || 0) + playerValue;
+
+          // Compute expected VORP for this pick slot and delta
           const expected = expectedMap.get(pickNo) || 0;
           const delta = playerValue - expected;
-          pickDeltas.push({ pick, owner, delta });
+
+          pickDeltas.push({ pick: enriched, rawPick, owner, pickNo, delta, expected, playerValue });
         });
 
         // Draft King = owner with highest total draft pick value for the season
@@ -423,11 +414,61 @@ export function computeBadges({ historicalData, processedSeasonalRecords, draftP
           recentBadges.push(badge);
         }
 
-        // Worst Draft Pick = the single pick with the largest negative delta
-        const worstPick = pickDeltas.sort((a, b) => a.delta - b.delta)[0];
+        // Identify worst and best picks by delta (largest negative delta == worst, largest positive delta == best)
+        const sortedByDelta = pickDeltas.slice().sort((a, b) => a.delta - b.delta);
+        const worstPick = sortedByDelta[0];
+        const bestPick = sortedByDelta[sortedByDelta.length - 1];
+        // Debug detection helper: supports URL param, global window flag, or env var
+        const isBadgeDebugEnabled = () => {
+          try {
+            if (typeof window !== 'undefined') {
+              if (window.__BADGE_DEBUG) return true;
+              if (window.location && window.location.search && window.location.search.indexOf('badgeDebug=1') !== -1) return true;
+            }
+            if (typeof process !== 'undefined' && process.env && (process.env.REACT_APP_BADGE_DEBUG === '1' || process.env.BADGE_DEBUG === '1')) return true;
+          } catch (e) { /* ignore */ }
+          return false;
+        };
+
+        // Unconditional per-season logging so developers can verify pick processing in constrained previews
+        try {
+          console.log(`computeBadges: season ${season} - seasonPicks=${seasonPicks.length}, pickDeltas=${pickDeltas.length}`);
+          if (worstPick) {
+            const wTeam = worstPick.pick?.picked_by_team_name || worstPick.pick?.picked_by_team || worstPick.rawPick?.picked_by_team || worstPick.owner || 'unknown';
+            console.log(`computeBadges: season ${season} WORST_PICK -> pickNo=${worstPick.pickNo}, owner=${worstPick.owner}, teamName=${wTeam}, player=${worstPick.pick?.player_name || worstPick.rawPick?.player_name || 'unknown'}, delta=${worstPick.delta}`);
+          } else {
+            console.log(`computeBadges: season ${season} WORST_PICK -> none`);
+          }
+          if (bestPick) {
+            const bTeam = bestPick.pick?.picked_by_team_name || bestPick.pick?.picked_by_team || bestPick.rawPick?.picked_by_team || bestPick.owner || 'unknown';
+            console.log(`computeBadges: season ${season} BEST_PICK  -> pickNo=${bestPick.pickNo}, owner=${bestPick.owner}, teamName=${bTeam}, player=${bestPick.pick?.player_name || bestPick.rawPick?.player_name || 'unknown'}, delta=${bestPick.delta}`);
+          } else {
+            console.log(`computeBadges: season ${season} BEST_PICK -> none`);
+          }
+        } catch (e) { /* ignore per-season debug logging errors */ }
+        try {
+          // Toggleable debug: if the url contains ?badgeDebug=1 log worst pick info for developer inspection
+          let debugOn = false;
+          try {
+            if (typeof window !== 'undefined' && window.location && window.location.search) {
+              debugOn = !!(window.location.search.indexOf('badgeDebug=1') !== -1);
+            }
+          } catch (err) { debugOn = false; }
+          // Also emit a concise worst-pick line (unconditional) for quick scanning
+          try { if (worstPick) console.log(`computeBadges: worst pick for season ${season}: pickNo=${worstPick.pickNo}, owner=${worstPick.owner}, player=${worstPick.pick?.player_name || worstPick.enriched?.player_name || worstPick.playerValue}, delta=${worstPick.delta}`); } catch (e) {}
+        } catch (err) { /* ignore debug logging errors */ }
+        // Award Best Draft Pick (single pick with largest positive delta) as an achievement
+        if (bestPick && bestPick.delta > 0) {
+          const ownerBest = bestPick.owner;
+          const badgeBest = { id: `best_draft_pick_${season}`, name: 'Best Draft Pick', displayName: 'Best Draft Pick', category: 'draft', year: season, teamId: ownerBest, metadata: { delta: bestPick.delta, expected: bestPick.expected, playerValue: bestPick.playerValue, pick: bestPick.rawPick, pickNo: bestPick.pickNo } };
+          (badgesByTeam[ownerBest] = badgesByTeam[ownerBest] || []).push(badgeBest);
+          recentBadges.push(badgeBest);
+        }
+
+        // Award Worst Draft Pick as a blunder (goes into blunders category)
         if (worstPick && worstPick.delta < 0) {
           const owner = worstPick.owner;
-          const badge = { id: `worst_draft_pick_${season}`, name: 'Worst Draft Pick', displayName: 'Worst Draft Pick', category: 'draft-blunder', year: season, teamId: owner, metadata: { delta: worstPick.delta, pick: worstPick.pick } };
+          const badge = { id: `worst_draft_pick_${season}`, name: 'Worst Draft Pick', displayName: 'Worst Draft Pick', category: 'blunder', year: season, teamId: owner, metadata: { delta: worstPick.delta, expected: worstPick.expected, playerValue: worstPick.playerValue, pick: worstPick.rawPick, pickNo: worstPick.pickNo } };
           (badgesByTeam[owner] = badgesByTeam[owner] || []).push(badge);
           recentBadges.push(badge);
         }
@@ -497,6 +538,77 @@ export function computeBadges({ historicalData, processedSeasonalRecords, draftP
 
   // Sort recentBadges by year descending
   recentBadges.sort((a, b) => b.year - a.year);
+  // --- League-wide career and tenure badges (auto-award) ---
+  try {
+    // Aggregate career wins and seasons played per owner across processedSeasonalRecords
+    // and determine the season when each 25-win milestone was crossed.
+    const careerWinsByOwner = {}; // ownerId -> total wins
+    const seasonsByOwner = {}; // ownerId -> Set of seasons
+    const crossingSeasonByOwner = {}; // ownerId -> { milestone: season }
+
+    // iterate seasons in ascending order so we can record the season a milestone is crossed
+    seasons.forEach(season => {
+      const seasonMetrics = processedSeasonalRecords[season] || {};
+      Object.values(seasonMetrics).forEach(entry => {
+        const owner = entry.ownerId || entry.owner_id || String(entry.ownerId || '');
+        if (!owner) return;
+        const wins = Number(entry.wins || 0) || 0;
+        seasonsByOwner[owner] = seasonsByOwner[owner] || new Set();
+        seasonsByOwner[owner].add(Number(season));
+
+        // compute previous cumulative and update
+        const prev = careerWinsByOwner[owner] || 0;
+        const curr = prev + wins;
+        careerWinsByOwner[owner] = curr;
+
+        // check for any 25-win milestones crossed in this season
+        crossingSeasonByOwner[owner] = crossingSeasonByOwner[owner] || {};
+        let nextMilestone = Math.floor(prev / 25) * 25 + 25; // first milestone > prev
+        while (nextMilestone <= curr) {
+          if (!crossingSeasonByOwner[owner][nextMilestone]) crossingSeasonByOwner[owner][nextMilestone] = Number(season);
+          nextMilestone += 25;
+        }
+      });
+    });
+
+    // Award Total Wins badges at every 25 wins milestone (25,50,75,...) and set year to season crossed
+    Object.keys(careerWinsByOwner).forEach(owner => {
+      const total = careerWinsByOwner[owner] || 0;
+      const milestone = Math.floor(total / 25) * 25;
+      for (let m = 25; m <= milestone; m += 25) {
+        const id = `total_wins_${m}_${owner}`;
+        const already = (badgesByTeam[owner] || []).some(b => String(b.id) === id);
+        if (already) continue;
+        const crossedSeason = (crossingSeasonByOwner[owner] && crossingSeasonByOwner[owner][m]) || null;
+        const badge = { id, name: `Total Wins - ${m}`, displayName: `Total Wins - ${m}`, category: 'league', year: crossedSeason, teamId: owner, accent: 'leagueAccent', metadata: { totalWins: total, milestone: m } };
+        (badgesByTeam[owner] = badgesByTeam[owner] || []).push(badge);
+        recentBadges.push(badge);
+      }
+
+      // Tenure badges: Veteran Presence (>=5 seasons) and Old Timer (>=10 seasons)
+      const seasonsCount = seasonsByOwner[owner] ? seasonsByOwner[owner].size : 0;
+      if (seasonsCount >= 5) {
+        const id = `veteran_presence_${owner}`;
+        const already = (badgesByTeam[owner] || []).some(b => String(b.id) === id);
+        if (!already) {
+          const badge = { id, name: 'Veteran Presence', displayName: 'Veteran Presence', category: 'league', year: null, teamId: owner, accent: 'leagueAccent', metadata: { seasons: seasonsCount } };
+          (badgesByTeam[owner] = badgesByTeam[owner] || []).push(badge);
+          recentBadges.push(badge);
+        }
+      }
+      if (seasonsCount >= 10) {
+        const id = `old_timer_${owner}`;
+        const already = (badgesByTeam[owner] || []).some(b => String(b.id) === id);
+        if (!already) {
+          const badge = { id, name: 'Old Timer', displayName: 'Old Timer', category: 'league', year: null, teamId: owner, accent: 'leagueAccent', metadata: { seasons: seasonsCount } };
+          (badgesByTeam[owner] = badgesByTeam[owner] || []).push(badge);
+          recentBadges.push(badge);
+        }
+      }
+    });
+  } catch (e) {
+    try { const logger = require('./logger').default; logger.error('computeBadges: error computing career/tenure badges', e); } catch (err) { }
+  }
   // Post-process all badges to ensure they have a human-friendly displayName, an icon, accent, and timestamp
   const tokenMap = {
     'season_title': 'Season Title',
