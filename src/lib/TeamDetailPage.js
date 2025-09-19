@@ -5,6 +5,7 @@ import logger from '../utils/logger';
 import { calculateAllLeagueMetrics } from '../utils/calculations';
 import { fetchFinancialDataForYears } from '../services/financialService';
 import { calculateTeamFinancialTotalsByOwnerId, calculateTeamTransactionCountsByOwnerId, formatCurrency } from '../utils/financialCalculations';
+import { formatScore } from '../utils/formatUtils';
 // We'll inline the record tables for tabs instead of importing the full components
 import { useSleeperData } from '../contexts/SleeperDataContext'; // Import the custom hook
 
@@ -46,15 +47,13 @@ const calculateRank = (value, allValues, isHigherBetter = true) => {
     return 'N/A';
 };
 
-const formatScore = (score) =>
-    typeof score === 'number' ? score.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : 'N/A';
 const formatPercentage = (value) =>
     typeof value === 'number' ? `${(value).toFixed(3).substring(1)}%` : 'N/A';
 const formatLuckRating = (value) =>
-    typeof value === 'number' ? value.toFixed(3) : 'N/A';
+    typeof value === 'number' ? formatScore(value, 3) : 'N/A';
 const formatDPR = (value) =>
     typeof value === 'number' && !isNaN(value)
-        ? value.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
+        ? formatScore(Number(value), 3)
         : 'N/A';
 
 const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and getMappedTeamName from props
@@ -97,9 +96,9 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
                 { key: 'blowoutLosses', label: 'Most Blowout Losses', isMax: true },
                 { key: 'slimWins', label: 'Most Slim Wins', isMax: true },
                 { key: 'slimLosses', label: 'Most Slim Losses', isMax: true },
-                { key: 'pointsFor', label: 'Most Total Points', isMax: true, format: v => v?.toFixed(2) },
-                { key: 'pointsAgainst', label: 'Most Points Against', isMax: true, format: v => v?.toFixed(2) },
-                { key: 'totalLuckRating', label: 'Best Luck', isMax: true, format: v => v?.toFixed(3) },
+                { key: 'pointsFor', label: 'Most Total Points', isMax: true, format: v => formatScore(v, 2) },
+                { key: 'pointsAgainst', label: 'Most Points Against', isMax: true, format: v => formatScore(v, 2) },
+                { key: 'totalLuckRating', label: 'Best Luck', isMax: true, format: v => formatScore(v, 3) },
             ];
             metrics.forEach(metric => {
                 let bestValue = metric.isMax ? -Infinity : Infinity;
@@ -173,8 +172,8 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
             { key: 'wins', label: 'Playoff Wins', isMax: true },
             { key: 'losses', label: 'Playoff Losses', isMax: true },
             // { key: 'ties', label: 'Playoff Ties', isMax: true }, // Remove ties from display
-            { key: 'pointsFor', label: 'Playoff Points For', isMax: true, format: v => v?.toFixed(2) },
-            { key: 'pointsAgainst', label: 'Playoff Points Against', isMax: true, format: v => v?.toFixed(2) },
+            { key: 'pointsFor', label: 'Playoff Points For', isMax: true, format: v => formatScore(v, 2) },
+            { key: 'pointsAgainst', label: 'Playoff Points Against', isMax: true, format: v => formatScore(v, 2) },
             { key: 'championships', label: 'Championships', isMax: true },
             { key: 'runnerUps', label: 'Runner-Ups', isMax: true },
             { key: 'thirdPlaces', label: 'Third Places', isMax: true },
@@ -262,9 +261,9 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
             { key: 'wins', label: 'Most Wins in a Season', isMax: true },
             { key: 'losses', label: 'Most Losses in a Season', isMax: true },
             { key: 'winPercentage', label: 'Best Win % in a Season', isMax: true, format: v => (v * 100).toFixed(3) + '%' },
-            { key: 'pointsFor', label: 'Most Points For in a Season', isMax: true, format: v => v?.toFixed(2) },
-            { key: 'luckRating', label: 'Best Luck Rating in a Season', isMax: true, format: v => v?.toFixed(3) },
-            { key: 'adjustedDPR', label: 'Highest DPR in a Season', isMax: true, format: v => v?.toFixed(3) },
+            { key: 'pointsFor', label: 'Most Points For in a Season', isMax: true, format: v => formatScore(v, 2) },
+            { key: 'luckRating', label: 'Best Luck Rating in a Season', isMax: true, format: v => formatScore(v, 3) },
+            { key: 'adjustedDPR', label: 'Highest DPR in a Season', isMax: true, format: v => formatScore(v, 3) },
         ];
         seasonMetrics.forEach(metric => {
             let bestValue = metric.isMax ? -Infinity : Infinity;

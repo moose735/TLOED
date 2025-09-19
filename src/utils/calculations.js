@@ -272,23 +272,27 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
                 const isRegularSeasonMatch = matchupDetailsInWeek?.isRegularSeasonMatch;
                 const hasOpponent = matchupDetailsInWeek?.hasOpponent; // Get the new flag
 
-                // Always add a score to weeklyScores, even if it's 0 for a bye or missing
+                // Score to consider for this week (may be 0 for bye or missing)
                 const scoreToAdd = hasValidWeeklyScore ? currentTeamScoreInWeek : 0;
-                currentTeamStats.weeklyScores.push(scoreToAdd);
-                // Always add to pointsFor, even if it's 0 for a bye
-                currentTeamStats.pointsFor += scoreToAdd;
+                // Only include weekly scores and add to pointsFor for weeks that are fully completed
+                const isWeekOver = year < currentNFLSeason || (year === currentNFLSeason && week < currentNFLWeek);
+                if (isWeekOver) {
+                    currentTeamStats.weeklyScores.push(scoreToAdd);
+                    // Only add to pointsFor for completed weeks (prevents mid-week inflation of DPR)
+                    currentTeamStats.pointsFor += scoreToAdd;
+                }
                 
 
 
                 // Only consider completed games (week is over and score > 0) for high/low score
-                let isWeekOver = year < currentNFLSeason || (year === currentNFLSeason && week < currentNFLWeek);
                 if (hasValidWeeklyScore && isWeekOver && currentTeamScoreInWeek > 0) {
                     currentTeamStats.highScore = Math.max(currentTeamStats.highScore, currentTeamScoreInWeek);
                     currentTeamStats.lowScore = Math.min(currentTeamStats.lowScore, currentTeamScoreInWeek);
                 }
 
                 // Update career weekly scores for the owner (these are cumulative across all weeks/seasons)
-                if (careerTeamStatsRaw[ownerId]) {
+                // Only include completed weeks to prevent mid-week changes to career DPR
+                if (isWeekOver && careerTeamStatsRaw[ownerId]) {
                     careerTeamStatsRaw[ownerId].careerWeeklyScores.push(scoreToAdd);
                 }
 

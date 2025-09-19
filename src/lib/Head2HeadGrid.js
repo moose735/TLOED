@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Area, ResponsiveContainer, Customized, ComposedChart, BarChart, Bar, Cell } from 'recharts';
 import { useSleeperData } from '../contexts/SleeperDataContext';
 import logger from '../utils/logger';
+import { formatScore } from '../utils/formatUtils';
 
 // Helper function to render record (W-L-T)
 const renderRecord = (record) => {
@@ -653,9 +654,9 @@ const Head2HeadGrid = () => {
                                 <div className="grid grid-cols-3 gap-3 w-full text-xs font-medium text-gray-700">
                                     {statBubble(totalWinsRank, 'Total Wins', totalWins !== null ? totalWins : 'N/A', getComparisonClass(totalWins, oppTotalWins))}
                                     {statBubble(winPercentageRank, 'Win %', winPercentage !== null ? winPercentage.toFixed(3) + '%' : 'N/A', winPctClass)}
-                                    {statBubble(careerDPRRank, 'Career DPR', careerDPR !== null ? careerDPR.toFixed(3) : 'N/A', getComparisonClass(careerDPR, oppCareerDPR))}
+                                    {statBubble(careerDPRRank, 'Career DPR', careerDPR !== null ? formatScore(careerDPR, 3) : 'N/A', getComparisonClass(careerDPR, oppCareerDPR))}
                                     {statBubble(calculateRank(weeklyHighScoreCount, Object.values(weeklyHighScoreCounts), true), 'Weekly High Score', weeklyHighScoreCount, weeklyHighScoreCountClass)}
-                                    {statBubble(totalPointsScoredRank, 'Total Points', totalPointsScored !== null ? totalPointsScored.toFixed(2) : 'N/A', getComparisonClass(totalPointsScored, oppTotalPointsScored))}
+                                    {statBubble(totalPointsScoredRank, 'Total Points', totalPointsScored !== null ? formatScore(totalPointsScored, 2) : 'N/A', getComparisonClass(totalPointsScored, oppTotalPointsScored))}
                                     {statBubble(medalScoreRank, 'Medal Score', medalScore, medalScoreClass)}
                                 </div>
                             </div>
@@ -811,9 +812,9 @@ const Head2HeadGrid = () => {
                                 <div className="grid grid-cols-3 gap-3 w-full text-xs font-medium text-gray-700">
                                     {statBubble(totalWinsRank, 'Total Wins', totalWins !== null ? totalWins : 'N/A', getComparisonClass(totalWins, oppTotalWins))}
                                     {statBubble(winPercentageRank, 'Win %', winPercentage !== null ? winPercentage.toFixed(3) + '%' : 'N/A', winPctClass)}
-                                    {statBubble(careerDPRRank, 'Career DPR', careerDPR !== null ? careerDPR.toFixed(3) : 'N/A', getComparisonClass(careerDPR, oppCareerDPR))}
+                                    {statBubble(careerDPRRank, 'Career DPR', careerDPR !== null ? formatScore(careerDPR, 3) : 'N/A', getComparisonClass(careerDPR, oppCareerDPR))}
                                     {statBubble(calculateRank(weeklyHighScoreCount, Object.values(weeklyHighScoreCounts), true), 'Weekly High Score', weeklyHighScoreCount, weeklyHighScoreCountClass)}
-                                    {statBubble(totalPointsScoredRank, 'Total Points', totalPointsScored !== null ? totalPointsScored.toFixed(2) : 'N/A', getComparisonClass(totalPointsScored, oppTotalPointsScored))}
+                                    {statBubble(totalPointsScoredRank, 'Total Points', totalPointsScored !== null ? formatScore(totalPointsScored, 2) : 'N/A', getComparisonClass(totalPointsScored, oppTotalPointsScored))}
                                     {statBubble(medalScoreRank, 'Medal Score', medalScore, medalScoreClass)}
                                 </div>
                             </div>
@@ -840,7 +841,7 @@ const Head2HeadGrid = () => {
                                 ticks={netPointsData.map(d => d.name)}
                             />
                             <YAxis domain={['auto', 'auto']} fontSize={12} />
-                            <Tooltip formatter={(value, name) => [typeof value === 'number' ? value.toFixed(2) : value, 'Cumulative Net Points']} />
+                            <Tooltip formatter={(value, name) => [typeof value === 'number' ? formatScore(value, 2) : value, 'Cumulative Net Points']} />
                             <ReferenceLine y={0} stroke="#374151" strokeWidth={2} />
                             <Bar dataKey="cumulativeNetPoints">
                                 {netPointsData.map((entry, index) => (
@@ -860,7 +861,7 @@ const Head2HeadGrid = () => {
                     <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
                         <p className="text-md font-semibold text-blue-700">Highest Score</p>
                         <p className="text-xl font-bold text-gray-800">
-                            {overallHighestScore.value !== null ? overallHighestScore.value.toFixed(2) : 'N/A'}
+                            {overallHighestScore.value !== null ? formatScore(overallHighestScore.value, 2) : 'N/A'}
                         </p>
                         <p className="text-xs text-gray-500">
                             {overallHighestScore.value !== null && overallHighestScore.ownerId ?
@@ -870,7 +871,7 @@ const Head2HeadGrid = () => {
                     <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
                         <p className="text-md font-semibold text-blue-700">Biggest Win Margin</p>
                         <p className="text-xl font-bold text-gray-800">
-                            {overallBiggestWinMargin.value !== null ? overallBiggestWinMargin.value.toFixed(2) : 'N/A'}
+                            {overallBiggestWinMargin.value !== null ? formatScore(overallBiggestWinMargin.value, 2) : 'N/A'}
                         </p>
                         <p className="text-xs text-gray-500">
                             {overallBiggestWinMargin.value !== null && overallBiggestWinMargin.winningOwnerId ?
@@ -880,7 +881,7 @@ const Head2HeadGrid = () => {
                     <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
                         <p className="text-md font-semibold text-blue-700">Slimmest Win Margin</p>
                         <p className="text-xl font-bold text-gray-800">
-                            {overallSlimmestWinMargin.value !== Infinity ? overallSlimmestWinMargin.value.toFixed(2) : 'N/A'}
+                            {overallSlimmestWinMargin.value !== Infinity ? formatScore(overallSlimmestWinMargin.value, 2) : 'N/A'}
                         </p>
                         <p className="text-xs text-gray-500">
                             {overallSlimmestWinMargin.value !== Infinity && overallSlimmestWinMargin.winningOwnerId ?
@@ -923,8 +924,8 @@ const Head2HeadGrid = () => {
                                     <tr key={idx} className="border-b border-gray-100 last:border-b-0">
                                         <td className="py-2 px-3">{match.year}</td>
                                         <td className="py-2 px-3">{match.week}</td>
-                                        <td className="py-2 px-3">{currentTeamAScore.toFixed(2)}</td>
-                                        <td className="py-2 px-3">{currentTeamBScore.toFixed(2)}</td>
+                                        <td className="py-2 px-3">{formatScore(currentTeamAScore, 2)}</td>
+                                        <td className="py-2 px-3">{formatScore(currentTeamBScore, 2)}</td>
                                         <td className="py-2 px-3">{match.winnerDisplayName === 'Tie' ? 'Tie' : match.winnerDisplayName}</td>
                                         <td className="py-2 px-3 text-xs text-gray-500">{match.matchType}</td> {/* Use pre-calculated matchType */}
                                     </tr>

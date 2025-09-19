@@ -67,6 +67,11 @@ export default function DesktopNav({ handleTabClick, handleSubTabClick, openSubM
         onClick={() => handleTabClick('teamsOverview')}>
         Teams
       </li>
+      {/* Achievements */}
+      <li className="px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 text-lg text-center touch-friendly"
+        onClick={() => handleTabClick('achievements')}>
+        Achievements
+      </li>
       {/* Analysis Dropdown */}
       <li className="relative px-3 py-2 hover:bg-gray-600 cursor-pointer rounded-md mx-1 text-lg text-center touch-friendly"
         onClick={() => toggleSubMenu('analysis')}>

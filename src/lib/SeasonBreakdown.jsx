@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSleeperData } from '../contexts/SleeperDataContext';
 import { calculateAllLeagueMetrics } from '../utils/calculations';
+import { formatScore } from '../utils/formatUtils';
 
 const SeasonBreakdown = () => {
     const {
@@ -207,7 +208,17 @@ const SeasonBreakdown = () => {
     };
 
     const formatPct = (v) => {
-        if (typeof v === 'number' && !isNaN(v)) return `${(v * 100).toFixed(1)}%`;
+        if (typeof v === 'number' && !isNaN(v)) return `${(v * 100).toFixed(2)}%`;
+        return 'N/A';
+    };
+
+    // Format fraction as three decimals, remove leading zero for values < 1 (e.g. ".903"), show "1.000" when exactly 1
+    const formatDecimalFraction = (v) => {
+        if (typeof v === 'number' && !isNaN(v)) {
+            const s = v.toFixed(3);
+            if (v < 1) return s.replace(/^0/, '');
+            return s;
+        }
         return 'N/A';
     };
 
@@ -273,7 +284,7 @@ const SeasonBreakdown = () => {
     }
 
     // --- All-Play and Mock Schedule computations ---
-    const { allPlayStandings, weeklyPointsMap, scheduleMap, headToHeadTies: memoHeadToHeadTies, weeksUsed: memoWeeksUsed } = useMemo(() => {
+    const { allPlayStandings, weeklyPointsMap, scheduleMap } = useMemo(() => {
         const result = { allPlayStandings: [], weeklyPointsMap: {}, scheduleMap: {} };
         if (!selectedSeason || !historicalData || !historicalData.matchupsBySeason || !historicalData.matchupsBySeason[selectedSeason]) return result;
 
@@ -479,7 +490,7 @@ const SeasonBreakdown = () => {
     const seasonHasTies = seasonStandings.some(t => t.ties && t.ties > 0);
     // allPlayStandings comes from useMemo above; ensure we handle missing value safely
     const allPlayHasTies = (allPlayStandings || []).some(t => t.ties && t.ties > 0);
-    const [showDebug, setShowDebug] = useState(false);
+    // debug UI removed
 
     return (
         <div className="p-4 bg-white rounded-lg shadow-md">
@@ -549,7 +560,7 @@ const SeasonBreakdown = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
                             <div className="bg-blue-50 rounded-lg p-4 shadow">
                                 <h4 className="font-bold text-blue-700 mb-1">Points Champion</h4>
-                                <div>{seasonStats.pointsChampion.teamName} ({seasonStats.pointsChampion.pointsFor?.toFixed(2)} pts)</div>
+                                <div>{seasonStats.pointsChampion.teamName} ({formatScore(Number(seasonStats.pointsChampion.pointsFor ?? 0) , 2)} pts)</div>
                             </div>
                             <div className="bg-green-50 rounded-lg p-4 shadow">
                                 <h4 className="font-bold text-green-700 mb-1">Best Record</h4>
@@ -557,15 +568,15 @@ const SeasonBreakdown = () => {
                             </div>
                             <div className="bg-yellow-50 rounded-lg p-4 shadow">
                                 <h4 className="font-bold text-yellow-700 mb-1">Luckiest Team</h4>
-                                <div>{seasonStats.luckiest.teamName} ({seasonStats.luckiest.luckRating?.toFixed(2)})</div>
+                                <div>{seasonStats.luckiest.teamName} ({typeof seasonStats.luckiest.luckRating === 'number' ? formatScore(seasonStats.luckiest.luckRating, 3) : 'N/A'})</div>
                             </div>
                             <div className="bg-red-50 rounded-lg p-4 shadow">
                                 <h4 className="font-bold text-red-700 mb-1">Unluckiest Team</h4>
-                                <div>{seasonStats.unluckiest.teamName} ({seasonStats.unluckiest.luckRating?.toFixed(2)})</div>
+                                <div>{seasonStats.unluckiest.teamName} ({typeof seasonStats.unluckiest.luckRating === 'number' ? formatScore(seasonStats.unluckiest.luckRating, 3) : 'N/A'})</div>
                             </div>
                             <div className="bg-purple-50 rounded-lg p-4 shadow">
                                 <h4 className="font-bold text-purple-700 mb-1">All-Play Champion</h4>
-                                <div>{seasonStats.allPlayChamp.teamName} ({(seasonStats.allPlayChamp.allPlayWinPercentage * 100)?.toFixed(1)}%)</div>
+                                <div>{seasonStats.allPlayChamp.teamName} ({formatScore((seasonStats.allPlayChamp.allPlayWinPercentage * 100) ?? 0, 1)}%)</div>
                             </div>
                             <div className="bg-pink-50 rounded-lg p-4 shadow">
                                 <h4 className="font-bold text-pink-700 mb-1">Blowout King</h4>
@@ -581,11 +592,11 @@ const SeasonBreakdown = () => {
                             </div>
                             <div className="bg-teal-50 rounded-lg p-4 shadow">
                                 <h4 className="font-bold text-teal-700 mb-1">Highest Single-Week Score</h4>
-                                <div>{seasonStats.highestWeek.team} ({seasonStats.highestWeek.score} pts, Week {seasonStats.highestWeek.week})</div>
+                                <div>{seasonStats.highestWeek.team} ({formatScore(typeof seasonStats.highestWeek.score === 'number' ? seasonStats.highestWeek.score : NaN, 2)} pts, Week {seasonStats.highestWeek.week})</div>
                             </div>
                             <div className="bg-gray-50 rounded-lg p-4 shadow">
                                 <h4 className="font-bold text-gray-700 mb-1">Lowest Single-Week Score</h4>
-                                <div>{seasonStats.lowestWeek.team} ({seasonStats.lowestWeek.score} pts, Week {seasonStats.lowestWeek.week})</div>
+                                <div>{seasonStats.lowestWeek.team} ({formatScore(typeof seasonStats.lowestWeek.score === 'number' ? seasonStats.lowestWeek.score : NaN, 2)} pts, Week {seasonStats.lowestWeek.week})</div>
                             </div>
                         </div>
                     )}
@@ -596,46 +607,68 @@ const SeasonBreakdown = () => {
                         <>
                             {/* Mobile Card List */}
                             <div className="sm:hidden space-y-3">
-                                {seasonStandings.map((team, idx) => (
+                                {seasonStandings.map((team, idx) => {
+                                    const metricsForTeam = seasonalMetrics?.[selectedSeason]?.[team.rosterId] || {};
+                                    const dprVal = metricsForTeam.adjustedDPR ?? metricsForTeam.dpr ?? null;
+                                    const pf = metricsForTeam.pointsFor ?? team.pointsFor ?? 0;
+                                    const pa = metricsForTeam.pointsAgainst ?? team.pointsAgainst ?? 0;
+                                    const recordStr = `${team.wins || 0}-${team.losses || 0}${team.ties?`-${team.ties}`:''}`;
+                                    const luck = typeof metricsForTeam.luckRating === 'number' ? formatScore(metricsForTeam.luckRating, 3) : 'N/A';
+                                    return (
                                     <div key={team.rosterId} className="bg-white rounded-lg shadow-md p-4 border-l-4 border-blue-500">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center space-x-3 min-w-0">
                                                 <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">{idx + 1}</div>
                                                 <div className="min-w-0">
                                                     <div className="font-semibold text-sm truncate">{team.teamName}</div>
-                                                    <div className="text-xs text-gray-500">Record: {team.wins}-{team.losses}{team.ties?`-${team.ties}`:''}</div>
+                                                    <div className="text-xs text-gray-500">Record: {recordStr} • DPR: {dprVal? formatScore(Number(dprVal), 3) : 'N/A'}</div>
                                                 </div>
                                             </div>
-                                            <div className="text-right text-sm text-gray-600">PA: {team.pointsAgainst.toFixed(2)}</div>
+                                            <div className="text-right text-sm text-gray-600">
+                                                <div>PF: {formatScore(Number(pf), 2)}</div>
+                                                <div>PA: {formatScore(Number(pa), 2)}</div>
+                                                <div>Luck: {luck}</div>
+                                            </div>
                                         </div>
                                     </div>
-                                ))}
+                                    );
+                                })}
                             </div>
 
                             {/* Desktop Table */}
                             <div className="hidden sm:block overflow-x-auto shadow-lg rounded-lg">
                                 <table className="min-w-full bg-white border border-gray-200 rounded-lg">
-                                    <thead className="bg-gray-100 sticky top-0 z-10">
+                                    <thead className="bg-blue-50 sticky top-0 z-10">
                                         <tr>
                                             <th className="py-3 px-4 text-left text-xs font-bold uppercase tracking-wider border-b">Rank</th>
                                             <th className="py-3 px-4 text-left text-xs font-bold uppercase tracking-wider border-b">Team</th>
-                                            <th className="py-3 px-4 text-center text-xs font-bold uppercase tracking-wider border-b">W</th>
-                                            <th className="py-3 px-4 text-center text-xs font-bold uppercase tracking-wider border-b">L</th>
-                                            {seasonHasTies && <th className="py-3 px-4 text-center text-xs font-bold uppercase tracking-wider border-b">T</th>}
+                                            <th className="py-3 px-4 text-center text-xs font-bold uppercase tracking-wider border-b">DPR</th>
+                                            <th className="py-3 px-4 text-center text-xs font-bold uppercase tracking-wider border-b">Record</th>
+                                            <th className="py-3 px-4 text-center text-xs font-bold uppercase tracking-wider border-b">PF</th>
                                             <th className="py-3 px-4 text-center text-xs font-bold uppercase tracking-wider border-b">PA</th>
+                                            <th className="py-3 px-4 text-center text-xs font-bold uppercase tracking-wider border-b">Luck</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {seasonStandings.map((team, index) => (
+                                        {seasonStandings.map((team, index) => {
+                                            const metricsForTeam = seasonalMetrics?.[selectedSeason]?.[team.rosterId] || {};
+                                            const dprVal = metricsForTeam.adjustedDPR ?? metricsForTeam.dpr ?? null;
+                                            const pf = metricsForTeam.pointsFor ?? team.pointsFor ?? 0;
+                                            const pa = metricsForTeam.pointsAgainst ?? team.pointsAgainst ?? 0;
+                                            const recordStr = `${team.wins || 0}-${team.losses || 0}${team.ties?`-${team.ties}`:''}`;
+                                            const luck = typeof metricsForTeam.luckRating === 'number' ? formatScore(metricsForTeam.luckRating, 3) : 'N/A';
+                                            return (
                                             <tr key={team.rosterId} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                                                 <td className="py-3 px-4 font-medium">{index + 1}</td>
                                                 <td className="py-3 px-4">{team.teamName}</td>
-                                                <td className="py-3 px-4 text-center">{team.wins}</td>
-                                                <td className="py-3 px-4 text-center">{team.losses}</td>
-                                                {seasonHasTies && <td className="py-3 px-4 text-center">{team.ties}</td>}
-                                                <td className="py-3 px-4 text-center">{team.pointsAgainst.toFixed(2)}</td>
+                                                <td className="py-3 px-4 text-center">{dprVal? formatScore(Number(dprVal), 3) : 'N/A'}</td>
+                                                <td className="py-3 px-4 text-center">{recordStr}</td>
+                                                <td className="py-3 px-4 text-center">{formatScore(Number(pf), 2)}</td>
+                                                <td className="py-3 px-4 text-center">{formatScore(Number(pa), 2)}</td>
+                                                <td className="py-3 px-4 text-center">{luck}</td>
                                             </tr>
-                                        ))}
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>
@@ -654,7 +687,7 @@ const SeasonBreakdown = () => {
                                 {/* Mobile */}
                                 <div className="sm:hidden space-y-3 mb-4">
                                     {allPlayStandings.map((t, idx) => (
-                                        <div key={t.rosterId} className="bg-white rounded-lg shadow-md p-3 border-l-4 border-purple-500">
+                                        <div key={t.rosterId} className="bg-white rounded-lg shadow-md p-3 border-l-4 border-purple-600">
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center space-x-3">
                                                     <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold">{idx + 1}</div>
@@ -663,7 +696,7 @@ const SeasonBreakdown = () => {
                                                         <div className="text-xs text-gray-500">W/L: {t.wins}/{t.losses}</div>
                                                     </div>
                                                 </div>
-                                                <div className="text-sm text-gray-600">Pct: {formatPct(t.pct)}</div>
+                                                <div className="text-sm text-gray-600">Pct: {formatDecimalFraction(t.pct)}</div>
                                             </div>
                                         </div>
                                     ))}
@@ -672,7 +705,7 @@ const SeasonBreakdown = () => {
                                 {/* Desktop Table */}
                                 <div className="hidden sm:block overflow-x-auto rounded-lg shadow-md mb-6">
                                     <table className="min-w-full bg-white border border-gray-200">
-                                        <thead className="bg-gray-100 text-gray-700 uppercase text-sm">
+                                        <thead className="bg-purple-50 text-gray-700 uppercase text-sm">
                                             <tr>
                                                 <th className="py-2 px-4 text-left">Rank</th>
                                                 <th className="py-2 px-4 text-left">Team</th>
@@ -690,7 +723,7 @@ const SeasonBreakdown = () => {
                                                     <td className="py-2 px-4 text-center">{t.wins}</td>
                                                     <td className="py-2 px-4 text-center">{t.losses}</td>
                                                     {allPlayHasTies && <td className="py-2 px-4 text-center">{t.ties}</td>}
-                                                    <td className="py-2 px-4 text-center">{formatPct(t.pct)}</td>
+                                                    <td className="py-2 px-4 text-center">{formatDecimalFraction(t.pct)}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -701,23 +734,10 @@ const SeasonBreakdown = () => {
                             <p className="text-sm text-gray-500">All-play data is not available for this season.</p>
                         )}
 
-                        <div className="mt-3">
-                            <button className="text-sm text-gray-600 underline" onClick={() => setShowDebug(s => !s)}>{showDebug ? 'Hide' : 'Show'} debug</button>
-                                {showDebug && (
-                                <div className="mt-2 p-2 bg-white border rounded">
-                                    <div className="text-sm mb-2">Weeks used for All-Play: {(memoWeeksUsed || []).join(', ') || 'none'}</div>
-                                    <div className="text-sm">Head-to-head ties per roster:</div>
-                                    <ul className="text-sm list-disc ml-5">
-                                        {Object.keys(memoHeadToHeadTies || {}).map(rid => (
-                                            <li key={rid}>{getTeamNameByRosterId(rid)} ({rid}): {memoHeadToHeadTies[rid]}</li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
-                        </div>
+                        {/* debug UI removed */}
 
                         {/* Hypothetical Schedule Tool: pick a subject team and show simulated W/L vs other teams' schedules */}
-                        <div className="mt-4 bg-gray-50 p-4 rounded-lg shadow">
+                        <div className="mt-4 bg-green-50 p-4 rounded-lg shadow">
                             <h4 className="font-semibold mb-2">Hypothetical Schedule</h4>
                             <p className="text-sm text-gray-600 mb-3">Select a subject team below to simulate hypothetical W/L results against each other team's schedules.</p>
                             <div className="mb-3">
@@ -740,11 +760,11 @@ const SeasonBreakdown = () => {
                                         {/* Mobile: simple stacked list */}
                                         <div className="sm:hidden space-y-2 mt-3">
                                             {allPlayStandings.filter(o => o.rosterId !== hypoSubject).map((o, idx) => {
-                                                const res = computeMockAgainstSchedule(hypoSubject, o.rosterId) || { wins: 0, losses: 0 };
+                                                const res = computeMockAgainstSchedule(hypoSubject, o.rosterId) || { wins: 0, losses: 0, pct: 0 };
                                                 return (
-                                                    <div key={o.rosterId} className="bg-white rounded-lg shadow-sm p-3 flex items-center justify-between">
+                                                    <div key={o.rosterId} className="bg-white rounded-lg shadow-sm p-3 flex items-center justify-between border-l-4 border-green-600">
                                                         <div className="font-semibold truncate">{o.teamName}</div>
-                                                        <div className="text-sm text-gray-600">{res.wins} - {res.losses}</div>
+                                                        <div className="text-sm text-gray-600">{res.wins} - {res.losses} • {formatDecimalFraction(res.pct)}</div>
                                                     </div>
                                                 );
                                             })}
@@ -753,21 +773,23 @@ const SeasonBreakdown = () => {
                                         {/* Desktop table */}
                                         <div className="hidden sm:block overflow-x-auto rounded-lg shadow-md mt-3">
                                             <table className="min-w-full bg-white border border-gray-200">
-                                                <thead className="bg-gray-100 text-gray-700 uppercase text-sm">
+                                                <thead className="bg-green-50 text-gray-700 uppercase text-sm">
                                                     <tr>
                                                         <th className="py-2 px-3 text-left">Opponent</th>
                                                         <th className="py-2 px-3 text-center">W</th>
                                                         <th className="py-2 px-3 text-center">L</th>
+                                                        <th className="py-2 px-3 text-center">Win %</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
                                                     {allPlayStandings.filter(o => o.rosterId !== hypoSubject).map((o, idx) => {
-                                                        const res = computeMockAgainstSchedule(hypoSubject, o.rosterId) || { wins: 0, losses: 0 };
+                                                        const res = computeMockAgainstSchedule(hypoSubject, o.rosterId) || { wins: 0, losses: 0, pct: 0 };
                                                         return (
                                                             <tr key={o.rosterId} className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                                                                 <td className="py-2 px-3 font-semibold">{o.teamName}</td>
                                                                 <td className="py-2 px-3 text-center">{res.wins}</td>
                                                                 <td className="py-2 px-3 text-center">{res.losses}</td>
+                                                                <td className="py-2 px-3 text-center">{formatDecimalFraction(res.pct)}</td>
                                                             </tr>
                                                         );
                                                     })}

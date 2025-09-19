@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 
 const navGroups = [
   { label: 'Dashboard', link: '/dashboard' },
+  { label: 'Achievements', link: '/achievements' },
   {
     label: 'Games',
     children: [
@@ -30,4 +31,4 @@ const navGroups = [
   },
 ];
 
-// This file is now unused and can be deleted.
+export default navGroups;

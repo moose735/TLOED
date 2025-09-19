@@ -17,6 +17,7 @@ import HallOfChampions from './lib/HallOfChampions';
 import Gamecenter from './components/Gamecenter';
 import Sportsbook from './components/Sportsbook';
 import KeeperList from './lib/KeeperList';
+import Achievements from './components/Achievements';
 // import MobileSidebarNav from './components/MobileSidebarNav';
 import DesktopNav from './components/DesktopNav';
 
@@ -49,6 +50,7 @@ const NAV_CATEGORIES = {
     SEASON_BREAKDOWN: { label: 'Season Breakdown', tab: 'seasonBreakdown' },
     DRAFT: { label: 'Draft', tab: 'draftAnalysis' }, // New tab for Draft Analysis
     FINANCIALS: { label: 'Financials', tab: 'financials' },
+    ACHIEVEMENTS: { label: 'Achievements', tab: 'achievements' },
 };
 
 // Flattened list of all possible tabs
@@ -70,6 +72,7 @@ const TABS = {
     SEASON_BREAKDOWN: 'seasonBreakdown',
     DRAFT_ANALYSIS: 'draftAnalysis',
     KEEPERS: 'keepers',
+    ACHIEVEMENTS: 'achievements',
 };
 
 const AppContent = () => {
@@ -467,6 +470,8 @@ const AppContent = () => {
                 return <SeasonBreakdown />;
             case TABS.DRAFT_ANALYSIS: // New case for Draft Analysis
                 return <DraftAnalysis />;
+            case TABS.ACHIEVEMENTS:
+                return <Achievements />;
             default:
                 return <Dashboard />;
         }
@@ -646,6 +651,15 @@ const AppContent = () => {
                                     </li>
                                 </ul>
                             )}
+                        </li>
+                        {/* Achievements */}
+                        <li>
+                            <button 
+                                className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600"
+                                onClick={() => handleTabClick('achievements')}
+                            >
+                                <span className="text-base font-medium">🏆 Achievements</span>
+                            </button>
                         </li>
                         {/* Teams */}
                         <li>

@@ -6,6 +6,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 
 // Import the custom hook from your SleeperDataContext
 import { useSleeperData } from '../contexts/SleeperDataContext';
+import { formatScore } from '../utils/formatUtils';
 
 const MatchupHistory = () => {
     // Consume data and functions from SleeperDataContext
@@ -144,14 +145,14 @@ const MatchupHistory = () => {
                                                         {/* Pass selectedYear to getTeamName for season-specific names */}
                                                         {getTeamName(matchup.team1_roster_id, selectedYear)}
                                                     </span>
-                                                    <span className={`font-bold ${matchup.winner_roster_id === matchup.team1_roster_id ? 'text-gray-900' : 'text-gray-500'}`}>{matchup.team1_score ? matchup.team1_score.toFixed(2) : 'N/A'}</span>
+                                                    <span className={`font-bold ${matchup.winner_roster_id === matchup.team1_roster_id ? 'text-gray-900' : 'text-gray-500'}`}>{matchup.team1_score ? formatScore(Number(matchup.team1_score), 2) : 'N/A'}</span>
                                                 </div>
                                                 <div className="flex justify-between text-sm text-gray-700">
                                                     <span className={`font-medium ${matchup.winner_roster_id === matchup.team2_roster_id ? 'font-bold' : 'text-gray-500'}`}>
                                                         {/* Pass selectedYear to getTeamName for season-specific names */}
                                                         {getTeamName(matchup.team2_roster_id, selectedYear)}
                                                     </span>
-                                                    <span className={`font-bold ${matchup.winner_roster_id === matchup.team2_roster_id ? 'text-gray-900' : 'text-gray-500'}`}>{matchup.team2_score ? matchup.team2_score.toFixed(2) : 'N/A'}</span>
+                                                    <span className={`font-bold ${matchup.winner_roster_id === matchup.team2_roster_id ? 'text-gray-900' : 'text-gray-500'}`}>{matchup.team2_score ? formatScore(Number(matchup.team2_score), 2) : 'N/A'}</span>
                                                 </div>
                                                 {matchup.winner_roster_id === null && Number(matchup.team1_score) > 0 && Number(matchup.team2_score) > 0 && Number(matchup.team1_score) === Number(matchup.team2_score) && (
                                                     <div className="text-xs text-gray-500 mt-1 text-center">

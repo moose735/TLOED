@@ -6,6 +6,7 @@ import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from
 import { initializeApp } from 'firebase/app';
 import { getFirestore, doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { getTransactionTotal } from '../utils/financialCalculations';
+import { formatScore } from '../utils/formatUtils';
 
 // Your Firebase Config (should be replaced by env vars in a real app)
 const firebaseConfig = {
@@ -694,7 +695,7 @@ const FinancialTracker = () => {
 												}
 											}
 											if (points !== null && !isNaN(points)) {
-												newDesc = `${cat} (${points.toFixed(2)} pts)`;
+												newDesc = `${cat} (${formatScore(Number(points ?? 0), 2)} pts)`;
 											}
 										}
 									}
@@ -707,7 +708,7 @@ const FinancialTracker = () => {
                                         if (leaders && leaders[leaderIndex]) {
                                             const leader = leaders[leaderIndex];
                                             newTeam = [leader.userId];
-                                            newDesc = `${cat} (${leader.score.toFixed(2)} pts)`;
+											newDesc = `${cat} (${formatScore(Number(leader.score ?? 0), 2)} pts)`;
                                         }
                                     }
 									setTransaction(t => ({ ...t, category: cat, team: newTeam, description: newDesc }));
@@ -834,7 +835,7 @@ const FinancialTracker = () => {
 												}
 											}
 											if (points !== null && !isNaN(points)) {
-												newDesc = `${transaction.category} (${points.toFixed(2)} pts)`;
+												newDesc = `${transaction.category} (${formatScore(Number(points ?? 0), 2)} pts)`;
 											}
 										}
 									}

@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { useSleeperData } from '../contexts/SleeperDataContext';
+import { formatScore } from '../utils/formatUtils';
 
 // Projected 6-team playoff bracket (1-6 seeds). Playoffs start week 15.
 // Seeding rules:
@@ -224,11 +225,11 @@ const ProjectedPlayoffBracket = () => {
           <div className="text-sm font-semibold text-gray-800 mb-1">{team.name}</div>
           <div className="grid grid-cols-2 gap-2 text-xs text-gray-700">
             <div>Current Record</div><div className="text-right">{team.currentWins}-{team.currentLosses}{team.currentTies > 0 ? `-${team.currentTies}` : ''}</div>
-            <div>Current Points</div><div className="text-right">{team.currentPoints.toFixed(1)}</div>
-            <div>Avg Score</div><div className="text-right">{team.avgScore.toFixed(1)}</div>
-            <div>All-Play Win%</div><div className="text-right">{(team.allPlayWinPct*100).toFixed(1)}%</div>
-            <div>Projected Wins</div><div className="text-right">{team.projectedWins.toFixed(2)}</div>
-            <div>Projected Points</div><div className="text-right">{team.projectedPoints.toFixed(1)}</div>
+            <div>Current Points</div><div className="text-right">{formatScore(Number(team.currentPoints ?? 0), 1)}</div>
+            <div>Avg Score</div><div className="text-right">{formatScore(Number(team.avgScore ?? 0), 1)}</div>
+            <div>All-Play Win%</div><div className="text-right">{formatScore((team.allPlayWinPct*100) ?? 0, 1)}%</div>
+            <div>Projected Wins</div><div className="text-right">{formatScore(Number(team.projectedWins ?? 0), 2)}</div>
+            <div>Projected Points</div><div className="text-right">{formatScore(Number(team.projectedPoints ?? 0), 1)}</div>
           </div>
           {team.remainingOpponents?.length > 0 && (
             <div className="mt-2">

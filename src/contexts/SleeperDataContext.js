@@ -19,6 +19,7 @@ import { fetchPlayerStats, fetchLeagueScoringSettings, fetchLeagueRosterSettings
 
 
 import logger from '../utils/logger';
+import badgesUtil from '../utils/badges';
 
 // 1. Create the Context
 const SleeperDataContext = createContext();
@@ -60,6 +61,8 @@ export const SleeperDataProvider = ({ children }) => {
     // NEW STATE FOR PROCESSED SEASONAL RECORDS
     const [processedSeasonalRecords, setProcessedSeasonalRecords] = useState({});
     const [careerDPRData, setCareerDPRData] = useState(null);
+    const [badgesByTeam, setBadgesByTeam] = useState({});
+    const [recentBadges, setRecentBadges] = useState([]);
     
     // --- NEW: State for storing transactions ---
     const [transactions, setTransactions] = useState([]);
@@ -566,6 +569,22 @@ export const SleeperDataProvider = ({ children }) => {
                     );
                     setProcessedSeasonalRecords(seasonalMetrics);
                     setCareerDPRData(calculatedCareerDPRData);
+                    // Compute badges now that seasonal records are available
+                    try {
+                        const { badgesByTeam: bbt, recentBadges: rb } = badgesUtil.computeBadges({
+                            historicalData: mergedHistoricalData,
+                            processedSeasonalRecords: seasonalMetrics,
+                            draftPicksBySeason: processedDraftPicksBySeason,
+                            transactions: allTransactions,
+                            usersData: users
+                        });
+                        setBadgesByTeam(bbt || {});
+                        setRecentBadges(rb || []);
+                    } catch (e) {
+                        logger.error('Error computing badges:', e);
+                        setBadgesByTeam({});
+                        setRecentBadges([]);
+                    }
                 } else {
                     setProcessedSeasonalRecords({});
                     setCareerDPRData(null);
@@ -686,6 +705,8 @@ export const SleeperDataProvider = ({ children }) => {
         draftHistoryBySeason,
         allDraftHistory,
         processedSeasonalRecords,
+    badgesByTeam,
+    recentBadges,
         careerDPRData,
         transactions,
         loading,

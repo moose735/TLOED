@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSleeperData } from '../contexts/SleeperDataContext';
 import logger from '../utils/logger';
+import { formatScore } from '../utils/formatUtils';
 
 const Gamecenter = () => {
     const { historicalData, leagueData, getTeamDetails, processedSeasonalRecords, nflState, loading, nflPlayers } = useSleeperData();
@@ -499,7 +500,7 @@ const Gamecenter = () => {
                                                             {team1Details.name}
                                                         </div>
                                                         <div className="text-xs text-gray-500">
-                                                            {team1Streak} • Avg: {team1AvgPts.toFixed(1)}
+                                                            {team1Streak} • Avg: {formatScore(Number(team1AvgPts ?? 0), 1)}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -507,7 +508,7 @@ const Gamecenter = () => {
                                                     <div className={`font-bold text-lg ${
                                                         isCompleted && shouldHighlightWinner && matchup.team1_score > matchup.team2_score ? 'text-green-600' : 'text-gray-800'
                                                     }`}>
-                                                        {isCompleted ? matchup.team1_score.toFixed(1) : '-'}
+                                                        {isCompleted ? formatScore(Number(matchup.team1_score ?? 0), 1) : '-'}
                                                     </div>
                                                 </div>
                                             </div>
@@ -536,7 +537,7 @@ const Gamecenter = () => {
                                                             {team2Details.name}
                                                         </div>
                                                         <div className="text-xs text-gray-500">
-                                                            {team2Streak} • Avg: {team2AvgPts.toFixed(1)}
+                                                            {team2Streak} • Avg: {formatScore(Number(team2AvgPts ?? 0), 1)}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -544,7 +545,7 @@ const Gamecenter = () => {
                                                     <div className={`font-bold text-lg ${
                                                         isCompleted && shouldHighlightWinner && matchup.team2_score > matchup.team1_score ? 'text-green-600' : 'text-gray-800'
                                                     }`}>
-                                                        {isCompleted ? matchup.team2_score.toFixed(1) : '-'}
+                                                        {isCompleted ? formatScore(Number(matchup.team2_score ?? 0), 1) : '-'}
                                                     </div>
                                                 </div>
                                             </div>
@@ -560,7 +561,7 @@ const Gamecenter = () => {
                                                         {team1Details.name}
                                                     </div>
                                                     <div className={`font-bold text-lg ${isCompleted && shouldHighlightWinner && matchup.team1_score > matchup.team2_score ? 'text-green-600' : 'text-gray-800'}`}>
-                                                        {isCompleted ? matchup.team1_score.toFixed(2) : '-'}
+                                                        {isCompleted ? formatScore(Number(matchup.team1_score ?? 0), 2) : '-'}
                                                     </div>
                                                 </div>
                                             </div>
@@ -578,7 +579,7 @@ const Gamecenter = () => {
                                                         {team2Details.name}
                                                     </div>
                                                     <div className={`font-bold text-lg ${isCompleted && shouldHighlightWinner && matchup.team2_score > matchup.team1_score ? 'text-green-600' : 'text-gray-800'}`}>
-                                                        {isCompleted ? matchup.team2_score.toFixed(2) : '-'}
+                                                        {isCompleted ? formatScore(Number(matchup.team2_score ?? 0), 2) : '-'}
                                                     </div>
                                                 </div>
                                             </div>
@@ -605,7 +606,7 @@ const Gamecenter = () => {
                                                     <div className="grid grid-cols-3 gap-2 items-center">
                                                         <div className="text-center space-y-1">
                                                             <div className="text-xs font-semibold">{team1Streak}</div>
-                                                            <div className="text-xs font-semibold">{team1AvgPts.toFixed(1)}</div>
+                                                            <div className="text-xs font-semibold">{formatScore(Number(team1AvgPts ?? 0), 1)}</div>
                                                         </div>
                                                         
                                                         <div className="text-center space-y-1">
@@ -615,7 +616,7 @@ const Gamecenter = () => {
                                                         
                                                         <div className="text-center space-y-1">
                                                             <div className="text-xs font-semibold">{team2Streak}</div>
-                                                            <div className="text-xs font-semibold">{team2AvgPts.toFixed(1)}</div>
+                                                            <div className="text-xs font-semibold">{formatScore(Number(team2AvgPts ?? 0), 1)}</div>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -640,10 +641,10 @@ const Gamecenter = () => {
                                                                 <div className="text-xs text-gray-500 font-medium mb-1">Luck Factor</div>
                                                                 <div className="flex justify-between items-center">
                                                                     <span className={`font-semibold text-sm ${team1Luck > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                                                        {team1Luck.toFixed(2)}
+                                                                        {formatScore(Number(team1Luck ?? 0), 2)}
                                                                     </span>
                                                                     <span className={`font-semibold text-sm ${team2Luck > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                                                        {team2Luck.toFixed(2)}
+                                                                        {formatScore(Number(team2Luck ?? 0), 2)}
                                                                     </span>
                                                                 </div>
                                                             </div>
@@ -653,7 +654,7 @@ const Gamecenter = () => {
                                                                 <div className="grid grid-cols-3 gap-2 items-center">
                                                                     <div className="text-center">
                                                                         <span className={`font-semibold text-sm ${team1Luck > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                                                            {team1Luck.toFixed(2)}
+                                                                            {formatScore(Number(team1Luck ?? 0), 2)}
                                                                         </span>
                                                                     </div>
                                                                     
@@ -663,7 +664,7 @@ const Gamecenter = () => {
                                                                     
                                                                     <div className="text-center">
                                                                         <span className={`font-semibold text-sm ${team2Luck > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                                                            {team2Luck.toFixed(2)}
+                                                                            {formatScore(Number(team2Luck ?? 0), 2)}
                                                                         </span>
                                                                     </div>
                                                                 </div>
@@ -881,10 +882,10 @@ const Gamecenter = () => {
                                                         </div>
                                                     </div>
                                                     <div className={`text-3xl sm:text-4xl font-bold ${team1Won ? 'text-green-600' : 'text-gray-600'}`}>
-                                                        {selectedMatchup.team1_score.toFixed(2)}
+                                                        {formatScore(Number(selectedMatchup.team1_score ?? 0), 2)}
                                                     </div>
                                                     <div className="text-xs sm:text-sm text-gray-500 mt-1">POINTS</div>
-                                                    <div className="text-xs sm:text-sm text-gray-500 mt-1">Coach Score: <span className="font-semibold text-gray-800">{team1Potential > 0 ? `${team1CoachScore.toFixed(1)}%` : 'N/A'}</span></div>
+                                                    <div className="text-xs sm:text-sm text-gray-500 mt-1">Coach Score: <span className="font-semibold text-gray-800">{team1Potential > 0 ? `${formatScore(Number(team1CoachScore ?? 0), 1)}%` : 'N/A'}</span></div>
                                                 </div>
                                                 
                                                 {/* Team 2 */}
@@ -897,10 +898,10 @@ const Gamecenter = () => {
                                                         </div>
                                                     </div>
                                                     <div className={`text-3xl sm:text-4xl font-bold ${team2Won ? 'text-green-600' : 'text-gray-600'}`}>
-                                                        {selectedMatchup.team2_score.toFixed(2)}
+                                                        {formatScore(Number(selectedMatchup.team2_score ?? 0), 2)}
                                                     </div>
                                                     <div className="text-xs sm:text-sm text-gray-500 mt-1">POINTS</div>
-                                                    <div className="text-xs sm:text-sm text-gray-500 mt-1">Coach Score: <span className="font-semibold text-gray-800">{team2Potential > 0 ? `${team2CoachScore.toFixed(1)}%` : 'N/A'}</span></div>
+                                                    <div className="text-xs sm:text-sm text-gray-500 mt-1">Coach Score: <span className="font-semibold text-gray-800">{team2Potential > 0 ? `${formatScore(Number(team2CoachScore ?? 0), 1)}%` : 'N/A'}</span></div>
                                                 </div>
                                             </div>
                                             
@@ -919,12 +920,12 @@ const Gamecenter = () => {
                                                         </div>
                                                         <div className="flex justify-between">
                                                             <span>Season Avg:</span>
-                                                            <span className="font-medium">{team1AvgPts.toFixed(2)}</span>
+                                                            <span className="font-medium">{formatScore(Number(team1AvgPts ?? 0), 2)}</span>
                                                         </div>
                                                         <div className="flex justify-between">
                                                             <span>Luck Factor:</span>
                                                             <span className={`font-medium ${team1Luck > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                                {team1Luck > 0 ? '+' : ''}{team1Luck.toFixed(2)}
+                                                                {team1Luck > 0 ? '+' : ''}{formatScore(Number(team1Luck ?? 0), 2)}
                                                             </span>
                                                         </div>
                                                     </div>
@@ -943,12 +944,12 @@ const Gamecenter = () => {
                                                         </div>
                                                         <div className="flex justify-between">
                                                             <span>Season Avg:</span>
-                                                            <span className="font-medium">{team2AvgPts.toFixed(2)}</span>
+                                                            <span className="font-medium">{formatScore(Number(team2AvgPts ?? 0), 2)}</span>
                                                         </div>
                                                         <div className="flex justify-between">
                                                             <span>Luck Factor:</span>
                                                             <span className={`font-medium ${team2Luck > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                                {team2Luck > 0 ? '+' : ''}{team2Luck.toFixed(2)}
+                                                                {team2Luck > 0 ? '+' : ''}{formatScore(Number(team2Luck ?? 0), 2)}
                                                             </span>
                                                         </div>
                                                     </div>
@@ -964,7 +965,7 @@ const Gamecenter = () => {
                                                     </div>
                                                     <div>
                                                         <div className="text-xs sm:text-sm text-gray-500">Point Difference</div>
-                                                        <div className="text-lg sm:text-2xl font-bold text-gray-800">{Math.abs(selectedMatchup.team1_score - selectedMatchup.team2_score).toFixed(2)}</div>
+                                                        <div className="text-lg sm:text-2xl font-bold text-gray-800">{formatScore(Math.abs(Number(selectedMatchup.team1_score ?? 0) - Number(selectedMatchup.team2_score ?? 0)), 2)}</div>
                                                     </div>
                                                     <div className="col-span-2 sm:col-span-1">
                                                         <div className="text-xs sm:text-sm text-gray-500">Matchup Type</div>

@@ -3,6 +3,7 @@ import React, { useCallback, useMemo } from 'react';
 import { useSleeperData } from '../contexts/SleeperDataContext';
 import PowerRankings from '../lib/PowerRankings';
 import ProjectedPlayoffBracket from './ProjectedPlayoffBracket';
+import { formatScore } from '../utils/formatUtils';
 
 const Dashboard = () => {
     const {
@@ -319,7 +320,7 @@ const Dashboard = () => {
                                                                 </div>
                                                                 <div className="flex-shrink-0 text-right ml-4 w-20">
                                                                     {t1Score > 0 ? (
-                                                                        <div className="text-sm font-bold text-gray-800">{t1Score.toFixed(1)}</div>
+                                                                        <div className="text-sm font-bold text-gray-800">{formatScore(t1Score)}</div>
                                                                     ) : (
                                                                         <div className="text-xs text-gray-500">&nbsp;</div>
                                                                     )}
@@ -338,7 +339,7 @@ const Dashboard = () => {
                                                                 </div>
                                                                 <div className="flex-shrink-0 text-right ml-4 w-20">
                                                                     {t2Score > 0 ? (
-                                                                        <div className="text-sm font-bold text-gray-800">{t2Score.toFixed(1)}</div>
+                                                                        <div className="text-sm font-bold text-gray-800">{formatScore(t2Score)}</div>
                                                                     ) : (
                                                                         <div className="text-xs text-gray-500">&nbsp;</div>
                                                                     )}
@@ -393,7 +394,7 @@ const Dashboard = () => {
                                                                 </div>
                                                                 <div className="flex-shrink-0 text-right ml-4 w-20">
                                                                     {t1Score > 0 ? (
-                                                                        <div className="text-sm font-bold text-gray-800">{t1Score.toFixed(1)}</div>
+                                                                        <div className="text-sm font-bold text-gray-800">{formatScore(t1Score)}</div>
                                                                     ) : (
                                                                         <div className="text-xs text-gray-500">&nbsp;</div>
                                                                     )}
@@ -412,7 +413,7 @@ const Dashboard = () => {
                                                                 </div>
                                                                 <div className="flex-shrink-0 text-right ml-4 w-20">
                                                                     {t2Score > 0 ? (
-                                                                        <div className="text-sm font-bold text-gray-800">{t2Score.toFixed(1)}</div>
+                                                                        <div className="text-sm font-bold text-gray-800">{formatScore(t2Score)}</div>
                                                                     ) : (
                                                                         <div className="text-xs text-gray-500">&nbsp;</div>
                                                                     )}

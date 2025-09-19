@@ -11,6 +11,7 @@ import { faRepeat } from '@fortawesome/free-solid-svg-icons'; // Import the spec
 import { enrichPickForCalculations, calculatePlayerValue, calculatePickSlotValue, generateExpectedVorpByPickSlot, calculateVORPDelta } from '../utils/draftCalculations';
 // Import fetchPlayerStats, fetchLeagueScoringSettings, fetchLeagueRosterSettings, calculateFantasyPoints, and rankPlayersByFantasyPoints from sleeperPlayerStats
 import { fetchPlayerStats, fetchLeagueScoringSettings, fetchLeagueRosterSettings, calculateFantasyPoints, rankPlayersByFantasyPoints, calculateVORP } from '../utils/sleeperPlayerStats';
+import { formatScore } from '../utils/formatUtils';
 
 // Removed: import YearlyDraftStats from './YearlyDraftStats';
 
@@ -831,7 +832,7 @@ const DraftAnalysis = () => {
                                                     </div>
                                                     <div className="text-sm text-gray-200">
                                                         <div className="text-xs">Draft Value</div>
-                                                        <div className="text-2xl font-bold text-green-400">{pick.scaled_vorp_delta.toFixed(2)}</div>
+                                                        <div className="text-2xl font-bold text-green-400">{formatScore(pick.scaled_vorp_delta, 2)}</div>
                                                     </div>
                                                     <div className="text-base font-medium text-blue-300">
                                                         {pick.team}
@@ -858,7 +859,7 @@ const DraftAnalysis = () => {
                                                     </div>
                                                     <div className="text-sm text-gray-200">
                                                         <div className="text-xs">Draft Value</div>
-                                                        <div className="text-2xl font-bold text-red-400">{pick.scaled_vorp_delta.toFixed(2)}</div>
+                                                        <div className="text-2xl font-bold text-red-400">{formatScore(pick.scaled_vorp_delta, 2)}</div>
                                                     </div>
                                                     <div className="text-base font-medium text-blue-300">
                                                         {pick.team}
@@ -883,8 +884,8 @@ const DraftAnalysis = () => {
                                                     <span className="text-gray-400 font-medium">#{idx + 1}</span>
                                                     <span className="text-white font-medium">{team.team}</span>
                                                 </div>
-                                                <span className={`font-bold ${team.value >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                                    {team.value.toFixed(2)}
+                                                    <span className={`font-bold ${team.value >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                                    {formatScore(team.value, 2)}
                                                 </span>
                                             </div>
                                         ))}
@@ -902,7 +903,7 @@ const DraftAnalysis = () => {
                                                 <div key={i} className="bg-gray-600 p-3 rounded border-l-2 border-green-400">
                                                     <div className="text-white font-medium">{draft.team}</div>
                                                     <div className="text-sm text-gray-300">{draft.season}</div>
-                                                    <div className="text-lg font-bold text-green-400">{draft.totalScaledVorp.toFixed(2)}</div>
+                                                    <div className="text-lg font-bold text-green-400">{formatScore(draft.totalScaledVorp, 2)}</div>
                                                 </div>
                                             ))}
                                         </div>
@@ -915,7 +916,7 @@ const DraftAnalysis = () => {
                                                 <div key={i} className="bg-gray-600 p-3 rounded border-l-2 border-red-400">
                                                     <div className="text-white font-medium">{draft.team}</div>
                                                     <div className="text-sm text-gray-300">{draft.season}</div>
-                                                    <div className="text-lg font-bold text-red-400">{draft.totalScaledVorp.toFixed(2)}</div>
+                                                    <div className="text-lg font-bold text-red-400">{formatScore(draft.totalScaledVorp, 2)}</div>
                                                 </div>
                                             ))}
                                         </div>
@@ -1063,9 +1064,9 @@ const DraftAnalysis = () => {
                                                                                 <div
                                                                                     className={`flex-shrink-0 inline-flex items-center justify-center text-[10px] font-bold text-white px-1.5 py-0.5 rounded ${pick.scaled_vorp_delta >= 0 ? 'bg-green-500' : 'bg-red-500'}`}
                                                                                     style={{ minWidth: '28px', maxWidth: '48px' }}
-                                                                                    title={`Draft Value: ${pick.scaled_vorp_delta.toFixed(2)}`}
+                                                                                    title={`Draft Value: ${formatScore(pick.scaled_vorp_delta, 2)}`}
                                                                                 >
-                                                                                    {parseFloat(pick.scaled_vorp_delta).toFixed(1)}
+                                                                                    {formatScore(parseFloat(pick.scaled_vorp_delta), 1)}
                                                                                 </div>
                                                                             ) : <div className="text-xs text-gray-400 w-6">&nbsp;</div>}
 
@@ -1111,11 +1112,11 @@ const DraftAnalysis = () => {
                                     <div className="flex flex-col md:flex-row md:space-x-8 justify-center items-center">
                                         <div className="bg-gray-700 rounded-lg p-4 shadow-md mb-4 md:mb-0 w-full md:w-1/2">
                                             <h4 className="text-xl font-bold text-blue-300 mb-2">Best Team by Total Draft Value</h4>
-                                            <p className="text-lg">{draftYearSummary.bestTeam.team} <span className="text-green-400 font-semibold">({draftYearSummary.bestTeam.totalScaledVorp.toFixed(2)})</span></p>
+                                            <p className="text-lg">{draftYearSummary.bestTeam.team} <span className="text-green-400 font-semibold">({formatScore(draftYearSummary.bestTeam.totalScaledVorp, 2)})</span></p>
                                         </div>
                                         <div className="bg-gray-700 rounded-lg p-4 shadow-md w-full md:w-1/2">
                                             <h4 className="text-xl font-bold text-red-300 mb-2">Worst Team by Total Draft Value</h4>
-                                            <p className="text-lg">{draftYearSummary.worstTeam.team} <span className="text-red-400 font-semibold">({draftYearSummary.worstTeam.totalScaledVorp.toFixed(2)})</span></p>
+                                            <p className="text-lg">{draftYearSummary.worstTeam.team} <span className="text-red-400 font-semibold">({formatScore(draftYearSummary.worstTeam.totalScaledVorp, 2)})</span></p>
                                         </div>
                                     </div>
 
@@ -1125,7 +1126,7 @@ const DraftAnalysis = () => {
                                             <h4 className="text-xl font-bold text-blue-300 mb-2">Best Pick (Draft Value)</h4>
                                             <p className="text-lg">
                                                 {draftYearSummary.bestPick.player_name} ({draftYearSummary.bestPick.player_position})
-                                                <span className="ml-2 text-green-400 font-semibold">{(typeof draftYearSummary.bestPick.scaled_vorp_delta === 'number' ? draftYearSummary.bestPick.scaled_vorp_delta : draftYearSummary.bestPick.vorp_delta).toFixed(2)}</span>
+                                                <span className="ml-2 text-green-400 font-semibold">{formatScore(typeof draftYearSummary.bestPick.scaled_vorp_delta === 'number' ? draftYearSummary.bestPick.scaled_vorp_delta : draftYearSummary.bestPick.vorp_delta, 2)}</span>
                                                 <br />
                                                 <span className="text-sm text-gray-300">Team: {draftYearSummary.bestPick.picked_by_team_name} | Pick: {draftYearSummary.bestPick.pick_no}</span>
                                             </p>
@@ -1134,7 +1135,7 @@ const DraftAnalysis = () => {
                                             <h4 className="text-xl font-bold text-red-300 mb-2">Worst Pick (Draft Value)</h4>
                                             <p className="text-lg">
                                                 {draftYearSummary.worstPick.player_name} ({draftYearSummary.worstPick.player_position})
-                                                <span className="ml-2 text-red-400 font-semibold">{(typeof draftYearSummary.worstPick.scaled_vorp_delta === 'number' ? draftYearSummary.worstPick.scaled_vorp_delta : draftYearSummary.worstPick.vorp_delta).toFixed(2)}</span>
+                                                <span className="ml-2 text-red-400 font-semibold">{formatScore(typeof draftYearSummary.worstPick.scaled_vorp_delta === 'number' ? draftYearSummary.worstPick.scaled_vorp_delta : draftYearSummary.worstPick.vorp_delta, 2)}</span>
                                                 <br />
                                                 <span className="text-sm text-gray-300">Team: {draftYearSummary.worstPick.picked_by_team_name} | Pick: {draftYearSummary.worstPick.pick_no}</span>
                                             </p>
@@ -1164,7 +1165,7 @@ const DraftAnalysis = () => {
                                                                 <td className="py-2 px-4 align-top">
                                                                     <div className="flex flex-col space-y-1">
                                                                         <div className="text-sm font-semibold text-white truncate">{round.best.player_name} <span className="text-xs text-gray-400">({round.best.player_position})</span></div>
-                                                                        <div className="text-sm font-bold text-green-400">Draft Value: {typeof round.best?.scaled_vorp_delta === 'number' ? round.best.scaled_vorp_delta.toFixed(2) : (typeof round.best?.vorp_delta === 'number' ? round.best.vorp_delta.toFixed(2) : '—')}</div>
+                                                                        <div className="text-sm font-bold text-green-400">Draft Value: {typeof round.best?.scaled_vorp_delta === 'number' ? formatScore(round.best.scaled_vorp_delta, 2) : (typeof round.best?.vorp_delta === 'number' ? formatScore(round.best.vorp_delta, 2) : '—')}</div>
                                                                         <div className="text-xs text-gray-400">Team: {round.best.picked_by_team_name || 'Unknown'} | Pick: {round.best.pick_no || '—'}</div>
                                                                     </div>
                                                                 </td>
@@ -1173,12 +1174,12 @@ const DraftAnalysis = () => {
                                                                 <td className="py-2 px-4 align-top">
                                                                     <div className="flex flex-col space-y-1">
                                                                         <div className="text-sm font-semibold text-white truncate">{round.worst.player_name} <span className="text-xs text-gray-400">({round.worst.player_position})</span></div>
-                                                                        <div className="text-sm font-bold text-red-400">Draft Value: {typeof round.worst?.scaled_vorp_delta === 'number' ? round.worst.scaled_vorp_delta.toFixed(2) : (typeof round.worst?.vorp_delta === 'number' ? round.worst.vorp_delta.toFixed(2) : '—')}</div>
+                                                                        <div className="text-sm font-bold text-red-400">Draft Value: {typeof round.worst?.scaled_vorp_delta === 'number' ? formatScore(round.worst.scaled_vorp_delta, 2) : (typeof round.worst?.vorp_delta === 'number' ? formatScore(round.worst.vorp_delta, 2) : '—')}</div>
                                                                         <div className="text-xs text-gray-400">Team: {round.worst.picked_by_team_name || 'Unknown'} | Pick: {round.worst.pick_no || '—'}</div>
                                                                     </div>
                                                                 </td>
 
-                                                                <td className="py-2 px-4 text-center align-top">{typeof round.avgScaledVorp === 'number' ? round.avgScaledVorp.toFixed(2) : '—'}</td>
+                                                                <td className="py-2 px-4 text-center align-top">{typeof round.avgScaledVorp === 'number' ? formatScore(round.avgScaledVorp, 2) : '—'}</td>
                                                             </tr>
                                                         </React.Fragment>
                                                     ))}

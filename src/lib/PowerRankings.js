@@ -131,16 +131,17 @@ function calculateSeasonalDPRMetrics(historicalData, getTeamName, season, comple
 }
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { TEAM_NAME_TO_SLEEPER_ID_MAP, RETIRED_MANAGERS } from '../config';
+import { formatScore } from '../utils/formatUtils';
 
-const formatDPR = (dpr) => (typeof dpr === 'number' && !isNaN(dpr) ? dpr.toFixed(3) : 'N/A');
+const formatDPR = (dpr) => (typeof dpr === 'number' && !isNaN(dpr) ? formatScore(dpr, 3) : 'N/A');
 const renderRecord = (wins, losses, ties) => {
 	if (ties > 0) {
 		return `${wins || 0}-${losses || 0}-${ties}`;
 	}
 	return `${wins || 0}-${losses || 0}`;
 };
-const formatPoints = (points) => (typeof points === 'number' && !isNaN(points) ? points.toFixed(2) : 'N/A');
-const formatLuckRating = (luck) => (typeof luck === 'number' && !isNaN(luck) ? luck.toFixed(3) : 'N/A');
+const formatPoints = (points) => (typeof points === 'number' && !isNaN(points) ? formatScore(points, 2) : 'N/A');
+const formatLuckRating = (luck) => (typeof luck === 'number' && !isNaN(luck) ? formatScore(luck, 3) : 'N/A');
 
 const CHART_COLORS = [
   '#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#00c49f', '#ff0000',
@@ -155,7 +156,7 @@ const CustomDPRRankTooltip = ({ active, payload, label }) => {
         <p className="font-bold text-gray-800 mb-2">Week: {label}</p>
         {sortedPayload.map((entry, index) => (
           <p key={`item-${index}`} style={{ color: entry.color }}>
-            {entry.name}: Rank {entry.value} ({entry.payload.dprValues[entry.name].toFixed(3)} DPR)
+			{entry.name}: Rank {entry.value} ({formatScore(entry.payload.dprValues[entry.name], 3)} DPR)
           </p>
         ))}
       </div>

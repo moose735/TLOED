@@ -17,7 +17,10 @@ import {
     calculateRecentForm, 
     probabilityToAmericanOdds, 
     formatOdds 
-} from '../utils/matchupOdds';const Sportsbook = () => {
+} from '../utils/matchupOdds';
+import { formatScore } from '../utils/formatUtils';
+
+const Sportsbook = () => {
     const { 
         historicalData, 
         leagueData, 
@@ -1304,7 +1307,7 @@ import {
                                 <span className="font-bold text-gray-800">Bet Slip ({betSlip.length})</span>
                                 {betAmount && parseFloat(betAmount) > 0 && (
                                     <span className="text-green-600 font-semibold text-sm">
-                                        ${calculatePayout().toFixed(2)}
+                                        ${formatScore(Number(calculatePayout()), 2)}
                                     </span>
                                 )}
                             </div>
@@ -1377,13 +1380,13 @@ import {
                                         <div className="text-sm">
                                             <span className="text-gray-600">To Win: </span>
                                             <span className="font-semibold text-green-600">
-                                                ${(calculatePayout() - parseFloat(betAmount)).toFixed(2)}
+                                                {formatScore(Number(calculatePayout() - parseFloat(betAmount)), 2)}
                                             </span>
                                         </div>
                                         <button
                                             className="bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition-colors text-sm font-medium"
                                             onClick={() => {
-                                                addNotification(`Bet placed: $${betAmount} to win $${(calculatePayout() - parseFloat(betAmount)).toFixed(2)}`, 'success');
+                                                addNotification(`Bet placed: $${betAmount} to win $${formatScore(Number(calculatePayout() - parseFloat(betAmount)), 2)}`, 'success');
                                                 clearBetSlip();
                                                 setIsBetSlipExpanded(false);
                                             }}
