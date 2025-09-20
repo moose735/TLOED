@@ -70,12 +70,25 @@ FORCED_BADGE_MAP['heavyweight-champion'] = '/badges/achievement/heavyweight-cham
 FORCED_BADGE_MAP['heavyweight-champion.svg'] = '/badges/achievement/heavyweight-champion.svg';
 
 // Matchup badges: prefer the shared matchup icon (or specific assets if added later)
+// For blunder-style matchup badges use the blunders matchup icon provided by the user
 const MATCHUP_ICON = '/badges/achievement/matchup-icon.svg';
+const BLUNDER_MATCHUP_ICON = '/badges/blunders/matchup-icon.svg';
+
 [
     'peak-performance','peak-performance.svg','the-shootout','shootout','massacre','massacre.svg',
     'firing-squad','firing-squad.svg','a-small-victory','a-small-victory.svg','a-micro-victory','a-nano-victory',
     'micro-victory','small-victory','nano-victory','double-up','double-up.svg','bully','thread-the-needle','thread-the-needle.svg'
 ].forEach(k => { FORCED_BADGE_MAP[k] = MATCHUP_ICON; });
+
+// Map blunder matchup names/aliases to the blunder matchup icon so they show the provided asset
+[
+ 'the-snoozer','the-snoozer.svg','the_snoozer','snoozer','snoozer.svg',
+ 'the-undercard','the-undercard.svg','the_undercard','undercard','undercard.svg',
+ 'a-small-defeat','a-small-defeat.svg','a_small_defeat','a small defeat','small-defeat','small_defeat',
+ 'doubled-up','doubled-up.svg','doubled_up','doubled up','doubledup',
+ 'spoiled-goods','spoiled-goods.svg','spoiled_goods','spoiled goods','spoiledgoods',
+ 'bullied','bullied.svg','bye-week','bye-week.svg','bye_week','the-bye-week','the-bye-week.svg'
+].forEach(k => { FORCED_BADGE_MAP[k] = BLUNDER_MATCHUP_ICON; });
 
 // Lucky Duck asset
 FORCED_BADGE_MAP['lucky-duck'] = '/badges/achievement/season-lucky-duck.svg';
@@ -113,6 +126,55 @@ FORCED_BADGE_MAP['best-draft-pick.svg'] = '/badges/achievement/best-pick-smiley.
 FORCED_BADGE_MAP['worst-draft-pick'] = '/badges/blunders/worst-pick-yuck.svg';
 FORCED_BADGE_MAP['worst_draft_pick'] = '/badges/blunders/worst-pick-yuck.svg';
 FORCED_BADGE_MAP['worst-draft-pick.svg'] = '/badges/blunders/worst-pick-yuck.svg';
+
+// Broke Ass blunder asset (placeholder) — create or replace with preferred SVG in public/badges/blunders/
+FORCED_BADGE_MAP['broke-ass'] = '/badges/blunders/broke-ass.svg';
+FORCED_BADGE_MAP['broke-ass.svg'] = '/badges/blunders/broke-ass.svg';
+FORCED_BADGE_MAP['broke_ass'] = '/badges/blunders/broke-ass.svg';
+
+// Champion drought blunder assets (single SVG reused for progressive 5-year badges)
+FORCED_BADGE_MAP['champ-drought'] = '/badges/blunders/champ-drought.svg';
+FORCED_BADGE_MAP['champ-drought.svg'] = '/badges/blunders/champ-drought.svg';
+FORCED_BADGE_MAP['champion-drought'] = '/badges/blunders/champ-drought.svg';
+FORCED_BADGE_MAP['champion-drought.svg'] = '/badges/blunders/champ-drought.svg';
+// progressive 5-year variants (map all to the same asset for now)
+['5','10','15','20','25','30','35','40','45','50'].forEach(n => {
+    FORCED_BADGE_MAP[`champion-drought-${n}`] = '/badges/blunders/champ-drought.svg';
+    FORCED_BADGE_MAP[`champion-drought-${n}.svg`] = '/badges/blunders/champ-drought.svg';
+    FORCED_BADGE_MAP[`champ-drought-${n}`] = '/badges/blunders/champ-drought.svg';
+    FORCED_BADGE_MAP[`champ-drought_${n}`] = '/badges/blunders/champ-drought.svg';
+});
+
+    // Season blunder assets: iron, wood, clay, cursed (user-added SVGs)
+    FORCED_BADGE_MAP['iron-season'] = '/badges/blunders/iron-season.svg';
+    FORCED_BADGE_MAP['iron-season.svg'] = '/badges/blunders/iron-season.svg';
+    FORCED_BADGE_MAP['iron_season'] = '/badges/blunders/iron-season.svg';
+    FORCED_BADGE_MAP['iron'] = '/badges/blunders/iron-season.svg';
+    FORCED_BADGE_MAP['iron.svg'] = '/badges/blunders/iron-season.svg';
+    FORCED_BADGE_MAP['iron_season.svg'] = '/badges/blunders/iron-season.svg';
+
+    FORCED_BADGE_MAP['wood-season'] = '/badges/blunders/wood-season.svg';
+    FORCED_BADGE_MAP['wood-season.svg'] = '/badges/blunders/wood-season.svg';
+    FORCED_BADGE_MAP['wood_season'] = '/badges/blunders/wood-season.svg';
+    FORCED_BADGE_MAP['wood'] = '/badges/blunders/wood-season.svg';
+    FORCED_BADGE_MAP['wood.svg'] = '/badges/blunders/wood-season.svg';
+    FORCED_BADGE_MAP['wood_season.svg'] = '/badges/blunders/wood-season.svg';
+
+    FORCED_BADGE_MAP['clay-season'] = '/badges/blunders/clay-season.svg';
+    FORCED_BADGE_MAP['clay-season.svg'] = '/badges/blunders/clay-season.svg';
+    FORCED_BADGE_MAP['clay_season'] = '/badges/blunders/clay-season.svg';
+    FORCED_BADGE_MAP['clay'] = '/badges/blunders/clay-season.svg';
+    FORCED_BADGE_MAP['clay.svg'] = '/badges/blunders/clay-season.svg';
+    FORCED_BADGE_MAP['clay_season.svg'] = '/badges/blunders/clay-season.svg';
+
+    FORCED_BADGE_MAP['cursed-season'] = '/badges/blunders/cursed-season.svg';
+    FORCED_BADGE_MAP['cursed-season.svg'] = '/badges/blunders/cursed-season.svg';
+    FORCED_BADGE_MAP['cursed_season'] = '/badges/blunders/cursed-season.svg';
+    FORCED_BADGE_MAP['cursed'] = '/badges/blunders/cursed-season.svg';
+    FORCED_BADGE_MAP['cursed.svg'] = '/badges/blunders/cursed-season.svg';
+    FORCED_BADGE_MAP['least-luck'] = '/badges/blunders/cursed-season.svg';
+    FORCED_BADGE_MAP['least-luck.svg'] = '/badges/blunders/cursed-season.svg';
+    FORCED_BADGE_MAP['least_luck'] = '/badges/blunders/cursed-season.svg';
 
 // Human-readable descriptions for tooltip hover. Keep at module scope so overview
 // rendering can reference these without ordering/hoisting problems.
@@ -193,18 +255,52 @@ const BADGE_DESCRIPTIONS = {
     'Bye Week': 'A season where an important week (bye) damaged season outcomes.',
     'Heartbreaker': 'Lost multiple games by extremely small margins.',
     'The Snoozer': 'Low scoring, unexciting season.',
+    'The Undercard': 'Lowest points share in a matchup for the season (undercard performance).',
     'Doubled Up': 'Suffered repeated losses that compound into a blunder.',
     'True Lowlight': 'A painfully bad highlight that stands out in league history.',
     'Spoiled Goods': 'Drafted players who severely underperformed relative to expectations.',
     'Bullied': 'Consistently got beaten by other teams in the league.',
-    'The Madman': 'Made an unorthodox series of moves that backfired spectacularly.'
+    'The Madman': 'Made an unorthodox series of moves that backfired spectacularly.',
+    // New losing-side blunders
+    'A Small Defeat': 'Lost a matchup by 1.00 - 2.00 points.',
+    'A Nano Defeat': 'Lost a matchup by 0.50 - 0.99 points.',
+    'A Micro Defeat': 'Lost a matchup by 0.01 - 0.49 points.'
 };
+
+    // Forced assets for new blunder names (map to the matchup blunder icon for now)
+    FORCED_BADGE_MAP['a-small-defeat'] = BLUNDER_MATCHUP_ICON;
+    FORCED_BADGE_MAP['a-small-defeat.svg'] = BLUNDER_MATCHUP_ICON;
+    FORCED_BADGE_MAP['a_small_defeat'] = BLUNDER_MATCHUP_ICON;
+
+    FORCED_BADGE_MAP['a-nano-defeat'] = BLUNDER_MATCHUP_ICON;
+    FORCED_BADGE_MAP['a-nano-defeat.svg'] = BLUNDER_MATCHUP_ICON;
+    FORCED_BADGE_MAP['a_nano_defeat'] = BLUNDER_MATCHUP_ICON;
+
+    FORCED_BADGE_MAP['a-micro-defeat'] = BLUNDER_MATCHUP_ICON;
+    FORCED_BADGE_MAP['a-micro-defeat.svg'] = BLUNDER_MATCHUP_ICON;
+    FORCED_BADGE_MAP['a_micro_defeat'] = BLUNDER_MATCHUP_ICON;
+
+// Transaction blunder: Broke Ass
+BADGE_DESCRIPTIONS['Broke Ass'] = 'Team that paid the most in transaction fees in a season.';
 
 // Add descriptions for new league badges
 BADGE_DESCRIPTIONS['Veteran Presence'] = 'Recognition for reaching five seasons of tenure with the league.';
 BADGE_DESCRIPTIONS['Old Timer'] = 'Recognition for reaching ten seasons of tenure with the league.';
 BADGE_DESCRIPTIONS['Total Wins - 25'] = 'Career milestone for accumulating 25 total wins.';
 BADGE_DESCRIPTIONS['Total Wins - 50'] = 'Career milestone for accumulating 50 total wins.';
+
+// Champion drought blunders (progressive every 5 years)
+BADGE_DESCRIPTIONS['Champion Drought - 5'] = 'Recognizes a team that has not won the championship for five consecutive seasons.';
+BADGE_DESCRIPTIONS['Champion Drought - 10'] = 'Recognizes a team that has not won the championship for ten consecutive seasons.';
+BADGE_DESCRIPTIONS['Champion Drought - 15'] = 'Recognizes a team that has not won the championship for fifteen consecutive seasons.';
+BADGE_DESCRIPTIONS['Champion Drought - 20'] = 'Recognizes a team that has not won the championship for twenty consecutive seasons.';
+BADGE_DESCRIPTIONS['Champion Drought - 25'] = 'Recognizes a team that has not won the championship for twenty-five consecutive seasons.';
+
+// Season badge DPR buckets
+BADGE_DESCRIPTIONS['Iron Season'] = 'Season DPR between 0.925 and 0.999 (very low variance / iron season).';
+BADGE_DESCRIPTIONS['Wood Season'] = 'Season DPR between 0.850 and 0.924 (low performance tier).';
+BADGE_DESCRIPTIONS['Clay Season'] = 'Season DPR below 0.849 (bottom-tier performance).';
+BADGE_DESCRIPTIONS['Cursed'] = 'Awarded to the team with the least luck in a season (lowest luck rating).';
 
 const Badge = ({ title, subtitle, year, accent = 'blue', icon = null }) => {
     const a = ACCENT_MAP[accent] || ACCENT_MAP.blue;
@@ -487,6 +583,9 @@ const Achievements = () => {
         setSelectedTeam(e.target.value);
     };
 
+    // Debug: show raw badge metadata for selected team
+    const [showRawBadges, setShowRawBadges] = useState(false);
+
     // Resolve an ownerId to a friendly team name using getTeamDetails, usersData, badge metadata, or fallback
     const resolveOwnerName = (ownerId) => {
         const id = String(ownerId || '');
@@ -555,6 +654,19 @@ const Achievements = () => {
                             return <div className="text-sm text-gray-500">Badge Count: {achievements} • Blunders: {blunders}</div>;
                         })()}
                     </div>
+                    <div className="ml-auto text-sm">
+                        <label className="inline-flex items-center gap-2 text-gray-600">
+                            <input type="checkbox" className="form-checkbox" checked={showRawBadges} onChange={(e) => setShowRawBadges(e.target.checked)} />
+                            <span>Show raw badges</span>
+                        </label>
+                    </div>
+                </div>
+            )}
+
+            {showRawBadges && selectedTeam && selectedTeam !== 'overview' && (
+                <div className="mb-4 p-3 bg-white border rounded text-xs text-gray-700 max-h-64 overflow-auto">
+                    <div className="font-semibold mb-2">Raw badges for {resolveOwnerName(selectedTeam)}</div>
+                    <pre className="whitespace-pre-wrap">{JSON.stringify((badgesByTeam && badgesByTeam[selectedTeam]) || [], null, 2)}</pre>
                 </div>
             )}
 
@@ -638,23 +750,50 @@ const Achievements = () => {
                                                         <div className="text-sm font-medium truncate">{r.name}</div>
                                                     </td>
                                                     <td className="px-2 py-3 align-middle">
-                                                        <div className="w-full h-8 bg-green-50 rounded-md overflow-hidden flex items-center">
-                                                            <div style={{ width: `${achBarPct}%`, backgroundColor: achColor, height: '100%' }} />
-                                                            <div className="absolute ml-2 text-sm font-semibold text-gray-800">{r.achievementsUnique}</div>
+                                                        <div className="relative w-full h-8 bg-green-50 rounded-md overflow-hidden flex items-center">
+                                                                <div
+                                                                    className={`h-full ${achBarPct === 100 ? 'rounded-md' : 'rounded-l-md'} bg-gradient-to-r from-green-400 to-green-600 flex items-center`}
+                                                                    style={{ width: `${achBarPct}%` }}
+                                                                >
+                                                                    {achBarPct >= 12 ? (
+                                                                        <div className="ml-3 text-sm font-semibold text-white">{r.achievementsUnique}</div>
+                                                                    ) : null}
+                                                                </div>
+                                                                {achBarPct < 12 && (
+                                                                    <div className="absolute left-2 text-sm font-semibold text-gray-800">{r.achievementsUnique}</div>
+                                                                )}
                                                         </div>
                                                     </td>
                                                     <td className="px-4 py-3 text-center text-sm font-semibold">{r.achievementsTotal}</td>
                                                     <td className="px-2 py-3 align-middle">
-                                                        <div className="w-full h-8 bg-red-50 rounded-md overflow-hidden flex items-center">
-                                                            <div style={{ width: `${blBarPct}%`, backgroundColor: blColor, height: '100%' }} />
-                                                            <div className="absolute ml-2 text-sm font-semibold text-gray-800">{r.blundersUnique}</div>
+                                                        <div className="relative w-full h-8 bg-red-50 rounded-md overflow-hidden flex items-center">
+                                                            <div
+                                                                className={`h-full ${blBarPct === 100 ? 'rounded-md' : 'rounded-l-md'} bg-gradient-to-r from-red-400 to-red-600 flex items-center`}
+                                                                style={{ width: `${blBarPct}%` }}
+                                                            >
+                                                                {blBarPct >= 12 ? (
+                                                                    <div className="ml-3 text-sm font-semibold text-white">{r.blundersUnique}</div>
+                                                                ) : null}
+                                                            </div>
+                                                            {blBarPct < 12 && (
+                                                                <div className="absolute left-2 text-sm font-semibold text-gray-800">{r.blundersUnique}</div>
+                                                            )}
                                                         </div>
                                                     </td>
                                                     <td className="px-4 py-3 text-center text-sm font-semibold">{r.blundersTotal}</td>
                                                     <td className="px-2 py-3 align-middle">
-                                                        <div className="w-full h-8 bg-blue-50 rounded-md overflow-hidden flex items-center">
-                                                            <div style={{ width: `${totalBarPct}%`, backgroundColor: totalColor, height: '100%' }} />
-                                                            <div className="absolute ml-2 text-sm font-semibold text-gray-800">{r.totalUnique}</div>
+                                                        <div className="relative w-full h-8 bg-blue-50 rounded-md overflow-hidden flex items-center">
+                                                            <div
+                                                                className={`h-full ${totalBarPct === 100 ? 'rounded-md' : 'rounded-l-md'} bg-gradient-to-r from-blue-500 to-blue-600 flex items-center`}
+                                                                style={{ width: `${totalBarPct}%` }}
+                                                            >
+                                                                {totalBarPct >= 12 ? (
+                                                                    <div className="ml-3 text-sm font-semibold text-white">{r.totalUnique}</div>
+                                                                ) : null}
+                                                            </div>
+                                                            {totalBarPct < 12 && (
+                                                                <div className="absolute left-2 text-sm font-semibold text-gray-800">{r.totalUnique}</div>
+                                                            )}
                                                         </div>
                                                     </td>
                                                     <td className="px-4 py-3 text-center text-sm font-semibold">{r.totalBadges}</td>
@@ -683,40 +822,112 @@ const Achievements = () => {
                             ) : <div className="text-sm text-gray-500">No recent badges</div>}
                     </div>
 
-                    {/* Badge Catalog: list all known badges with description and icon for review */}
+                    {/* Badge Catalog: grouped view with category headings */}
                     <SectionHeader title="Badge Catalog (icons & descriptions)" />
-                    <div className="grid grid-cols-2 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4 mb-6">
-                        {(() => {
-                            const known = [
-                                'Season Title','Points Title','Season All-Play Title','Triple Crown','Champion','Runner Up','3rd Place',
-                                'Bronze Season','Silver Season','Gold Season','Diamond Season',
-                                'Peak Performance','The Shootout','Massacre','Firing Squad','A Small Victory','A Micro Victory','A Nano Victory','Double Up',
-                                'Draft King','Worst Draft Pick','Action King','Season Transactions','Lucky Duck',
-                                'Veteran Presence','Old Timer','Total Wins - 25','Total Wins - 50'
-                            ];
-                            return known.map(name => {
-                                const slug = String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-                                // Prefer the career-win-flag asset for Total Wins badges
-                                const isTotalWins = /^total-wins(-|\s)?/.test(slug) || String(name).toLowerCase().indexOf('total wins') !== -1;
-                                const forced = (isTotalWins ? FORCED_BADGE_MAP['career-win-flag'] : null) || FORCED_BADGE_MAP[slug] || FORCED_BADGE_MAP[slug + '.svg'] || null;
-                                // prefer forced asset if available and append cache-bust to ensure updates show
-                                const cb = Date.now();
-                                const candidate = forced ? `${forced}${forced.indexOf('?') === -1 ? '?' : '&'}cb=${cb}` : `/badges/achievement/${slug}.svg?cb=${cb}`;
-                                const desc = BADGE_DESCRIPTIONS && BADGE_DESCRIPTIONS[name] ? BADGE_DESCRIPTIONS[name] : '';
-                                return (
-                                    <div key={slug} className="p-3 rounded-md border border-gray-100 bg-white text-center">
-                                        <div className="flex items-center justify-center mb-3">
-                                            <div className="w-16 h-16 rounded-full overflow-hidden relative mx-auto">
-                                                <img src={candidate} alt={name} className="w-full h-full object-cover" onError={(e)=>{e.currentTarget.onerror=null; e.currentTarget.src='/badges/default.svg'}} />
+                    {(() => {
+                        // Shared subcategories for both catalogs
+                        const subcategories = [
+                            { title: 'Champion Badges', key: 'champion', items: ['Season Title','Points Title','Season All-Play Title','Triple Crown','Champion','Runner Up','3rd Place','Heavyweight Champion','Comeback Kid','Against All Odds'] },
+                            { title: 'Season Badges', key: 'season', items: ['Bronze Season','Silver Season','Gold Season','Diamond Season','The Gauntlet','Lucky Duck','Iron Season','Wood Season','Clay Season','Cursed'] },
+                            { title: 'Matchup Badges', key: 'matchup', items: ['Peak Performance','The Shootout','Massacre','Firing Squad','A Small Victory','A Micro Victory','A Nano Victory','Double Up','Perfectly Peaked','Bully','Thread The Needle','The Snoozer','A Small Defeat','Bye Week','Bullied','Spoiled Goods'] },
+                            { title: 'Draft Badges', key: 'draft', items: ['Draft King','Top Draft Pick','Top QB Draft','Top RB Draft','Top WR Draft','Top TE Draft','Top K Draft','Top DEF Draft'] },
+                            { title: 'Transaction Badges', key: 'tx', items: ['Action King','Season Transactions'] },
+                            { title: 'Roster Badges', key: 'roster', items: ['Top QB Roster','Top RB Roster','Top WR Roster','Top TE Roster','Top K Roster','Top DEF Roster'] },
+                            { title: 'League Badges', key: 'league', items: ['Veteran Presence','Old Timer','Total Wins - 25','Total Wins - 50','All-Play Wins - 250','All-Play Wins - 500','Total Points - 10000'] }
+                        ];
+
+                        // Define blunder-only set once so Achievements catalog can exclude them
+                        const blunderOnly = new Set(['Iron Season','Wood Season','Clay Season','Cursed','The Snoozer','A Small Defeat','Bye Week','Bullied','Spoiled Goods','Doubled Up','Champion Drought - 5','Champion Drought - 10','Champion Drought - 15','Champion Drought - 20','Champion Drought - 25','The Worst','Trash Trifecta','Flawless Garbage','The Cupcake','Season Worst Scores -5','True Lowlight','The Madman','Worst Draft Pick']);
+
+                        // Helper to render a group grid given an items array
+                        const renderGroupGrid = (groupTitle, items) => (
+                            <React.Fragment key={groupTitle}>
+                                <SectionHeader title={groupTitle} />
+                                <div className="grid grid-cols-2 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4 mb-6">
+                                    {items.map(name => {
+                                        const slug = String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+                                        const isTotalWins = /^total-wins(-|\s)?/.test(slug) || String(name).toLowerCase().indexOf('total wins') !== -1;
+                                        const forced = (isTotalWins ? FORCED_BADGE_MAP['career-win-flag'] : null) || FORCED_BADGE_MAP[slug] || FORCED_BADGE_MAP[slug + '.svg'] || null;
+                                        const cb = Date.now();
+                                        const candidate = forced ? `${forced}${forced.indexOf('?') === -1 ? '?' : '&'}cb=${cb}` : `/badges/achievement/${slug}.svg?cb=${cb}`;
+                                        const desc = BADGE_DESCRIPTIONS && BADGE_DESCRIPTIONS[name] ? BADGE_DESCRIPTIONS[name] : '';
+                                        // Find winners from badgesByTeam (team name + year). Limit to 5 for compactness.
+                                        const normalizeForMatch = s => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+                                        const targetNorm = normalizeForMatch(name);
+                                        const winners = [];
+                                        try {
+                                            Object.keys(badgesByTeam || {}).forEach(ownerId => {
+                                                const bs = (badgesByTeam && badgesByTeam[ownerId]) || [];
+                                                bs.forEach(b => {
+                                                    const bn = normalizeForMatch(b.displayName || b.name || b.id);
+                                                    if (bn === targetNorm) {
+                                                        const label = resolveOwnerName(ownerId) || `Team ${ownerId}`;
+                                                        const year = b.year ? ` ${b.year}` : '';
+                                                        winners.push(`${label}${year}`);
+                                                    }
+                                                });
+                                            });
+                                        } catch (err) { /* ignore winner lookup errors */ }
+                                        const uniqueWinners = Array.from(new Set(winners));
+                                        const winnersPreview = uniqueWinners.length === 0 ? 'None' : (uniqueWinners.slice(0,5).join(', ') + (uniqueWinners.length > 5 ? ` (+${uniqueWinners.length - 5} more)` : ''));
+                                        return (
+                                            <div key={`${groupTitle}-${slug}`} className="p-3 rounded-md border border-gray-100 bg-white text-center">
+                                                <div className="flex items-center justify-center mb-3">
+                                                    <div className="w-16 h-16 rounded-full overflow-hidden relative mx-auto">
+                                                        <img src={candidate} alt={name} className="w-full h-full object-cover" onError={(e)=>{e.currentTarget.onerror=null; e.currentTarget.src='/badges/default.svg'}} />
+                                                    </div>
+                                                </div>
+                                                <div className="text-sm font-semibold text-gray-800">{name}</div>
+                                                <div className="text-xs text-gray-500 mt-1">{desc}</div>
+                                                <div className="text-xs text-gray-600 mt-2">Winners: {winnersPreview}</div>
                                             </div>
-                                        </div>
-                                        <div className="text-sm font-semibold text-gray-800">{name}</div>
-                                        <div className="text-xs text-gray-500 mt-1">{desc}</div>
-                                    </div>
-                                );
-                            });
-                        })()}
-                    </div>
+                                        );
+                                    })}
+                                </div>
+                            </React.Fragment>
+                        );
+
+                        // Render two catalogs side-by-side on wide screens, stacked on small screens
+                        return (
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                                {/* Achievements catalog */}
+                                <div>
+                                    <SectionHeader title="Achievements Catalog" />
+                                    {subcategories.map(sc => {
+                                        const items = sc.items.filter(i => !blunderOnly.has(i));
+                                        if (!items || items.length === 0) return null;
+                                        return renderGroupGrid(sc.title, items);
+                                    })}
+                                </div>
+
+                                {/* Blunders catalog uses same subcategories but often different subset of items (we include relevant blunder items) */}
+                                <div>
+                                    <SectionHeader title="Blunders Catalog" />
+                                    {(() => {
+                                            const blunderOnly = new Set(['Iron Season','Wood Season','Clay Season','Cursed','The Snoozer','A Small Defeat','Bye Week','Bullied','Spoiled Goods','Doubled Up','Champion Drought - 5','Champion Drought - 10','Champion Drought - 15','Champion Drought - 20','Champion Drought - 25','The Worst','Trash Trifecta','Flawless Garbage','The Cupcake','Season Worst Scores -5','True Lowlight','The Madman','Worst Draft Pick','Worst QB Draft','Worst RB Draft','Worst WR Draft','Worst TE Draft','Worst K Draft','Worst DEF Draft','Broke Ass']);
+
+                                                            // For Blunders catalog, some subcategories (like Draft and Transactions)
+                                                            // should show the 'Worst' variants or specific blunders which are
+                                                            // not present in the achievements list.
+                                                            const blunderAdditions = {
+                                                                draft: ['Worst Draft Pick','Worst QB Draft','Worst RB Draft','Worst WR Draft','Worst TE Draft','Worst K Draft','Worst DEF Draft'],
+                                                                tx: ['Broke Ass']
+                                                            };
+
+                                                            return subcategories.map(sc => {
+                                                                // Include only those items in this subcategory which are known blunders
+                                                                // plus any explicit additions for that subcategory
+                                                                const base = sc.items.filter(i => blunderOnly.has(i));
+                                                                const additions = blunderAdditions[sc.key] || [];
+                                                                const items = Array.from(new Set([...base, ...additions]));
+                                                                if (!items || items.length === 0) return null;
+                                                                return renderGroupGrid(sc.title, items);
+                                                            });
+                                        })()}
+                                </div>
+                            </div>
+                        );
+                    })()}
                 </>
             )}
 
@@ -726,12 +937,9 @@ const Achievements = () => {
                     if (!selectedTeam || selectedTeam === 'overview') return null;
                     const allTeamBadges = (badgesByTeam && badgesByTeam[selectedTeam]) || [];
 
-                    // Filter badges by selected tab (achievements vs blunders)
-                    const teamBadges = allTeamBadges.filter(b => {
-                        if (teamTab === 'achievements') return b.category !== 'blunder';
-                        if (teamTab === 'blunders') return b.category === 'blunder';
-                        return true;
-                    });
+                    // We'll filter badges by tab after we build the blunder/achievement sets below.
+                    // Use `let` so we can reassign `teamBadges` once the sets are available.
+                    let teamBadges = allTeamBadges;
 
                     // Helper to render a section if there are badges matching the given display names
                     const normalize = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -786,8 +994,17 @@ const Achievements = () => {
                     const draftTxBadges = makeSet(['The Mastermind','Top Draft Pick','Top QB Draft','Top RB Draft','Top WR Draft','Top TE Draft','Top K Draft','Top DEF Draft','Draft King','Worst Draft Pick','Worst QB Draft','Worst RB Draft','Worst K Draft','Worst DL Draft','Worst DB Draft','Worst LB Draft','Worst WR Draft','Worst TE Draft']);
                     const rosterBadges = makeSet(['Top QB Roster','Top RB Roster','Top WR Roster','Top TE Roster','Top K Roster','Top DEF Roster']);
                     const leagueBadges = makeSet(['Veteran Presence','Old Timer','Total Wins - 25','Total Wins - 50','Total Wins - 75','Total Wins - 100','All-Play Wins - 250','All-Play Wins - 500','Total Points - 10000','All-Play Wins - 1000','Total Wins - 100']);
-                    const blunderBadges = makeSet(['The Worst','Trash Trifecta','Flawless Garbage','Champion Drought - 5','Champion Drought - 10','Champion Drought - 15','The Cupcake','Season Worst Scores -5','Iron Season','Wood Season','Clay Season','Season Bottom-Half Scoring - 75%','Bye Week','Heartbreaker','The Snoozer','Doubled Up','True Lowlight','Spoiled Goods','Bullied','The Madman','Worst Draft Pick','Worst QB Draft','Worst RB Draft','Worst K Draft','Worst DL Draft','Worst DB Draft','Worst LB Draft','Worst WR Draft','Worst TE Draft','Worst QB Roster','Worst RB Roster','Worst WR Roster','Worst TE Roster','Worst K Roster','Worst DEF Roster','Worst DL Roster','Worst LB Roster','Worst DB Roster']);
-                    const leagueBlunders = makeSet(['Total Losses - 25','Total Losses - 50','Total Losses - 100','All-Play Losses - 250','All-Play Losses - 500','All-Play Losses - 1000','Total Opponent Points - 10000']);
+                    const blunderBadges = makeSet([
+                        'The Worst','Trash Trifecta','Flawless Garbage',
+                        'Champion Drought - 5','Champion Drought - 10','Champion Drought - 15','Champion Drought - 20','Champion Drought - 25','Champion Drought - 30','Champion Drought - 35','Champion Drought - 40','Champion Drought - 45','Champion Drought - 50',
+                        'The Cupcake','Season Worst Scores -5','Iron Season','Wood Season','Clay Season','Cursed','Season Bottom-Half Scoring - 75%','Bye Week','Heartbreaker','The Snoozer','Doubled Up','True Lowlight','Spoiled Goods','Bullied','The Madman',
+                        'Worst Draft Pick','Worst QB Draft','Worst RB Draft','Worst K Draft','Worst DL Draft','Worst DB Draft','Worst LB Draft','Worst WR Draft','Worst TE Draft',
+                        'Worst QB Roster','Worst RB Roster','Worst WR Roster','Worst TE Roster','Worst K Roster','Worst DEF Roster','Worst DL Roster','Worst LB Roster','Worst DB Roster'
+                    ]);
+                    const leagueBlunders = makeSet([
+                        'Total Losses - 25','Total Losses - 50','Total Losses - 100','All-Play Losses - 250','All-Play Losses - 500','All-Play Losses - 1000','Total Opponent Points - 10000',
+                        'Champion Drought - 5','Champion Drought - 10','Champion Drought - 15','Champion Drought - 20','Champion Drought - 25'
+                    ]);
 
                     // Tab controls
                     const TabControls = () => (
@@ -804,10 +1021,14 @@ const Achievements = () => {
                         </div>
                     </div>;
 
-                    // Render sections with precedence: once a badge is placed into a section
-                    // it will not appear in later sections. This avoids duplicating the same
-                    // earned badge across multiple categories.
-                    const sections = [
+                    // Render sections with precedence. For achievements we show the usual
+                    // Trophy/Champion/Season/Matchup/Draft/Roster/League groups. For blunders
+                    // we want the same high-level groupings but only include badge names
+                    // that appear in the blunder set. We'll compute intersection sets and
+                    // build the appropriate sections list depending on the active tab.
+                    const intersectSets = (a, b) => new Set(Array.from(a).filter(x => b.has(x)));
+
+                    const sectionsForAchievements = [
                         { title: 'Trophy Room', set: trophyRoom },
                         { title: 'Champion Badges', set: championBadges },
                         { title: 'Season Badges', set: seasonBadges },
@@ -815,11 +1036,72 @@ const Achievements = () => {
                         { title: 'Draft & Transaction Badges', set: draftTxBadges },
                         { title: 'Roster Badges', set: rosterBadges },
                         { title: 'League Badges', set: leagueBadges },
-                        { title: 'Blunders', set: blunderBadges },
-                        { title: 'League Blunders', set: leagueBlunders },
                     ];
 
+                    // Build blunder-group sets by intersecting achievement groups with the blunder list
+                    // Also explicitly include a few blunder names that should map to these groups
+                    // even if they weren't listed in the original achievement group arrays.
+                    const seasonExtras = ['Iron Season','Wood Season','Clay Season','Cursed'];
+                    const seasonExtraNorm = new Set(seasonExtras.map(n => normalize(n)));
+                    const seasonBlunderSet = new Set([
+                        ...Array.from(intersectSets(seasonBadges, blunderBadges)),
+                        ...Array.from(blunderBadges).filter(x => seasonExtraNorm.has(x))
+                    ]);
+
+                    const matchupBlunderSet = intersectSets(matchupBadges, blunderBadges);
+                    const draftTxBlunderSet = intersectSets(draftTxBadges, blunderBadges);
+                    const rosterBlunderSet = intersectSets(rosterBadges, blunderBadges);
+                    const leagueBlunderSet = intersectSets(leagueBadges, blunderBadges);
+
+                    // Champion droughts should be grouped with Champion Badges
+                    const championDroughtNorm = Array.from(blunderBadges).filter(x => x.startsWith('champion drought'));
+                    const championBlunderSet = new Set([
+                        ...Array.from(intersectSets(championBadges, blunderBadges)),
+                        ...championDroughtNorm
+                    ]);
+
+                    // Any remaining blunders that didn't match the above groups go into 'Other Blunders'
+                    const groupedUnion = new Set([
+                        ...seasonBlunderSet, ...matchupBlunderSet, ...draftTxBlunderSet, ...rosterBlunderSet, ...leagueBlunderSet, ...championBlunderSet
+                    ]);
+                    const otherBlunders = new Set(Array.from(blunderBadges).filter(x => !groupedUnion.has(x)));
+
+                    const sectionsForBlunders = [
+                        { title: 'Season Blunders', set: seasonBlunderSet },
+                        { title: 'Champion Badges', set: championBlunderSet },
+                        { title: 'Matchup Blunders', set: matchupBlunderSet },
+                        { title: 'Draft & Transaction Blunders', set: draftTxBlunderSet },
+                        { title: 'Roster Blunders', set: rosterBlunderSet },
+                        { title: 'League Blunders', set: leagueBlunderSet },
+                        { title: 'Other Blunders', set: otherBlunders },
+                    ];
+
+                    const sections = (teamTab === 'blunders') ? sectionsForBlunders : sectionsForAchievements;
+
                     let remaining = Array.from(teamBadges);
+
+                    // Recompute `teamBadges` using the set-based definitions so badges that
+                    // should be blunders (by name) are included even if their `category`
+                    // in the source data isn't set to 'blunder'. This handles cases where
+                    // incoming badge data mis-categorizes season blunders.
+                    if (teamTab === 'achievements') {
+                        teamBadges = allTeamBadges.filter(b => {
+                            const isBlunderByCategory = String(b.category || '').toLowerCase() === 'blunder';
+                            const isBlunderByName = blunderBadges.has(normalize(b.displayName));
+                            return !isBlunderByCategory && !isBlunderByName;
+                        });
+                    } else if (teamTab === 'blunders') {
+                        teamBadges = allTeamBadges.filter(b => {
+                            const isBlunderByCategory = String(b.category || '').toLowerCase() === 'blunder';
+                            const isBlunderByName = blunderBadges.has(normalize(b.displayName));
+                            return isBlunderByCategory || isBlunderByName;
+                        });
+                    } else {
+                        teamBadges = allTeamBadges;
+                    }
+
+                    // Update remaining pool after tab-filtering
+                    remaining = Array.from(teamBadges);
 
                     // If there are no badges for the selected tab, render tabs and a message
                     if ((!allTeamBadges || allTeamBadges.length === 0) || (!teamBadges || teamBadges.length === 0)) {
