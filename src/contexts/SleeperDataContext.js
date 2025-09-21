@@ -28,6 +28,24 @@ const SleeperDataContext = createContext();
 // If CURRENT_LEAGUE_ID from config.js is undefined, this ID will be used.
 const FALLBACK_LEAGUE_ID = '1074092015093413888'; // Example ID, replace with a valid one if needed
 
+// Small concurrency-limited mapper: runs asyncFn over items with at most `limit` concurrent promises
+const pMapLimit = async (items = [], limit = 5, asyncFn) => {
+    const results = new Array(items.length);
+    let i = 0;
+    const workers = new Array(Math.min(limit, items.length)).fill(null).map(async () => {
+        while (i < items.length) {
+            const idx = i++;
+            try {
+                results[idx] = await asyncFn(items[idx], idx);
+            } catch (err) {
+                results[idx] = undefined;
+            }
+        }
+    });
+    await Promise.all(workers);
+    return results;
+};
+
 // --- NEW UTILITY FUNCTION TO FETCH TRANSACTIONS ---
 // This function fetches transactions for a specific league and week.
     const fetchTransactions = async (leagueId, week) => {
@@ -475,14 +493,20 @@ export const SleeperDataProvider = ({ children }) => {
                 let allTransactions = [];
                 // Only fetch transactions if nflState and its week property are available
                 if (state && state.week) {
-                    // Loop from week 1 up to the current week
-                    for (let i = 1; i <= state.week; i++) {
-                        const weeklyTransactions = await fetchTransactions(leagueIdToFetch, i);
-                        allTransactions = [...allTransactions, ...weeklyTransactions];
-                    }
+                    const weeks = Array.from({ length: state.week }, (_, i) => i + 1);
+                    // Fetch up to 4 weeks concurrently to avoid hammering the API while reducing total time
+                    const txResults = await pMapLimit(weeks, 4, async (weekNum) => {
+                        try {
+                            return await fetchTransactions(leagueIdToFetch, weekNum);
+                        } catch (err) {
+                            return [];
+                        }
+                    });
+                    // Flatten results
+                    allTransactions = txResults.flat().filter(Boolean);
                 }
                 setTransactions(allTransactions);
-                logger.debug("SleeperDataContext: Fetched transactions:", allTransactions);
+                logger.debug("SleeperDataContext: Fetched transactions (count):", allTransactions.length);
                 // --- END: FETCH TRANSACTIONS ---
 
                 // --- START: Process Draft Data for DraftAnalysis Component ---
@@ -569,117 +593,11 @@ export const SleeperDataProvider = ({ children }) => {
                     );
                     setProcessedSeasonalRecords(seasonalMetrics);
                     setCareerDPRData(calculatedCareerDPRData);
-                    // Compute badges now that seasonal records are available
-                    try {
-                        // --- Build playerSeasonPoints for top-positional calculations ---
-                        const playerSeasonPoints = {};
-                        try {
-                        // Attach computed playerSeasonPoints into mergedHistoricalData so badges util can consume it
-                        mergedHistoricalData.playerSeasonPoints = playerSeasonPoints;
-                            const seasonsWithPicks = Object.keys(processedDraftPicksBySeason || {});
-                            for (const s of seasonsWithPicks) {
-                                const season = String(s);
-                                const picks = processedDraftPicksBySeason[season] || [];
-                                const uniquePlayerIds = Array.from(new Set(picks.map(p => (p && (p.player_id || p.playerId || p.player || (p.metadata && (p.metadata.player_id || p.metadata.id))))).filter(Boolean)));
-                                playerSeasonPoints[season] = playerSeasonPoints[season] || {};
-                                // Fetch player stats for unique players in parallel
-                                await Promise.all(uniquePlayerIds.map(async (pid) => {
-                                    try {
-                                        const samplePick = picks.find(pk => {
-                                            const id = (pk && (pk.player_id || pk.playerId || pk.player || (pk.metadata && (pk.metadata.player_id || pk.metadata.id))));
-                                            return String(id) === String(pid);
-                                        }) || {};
-                                        const playerName = samplePick.player_name || (samplePick.metadata && (samplePick.metadata.name || `${samplePick.metadata.first_name || ''} ${samplePick.metadata.last_name || ''}`)) || 'Unknown Player';
-                                        const pos = (samplePick.player_position || samplePick.player_pos || (samplePick.metadata && samplePick.metadata.position) || '').toString().toUpperCase();
-                                        // Get scoring settings for this season if available (mergedHistoricalData may contain per-season settings)
-                                        let scoringSettings = (mergedHistoricalData.leaguesMetadataBySeason && mergedHistoricalData.leaguesMetadataBySeason[season] && mergedHistoricalData.leaguesMetadataBySeason[season].settings && mergedHistoricalData.leaguesMetadataBySeason[season].settings.scoring_settings) || (leagueData && leagueData.settings && leagueData.settings.scoring_settings) || {};
-                                        // Provide a reasonable default scoring profile if none exists (standard PPR-ish)
-                                        if (!scoringSettings || Object.keys(scoringSettings).length === 0) {
-                                            scoringSettings = {
-                                                pass_yd: 0.04,
-                                                pass_td: 4,
-                                                pass_int: -1,
-                                                rush_yd: 0.1,
-                                                rush_td: 6,
-                                                rec_yd: 0.1,
-                                                rec: 1,
-                                                rec_td: 6,
-                                                fum_lost: -2,
-                                                // Defensive tiers (best-effort)
-                                                pts_allow_0: 10,
-                                                pts_allow_1_6: 7,
-                                                pts_allow_7_13: 4,
-                                                pts_allow_14_20: 1,
-                                                pts_allow_21_27: 0,
-                                                pts_allow_28_34: -1,
-                                                pts_allow_35p: -4,
-                                                yds_allow_0_100: 6,
-                                                yds_allow_100_199: 3,
-                                                yds_allow_200_299: 0,
-                                                yds_allow_300_349: -1,
-                                                yds_allow_350_399: -3,
-                                                yds_allow_400_449: -5,
-                                                yds_allow_450_499: -7,
-                                                yds_allow_500_549: -9,
-                                                yds_allow_550p: -11
-                                            };
-
-                                            // Common kicker scoring keys (best-effort defaults).
-                                            // Sleeper sometimes reports field goal makes with distance buckets or as `fgm`/`fg` and extra points as `xp`/`xpmade`.
-                                            // Provide a few common variants so `calculateFantasyPoints` will pick them up when present.
-                                            const kickerDefaults = {
-                                                // Generic made field goals
-                                                fgm: 3,
-                                                fg: 3,
-                                                // Distance buckets (some providers use these keys)
-                                                fg_0_19: 3,
-                                                fg_20_29: 3,
-                                                fg_30_39: 3,
-                                                fg_40_49: 3,
-                                                fg_50p: 4,
-                                                // Extra points
-                                                xp: 1,
-                                                xpmade: 1,
-                                                xp_made: 1
-                                            };
-
-                                            // Merge kicker defaults, but don't override any explicit league settings
-                                            scoringSettings = Object.assign({}, kickerDefaults, scoringSettings);
-                                        }
-                                        const stats = await fetchPlayerStats(pid, season, 'regular', playerName);
-                                        const totalPoints = stats ? calculateFantasyPoints(stats, scoringSettings, pos) : 0;
-                                        playerSeasonPoints[season][pid] = { playerId: pid, playerName, position: pos, totalPoints };
-                                    } catch (errInner) {
-                                        // swallow errors per player to avoid failing whole badge generation
-                                        try { const logger = require('../utils/logger').default; logger.warn(`Failed to fetch/calc points for player ${pid} in season ${s}:`, errInner); } catch (e) {}
-                                    }
-                                }));
-                            }
-                        } catch (errPts) {
-                            try { const logger = require('../utils/logger').default; logger.warn('Error building playerSeasonPoints map:', errPts); } catch(e){}
-                        }
-                        try {
-                            const logger = require('../utils/logger').default;
-                            Object.keys(playerSeasonPoints || {}).forEach(seasonKey => {
-                                const count = Object.keys(playerSeasonPoints[seasonKey] || {}).length;
-                                logger.debug(`playerSeasonPoints built for season ${seasonKey}: ${count} players`);
-                            });
-                        } catch (e) { /* ignore logging errors */ }
-                        const { badgesByTeam: bbt, recentBadges: rb } = badgesUtil.computeBadges({
-                            historicalData: mergedHistoricalData,
-                            processedSeasonalRecords: seasonalMetrics,
-                            draftPicksBySeason: processedDraftPicksBySeason,
-                            transactions: allTransactions,
-                            usersData: users,
-                            getTeamName
-                        });
-                        setBadgesByTeam(bbt || {});
-                        setRecentBadges(rb || []);
-                    } catch (e) {
-                        logger.error('Error computing badges:', e);
-                        setBadgesByTeam({});
-                        setRecentBadges([]);
-                    }
+                    // Heavy badge computation (player stat fetches and badge scoring) is deferred to an explicit
+                    // on-demand function `computeBadgesNow`. Deferring this reduces initial app load time.
+                    // Keep placeholders in state so consumers don't break.
+                    setBadgesByTeam({});
+                    setRecentBadges([]);
                 } else {
                     setProcessedSeasonalRecords({});
                     setCareerDPRData(null);
@@ -703,6 +621,74 @@ export const SleeperDataProvider = ({ children }) => {
 
         loadAllSleeperData();
     }, []); // Empty dependency array means this effect runs once on mount
+
+    // computeBadgesNow: run heavy player stat fetches and compute badges on-demand
+    const computeBadgesNow = async (options = {}) => {
+        // guard: require historicalMatchups to be present
+        if (!historicalMatchups || !historicalMatchups.matchupsBySeason || Object.keys(historicalMatchups.matchupsBySeason).length === 0) {
+            return { badgesByTeam: {}, recentBadges: [] };
+        }
+
+        // Indicate badges computation in progress (does not flip global `loading`)
+        try {
+            const mergedHistoricalData = historicalMatchups;
+            // Build playerSeasonPoints for top-positional calculations
+            const playerSeasonPoints = {};
+            mergedHistoricalData.playerSeasonPoints = playerSeasonPoints;
+
+            const seasonsWithPicks = Object.keys(draftPicksBySeason || {});
+            for (const s of seasonsWithPicks) {
+                const season = String(s);
+                const picks = draftPicksBySeason[season] || [];
+                const uniquePlayerIds = Array.from(new Set(picks.map(p => (p && (p.player_id || p.playerId || p.player || (p.metadata && (p.metadata.player_id || p.metadata.id))))).filter(Boolean)));
+                playerSeasonPoints[season] = playerSeasonPoints[season] || {};
+                // Fetch player stats with limited concurrency
+                await pMapLimit(uniquePlayerIds, 5, async (pid) => {
+                    try {
+                        const samplePick = picks.find(pk => {
+                            const id = (pk && (pk.player_id || pk.playerId || pk.player || (pk.metadata && (pk.metadata.player_id || pk.metadata.id))));
+                            return String(id) === String(pid);
+                        }) || {};
+                        const playerName = samplePick.player_name || (samplePick.metadata && (samplePick.metadata.name || `${samplePick.metadata.first_name || ''} ${samplePick.metadata.last_name || ''}`)) || 'Unknown Player';
+                        const pos = (samplePick.player_position || samplePick.player_pos || (samplePick.metadata && samplePick.metadata.position) || '').toString().toUpperCase();
+                        let scoringSettings = (mergedHistoricalData.leaguesMetadataBySeason && mergedHistoricalData.leaguesMetadataBySeason[season] && mergedHistoricalData.leaguesMetadataBySeason[season].settings && mergedHistoricalData.leaguesMetadataBySeason[season].settings.scoring_settings) || (leagueData && leagueData.settings && leagueData.settings.scoring_settings) || {};
+                        if (!scoringSettings || Object.keys(scoringSettings).length === 0) {
+                            const kickerDefaults = { fgm:3, fg:3, fg_0_19:3, fg_20_29:3, fg_30_39:3, fg_40_49:3, fg_50p:4, xp:1, xpmade:1, xp_made:1 };
+                            scoringSettings = Object.assign({}, kickerDefaults, scoringSettings || {});
+                        }
+                        const stats = await fetchPlayerStats(pid, season, 'regular', playerName);
+                        const totalPoints = stats ? calculateFantasyPoints(stats, scoringSettings, pos) : 0;
+                        playerSeasonPoints[season][pid] = { playerId: pid, playerName, position: pos, totalPoints };
+                    } catch (errInner) {
+                        try { const logger = require('../utils/logger').default; logger.warn(`Failed to fetch/calc points for player ${pid} in season ${s}:`, errInner); } catch(e){}
+                    }
+                });
+            }
+
+            // Now compute badges using the badges utility
+            const { badgesByTeam: bbt, recentBadges: rb } = badgesUtil.computeBadges({
+                historicalData: mergedHistoricalData,
+                processedSeasonalRecords,
+                draftPicksBySeason,
+                transactions,
+                usersData,
+                getTeamName,
+                ...options
+            });
+            setBadgesByTeam(bbt || {});
+            setRecentBadges(rb || []);
+
+            // expose to window for dev debugging
+            try { if (typeof window !== 'undefined') window.__computedBadges = { badgesByTeam: bbt || {}, recentBadges: rb || {}, historicalData: mergedHistoricalData }; } catch(e){}
+
+            return { badgesByTeam: bbt || {}, recentBadges: rb || [] };
+        } catch (err) {
+            try { const logger = require('../utils/logger').default; logger.error('computeBadgesNow failed:', err); } catch(e){}
+            setBadgesByTeam({});
+            setRecentBadges([]);
+            return { badgesByTeam: {}, recentBadges: [] };
+        }
+    };
 
     // Utility: Get 1st and 2nd highest scorers per week for a given season
     const getWeeklyHighScores = (season) => {
@@ -809,6 +795,7 @@ export const SleeperDataProvider = ({ children }) => {
         currentSeason, // EXPORT THE CURRENT SEASON
         getTeamName,
         getTeamDetails, // EXPORT THE NEW FUNCTION
+        computeBadgesNow,
     }), [
         leagueData,
         usersData,
@@ -828,6 +815,7 @@ export const SleeperDataProvider = ({ children }) => {
         currentSeason, // ADD TO DEPENDENCY ARRAY
         getTeamName,
         getTeamDetails, // ADD TO DEPENDENCY ARRAY
+        computeBadgesNow,
     ]);
 
     return (

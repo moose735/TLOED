@@ -97,6 +97,31 @@ export const generateExpectedVorpByPickSlot = (totalDraftPicks) => {
     return expectedVorpByPick;
 };
 
+// Helper: normalize various position strings into canonical positions
+export const normalizePosition = (raw) => {
+    if (!raw && raw !== 0) return '';
+    const s = String(raw || '').toUpperCase().trim();
+    if (!s) return '';
+    const map = {
+        'DST': 'DEF',
+        'DEFENSE': 'DEF',
+        'D': 'DEF',
+        'PK': 'K',
+        'P': 'K',
+        'HB': 'RB',
+        'FB': 'RB',
+        'WRR': 'WR'
+    };
+    if (map[s]) return map[s];
+    if (['QB','RB','WR','TE','K','DEF'].indexOf(s) !== -1) return s;
+    const prefix = s.replace(/[^A-Z]+/g, '').slice(0,2);
+    if (['QB','RB','WR','TE','DE','DT'].indexOf(prefix) !== -1) {
+        if (['DE','DT'].includes(prefix)) return 'DEF';
+        return prefix;
+    }
+    return s;
+};
+
 /**
  * Calculates the difference between a player's actual VORP and the VORP assigned to their draft pick.
  * A positive delta means the player provided more value than their draft slot expected.
@@ -124,4 +149,149 @@ export const scaleVorpDelta = (rawValue, minRaw, maxRaw, minTarget, maxTarget) =
         return minTarget; // Or maxTarget, as the range is effectively zero
     }
     return ((rawValue - minRaw) / (maxRaw - minRaw)) * (maxTarget - minTarget) + minTarget;
+};
+
+/**
+ * Compute per-team, per-position scaled VORP sums for a draft.
+ *
+ * Parameters:
+ * - draftPicks: array of raw pick objects (must include pick_no and player identifiers)
+ * - options: {
+ *     historicalData, usersData, season, positions, minTarget, maxTarget,
+ *     scaleMethod: 'perPickThenSum' | 'sumThenScale' (default 'perPickThenSum'),
+ *     getTeamName: optional function(ownerId, season) => name
+ * }
+ *
+ * Behavior:
+ * - If scaleMethod === 'perPickThenSum', each pick's delta (playerValue - expected) is scaled to [minTarget,maxTarget]
+ *   using the global min/max of per-pick deltas, then per-team/per-position scaled sums are computed.
+ * - If scaleMethod === 'sumThenScale', raw per-team-per-position sums are computed first, then the collection of
+ *   those sums is scaled to [minTarget,maxTarget].
+ *
+ * Returns an object with meta and perOwner breakdowns.
+ */
+export const computeTeamScaledVorpByPosition = (draftPicks = [], options = {}) => {
+    const {
+        historicalData = {},
+        usersData = [],
+        season = null,
+        positions = ['QB','RB','WR','TE','K','DEF'],
+        minTarget = -5,
+        maxTarget = 5,
+        scaleMethod = 'perPickThenSum',
+        getTeamName = () => ''
+    } = options || {};
+
+    const totalDraftPicks = Array.isArray(draftPicks) ? draftPicks.length : 0;
+    const expectedMap = generateExpectedVorpByPickSlot(totalDraftPicks);
+
+    const entries = []; // { owner, position, delta, pickNo }
+
+    draftPicks.forEach(rawPick => {
+        if (!rawPick) return;
+        const pickNo = Number(rawPick.pick_no || rawPick.pick_number || rawPick.overall_pick || 0) || 0;
+        if (pickNo <= 0) return;
+        const owner = String(rawPick.picked_by || rawPick.owner_id || rawPick.picked_by_team || rawPick.roster_id || 'unknown');
+
+        const enriched = enrichPickForCalculations(rawPick, usersData || [], historicalData || {}, Number(season), getTeamName || (()=>''));
+        const playerValue = calculatePlayerValue(enriched) || 0;
+        const expected = expectedMap.get(pickNo) || 0;
+        const delta = calculateVORPDelta(playerValue, expected);
+    const posRaw = (enriched.player_position || enriched.player_pos || (rawPick.metadata && rawPick.metadata.position) || '').toString() || '';
+    const position = normalizePosition(posRaw) || 'NA';
+
+        entries.push({ owner, position, delta, pickNo, playerValue, expected, enriched });
+    });
+
+    // Global per-pick min/max for scaling
+    const allDeltas = entries.map(e => e.delta).filter(v => typeof v === 'number' && !isNaN(v));
+    const minRaw = allDeltas.length ? Math.min(...allDeltas) : 0;
+    const maxRaw = allDeltas.length ? Math.max(...allDeltas) : 0;
+
+    const perOwner = {}; // owner -> { positions: { POS: { rawSum, scaledSum, count } }, totals }
+
+    if (scaleMethod === 'perPickThenSum') {
+        entries.forEach(e => {
+            const scaled = scaleVorpDelta(e.delta, minRaw, maxRaw, minTarget, maxTarget);
+            if (!perOwner[e.owner]) perOwner[e.owner] = { positions: {}, totals: { rawSum: 0, scaledSum: 0, count: 0 } };
+            if (!perOwner[e.owner].positions[e.position]) perOwner[e.owner].positions[e.position] = { rawSum: 0, scaledSum: 0, count: 0 };
+            perOwner[e.owner].positions[e.position].rawSum += e.delta;
+            perOwner[e.owner].positions[e.position].scaledSum += scaled;
+            perOwner[e.owner].positions[e.position].count += 1;
+            perOwner[e.owner].totals.rawSum += e.delta;
+            perOwner[e.owner].totals.scaledSum += scaled;
+            perOwner[e.owner].totals.count += 1;
+        });
+    } else {
+        // sumThenScale: compute raw sums first
+        entries.forEach(e => {
+            if (!perOwner[e.owner]) perOwner[e.owner] = { positions: {}, totals: { rawSum: 0, scaledSum: 0, count: 0 } };
+            if (!perOwner[e.owner].positions[e.position]) perOwner[e.owner].positions[e.position] = { rawSum: 0, scaledSum: 0, count: 0 };
+            perOwner[e.owner].positions[e.position].rawSum += e.delta;
+            perOwner[e.owner].positions[e.position].count += 1;
+            perOwner[e.owner].totals.rawSum += e.delta;
+            perOwner[e.owner].totals.count += 1;
+        });
+
+        // collect all owner-position raw sums to compute min/max
+        const ownerPosRawSums = [];
+        Object.keys(perOwner).forEach(owner => {
+            Object.keys(perOwner[owner].positions).forEach(pos => {
+                ownerPosRawSums.push(perOwner[owner].positions[pos].rawSum || 0);
+            });
+        });
+        const minOwnerPos = ownerPosRawSums.length ? Math.min(...ownerPosRawSums) : 0;
+        const maxOwnerPos = ownerPosRawSums.length ? Math.max(...ownerPosRawSums) : 0;
+
+        // scale each raw sum into target range
+        Object.keys(perOwner).forEach(owner => {
+            Object.keys(perOwner[owner].positions).forEach(pos => {
+                const raw = perOwner[owner].positions[pos].rawSum || 0;
+                const scaled = scaleVorpDelta(raw, minOwnerPos, maxOwnerPos, minTarget, maxTarget);
+                perOwner[owner].positions[pos].scaledSum = scaled;
+                perOwner[owner].totals.scaledSum = (perOwner[owner].totals.scaledSum || 0) + scaled;
+            });
+        });
+    }
+
+    // Compute position-level totals across all owners
+    const positionTotals = {};
+    Object.keys(perOwner).forEach(owner => {
+        Object.keys(perOwner[owner].positions).forEach(pos => {
+            if (!positionTotals[pos]) positionTotals[pos] = { rawSum: 0, scaledSum: 0, count: 0 };
+            positionTotals[pos].rawSum += perOwner[owner].positions[pos].rawSum || 0;
+            positionTotals[pos].scaledSum += perOwner[owner].positions[pos].scaledSum || 0;
+            positionTotals[pos].count += perOwner[owner].positions[pos].count || 0;
+        });
+    });
+
+    return {
+        meta: { totalDraftPicks, minRaw, maxRaw, minTarget, maxTarget, scaleMethod, processedPicks: entries.length },
+        perOwner,
+        positionTotals,
+        entries
+    };
+};
+
+/**
+ * Pretty-print / console summary helper for team scaled VORP results.
+ * This centralizes logging so callers (badges, analysis pages) can reuse the same output.
+ */
+export const printScaledVorpSummary = (teamVorp = {}, season = null, getTeamName = () => '') => {
+    try {
+        if (!teamVorp || !teamVorp.perOwner) return;
+        const summary = Object.keys(teamVorp.perOwner || {}).map(ownerId => {
+            const teamName = (typeof getTeamName === 'function') ? getTeamName(ownerId, Number(season)) : ownerId;
+            const positionsObj = teamVorp.perOwner[ownerId].positions || {};
+            const posSummary = {};
+            Object.keys(positionsObj).forEach(p => {
+                posSummary[p] = { scaled: Number((positionsObj[p].scaledSum || 0).toFixed(3)), raw: Number((positionsObj[p].rawSum || 0).toFixed(3)), count: positionsObj[p].count || 0 };
+            });
+            return { ownerId, teamName, totals: { scaled: Number((teamVorp.perOwner[ownerId].totals.scaledSum || 0).toFixed(3)), raw: Number((teamVorp.perOwner[ownerId].totals.rawSum || 0).toFixed(3)), count: teamVorp.perOwner[ownerId].totals.count || 0 }, positions: posSummary };
+        });
+        // Use project logger when available to avoid unconditional console output
+        try { const logger = require('./logger').default; if (logger && typeof logger.info === 'function') logger.info(`Season ${season} - Scaled VORP by Position by Team:`, summary); } catch(e) { /* silent */ }
+    } catch (e) {
+        // no-op: logging should never throw
+    }
 };

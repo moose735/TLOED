@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import logger from '../utils/logger';
 import { getSleeperPlayerHeadshotUrl } from '../utils/sleeperApi';
 import { useSleeperData } from '../contexts/SleeperDataContext';
 
@@ -392,8 +393,8 @@ const HallOfChampions = () => {
                 };
         });
 
-        // Debug: expose the built DB so we can inspect playerId shapes and nflMeta in the browser console
-        console.debug('HallOfChampions: built championPlayersByYear', db);
+    // Debug: expose the built DB so we can inspect playerId shapes and nflMeta in the browser console (verbose)
+    logger.debug && logger.debug('HallOfChampions: built championPlayersByYear', db);
         setChampionPlayersByYear(db);
     }, [historicalData, championsByYear, nflPlayers]);
 
@@ -423,7 +424,7 @@ const HallOfChampions = () => {
                             alt={p.name || p.playerId}
                             style={{ width: size - 8, height: size - 8, borderRadius: '50%' }}
                             className="object-cover"
-                            onError={(e) => { console.debug('PlayerAvatar: headshot failed to load for', p.playerId, imgUrl); setImgError(true); }}
+                            onError={(e) => { try { logger.debug && logger.debug('PlayerAvatar: headshot failed to load for', p.playerId, imgUrl); } catch (err) {} setImgError(true); }}
                         />
                     </div>
                 </div>

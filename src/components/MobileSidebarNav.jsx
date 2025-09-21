@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 
 const navGroups = [
   { label: 'Dashboard', link: '/dashboard' },
-  { label: 'Achievements', link: '/achievements' },
+  // Achievements removed
   {
     label: 'Games',
     children: [

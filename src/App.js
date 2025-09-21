@@ -17,7 +17,6 @@ import HallOfChampions from './lib/HallOfChampions';
 import Gamecenter from './components/Gamecenter';
 import Sportsbook from './components/Sportsbook';
 import KeeperList from './lib/KeeperList';
-import Achievements from './components/Achievements';
 // import MobileSidebarNav from './components/MobileSidebarNav';
 import DesktopNav from './components/DesktopNav';
 
@@ -50,7 +49,7 @@ const NAV_CATEGORIES = {
     SEASON_BREAKDOWN: { label: 'Season Breakdown', tab: 'seasonBreakdown' },
     DRAFT: { label: 'Draft', tab: 'draftAnalysis' }, // New tab for Draft Analysis
     FINANCIALS: { label: 'Financials', tab: 'financials' },
-    ACHIEVEMENTS: { label: 'Achievements', tab: 'achievements' },
+    // Achievements removed - UI simplified
 };
 
 // Flattened list of all possible tabs
@@ -471,7 +470,8 @@ const AppContent = () => {
             case TABS.DRAFT_ANALYSIS: // New case for Draft Analysis
                 return <DraftAnalysis />;
             case TABS.ACHIEVEMENTS:
-                return <Achievements />;
+                // Achievements UI removed; redirect to dashboard
+                return <Dashboard />;
             default:
                 return <Dashboard />;
         }
@@ -652,15 +652,7 @@ const AppContent = () => {
                                 </ul>
                             )}
                         </li>
-                        {/* Achievements */}
-                        <li>
-                            <button 
-                                className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600"
-                                onClick={() => handleTabClick('achievements')}
-                            >
-                                <span className="text-base font-medium">🏆 Achievements</span>
-                            </button>
-                        </li>
+                        {/* Achievements removed */}
                         {/* Teams */}
                         <li>
                             <button 
@@ -727,6 +719,8 @@ const AppContent = () => {
                     {renderContent()}
                 </div>
             </main>
+            {/* Dev-only ByeWeek debug panel */}
+            {/* ByeWeekDebugPanel removed - dev-only bye week debugging UI disabled */}
         </div>
     );
 };
