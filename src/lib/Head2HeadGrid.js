@@ -50,6 +50,10 @@ const Head2HeadGrid = () => {
 
     const [headToHeadRecords, setHeadToHeadRecords] = useState({});
     const [selectedRivalryKey, setSelectedRivalryKey] = useState(null); // Stores the H2H key (e.g., "ownerId1 vs ownerId2")
+    // When selecting a rivalry from the grid we also want to remember which owner
+    // was on the left (row) and which was on the top (column) so the detail view
+    // displays "left team's record vs top team" consistently with the grid.
+    const [selectedRivalryOwners, setSelectedRivalryOwners] = useState(null);
     const [loading, setLoading] = useState(true); // Local loading state for calculations
     const [weeklyHighScoreCounts, setWeeklyHighScoreCounts] = useState({});
 
@@ -334,11 +338,13 @@ const Head2HeadGrid = () => {
 
     // Component to render the detailed rivalry view
     const renderSelectedRivalryDetails = useCallback(() => {
-        const rivalry = headToHeadRecords[selectedRivalryKey];
-        if (!rivalry) return null;
+    const rivalry = headToHeadRecords[selectedRivalryKey];
+    if (!rivalry) return null;
 
-        const ownerA = rivalry.owners[0]; // These are now owner IDs
-        const ownerB = rivalry.owners[1]; // These are now owner IDs
+    // If we have ordered owners from the grid selection use them (left=row, top=col).
+    // Otherwise fall back to the stored order inside the rivalry object.
+    const ownerA = selectedRivalryOwners ? selectedRivalryOwners[0] : rivalry.owners[0];
+    const ownerB = selectedRivalryOwners ? selectedRivalryOwners[1] : rivalry.owners[1];
 
         const teamADisplayName = getTeamName(ownerA, null); // Resolve display name for owner A
         const teamBDisplayName = getTeamName(ownerB, null); // Resolve display name for owner B
@@ -514,7 +520,10 @@ const Head2HeadGrid = () => {
         return (
             <div className="p-4 bg-gray-100 rounded-lg shadow-md border border-gray-200">
                 <button
-                    onClick={() => setSelectedRivalryKey(null)}
+                    onClick={() => {
+                        setSelectedRivalryKey(null);
+                        setSelectedRivalryOwners(null);
+                    }}
                     className="mb-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-semibold shadow-sm"
                 >
                     &larr; Back to All Rivalries
@@ -975,14 +984,15 @@ const Head2HeadGrid = () => {
                 <>
                     <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Head-to-Head Rivalries</h3>
                     <div className="overflow-x-auto relative"> {/* Added relative for sticky positioning */}
-                        <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
+                        {/* Use table-auto so columns size to content; make headers narrower on mobile */}
+                        <table className="min-w-full table-auto bg-white border border-gray-200 rounded-lg shadow-sm">
                             <thead className="bg-blue-50">
                                 <tr>
                                     {/* Empty corner for team names - sticky */}
-                                    <th className="py-2 px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 sticky left-0 bg-blue-50 z-20 shadow-sm"></th>
+                                    <th className="py-1 px-2 sm:py-2 sm:px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 sticky left-0 bg-blue-50 z-20 shadow-sm"></th>
                                     {sortedDisplayNamesAndOwners.map(team => (
-                                        <th key={team.ownerId} className="py-2 px-3 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 min-w-[90px] sticky top-0 bg-blue-50 z-10"> {/* Sticky top for horizontal scroll */}
-                                            {team.displayName}
+                                        <th key={team.ownerId} className="py-1 px-2 sm:py-2 sm:px-3 text-center text-[10px] sm:text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 min-w-[70px] sm:min-w-[90px] sticky top-0 bg-blue-50 z-10"> {/* Sticky top for horizontal scroll */}
+                                            <div className="truncate max-w-[80px] sm:max-w-[120px]">{team.displayName}</div>
                                         </th>
                                     ))}
                                 </tr>
@@ -990,7 +1000,7 @@ const Head2HeadGrid = () => {
                             <tbody>
                                 {sortedDisplayNamesAndOwners.map(rowTeam => ( // Iterate over sorted display names for rows
                                     <tr key={rowTeam.ownerId} className="border-b border-gray-100 last:border-b-0">
-                                        <td className="py-2 px-3 text-left text-sm text-gray-800 font-semibold sticky left-0 bg-white z-20 border-r border-gray-200 shadow-sm"> {/* Sticky left for vertical scroll */}
+                                        <td className="py-1 px-2 sm:py-2 sm:px-3 text-left text-sm text-gray-800 font-semibold sticky left-0 bg-white z-20 border-r border-gray-200 shadow-sm"> {/* Sticky left for vertical scroll */}
                                             {rowTeam.displayName}
                                         </td>
                                         {sortedDisplayNamesAndOwners.map(colTeam => { // Iterate over sorted display names for columns
@@ -1006,7 +1016,8 @@ const Head2HeadGrid = () => {
                                             const rivalry = headToHeadRecords[rivalryKey];
 
                                             let recordForDisplay = '0-0';
-                                            let cellClassName = 'py-2 px-3 text-center text-sm border-b border-gray-200 cursor-pointer ';
+                                            // Compact cell padding on small screens to make more columns fit
+                                            let cellClassName = 'py-1 px-2 sm:py-2 sm:px-3 text-center text-sm border-b border-gray-200 cursor-pointer ';
 
                                             if (rivalry) {
                                                 const rowOwnerRecord = rivalry[rowTeam.ownerId];
@@ -1033,7 +1044,25 @@ const Head2HeadGrid = () => {
                                                 <td
                                                     key={`${rowTeam.ownerId}-${colTeam.ownerId}`}
                                                     className={cellClassName}
-                                                    onClick={() => rivalry && setSelectedRivalryKey(rivalryKey)}
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    onClick={() => {
+                                                        if (!rivalry) return;
+                                                        const leftOwner = rowTeam.ownerId;
+                                                        const topOwner = colTeam.ownerId;
+                                                        setSelectedRivalryOwners([leftOwner, topOwner]);
+                                                        setSelectedRivalryKey(rivalryKey);
+                                                    }}
+                                                    onKeyDown={(e) => {
+                                                        if (!rivalry) return;
+                                                        if (e.key === 'Enter' || e.key === ' ') {
+                                                            e.preventDefault();
+                                                            const leftOwner = rowTeam.ownerId;
+                                                            const topOwner = colTeam.ownerId;
+                                                            setSelectedRivalryOwners([leftOwner, topOwner]);
+                                                            setSelectedRivalryKey(rivalryKey);
+                                                        }
+                                                    }}
                                                 >
                                                     {recordForDisplay}
                                                 </td>

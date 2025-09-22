@@ -16,9 +16,8 @@ export const convertSpreadToMoneyline = (spread, isFavorite = true, vig = 0.045)
         return baseOdds + variance; // Range: -115 to -105
     }
     
-    if (absSpread >= 20) {
-        return isFavorite ? -1500 : +800; // Extreme spreads
-    }
+    // For very large spreads, continue with the piecewise extrapolation below
+    // (removed the old hard cap of -1500/+800 so markets can reflect more extreme values)
     
     // Real sportsbook moneyline patterns based on actual market data
     let favoriteOdds, underdogOdds;
@@ -51,9 +50,9 @@ export const convertSpreadToMoneyline = (spread, isFavorite = true, vig = 0.045)
     favoriteOdds = Math.round(favoriteOdds * vigFactor);
     underdogOdds = Math.round(underdogOdds * vigFactor);
     
-    // Ensure proper bounds
-    favoriteOdds = Math.max(-2000, favoriteOdds);
-    underdogOdds = Math.min(2000, Math.max(100, underdogOdds));
+    // Ensure proper bounds - allow more extreme but keep within safe numeric limits
+    favoriteOdds = Math.max(-5000, favoriteOdds);
+    underdogOdds = Math.min(5000, Math.max(100, underdogOdds));
     
     return isFavorite ? favoriteOdds : underdogOdds;
 };
@@ -98,6 +97,24 @@ export const calculateSpreadFromProbability = (winProbability, teamPowerDiff = 0
     
     // Round to nearest 0.5
     return Math.round(spread * 2) / 2;
+};
+
+// Inverse error function approximation (Winitzki, good enough for our use)
+const erfinv = (x) => {
+    const a = 0.147; // approximation constant
+    const sign = x < 0 ? -1 : 1;
+    const ln = Math.log(1 - x * x);
+    const part1 = (2 / (Math.PI * a)) + (ln / 2);
+    const insideSqrt = (part1 * part1) - (ln / a);
+    const result = sign * Math.sqrt(Math.sqrt(insideSqrt) - part1);
+    return result;
+};
+
+// Inverse of standard normal CDF using erfinv
+const inverseNormal = (p) => {
+    // Clamp
+    const q = Math.max(1e-10, Math.min(1 - 1e-10, p));
+    return Math.SQRT2 * erfinv(2 * q - 1);
 };
 
 /**
@@ -325,10 +342,82 @@ export const generateCleanBettingMarkets = (matchup, teamStats, options = {}) =>
     const powerBasedProbAdjustment = powerAnalysis.powerDiff * 0.02; // 0.02 per power point
     const adjustedWinProbability = Math.max(0.1, Math.min(0.9, winProbability + powerBasedProbAdjustment));
     
-    // Calculate spread using the adjusted probability and power differential
-    let spread = calculateSpreadFromProbability(adjustedWinProbability, powerAnalysis.powerDiff);
-    const isTeam1Favorite = spread < 0;
-    const absSpread = Math.abs(spread);
+    // Calculate spread using score distribution (means + variances) so the line
+    // better reflects how final scores end up (not just a mapping from win probability)
+    // Compute sample variances from scores if available, otherwise use sensible defaults
+    // Compute variances from scores if available, otherwise use sensible defaults
+    const computeVariance = (scores) => {
+        if (!Array.isArray(scores) || scores.length < 2) return 400; // std ~20
+        const n = scores.length;
+        const mean = scores.reduce((s, v) => s + v, 0) / n;
+        const variance = scores.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / n; // population variance
+        return Math.max(100, variance); // floor variance
+    };
+
+    const t1Var = computeVariance(team1Stats.scores);
+    const t2Var = computeVariance(team2Stats.scores);
+
+    // Expected margin (mu) and combined sigma (game-to-game variation)
+    const rawMu = (team1Stats.averageScore || 120) - (team2Stats.averageScore || 120);
+    const baseSigma = Math.sqrt(t1Var + t2Var);
+
+    // Use power analysis components to adjust mu and sigma
+    // powerDiff is (team1Score - team2Score) / 10 from calculateTeamPowerDifferential
+    const powerDiff = powerAnalysis.powerDiff; // roughly 0-10 scale
+    const team1Details = powerAnalysis.team1Details || { pointsAdvantage: 0, consistency: 0.5, momentum: 0 };
+    const team2Details = powerAnalysis.team2Details || { pointsAdvantage: 0, consistency: 0.5, momentum: 0 };
+
+    // Points-based margin (convert powerDiff into points). Tunable scale: ~2.5 points per power point
+    const powerMarginPoints = powerDiff * 2.5;
+
+    // Momentum influence (recent form) - small additive effect in points
+    const momentumDiff = (team1Details.momentum || 0) - (team2Details.momentum || 0); // -1..1 ranges
+    const momentumBoost = momentumDiff * 4.0; // each 0.25 momentum ~1 point
+
+    // Combine raw scoring margin with power/momentum influence
+    // Keep majority weight on raw scoring (averages) but blend in power and momentum
+    const MU_WEIGHT_RAW = 0.65;
+    const MU_WEIGHT_POWER = 0.30;
+    const MU_WEIGHT_MOMENTUM = 0.05;
+
+    const mu = (rawMu * MU_WEIGHT_RAW) + (powerMarginPoints * MU_WEIGHT_POWER) + (momentumBoost * MU_WEIGHT_MOMENTUM);
+
+    // Consistency reduces variance: higher consistency => lower sigma
+    const t1Consistency = Math.max(0, Math.min(1, team1Details.consistency || 0.5));
+    const t2Consistency = Math.max(0, Math.min(1, team2Details.consistency || 0.5));
+    const avgConsistency = (t1Consistency + t2Consistency) / 2; // 0..1 (higher = more consistent)
+
+    // Reduce sigma up to 30% for highly consistent matchups; increase slightly for volatile matchups
+    const CONSISTENCY_MAX_REDUCTION = 0.30;
+    const consistencyFactor = 1 - (avgConsistency * CONSISTENCY_MAX_REDUCTION);
+
+    // Also slightly reduce sigma when teams have positive momentum (recent stable high scoring)
+    const momentumSigmaFactor = 1 - (Math.abs(momentumDiff) * 0.05);
+
+    const sigma = Math.max(6, baseSigma * consistencyFactor * momentumSigmaFactor);
+
+    let spreadRaw;
+    try {
+        const inv = inverseNormal(1 - adjustedWinProbability);
+        spreadRaw = mu + sigma * inv;
+    } catch (e) {
+        // Fallback to probability mapping if numerical issues
+        spreadRaw = Math.abs(calculateSpreadFromProbability(adjustedWinProbability, powerAnalysis.powerDiff));
+    }
+
+    // Maintain sign convention: negative spread means team1 is favorite
+    const isTeam1Favorite = adjustedWinProbability > 0.5;
+    let spread = isTeam1Favorite ? -spreadRaw : spreadRaw;
+    let absSpread = Math.abs(spread);
+
+    // Round to nearest 0.5 and treat tiny spreads as pick'em
+    absSpread = Math.round(absSpread * 2) / 2;
+    if (absSpread < 0.5) {
+        absSpread = 0;
+        spread = 0;
+    } else {
+        spread = isTeam1Favorite ? -absSpread : absSpread;
+    }
     
     // Handle true pick'em games (spread rounds to 0)
     const isPick = absSpread === 0;
