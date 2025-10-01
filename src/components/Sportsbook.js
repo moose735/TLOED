@@ -272,6 +272,9 @@ const Sportsbook = () => {
         }
     };
 
+    // Whether the user can place the bet (at least one bet and valid amount)
+    const canPlace = (betSlip.length > 0) && betAmount && !isNaN(parseFloat(betAmount)) && parseFloat(betAmount) > 0;
+
     // Calculate team power score based on multiple factors
     const calculateTeamPowerScore = (teamStats, rosterId, season) => {
         // Base factors
@@ -1549,38 +1552,38 @@ const Sportsbook = () => {
                                     )}
                                 </div>
 
-                                {/* Payout & Button */}
-                                {betAmount && parseFloat(betAmount) > 0 && (
-                                    <div className="flex justify-between items-center">
-                                        <div className="text-sm">
-                                            <span className="text-gray-600">To Win: </span>
-                                            <span className="font-semibold text-green-600">
-                                                {formatScore(Number(calculatePayout() - parseFloat(betAmount)), 2)}
-                                            </span>
-                                        </div>
-                                        <button
-                                            className="bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition-colors text-sm font-medium"
-                                            onClick={() => {
-                                                const submissionTime = new Date();
-                                                const betData = {
-                                                    bets: [...betSlip],
-                                                    amount: betAmount,
-                                                    potentialPayout: calculatePayout(),
-                                                    potentialWin: calculatePayout() - parseFloat(betAmount),
-                                                    submittedAt: submissionTime,
-                                                    ticketNumber: `TLO-${Date.now()}`
-                                                };
-                                                setConfirmationData(betData);
-                                                setShowConfirmation(true);
-                                                clearBetSlip();
-                                                // Keep bet slip expanded so user can see confirmation modal
-                                                setIsBetSlipExpanded(true);
-                                            }}
-                                        >
-                                            Place Bet
-                                        </button>
+                                {/* Payout & Button (always shown; disabled until valid) */}
+                                <div className="flex justify-between items-center">
+                                    <div className="text-sm">
+                                        <span className="text-gray-600">To Win: </span>
+                                        <span className="font-semibold text-green-600">
+                                            {formatScore(Number(canPlace ? (calculatePayout() - parseFloat(betAmount)) : 0), 2)}
+                                        </span>
                                     </div>
-                                )}
+                                    <button
+                                        className={`py-2 px-4 rounded transition-colors text-sm font-medium ${canPlace ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-300 text-gray-600 cursor-not-allowed'}`}
+                                        disabled={!canPlace}
+                                        onClick={() => {
+                                            if (!canPlace) return;
+                                            const submissionTime = new Date();
+                                            const betData = {
+                                                bets: [...betSlip],
+                                                amount: betAmount,
+                                                potentialPayout: calculatePayout(),
+                                                potentialWin: calculatePayout() - parseFloat(betAmount),
+                                                submittedAt: submissionTime,
+                                                ticketNumber: `TLO-${Date.now()}`
+                                            };
+                                            setConfirmationData(betData);
+                                            setShowConfirmation(true);
+                                            clearBetSlip();
+                                            // Keep bet slip expanded so user can see confirmation modal
+                                            setIsBetSlipExpanded(true);
+                                        }}
+                                    >
+                                        Place Bet
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
