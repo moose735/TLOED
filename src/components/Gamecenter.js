@@ -30,7 +30,9 @@ const Gamecenter = () => {
     useEffect(() => {
         if (selectedSeason && historicalData?.matchupsBySeason?.[selectedSeason]) {
             const weeks = new Set(historicalData.matchupsBySeason[selectedSeason].map(m => m.week));
-            setSeasonWeeks(Array.from(weeks).sort((a, b) => a - b));
+            // Filter out playoff weeks (15-17) since playoff matchups aren't determined until regular season ends
+            const regularSeasonWeeks = Array.from(weeks).filter(week => week < 15);
+            setSeasonWeeks(regularSeasonWeeks.sort((a, b) => a - b));
         }
     }, [selectedSeason, historicalData]); // Runs only when the season changes
 
@@ -305,7 +307,9 @@ const Gamecenter = () => {
             // For historical seasons, find the first available week and set it.
             if (historicalData?.matchupsBySeason?.[newSeason]) {
                 const weeks = new Set(historicalData.matchupsBySeason[newSeason].map(m => m.week));
-                const firstWeek = Array.from(weeks).sort((a, b) => a - b)[0];
+                // Filter out playoff weeks (15-17) since playoff matchups aren't determined until regular season ends
+                const regularSeasonWeeks = Array.from(weeks).filter(week => week < 15);
+                const firstWeek = regularSeasonWeeks.sort((a, b) => a - b)[0];
                 setSelectedWeek(firstWeek);
             }
         }
@@ -355,6 +359,15 @@ const Gamecenter = () => {
         }
     
         return `${streak}${streakType}`;
+    };
+
+    // Helper function to add emojis to streaks for future matchups
+    const formatStreakWithEmoji = (streak) => {
+        if (streak === "N/A") return streak;
+        
+        const isWinning = streak.includes('W');
+        const emoji = isWinning ? '🔥' : '❄️'; // 🔥 for wins, ❄️ for losses
+        return `${streak} ${emoji}`;
     };
 
     const getHeadToHeadRecord = (ownerId1, ownerId2) => {
@@ -500,7 +513,7 @@ const Gamecenter = () => {
                                                             {team1Details.name}
                                                         </div>
                                                         <div className="text-xs text-gray-500">
-                                                            {team1Streak} • Avg: {formatScore(Number(team1AvgPts ?? 0), 1)}
+                                                            {!isWeekComplete ? formatStreakWithEmoji(team1Streak) : team1Streak} • Avg: {formatScore(Number(team1AvgPts ?? 0), 1)}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -537,7 +550,7 @@ const Gamecenter = () => {
                                                             {team2Details.name}
                                                         </div>
                                                         <div className="text-xs text-gray-500">
-                                                            {team2Streak} • Avg: {formatScore(Number(team2AvgPts ?? 0), 1)}
+                                                            {!isWeekComplete ? formatStreakWithEmoji(team2Streak) : team2Streak} • Avg: {formatScore(Number(team2AvgPts ?? 0), 1)}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -605,7 +618,7 @@ const Gamecenter = () => {
                                                     
                                                     <div className="grid grid-cols-3 gap-2 items-center">
                                                         <div className="text-center space-y-1">
-                                                            <div className="text-xs font-semibold">{team1Streak}</div>
+                                                            <div className="text-xs font-semibold">{!isWeekComplete ? formatStreakWithEmoji(team1Streak) : team1Streak}</div>
                                                             <div className="text-xs font-semibold">{formatScore(Number(team1AvgPts ?? 0), 1)}</div>
                                                         </div>
                                                         
@@ -615,76 +628,21 @@ const Gamecenter = () => {
                                                         </div>
                                                         
                                                         <div className="text-center space-y-1">
-                                                            <div className="text-xs font-semibold">{team2Streak}</div>
+                                                            <div className="text-xs font-semibold">{!isWeekComplete ? formatStreakWithEmoji(team2Streak) : team2Streak}</div>
                                                             <div className="text-xs font-semibold">{formatScore(Number(team2AvgPts ?? 0), 1)}</div>
                                                         </div>
                                                     </div>
                                                 </div>
                                             </div>
                                         ) : (
-                                            <>
-                                                {(() => {
-                                                    const currentNFLSeason = parseInt(nflState?.season || new Date().getFullYear());
-                                                    const currentNFLWeek = parseInt(nflState?.week || 1);
-                                                    const selectedSeasonInt = parseInt(selectedSeason);
-                                                    const selectedWeekInt = parseInt(selectedWeek);
-                                                    
-                                                    const isWeekComplete = selectedSeasonInt < currentNFLSeason || 
-                                                                         (selectedSeasonInt === currentNFLSeason && selectedWeekInt < currentNFLWeek);
-                                                    
-                                                    const gameHasScores = matchup.team1_score > 0 && matchup.team2_score > 0;
-                                                    
-                                                    return isWeekComplete && gameHasScores ? (
-                                                        <div className="text-xs text-gray-600">
-                                                            {/* Mobile Luck Display */}
-                                                            <div className="sm:hidden text-center">
-                                                                <div className="text-xs text-gray-500 font-medium mb-1">Luck Factor</div>
-                                                                <div className="flex justify-between items-center">
-                                                                    <span className={`font-semibold text-sm ${team1Luck > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                                                        {formatScore(Number(team1Luck ?? 0), 2)}
-                                                                    </span>
-                                                                    <span className={`font-semibold text-sm ${team2Luck > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                                                        {formatScore(Number(team2Luck ?? 0), 2)}
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-                                                            
-                                                            {/* Desktop Luck Display */}
-                                                            <div className="hidden sm:block">
-                                                                <div className="grid grid-cols-3 gap-2 items-center">
-                                                                    <div className="text-center">
-                                                                        <span className={`font-semibold text-sm ${team1Luck > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                                                            {formatScore(Number(team1Luck ?? 0), 2)}
-                                                                        </span>
-                                                                    </div>
-                                                                    
-                                                                    <div className="text-center">
-                                                                        <div className="text-xs text-gray-500 font-medium">Luck</div>
-                                                                    </div>
-                                                                    
-                                                                    <div className="text-center">
-                                                                        <span className={`font-semibold text-sm ${team2Luck > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                                                            {formatScore(Number(team2Luck ?? 0), 2)}
-                                                                        </span>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="text-center text-xs text-gray-500">
-                                                            Game in progress or incomplete
-                                                        </div>
-                                                    );
-                                                })()}
-                                            </>
+                                            // Future games section - no additional content needed
+                                            <></>
                                         )}
                                         
-                                        {/* Tap indicator for completed games */}
-                                        {isCompleted && (
-                                            <div className="text-center mt-2">
-                                                <span className="text-xs text-blue-500 font-medium">Tap for details</span>
-                                            </div>
-                                        )}
+                                        {/* Tap indicator for all games */}
+                                        <div className="text-center mt-2">
+                                            <span className="text-xs text-blue-500 font-medium">Tap for details</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchTransactions, getSleeperPlayerHeadshotUrl } from '../utils/sleeperApi';
+import { fetchTransactionsForWeek, getSleeperPlayerHeadshotUrl } from '../utils/sleeperApi';
 import {
   formatDate,
   formatPlayerTransaction,
@@ -23,12 +23,15 @@ const Transactions = ({ leagueId, week }) => {
     const fetchAndSetTransactions = async () => {
       setLoading(true);
       setError(null);
+      console.log('🔍 Fetching transactions for:', { leagueId, week });
       try {
         // We use the fetchTransactions function from our utility file.
-        const fetchedTransactions = await fetchTransactions(leagueId, week);
+        const fetchedTransactions = await fetchTransactionsForWeek(leagueId, week);
+        console.log('📦 Fetched transactions:', fetchedTransactions);
+        console.log('📊 Trade transactions:', fetchedTransactions?.filter(t => t.type === 'trade'));
         setTransactions(fetchedTransactions);
       } catch (err) {
-  logger.error("Failed to fetch transactions:", err);
+        console.error("Failed to fetch transactions:", err);
         setError("Failed to load transactions. Please try again.");
       } finally {
         setLoading(false);
@@ -63,10 +66,18 @@ const Transactions = ({ leagueId, week }) => {
     );
   }
 
+  // Debug logging for transactions
+  console.log('🎯 Rendering transactions component with:', {
+    transactionsCount: transactions.length,
+    week,
+    leagueId,
+    sampleTransaction: transactions[0]
+  });
+
   // The main rendering logic for the transactions list.
   return (
     <div className="p-4 bg-gray-100 rounded-lg shadow-lg">
-      <h2 className="text-2xl font-bold mb-4">Transactions</h2>
+      <h2 className="text-2xl font-bold mb-4">Transactions (Week {week})</h2>
       <ul className="space-y-4">
         {transactions.map(transaction => (
           <li key={transaction.transaction_id} className="bg-white p-4 rounded-lg shadow">
@@ -114,13 +125,57 @@ const Transactions = ({ leagueId, week }) => {
                 </div>
               </div>
             )}
+            {/* Debug logging for draft picks */}
+            {transaction.type === 'trade' && transaction.transaction_id === '1279156171718012928' && console.log('🎯 Nick Chubb Trade Debug:', {
+              id: transaction.transaction_id,
+              draft_picks: transaction.draft_picks,
+              hasDraftPicks: !!(transaction.draft_picks && Array.isArray(transaction.draft_picks) && transaction.draft_picks.length > 0)
+            })}
+            
+            {/* Draft picks involved in trades - check both possible locations */}
+            {(() => {
+              if (transaction.type !== 'trade') return null;
+              
+              // Check for draft picks in primary location
+              const draftPicks = transaction.draft_picks;
+              // Check for draft picks in metadata as fallback
+              const metadataPicks = transaction.metadata?.traded_picks;
+              
+              const picksToShow = (draftPicks && Array.isArray(draftPicks) && draftPicks.length > 0) 
+                ? draftPicks 
+                : (metadataPicks && Array.isArray(metadataPicks) && metadataPicks.length > 0)
+                  ? metadataPicks
+                  : null;
+              
+              if (!picksToShow) return null;
+              
+              return (
+                <div className="flex items-center space-x-2 my-2">
+                  <span className="text-blue-600 font-medium">Draft Picks:</span>
+                  <div className="flex flex-wrap space-x-2">
+                    {picksToShow.map((pick, index) => (
+                      <div key={index} className="flex items-center space-x-1 bg-blue-50 px-2 py-1 rounded">
+                        <div className="flex items-center space-x-1">
+                          <span className="text-sm font-medium">
+                            {pick.season} Round {pick.round}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            (from Roster {pick.previous_owner_id || pick.owner_id} → Roster {pick.roster_id})
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+            
             {/* Additional details for trades */}
             {transaction.type === 'trade' && (
               <div className="mt-2 text-gray-700">
                 <p>
                   Trade between Roster IDs: {transaction.roster_ids.join(', ')}
                 </p>
-                {/* You can add more details here for draft picks, FAAB, etc. */}
               </div>
             )}
           </li>

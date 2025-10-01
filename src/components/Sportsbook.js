@@ -52,6 +52,8 @@ const Sportsbook = () => {
     const [betAmount, setBetAmount] = useState('');
     const [notifications, setNotifications] = useState([]);
     const [isBetSlipExpanded, setIsBetSlipExpanded] = useState(false);
+    const [showConfirmation, setShowConfirmation] = useState(false);
+    const [confirmationData, setConfirmationData] = useState(null);
 
     // Current season
     const currentSeason = useMemo(() => {
@@ -218,9 +220,13 @@ const Sportsbook = () => {
             return;
         }
 
-        // Add new bet
-        setBetSlip(prev => [...prev, { ...bet, id: betId }]);
+        // Add new bet with timestamp
+        const timestamp = new Date().toLocaleString();
+        setBetSlip(prev => [...prev, { ...bet, id: betId, timestamp }]);
         addNotification('Bet added to slip', 'success');
+        
+        // Expand bet slip when bet is added
+        setIsBetSlipExpanded(true);
     };
 
     const removeBetFromSlip = (betId) => {
@@ -601,7 +607,7 @@ const Sportsbook = () => {
                     },
                     statsToUse,
                     {
-                        vig: 0.045,
+                        vig: 0.055,
                         includePropBets: true,
                         weekNumber: week
                     }
@@ -862,11 +868,17 @@ const Sportsbook = () => {
                                     onChange={(e) => setSelectedWeek(parseInt(e.target.value))}
                                     className="block w-48 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md"
                                 >
-                                    {Array.from({length: 18}, (_, i) => i + 1).map(week => (
-                                        <option key={week} value={week}>
-                                            Week {week} {week >= 15 ? '(Playoffs)' : ''}
-                                        </option>
-                                    ))}
+                                    {Array.from({length: 18}, (_, i) => i + 1)
+                                        .filter(week => {
+                                            // Only show current week and future weeks
+                                            const currentWeek = nflState?.week ? parseInt(nflState.week) : 1;
+                                            return week >= currentWeek;
+                                        })
+                                        .map(week => (
+                                            <option key={week} value={week}>
+                                                Week {week} {week >= 15 ? '(Playoffs)' : ''}
+                                            </option>
+                                        ))}
                                 </select>
                             </div>
                         </div>
@@ -958,7 +970,10 @@ const Sportsbook = () => {
                                                                     team: matchup.team1.name,
                                                                     line: matchup.markets.spread.team1.line,
                                                                     odds: matchup.markets.spread.team1.odds,
-                                                                    description: `${matchup.team1.name} ${matchup.markets.spread.team1.line}`
+                                                                    description: `${matchup.team1.name} ${matchup.markets.spread.team1.line}`,
+                                                                    season: currentSeason,
+                                                                    week: selectedWeek,
+                                                                    matchup: `${matchup.team1.name} vs ${matchup.team2.name}`
                                                                 })}
                                                             >
                                                                 <div className={`text-lg font-bold mb-1 ${
@@ -989,7 +1004,10 @@ const Sportsbook = () => {
                                                                     team: matchup.team2.name,
                                                                     line: matchup.markets.spread.team2.line,
                                                                     odds: matchup.markets.spread.team2.odds,
-                                                                    description: `${matchup.team2.name} ${matchup.markets.spread.team2.line}`
+                                                                    description: `${matchup.team2.name} ${matchup.markets.spread.team2.line}`,
+                                                                    season: currentSeason,
+                                                                    week: selectedWeek,
+                                                                    matchup: `${matchup.team1.name} vs ${matchup.team2.name}`
                                                                 })}
                                                             >
                                                                 <div className={`text-lg font-bold mb-1 ${
@@ -1036,7 +1054,10 @@ const Sportsbook = () => {
                                                                     team: `${matchup.team1.name} vs ${matchup.team2.name}`,
                                                                     line: matchup.markets.total.over.line,
                                                                     odds: matchup.markets.total.over.odds,
-                                                                    description: `Over ${matchup.markets.total.over.line}`
+                                                                    description: `Over ${matchup.markets.total.over.line}`,
+                                                                    season: currentSeason,
+                                                                    week: selectedWeek,
+                                                                    matchup: `${matchup.team1.name} vs ${matchup.team2.name}`
                                                                 })}
                                                             >
                                                                 <div className="text-xs text-gray-600 mb-1">OVER</div>
@@ -1067,7 +1088,10 @@ const Sportsbook = () => {
                                                                     team: `${matchup.team1.name} vs ${matchup.team2.name}`,
                                                                     line: matchup.markets.total.under.line,
                                                                     odds: matchup.markets.total.under.odds,
-                                                                    description: `Under ${matchup.markets.total.under.line}`
+                                                                    description: `Under ${matchup.markets.total.under.line}`,
+                                                                    season: currentSeason,
+                                                                    week: selectedWeek,
+                                                                    matchup: `${matchup.team1.name} vs ${matchup.team2.name}`
                                                                 })}
                                                             >
                                                                 <div className="text-xs text-gray-600 mb-1">UNDER</div>
@@ -1113,7 +1137,10 @@ const Sportsbook = () => {
                                                                 team: matchup.team1.name,
                                                                 line: 'ML',
                                                                 odds: matchup.markets?.moneyline?.team1?.odds || matchup.team1.odds,
-                                                                description: `${matchup.team1.name} ML`
+                                                                description: `${matchup.team1.name} ML`,
+                                                                season: currentSeason,
+                                                                week: selectedWeek,
+                                                                matchup: `${matchup.team1.name} vs ${matchup.team2.name}`
                                                             })}
                                                         >
                                                             <div className={`text-lg font-bold ${
@@ -1142,7 +1169,10 @@ const Sportsbook = () => {
                                                                 team: matchup.team2.name,
                                                                 line: 'ML',
                                                                 odds: matchup.markets?.moneyline?.team2?.odds || matchup.team2.odds,
-                                                                description: `${matchup.team2.name} ML`
+                                                                description: `${matchup.team2.name} ML`,
+                                                                season: currentSeason,
+                                                                week: selectedWeek,
+                                                                matchup: `${matchup.team1.name} vs ${matchup.team2.name}`
                                                             })}
                                                         >
                                                             <div className={`text-lg font-bold ${
@@ -1336,7 +1366,10 @@ const Sportsbook = () => {
                                                         team: team.name,
                                                         line: 'Make Playoffs',
                                                         odds: team.odds,
-                                                        description: `${team.name} Make Playoffs`
+                                                        description: `${team.name} Make Playoffs`,
+                                                        season: currentSeason,
+                                                        week: 'Futures',
+                                                        matchup: 'Season-Long Bet'
                                                     })}
                                                 >
                                                     <div className="text-lg font-bold text-blue-600">
@@ -1386,7 +1419,10 @@ const Sportsbook = () => {
                                                         team: team.name,
                                                         line: 'Win Championship',
                                                         odds: team.odds,
-                                                        description: `${team.name} Win Championship`
+                                                        description: `${team.name} Win Championship`,
+                                                        season: currentSeason,
+                                                        week: 'Futures',
+                                                        matchup: 'Season-Long Bet'
                                                     })}
                                                 >
                                                     <div className="text-lg font-bold text-blue-600">
@@ -1472,6 +1508,16 @@ const Sportsbook = () => {
                                         <div>
                                             <div className="text-sm font-medium text-gray-800">{bet.description}</div>
                                             <div className="text-xs text-gray-600">{formatOdds(bet.odds)}</div>
+                                            {bet.season && bet.week && bet.matchup && (
+                                                <div className="text-xs text-gray-500 mt-1">
+                                                    {bet.season} • Week {bet.week} • {bet.matchup}
+                                                </div>
+                                            )}
+                                            {bet.timestamp && (
+                                                <div className="text-xs text-gray-400 mt-1">
+                                                    {bet.timestamp}
+                                                </div>
+                                            )}
                                         </div>
                                         <button
                                             onClick={() => removeBetFromSlip(bet.id)}
@@ -1515,9 +1561,20 @@ const Sportsbook = () => {
                                         <button
                                             className="bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition-colors text-sm font-medium"
                                             onClick={() => {
-                                                addNotification(`Bet placed: $${betAmount} to win $${formatScore(Number(calculatePayout() - parseFloat(betAmount)), 2)}`, 'success');
+                                                const submissionTime = new Date();
+                                                const betData = {
+                                                    bets: [...betSlip],
+                                                    amount: betAmount,
+                                                    potentialPayout: calculatePayout(),
+                                                    potentialWin: calculatePayout() - parseFloat(betAmount),
+                                                    submittedAt: submissionTime,
+                                                    ticketNumber: `TLO-${Date.now()}`
+                                                };
+                                                setConfirmationData(betData);
+                                                setShowConfirmation(true);
                                                 clearBetSlip();
-                                                setIsBetSlipExpanded(false);
+                                                // Keep bet slip expanded so user can see confirmation modal
+                                                setIsBetSlipExpanded(true);
                                             }}
                                         >
                                             Place Bet
@@ -1546,6 +1603,100 @@ const Sportsbook = () => {
                         </div>
                     </div>
                 </div>
+
+                {/* Bet Confirmation Modal */}
+                {showConfirmation && confirmationData && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+                            {/* Modal Header */}
+                            <div className="bg-green-600 text-white p-4 rounded-t-lg">
+                                <div className="flex items-center justify-between">
+                                    <h2 className="text-xl font-bold">Bet Confirmation</h2>
+                                    <button
+                                        onClick={() => {
+                                            setShowConfirmation(false);
+                                            setIsBetSlipExpanded(false);
+                                        }}
+                                        className="text-white hover:text-gray-200 text-2xl leading-none"
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Receipt Content */}
+                            <div className="p-6">
+                                <div className="text-center mb-6">
+                                    <div className="text-2xl font-bold text-green-600 mb-2">✅ BET PLACED</div>
+                                    <div className="text-lg font-semibold text-gray-800">Ticket #{confirmationData.ticketNumber}</div>
+                                </div>
+
+                                {/* Bet Details */}
+                                <div className="space-y-4 mb-6">
+                                    <h3 className="font-semibold text-gray-800 border-b pb-2">Bet Details:</h3>
+                                    {confirmationData.bets.map((bet, index) => (
+                                        <div key={bet.id} className="bg-gray-50 p-3 rounded">
+                                            <div className="font-medium text-gray-800">{bet.description}</div>
+                                            <div className="text-sm text-gray-600">{formatOdds(bet.odds)}</div>
+                                            {bet.season && bet.week && bet.matchup && (
+                                                <div className="text-xs text-gray-500 mt-1">
+                                                    {bet.season} • Week {bet.week} • {bet.matchup}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Financial Summary */}
+                                <div className="bg-blue-50 p-4 rounded-lg mb-6">
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between">
+                                            <span className="font-medium">Bet Amount:</span>
+                                            <span className="font-bold">${confirmationData.amount}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="font-medium">Potential Payout:</span>
+                                            <span className="font-bold text-green-600">${formatScore(Number(confirmationData.potentialPayout), 2)}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="font-medium">Potential Win:</span>
+                                            <span className="font-bold text-green-600">${formatScore(Number(confirmationData.potentialWin), 2)}</span>
+                                        </div>
+                                        {confirmationData.bets.length > 1 && (
+                                            <div className="text-xs text-blue-600 mt-2">
+                                                {confirmationData.bets.length}-leg parlay • All selections must win
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                {/* Screenshot Note */}
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                    <div className="text-center text-sm text-yellow-800">
+                        <div className="font-medium mb-1">📱 Save for Your Records</div>
+                        <div>Screenshot this receipt to keep a record of your bet</div>
+                    </div>
+                </div>
+
+                {/* Timestamp */}
+                <div className="text-center border-t pt-4">
+                    <div className="text-sm text-gray-600">
+                        <div>Submitted: {confirmationData.submittedAt.toLocaleDateString()}</div>
+                        <div>{confirmationData.submittedAt.toLocaleTimeString()}</div>
+                    </div>
+                </div>                                {/* Close Button */}
+                                <div className="mt-6 text-center">
+                                    <button
+                                        onClick={() => setShowConfirmation(false)}
+                                        className="bg-blue-600 text-white py-2 px-6 rounded hover:bg-blue-700 transition-colors font-medium"
+                                    >
+                                        Close Receipt
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

@@ -11,7 +11,7 @@ import { calculateWinProbability } from './winProbabilityCalculator.js';
  * Convert point spread to moneyline odds with realistic sportsbook relationships
  * Based on REAL NFL sportsbook data patterns
  */
-export const convertSpreadToMoneyline = (spread, isFavorite = true, vig = 0.045) => {
+export const convertSpreadToMoneyline = (spread, isFavorite = true, vig = 0.055) => {
     const absSpread = Math.abs(spread);
     
     // Handle true pick'em games (spread = 0)
@@ -392,7 +392,7 @@ export const generateCleanBettingMarkets = (matchup, teamStats, options = {}) =>
     } = matchup;
     
     const {
-        vig = 0.045,
+        vig = 0.055,
         includePropBets = true,
         includeSpecialMarkets = false,
         weekNumber = 3
@@ -767,7 +767,7 @@ export const oddsToImpliedProbability = (americanOdds) => {
 /**
  * Convert implied probability to American odds
  */
-export const probabilityToAmericanOdds = (probability, addVig = true, vigAmount = 0.045) => {
+export const probabilityToAmericanOdds = (probability, addVig = true, vigAmount = 0.055) => {
     let adjustedProb = probability;
     
     if (addVig) {

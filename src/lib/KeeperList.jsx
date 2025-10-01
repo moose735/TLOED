@@ -4,7 +4,7 @@ import resolveKeeperPick from '../utils/keeperSlotResolver';
 
 // KeeperList: independent page under League tab to show current keepers and keeper metadata
 export default function KeeperList() {
-    const { historicalData, usersData, currentSeason, nflPlayers, getTeamDetails } = useSleeperData();
+    const { historicalData, usersData, currentSeason, nflPlayers, getTeamDetails, rostersWithDetails } = useSleeperData();
 
     // ...existing code... (no centralized helper; expiration calculation inlined where needed)
 
@@ -68,9 +68,23 @@ export default function KeeperList() {
 
             // capture original draft round/pick info from the pick at the current draft start (in case the player was re-drafted after being returned to the draft)
             const originalPick = (picksAfterStart && picksAfterStart.length) ? picksAfterStart[0] : (picks.length ? picks[0] : null);
-            const originalDraftRound = originalPick ? (originalPick.round || null) : null;
-            const originalPickInRound = originalPick ? (originalPick.pick_in_round || null) : null;
-            const originalPickNo = originalPick ? (originalPick.pick_no || null) : null;
+            
+            // Check if player was drafted in the CURRENT season (not just the draft cycle start)
+            // This handles cases where player went back to draft but wasn't drafted and was picked up off waivers
+            const currentSeasonNumber = currentSeason ? Number(currentSeason) : null;
+            const currentSeasonPick = picks.find(p => p.season === currentSeasonNumber);
+            const wasDraftedThisSeason = currentSeasonPick && (currentSeasonPick.round || currentSeasonPick.pick_in_round || currentSeasonPick.pick_no);
+            
+            // If not drafted this season, treat as waiver pickup (Round 10 value)
+            // If drafted this season, use the current season pick info
+            // If no current season pick but has original pick, use original (for players kept from previous years)
+            const wasActuallyDrafted = wasDraftedThisSeason || (originalPick && (originalPick.round || originalPick.pick_in_round || originalPick.pick_no) && originalPick.season === currentSeasonNumber);
+            const pickToUse = wasDraftedThisSeason ? currentSeasonPick : originalPick;
+            const originalDraftRound = wasActuallyDrafted ? (pickToUse?.round || null) : null;
+            const originalPickInRound = wasActuallyDrafted ? (pickToUse?.pick_in_round || null) : null;
+            const originalPickNo = wasActuallyDrafted ? (pickToUse?.pick_no || null) : null;
+
+
 
             map[pid] = {
                 player_name: playerName || 'Unknown',
@@ -82,14 +96,50 @@ export default function KeeperList() {
                 originalDraftRound,
                 originalPickInRound,
                 originalPickNo,
+                wasActuallyDrafted, // Add this for debugging
                 // expose lastKeeperSeason relative to current draft start for expiration calculations
                 lastKeeperSeason: lastKeeperSeasonAfterStart,
                 isKeeper
             };
         }
 
+        // Add players who are on current rosters but have no draft history (pure waiver pickups)
+        if (rostersWithDetails && nflPlayers && currentSeason) {
+            for (const roster of rostersWithDetails) {
+                if (!roster.players || !Array.isArray(roster.players)) continue;
+                
+                for (const playerId of roster.players) {
+                    const pid = String(playerId);
+                    
+                    // Skip if player already in keeper map (has draft history)
+                    if (map[pid]) continue;
+                    
+                    // This is a pure waiver pickup with no draft history
+                    const player = nflPlayers[playerId];
+                    const playerName = player ? `${player.first_name} ${player.last_name}` : `Player ${playerId}`;
+                    
+                    // console.log(`Found pure waiver pickup: ${playerName} (ID: ${pid}) on roster ${roster.roster_id}`);
+                    
+                    map[pid] = {
+                        player_name: playerName,
+                        lastOwner: null,
+                        yearsKept: 0,
+                        lastSeasonSeen: Number(currentSeason),
+                        firstSeasonSeen: Number(currentSeason),
+                        originalDraftSeason: null,
+                        originalDraftRound: null,
+                        originalPickInRound: null,
+                        originalPickNo: null,
+                        wasActuallyDrafted: false, // Pure waiver pickup
+                        lastKeeperSeason: null,
+                        isKeeper: false
+                    };
+                }
+            }
+        }
+
         return map;
-    }, [historicalData]);
+    }, [historicalData, rostersWithDetails, nflPlayers, currentSeason]);
 
     // Selection state for filtering
     const [selectedRosterId, setSelectedRosterId] = useState('all');
@@ -103,15 +153,23 @@ export default function KeeperList() {
         const rosters = {};
         const positionsSet = new Set();
 
-        if (currentSeason && historicalData?.draftPicksBySeason?.[currentSeason]) {
-            for (const p of historicalData.draftPicksBySeason[currentSeason]) {
-                if (!p.player_id) continue;
-                const pid = String(p.player_id);
-                // prefer p.roster_id if available
-                if (p.roster_id) map.set(pid, { roster_id: String(p.roster_id), position: p.player_position || p.metadata?.position || null });
-                else map.set(pid, { roster_id: null, position: p.player_position || p.metadata?.position || null });
-                const pos = p.player_position || p.metadata?.position;
-                if (pos) positionsSet.add(pos);
+        // Use current roster data from Sleeper API instead of draft data
+        if (rostersWithDetails && rostersWithDetails.length > 0) {
+            for (const roster of rostersWithDetails) {
+                if (!roster.players || !Array.isArray(roster.players)) continue;
+                
+                for (const playerId of roster.players) {
+                    const pid = String(playerId);
+                    const player = nflPlayers?.[playerId];
+                    const position = player?.position || null;
+                    
+                    map.set(pid, { 
+                        roster_id: String(roster.roster_id), 
+                        position: position 
+                    });
+                    
+                    if (position) positionsSet.add(position);
+                }
             }
         }
 
@@ -148,7 +206,7 @@ export default function KeeperList() {
     const positionOpts = [...orderedPreferred, ...leftovers];
 
         return { currentPlayersMap: map, rosterOptions: rosterOpts, positionOptions: positionOpts, rosterLookup: rosters };
-    }, [historicalData, currentSeason]);
+    }, [historicalData, currentSeason, rostersWithDetails, nflPlayers]);
 
     // derive expiration years present in keeperMap for the current season players
     const yearOptions = useMemo(() => {
@@ -160,10 +218,15 @@ export default function KeeperList() {
             const firstSeason = data.firstSeasonSeen ? Number(data.firstSeasonSeen) : (data.lastSeasonSeen ? Number(data.lastSeasonSeen) : null);
             const lastKeeper = data.lastKeeperSeason ? Number(data.lastKeeperSeason) : null;
             const keptYears = data.yearsKept || 0;
+            const currentSeasonNum = currentSeason ? Number(currentSeason) : null;
+            
             let expirationYear = null;
             if (lastKeeper) {
                 const remaining = Math.max(0, 3 - keptYears);
                 expirationYear = lastKeeper + remaining;
+            } else if (!data.wasActuallyDrafted && currentSeasonNum) {
+                // Waiver pickup this season, 3-year contract from current season
+                expirationYear = currentSeasonNum + 3;
             } else if (firstSeason) {
                 expirationYear = firstSeason + 3;
             }
@@ -197,10 +260,15 @@ export default function KeeperList() {
             const firstSeason = r.firstSeasonSeen ? Number(r.firstSeasonSeen) : (r.lastSeasonSeen ? Number(r.lastSeasonSeen) : null);
             const lastKeeper = r.lastKeeperSeason ? Number(r.lastKeeperSeason) : null;
             const keptYears = r.yearsKept || 0;
+            const currentSeasonNum = currentSeason ? Number(currentSeason) : null;
+            
             let expirationYear = null;
             if (lastKeeper) {
                 const remaining = Math.max(0, 3 - keptYears);
                 expirationYear = lastKeeper + remaining;
+            } else if (!r.wasActuallyDrafted && currentSeasonNum) {
+                // Waiver pickup this season, 3-year contract from current season
+                expirationYear = currentSeasonNum + 3;
             } else if (firstSeason) {
                 expirationYear = firstSeason + 3;
             }
@@ -244,7 +312,10 @@ export default function KeeperList() {
     return (
         <div className="bg-gray-900 p-4 rounded-lg shadow-lg">
             <h2 className="text-2xl font-semibold mb-4 text-yellow-300">Keepers</h2>
-            <p className="text-sm text-gray-200 mb-4">Rules: 3 players are to be kept from 3 different positions. Draft year + 2 keeper years for a total of 3 years max. Starting in 2028, <span className="underline decoration-dotted decoration-gray-400 cursor-help" title={"2026 = 1 player kept at round value\n2027 = 2 players kept at round value\n2028 = 3 players kept at round value\nIf you do not have a pick in the assigned round, it will cost -1 round.\nFree Agent keepers are assigned the 10th round."}>F Jon</span> Rule will be completely implemented with draft pick values assigned to players.</p>
+            <p className="text-sm text-gray-200 mb-4">
+                Rules: 3 players are to be kept from 3 different positions. Draft year + 2 keeper years for a total of 3 years max. 
+                Starting in {currentSeason ? Number(currentSeason) + 3 : 2028}, <span className="underline decoration-dotted decoration-gray-400 cursor-help" title={currentSeason ? `${Number(currentSeason) + 1} = 1 player kept at round value\n${Number(currentSeason) + 2} = 2 players kept at round value\n${Number(currentSeason) + 3} = 3 players kept at round value\nIf you do not have a pick in the assigned round, it will cost -1 round.\nFree Agent keepers are assigned the 10th round.` : "F Jon Rule details"}>F Jon</span> Rule will be completely implemented with draft pick values assigned to players.
+            </p>
 
             <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:gap-4">
                 <div>
@@ -338,10 +409,15 @@ export default function KeeperList() {
                                                                     const firstSeason = r.firstSeasonSeen ? Number(r.firstSeasonSeen) : (r.lastSeasonSeen ? Number(r.lastSeasonSeen) : null);
                                                                     const lastKeeper = r.lastKeeperSeason ? Number(r.lastKeeperSeason) : null;
                                                                     const keptYears = r.yearsKept || 0;
+                                                                    const currentSeasonNum = currentSeason ? Number(currentSeason) : null;
+                                                                    
                                                                     let expirationYear = null;
                                                                     if (lastKeeper) {
                                                                         const remaining = Math.max(0, 3 - keptYears);
                                                                         expirationYear = lastKeeper + remaining;
+                                                                    } else if (!r.wasActuallyDrafted && currentSeasonNum) {
+                                                                        // Waiver pickup this season, 3-year contract from current season
+                                                                        expirationYear = currentSeasonNum + 3;
                                                                     } else if (firstSeason) {
                                                                         expirationYear = firstSeason + 3;
                                                                     }
@@ -398,17 +474,26 @@ export default function KeeperList() {
                                                             const firstSeason = r.firstSeasonSeen ? Number(r.firstSeasonSeen) : (r.lastSeasonSeen ? Number(r.lastSeasonSeen) : null);
                                                             const lastKeeper = r.lastKeeperSeason ? Number(r.lastKeeperSeason) : null;
                                                             const keptYears = r.yearsKept || 0;
+                                                            const currentSeasonNum = currentSeason ? Number(currentSeason) : null;
+                                                            
                                                             let expirationYear = null;
                                                             if (lastKeeper) {
+                                                                // Player has been kept before, use standard keeper logic
                                                                 const remaining = Math.max(0, 3 - keptYears);
                                                                 expirationYear = lastKeeper + remaining;
+                                                            } else if (!r.wasActuallyDrafted && currentSeasonNum) {
+                                                                // Player was picked up off waivers this season, start 3-year contract from current season
+                                                                expirationYear = currentSeasonNum + 3;
                                                             } else if (firstSeason) {
+                                                                // Player was drafted (either this season or in their cycle start), use firstSeason + 3
                                                                 expirationYear = firstSeason + 3;
                                                             }
 
                                                             // Assigned round for the next keep (simple heuristic): originalRound - yearsKept (min 1).
-                                                            const originalRound = r.originalDraftRound ? Number(r.originalDraftRound) : null;
-                                                            const assignedRound = originalRound ? Math.max(1, originalRound - (r.yearsKept || 0)) : null;
+                                                            // For undrafted players (waiver/free agent pickups), assign Round 10 value.
+                                                            // Use wasActuallyDrafted flag to determine if they were drafted or picked up off waivers
+                                                            const originalRound = (r.wasActuallyDrafted && r.originalDraftRound) ? Number(r.originalDraftRound) : 10;
+                                                            const assignedRound = Math.max(1, originalRound - (r.yearsKept || 0));
 
                                                             let containerClass = 'bg-gray-900 border-gray-800';
                                                             let nameClass = 'text-gray-100';

@@ -150,10 +150,42 @@ const Dashboard = () => {
                             });
                         }
                         
+                        // Process draft picks for this team
+                        const teamDraftPicksReceived = [];
+                        const teamDraftPicksSent = [];
+                        
+                        if (transaction.draft_picks && Array.isArray(transaction.draft_picks)) {
+                            transaction.draft_picks.forEach(pick => {
+                                // Based on API data analysis:
+                                // owner_id: who gets the pick after the trade
+                                // previous_owner_id: who had the pick before the trade
+                                
+                                // If this team gets the pick (owner_id matches)
+                                if (String(pick.owner_id) === String(teamRosterId)) {
+                                    teamDraftPicksReceived.push({
+                                        season: pick.season,
+                                        round: pick.round,
+                                        fromRoster: pick.previous_owner_id
+                                    });
+                                }
+                                
+                                // If this team originally had the pick (previous_owner_id matches)
+                                if (String(pick.previous_owner_id) === String(teamRosterId)) {
+                                    teamDraftPicksSent.push({
+                                        season: pick.season,
+                                        round: pick.round,
+                                        toRoster: pick.owner_id
+                                    });
+                                }
+                            });
+                        }
+                        
                         return {
                             ...team,
                             receives: teamAdds,
-                            sends: teamDrops
+                            sends: teamDrops,
+                            receivedPicks: teamDraftPicksReceived,
+                            sentPicks: teamDraftPicksSent
                         };
                     });
                 }
@@ -190,6 +222,7 @@ const Dashboard = () => {
                     addedPlayers,
                     droppedPlayers,
                     tradeDetails,
+                    draftPicks: transaction.draft_picks || [],
                     waiver_budget: transaction.waiver_budget || []
                 };
             });
@@ -544,6 +577,48 @@ const Dashboard = () => {
                                                                     <div className="flex-1 min-w-0">
                                                                         <div className="font-medium text-gray-800 text-sm truncate">{player.name}</div>
                                                                         <div className="text-xs text-gray-500">{player.position} • {player.team}</div>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                
+                                                {/* Draft Picks Sent */}
+                                                {team.sentPicks && team.sentPicks.length > 0 && (
+                                                    <div>
+                                                        <div className="flex items-center space-x-2 mb-2">
+                                                            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                                                            </svg>
+                                                            <span className="font-medium text-blue-700 text-sm">Draft Picks Sent</span>
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            {team.sentPicks.map((pick, pickIdx) => (
+                                                                <div key={pickIdx} className="bg-blue-50 rounded p-2 text-sm">
+                                                                    <div className="font-medium text-blue-800">
+                                                                        {pick.season} Round {pick.round}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                
+                                                {/* Draft Picks Received */}
+                                                {team.receivedPicks && team.receivedPicks.length > 0 && (
+                                                    <div>
+                                                        <div className="flex items-center space-x-2 mb-2">
+                                                            <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16l-4-4m0 0l4-4m-4 4h18" />
+                                                            </svg>
+                                                            <span className="font-medium text-purple-700 text-sm">Draft Picks Received</span>
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            {team.receivedPicks.map((pick, pickIdx) => (
+                                                                <div key={pickIdx} className="bg-purple-50 rounded p-2 text-sm">
+                                                                    <div className="font-medium text-purple-800">
+                                                                        {pick.season} Round {pick.round}
                                                                     </div>
                                                                 </div>
                                                             ))}
