@@ -190,43 +190,36 @@ const Sportsbook = () => {
 
         // Check for conflicts only when adding new bets
         const conflicts = betSlip.filter(existingBet => {
-            // Same game restrictions
-            if (existingBet.matchupId === bet.matchupId) {
-                // Can't bet both sides of spread
-                if (bet.type === 'spread' && existingBet.type === 'spread') {
-                    return true;
-                }
-                // Can't bet both over/under
-                if (bet.type === 'total' && existingBet.type === 'total') {
-                    return true;
-                }
-                // Can't bet both moneylines
-                if (bet.type === 'moneyline' && existingBet.type === 'moneyline') {
-                    return true;
-                }
-                // Can't bet same team's spread and moneyline
-                if ((bet.type === 'spread' && existingBet.type === 'moneyline') ||
-                    (bet.type === 'moneyline' && existingBet.type === 'spread')) {
-                    if (bet.team === existingBet.team) {
-                        return true;
-                    }
-                }
+            // Only consider same-matchup bets for conflicts
+            if (existingBet.matchupId !== bet.matchupId) return false;
+
+            // Disallow exact duplicate types (can't add same type twice)
+            if (existingBet.type === bet.type) return true;
+
+            // Disallow spread + moneyline combos on the same matchup
+            if ((existingBet.type === 'spread' && bet.type === 'moneyline') || (existingBet.type === 'moneyline' && bet.type === 'spread')) {
+                return true;
             }
-            return false;
+
+            // Allow combinations that include totals (O/U) with spread or moneyline (parlay-friendly)
+            // e.g., spread + total or moneyline + total are allowed.
+            if (existingBet.type === 'total' || bet.type === 'total') {
+                return false;
+            }
+
+            // Any other cross-type combination is disallowed by default
+            return true;
         });
 
         if (conflicts.length > 0) {
-            addNotification('Cannot add conflicting bets from the same game', 'error');
+            addNotification('Cannot add conflicting bets for the same game (spread + moneyline not allowed). You can combine a spread or moneyline with a total for parlays.', 'error');
             return;
         }
 
-        // Add new bet with timestamp
-        const timestamp = new Date().toLocaleString();
-        setBetSlip(prev => [...prev, { ...bet, id: betId, timestamp }]);
-        addNotification('Bet added to slip', 'success');
-        
-        // Expand bet slip when bet is added
-        setIsBetSlipExpanded(true);
+    // Add new bet with timestamp (do not auto-expand; keep collapsed by default)
+    const timestamp = new Date().toLocaleString();
+    setBetSlip(prev => [...prev, { ...bet, id: betId, timestamp }]);
+    addNotification('Bet added to slip', 'success');
     };
 
     const removeBetFromSlip = (betId) => {
@@ -1472,13 +1465,16 @@ const Sportsbook = () => {
                             onClick={() => setIsBetSlipExpanded(!isBetSlipExpanded)}
                         >
                             <div className="flex items-center gap-3">
-                                <span className="font-bold text-gray-800">Bet Slip ({betSlip.length})</span>
-                                {betAmount && parseFloat(betAmount) > 0 && (
-                                    <span className="text-green-600 font-semibold text-sm">
-                                        ${formatScore(Number(calculatePayout()), 2)}
-                                    </span>
-                                )}
-                            </div>
+                                    <span className="font-bold text-gray-800">Bet Slip ({betSlip.length})</span>
+                                    {betSlip.length > 0 && (
+                                        <span className="text-gray-600 text-sm">•</span>
+                                    )}
+                                    {betSlip.length > 0 && (
+                                        <span className="text-green-600 font-semibold text-sm">
+                                            {betSlip.length === 1 ? `${formatOdds(betSlip[0].odds)}` : `${formatOdds(calculateParlayOdds(betSlip))} (Parlay)`}
+                                        </span>
+                                    )}
+                                </div>
                             <div className="flex items-center gap-2">
                                 <button
                                     onClick={(e) => {
@@ -1566,11 +1562,15 @@ const Sportsbook = () => {
                                         onClick={() => {
                                             if (!canPlace) return;
                                             const submissionTime = new Date();
+                                            const parlayOdds = betSlip.length > 1 ? calculateParlayOdds(betSlip) : null;
+                                            const singleOdds = betSlip.length === 1 ? betSlip[0].odds : null;
                                             const betData = {
                                                 bets: [...betSlip],
                                                 amount: betAmount,
                                                 potentialPayout: calculatePayout(),
                                                 potentialWin: calculatePayout() - parseFloat(betAmount),
+                                                singleOdds,
+                                                parlayOdds,
                                                 submittedAt: submissionTime,
                                                 ticketNumber: `TLO-${Date.now()}`
                                             };
@@ -1665,6 +1665,18 @@ const Sportsbook = () => {
                                             <span className="font-medium">Potential Win:</span>
                                             <span className="font-bold text-green-600">${formatScore(Number(confirmationData.potentialWin), 2)}</span>
                                         </div>
+                                        {confirmationData.parlayOdds && (
+                                            <div className="flex justify-between">
+                                                <span className="font-medium">Parlay Odds:</span>
+                                                <span className="font-bold">{formatOdds(confirmationData.parlayOdds)}</span>
+                                            </div>
+                                        )}
+                                        {confirmationData.singleOdds && (
+                                            <div className="flex justify-between">
+                                                <span className="font-medium">Single Odds:</span>
+                                                <span className="font-bold">{formatOdds(confirmationData.singleOdds)}</span>
+                                            </div>
+                                        )}
                                         {confirmationData.bets.length > 1 && (
                                             <div className="text-xs text-blue-600 mt-2">
                                                 {confirmationData.bets.length}-leg parlay • All selections must win
