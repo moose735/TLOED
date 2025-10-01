@@ -289,10 +289,21 @@ const PowerRankings = () => {
 			const t1N = t1Stats.count >= 2 ? t1Stats.count : 1;
 			const t2N = t2Stats.count >= 2 ? t2Stats.count : 1;
 			const diff = t1Mean - t2Mean;
-			const stdErr = Math.sqrt((t1Var / t1N) + (t2Var / t2N));
+			let stdErr = Math.sqrt((t1Var / t1N) + (t2Var / t2N));
+			
+			// Add safety checks to prevent unrealistic projections
+			if (stdErr <= 0 || t1Stats.count < 2 || t2Stats.count < 2) {
+				// If insufficient data, use league average variance as baseline
+				const leagueAvgStdErr = 15; // reasonable standard error for fantasy football
+				stdErr = Math.max(stdErr, leagueAvgStdErr);
+			}
+			
+			// Cap the difference to prevent extreme projections (no team should be 22+ points better)
+			const cappedDiff = Math.max(-20, Math.min(20, diff));
+			
 			let t1WinProb = 0.5;
 			if (stdErr > 0) {
-				t1WinProb = 0.5 + 0.5 * erf(diff / (Math.sqrt(2) * stdErr));
+				t1WinProb = 0.5 + 0.5 * erf(cappedDiff / (Math.sqrt(2) * stdErr));
 			}
 			// Cap win probabilities to [0.05, 0.95] to reflect fantasy randomness
 			t1WinProb = Math.max(0.05, Math.min(0.95, t1WinProb));

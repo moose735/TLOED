@@ -1,5 +1,11 @@
 // src/utils/cleanOddsCalculator.js
 // Clean, consolidated odds calculator with proper spread-to-moneyline relationships
+// Enhanced with historical scoring analysis for improved spread calculations
+
+import { calculateTeamStats, calculateVarianceBasedSpread, getHeadToHeadRecord } from './historicalAnalysis.js';
+import { calculateEnhancedSpread } from './currentSeasonStats.js';
+import { calculateDynamicEnhancedSpread } from './dynamicSeasonStats.js';
+import { calculateWinProbability } from './winProbabilityCalculator.js';
 
 /**
  * Convert point spread to moneyline odds with realistic sportsbook relationships
@@ -19,30 +25,30 @@ export const convertSpreadToMoneyline = (spread, isFavorite = true, vig = 0.045)
     // For very large spreads, continue with the piecewise extrapolation below
     // (removed the old hard cap of -1500/+800 so markets can reflect more extreme values)
     
-    // Real sportsbook moneyline patterns based on actual market data
+    // More conservative moneyline patterns for fantasy football
     let favoriteOdds, underdogOdds;
     
     if (absSpread <= 1.5) {
-        favoriteOdds = -115 - (absSpread * 10);  // -115 to -130
-        underdogOdds = 100 + (absSpread * 10);   // +100 to +110
+        favoriteOdds = -110 - (absSpread * 8);   // -110 to -122
+        underdogOdds = 100 + (absSpread * 8);    // +100 to +108
     } else if (absSpread <= 3) {
-        favoriteOdds = -130 - ((absSpread - 1.5) * 20); // -130 to -160
-        underdogOdds = 110 + ((absSpread - 1.5) * 20);  // +110 to +140
+        favoriteOdds = -122 - ((absSpread - 1.5) * 12); // -122 to -140
+        underdogOdds = 108 + ((absSpread - 1.5) * 12);  // +108 to +126
     } else if (absSpread <= 4.5) {
-        favoriteOdds = -160 - ((absSpread - 3) * 30); // -160 to -205
-        underdogOdds = 140 + ((absSpread - 3) * 25);  // +140 to +175
-    } else if (absSpread <= 6.5) {
-        favoriteOdds = -205 - ((absSpread - 4.5) * 50); // -205 to -305
-        underdogOdds = 175 + ((absSpread - 4.5) * 35);  // +175 to +245
+        favoriteOdds = -140 - ((absSpread - 3) * 15); // -140 to -163
+        underdogOdds = 126 + ((absSpread - 3) * 15);  // +126 to +149
+    } else if (absSpread <= 7) {
+        favoriteOdds = -163 - ((absSpread - 4.5) * 18); // -163 to -208
+        underdogOdds = 149 + ((absSpread - 4.5) * 18);  // +149 to +194
     } else if (absSpread <= 10) {
-        favoriteOdds = -305 - ((absSpread - 6.5) * 70); // -305 to -550
-        underdogOdds = 245 + ((absSpread - 6.5) * 55);  // +245 to +435
-    } else if (absSpread <= 14) {
-        favoriteOdds = -550 - ((absSpread - 10) * 100); // -550 to -950
-        underdogOdds = 435 + ((absSpread - 10) * 90);   // +435 to +795
+        favoriteOdds = -208 - ((absSpread - 7) * 25); // -208 to -283
+        underdogOdds = 194 + ((absSpread - 7) * 25);  // +194 to +269
+    } else if (absSpread <= 15) {
+        favoriteOdds = -283 - ((absSpread - 10) * 30); // -283 to -433
+        underdogOdds = 269 + ((absSpread - 10) * 30);  // +269 to +419
     } else {
-        favoriteOdds = -950 - ((absSpread - 14) * 75);  // -950+
-        underdogOdds = 795 + ((absSpread - 14) * 60);   // +795+
+        favoriteOdds = -433 - ((absSpread - 15) * 20);  // -433+ (capped more reasonably)
+        underdogOdds = 419 + ((absSpread - 15) * 20);   // +419+ (consistent with favorite scaling)
     }
     
     // Apply small vig adjustments
@@ -122,49 +128,34 @@ const inverseNormal = (p) => {
  * Enhanced for fantasy football scoring patterns with NFL-like relative scaling
  */
 export const calculateTotal = (team1AvgScore, team2AvgScore, matchupContext = {}) => {
+    // Simple and predictable: use team averages as the base
     let baseTotal = team1AvgScore + team2AvgScore;
     
-    // Fantasy football scaling: NFL totals are ~21-56, fantasy should be ~200-300
-    // That's roughly 5-6x multiplier, but we want some variance
-    const fantasyMultiplier = 5.2; // Base multiplier
-    
     // If we don't have real averages, use reasonable defaults
-    if (baseTotal < 150) {
-        baseTotal = 200 + (Math.random() * 60); // 200-260 default range
+    if (!team1AvgScore || !team2AvgScore || baseTotal < 150) {
+        baseTotal = 220; // Default reasonable total
     }
     
-    // Convert to "NFL equivalent" for calculation
-    const nflEquivalent = baseTotal / fantasyMultiplier; // ~40-50 NFL range
-    
-    // Adjust for pace and matchup factors (similar to NFL)
+    // Add small variance for realism (±5%)
     const {
-        pace = 1.0,           // Pace factor (1.0 = average)
-        defensive = 1.0,      // Defensive factor (1.0 = average, <1.0 = better defense)
-        weather = 1.0,        // Weather factor (minimal for fantasy)
-        variance = 0.06,      // Expected variance (slightly higher than NFL)
+        variance = 0.03,      // Smaller, more predictable variance
         weekNumber = 3        // Current week
     } = matchupContext;
     
-    let adjustedNFL = nflEquivalent * pace * defensive * weather;
-    
-    // Early season adjustment (weeks 1-4 tend to be slightly higher scoring)
-    if (weekNumber <= 4) {
-        adjustedNFL *= 1.03; // 3% boost early season (vs NFL's 5%)
+    // Early season adjustment is minimal
+    if (weekNumber <= 3) {
+        baseTotal *= 1.02; // Just 2% boost early season
     }
     
-    // Add realistic variance
-    const randomFactor = 1 + ((Math.random() - 0.5) * variance);
-    adjustedNFL *= randomFactor;
+    // Add small realistic variance (±3%)
+    const randomFactor = 1 + ((Math.random() - 0.5) * variance * 2);
+    let finalTotal = baseTotal * randomFactor;
     
-    // Convert back to fantasy scale
-    let fantasyTotal = adjustedNFL * fantasyMultiplier;
+    // Keep totals in reasonable fantasy range but closer to team averages
+    finalTotal = Math.max(180, Math.min(320, finalTotal));
     
-    // Ensure totals are in realistic fantasy football range
-    // NFL: 40-50 becomes Fantasy: 208-260 (conservative range)
-    fantasyTotal = Math.max(205, Math.min(290, fantasyTotal));
-    
-    // Round to nearest 0.5 (just like NFL)
-    return Math.round(fantasyTotal * 2) / 2;
+    // Round to nearest 0.5
+    return Math.round(finalTotal * 2) / 2;
 };
 
 /**
@@ -293,6 +284,83 @@ export const calculateAdvancedTeamPower = (teamStats, rosterId, allTeamStats = {
 };
 
 /**
+ * Enhanced spread calculation using historical scoring data
+ * Combines variance analysis, hot/cold streaks, and head-to-head records
+ * Updated to support dynamic stats system
+ */
+export const calculateHistoricalSpread = (team1Identifier, team2Identifier, winProbability = 0.5, dynamicStats = null) => {
+    try {
+        // First try dynamic enhanced calculation if available
+        let enhancedSpread;
+        if (dynamicStats && Object.keys(dynamicStats).length > 0) {
+            enhancedSpread = calculateDynamicEnhancedSpread(team1Identifier, team2Identifier, winProbability, dynamicStats);
+            console.log(`Using dynamic enhanced spread for ${team1Identifier} vs ${team2Identifier}: ${enhancedSpread.spread}`);
+        } else {
+            // Fallback to hardcoded current season calculation (expects team names)
+            enhancedSpread = calculateEnhancedSpread(team1Identifier, team2Identifier, winProbability);
+            console.log(`Using legacy enhanced spread for ${team1Identifier} vs ${team2Identifier}: ${enhancedSpread.spread}`);
+        }
+        if (enhancedSpread.basis === 'enhanced' || enhancedSpread.basis === 'dynamic-stats') {
+            console.log(`Using enhanced current season spread for ${team1Identifier} vs ${team2Identifier}: ${enhancedSpread.spread}`);
+            // For dynamic stats, get team stats from the dynamic stats object
+            const team1StatsData = dynamicStats ? dynamicStats[team1Identifier] : enhancedSpread.team1Stats;
+            const team2StatsData = dynamicStats ? dynamicStats[team2Identifier] : enhancedSpread.team2Stats;
+            
+            return {
+                spread: enhancedSpread.spread,
+                confidence: enhancedSpread.confidence,
+                historicalBasis: true,
+                team1Stats: {
+                    mean: team1StatsData?.averageScore || team1StatsData?.avgPerGame || 120,
+                    stdDev: 20, // Estimate
+                    isHot: team1StatsData?.isHot || false,
+                    isCold: team1StatsData?.isCold || false,
+                    consistency: 95 // Estimate
+                },
+                team2Stats: {
+                    mean: team2StatsData?.averageScore || team2StatsData?.avgPerGame || 120,
+                    stdDev: 20, // Estimate
+                    isHot: team2StatsData?.isHot || false,
+                    isCold: team2StatsData?.isCold || false,
+                    consistency: 95 // Estimate
+                },
+                enhancedBasis: enhancedSpread
+            };
+        }
+        
+        // Fallback to historical variance analysis (this expects team names)
+        const historicalTeamStats = calculateTeamStats();
+        // For historical analysis fallback, we need team names, so derive them if we have roster IDs
+        const team1Name = (dynamicStats && dynamicStats[team1Identifier]) ? dynamicStats[team1Identifier].name : team1Identifier;
+        const team2Name = (dynamicStats && dynamicStats[team2Identifier]) ? dynamicStats[team2Identifier].name : team2Identifier;
+        const varianceSpread = calculateVarianceBasedSpread(team1Name, team2Name, historicalTeamStats);
+        
+        let spread = varianceSpread.spread;
+        
+        // Let enhanced spread calculation stand without probability override
+        // Removed conservative probability adjustment that was watering down statistical analysis
+        
+        spread = Math.round(spread * 2) / 2; // Keep rounding but remove artificial cap
+        
+        return {
+            spread,
+            confidence: varianceSpread.confidence,
+            historicalBasis: true,
+            team1Stats: varianceSpread.team1Stats,
+            team2Stats: varianceSpread.team2Stats
+        };
+        
+    } catch (error) {
+        console.warn('Enhanced analysis failed, falling back to probability-based spread:', error);
+        return {
+            spread: calculateSpreadFromProbability(winProbability),
+            confidence: 0.5,
+            historicalBasis: false
+        };
+    }
+};
+
+/**
  * Calculate team power differential for spread calculation
  * Now uses advanced power scoring instead of simple average difference
  */
@@ -330,9 +398,79 @@ export const generateCleanBettingMarkets = (matchup, teamStats, options = {}) =>
         weekNumber = 3
     } = options;
     
-    // Get team statistics with enhanced data
-    const team1Stats = teamStats[team1RosterId] || { averageScore: 120, gamesPlayed: 0, scores: [], rosterId: team1RosterId };
-    const team2Stats = teamStats[team2RosterId] || { averageScore: 120, gamesPlayed: 0, scores: [], rosterId: team2RosterId };
+    // Get team statistics with enhanced data and better fallbacks
+    let team1Stats = teamStats[team1RosterId];
+    let team2Stats = teamStats[team2RosterId];
+    
+    // Debug: Check if roster IDs exist in the stats object
+    if (team1Name && (team1Name.includes('Michael Vick') || !team1Stats || !team2Stats)) {
+        console.log(`[CLEAN ODDS DEBUG] Looking up teams:`);
+        console.log(`  Team1: ${team1Name} (ID: ${team1RosterId}) - Direct lookup: ${team1Stats ? 'FOUND' : 'MISSING'}`);
+        console.log(`  Team2: ${team2Name} (ID: ${team2RosterId}) - Direct lookup: ${team2Stats ? 'FOUND' : 'MISSING'}`);
+        console.log(`  Available stats keys:`, Object.keys(teamStats).slice(0, 10)); // Show first 10 keys
+        console.log(`  Stats structure sample:`, Object.values(teamStats)[0]);
+    }
+    
+    // If not found by roster ID, try to find by team name (more robust matching)
+    if (!team1Stats && team1Name) {
+        team1Stats = Object.values(teamStats).find(team => 
+            team && team.name && team.name.toLowerCase().trim() === team1Name.toLowerCase().trim()
+        );
+        if (team1Stats) {
+            console.log(`[FALLBACK] Found ${team1Name} by name lookup (roster ID: ${team1Stats.rosterId})`);
+        }
+    }
+    if (!team2Stats && team2Name) {
+        team2Stats = Object.values(teamStats).find(team => 
+            team && team.name && team.name.toLowerCase().trim() === team2Name.toLowerCase().trim()
+        );
+        if (team2Stats) {
+            console.log(`[FALLBACK] Found ${team2Name} by name lookup (roster ID: ${team2Stats.rosterId})`);
+        }
+    }
+    
+    // Final fallback to default values if still not found
+    if (!team1Stats) {
+        console.log(`[WARNING] No stats found for ${team1Name} (ID: ${team1RosterId}), using defaults`);
+        team1Stats = { averageScore: 120, gamesPlayed: 0, scores: [], rosterId: team1RosterId };
+    }
+    if (!team2Stats) {
+        console.log(`[WARNING] No stats found for ${team2Name} (ID: ${team2RosterId}), using defaults`);
+        team2Stats = { averageScore: 120, gamesPlayed: 0, scores: [], rosterId: team2RosterId };
+    }
+    
+    // Calculate realistic win probability based on current season performance
+    let adjustedWinProbability = winProbability;
+    if (team1RosterId && team2RosterId) {
+        // Check if teamStats is dynamic stats format and pass it accordingly
+        const isDynamicStats = Object.values(teamStats).some(team => team && typeof team.dpr === 'number');
+        const dynamicStatsToPass = isDynamicStats ? teamStats : null;
+        
+        // Use roster IDs for dynamic stats, team names for legacy stats
+        const team1Identifier = isDynamicStats ? team1RosterId : team1Name;
+        const team2Identifier = isDynamicStats ? team2RosterId : team2Name;
+        
+        const calculatedProb = calculateWinProbability(team1Identifier, team2Identifier, dynamicStatsToPass);
+        // Use calculated probability if it seems reasonable, otherwise blend with provided prob
+        adjustedWinProbability = Math.abs(calculatedProb - 0.5) > 0.05 ? calculatedProb : 
+                                 (calculatedProb * 0.7 + winProbability * 0.3);
+        
+        console.log(`Using calculated win probability for ${team1Name}: ${(adjustedWinProbability * 100).toFixed(1)}%`);
+    }
+    
+    // Try to use enhanced spread calculation with realistic probability
+    let historicalSpreadResult = null;
+    if (team1RosterId && team2RosterId) {
+        // Check if teamStats is dynamic stats format (has dpr field) vs legacy format
+        const isDynamicStats = Object.values(teamStats).some(team => team && typeof team.dpr === 'number');
+        const dynamicStatsToPass = isDynamicStats ? teamStats : null;
+        
+        // Use roster IDs for dynamic stats, team names for legacy stats
+        const team1Identifier = isDynamicStats ? team1RosterId : team1Name;
+        const team2Identifier = isDynamicStats ? team2RosterId : team2Name;
+        
+        historicalSpreadResult = calculateHistoricalSpread(team1Identifier, team2Identifier, adjustedWinProbability, dynamicStatsToPass);
+    }
     
     // Calculate advanced team power differential based on points, consistency, momentum
     const powerAnalysis = calculateTeamPowerDifferential(team1Stats, team2Stats, teamStats);
@@ -340,7 +478,7 @@ export const generateCleanBettingMarkets = (matchup, teamStats, options = {}) =>
     // Use power differential to adjust the win probability
     // If power analysis shows a different story than win probability, factor it in
     const powerBasedProbAdjustment = powerAnalysis.powerDiff * 0.02; // 0.02 per power point
-    const adjustedWinProbability = Math.max(0.1, Math.min(0.9, winProbability + powerBasedProbAdjustment));
+    const finalWinProbability = Math.max(0.1, Math.min(0.9, adjustedWinProbability + powerBasedProbAdjustment));
     
     // Calculate spread using score distribution (means + variances) so the line
     // better reflects how final scores end up (not just a mapping from win probability)
@@ -358,7 +496,9 @@ export const generateCleanBettingMarkets = (matchup, teamStats, options = {}) =>
     const t2Var = computeVariance(team2Stats.scores);
 
     // Expected margin (mu) and combined sigma (game-to-game variation)
-    const rawMu = (team1Stats.averageScore || 120) - (team2Stats.averageScore || 120);
+    const team1Avg = team1Stats.averageScore || 120;
+    const team2Avg = team2Stats.averageScore || 120;
+    const rawMu = team1Avg - team2Avg;
     const baseSigma = Math.sqrt(t1Var + t2Var);
 
     // Use power analysis components to adjust mu and sigma
@@ -380,7 +520,10 @@ export const generateCleanBettingMarkets = (matchup, teamStats, options = {}) =>
     const MU_WEIGHT_POWER = 0.30;
     const MU_WEIGHT_MOMENTUM = 0.05;
 
-    const mu = (rawMu * MU_WEIGHT_RAW) + (powerMarginPoints * MU_WEIGHT_POWER) + (momentumBoost * MU_WEIGHT_MOMENTUM);
+    let mu = (rawMu * MU_WEIGHT_RAW) + (powerMarginPoints * MU_WEIGHT_POWER) + (momentumBoost * MU_WEIGHT_MOMENTUM);
+    
+    // Cap mu to prevent unrealistic spreads (no team should be 20+ points better on average)
+    mu = Math.max(-20, Math.min(20, mu));
 
     // Consistency reduces variance: higher consistency => lower sigma
     const t1Consistency = Math.max(0, Math.min(1, team1Details.consistency || 0.5));
@@ -396,31 +539,78 @@ export const generateCleanBettingMarkets = (matchup, teamStats, options = {}) =>
 
     const sigma = Math.max(6, baseSigma * consistencyFactor * momentumSigmaFactor);
 
-    let spreadRaw;
-    try {
-        const inv = inverseNormal(1 - adjustedWinProbability);
-        spreadRaw = mu + sigma * inv;
-    } catch (e) {
-        // Fallback to probability mapping if numerical issues
-        spreadRaw = Math.abs(calculateSpreadFromProbability(adjustedWinProbability, powerAnalysis.powerDiff));
-    }
+    // Use historical spread calculation if available, otherwise fall back to statistical method
+    let spread, spreadConfidence;
+    if (historicalSpreadResult && historicalSpreadResult.historicalBasis) {
+        // Use historical analysis result
+        spread = historicalSpreadResult.spread;
+        spreadConfidence = historicalSpreadResult.confidence;
+        
+        console.log(`Using historical spread for ${team1Name} vs ${team2Name}: ${spread}`);
+    } else {
+        // Fall back to original statistical calculation
+        let spreadRaw;
+        try {
+            const inv = inverseNormal(1 - finalWinProbability);
+            spreadRaw = mu + sigma * inv;
+        } catch (e) {
+            // Fallback to probability mapping if numerical issues
+            spreadRaw = Math.abs(calculateSpreadFromProbability(finalWinProbability, powerAnalysis.powerDiff));
+        }
 
-    // Maintain sign convention: negative spread means team1 is favorite
-    const isTeam1Favorite = adjustedWinProbability > 0.5;
-    let spread = isTeam1Favorite ? -spreadRaw : spreadRaw;
+        // Maintain sign convention: negative spread means team1 is favorite
+        const isTeam1Favorite = finalWinProbability > 0.5;
+        spread = isTeam1Favorite ? -spreadRaw : spreadRaw;
+        spreadConfidence = 0.6; // Default confidence
+    }
+    
     let absSpread = Math.abs(spread);
 
-    // Round to nearest 0.5 and treat tiny spreads as pick'em
+    // Round to nearest 0.5 but be more aggressive about creating spreads
     absSpread = Math.round(absSpread * 2) / 2;
+    
+    // Let algorithm spreads through without artificial capping
+    // absSpread = Math.min(absSpread, 20); // REMOVED: Let true statistical differences show
+    
+    // Determine favorite based on final spread (negative spread means team1 is favorite)
+    const isTeam1Favorite = spread < 0;
+    
+    // Only treat as pick'em if teams are truly equal (much stricter threshold)
+    // Also check if the teams have meaningful statistical differences
+    const team1AvgScore = team1Stats.averageScore || team1Stats.avgPerGame || 120;
+    const team2AvgScore = team2Stats.averageScore || team2Stats.avgPerGame || 120;
+    const scoringDiff = Math.abs(team1AvgScore - team2AvgScore);
+    const absPowerDiff = Math.abs(powerAnalysis.powerDiff);
+    
+    // Force a minimum spread if there are clear differences between teams
     if (absSpread < 0.5) {
-        absSpread = 0;
-        spread = 0;
-    } else {
+        if (scoringDiff >= 8 || absPowerDiff >= 1.5) {
+            // Teams have meaningful differences, calculate proper spread
+            absSpread = Math.max(1.0, scoringDiff * 0.15); // 10 point avg diff = 1.5 point spread
+            absSpread = Math.round(absSpread * 2) / 2; // Round to nearest 0.5
+        } else {
+            // Teams are truly similar, keep as pick'em
+            absSpread = 0;
+            spread = 0;
+        }
+    } else if (absSpread < 3.0 && (scoringDiff >= 15 || absPowerDiff >= 2.5)) {
+        // Even if spread was calculated > 0.5, boost it for teams with large differences
+        const boostedSpread = Math.max(absSpread, scoringDiff * 0.12); // More aggressive for large diffs
+        absSpread = Math.round(boostedSpread * 2) / 2;
+    }
+    
+    if (absSpread > 0) {
+        // Ensure spread maintains proper sign
         spread = isTeam1Favorite ? -absSpread : absSpread;
     }
     
     // Handle true pick'em games (spread rounds to 0)
     const isPick = absSpread === 0;
+    
+    // Log spread calculation for debugging
+    if (team1Name && team2Name) {
+        console.log(`[Spread Debug] ${team1Name} vs ${team2Name}: scoringDiff=${scoringDiff.toFixed(1)}, powerDiff=${absPowerDiff.toFixed(2)}, finalSpread=${spread}, isPick=${isPick}`);
+    }
     
     // Calculate moneylines for pick'em vs regular spreads
     let team1ML, team2ML;
@@ -457,9 +647,12 @@ export const generateCleanBettingMarkets = (matchup, teamStats, options = {}) =>
         }
         
         if (isTeam1) {
+            // Team1 gets the spread as calculated
             return spread > 0 ? `+${spread}` : spread.toString();
         } else {
-            return spread > 0 ? (-spread).toString() : `+${Math.abs(spread)}`;
+            // Team2 gets the opposite spread
+            const team2Spread = -spread;
+            return team2Spread > 0 ? `+${team2Spread}` : team2Spread.toString();
         }
     };
     
@@ -504,7 +697,7 @@ export const generateCleanBettingMarkets = (matchup, teamStats, options = {}) =>
             team1Details: powerAnalysis.team1Details,
             team2Details: powerAnalysis.team2Details,
             originalWinProb: winProbability,
-            adjustedWinProb: adjustedWinProbability,
+            adjustedWinProb: finalWinProbability,
             isPick: isPick
         }
     };

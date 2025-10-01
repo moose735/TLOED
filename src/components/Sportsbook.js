@@ -18,6 +18,14 @@ import {
     probabilityToAmericanOdds, 
     formatOdds 
 } from '../utils/matchupOdds';
+import { 
+    buildDynamicSeasonStats, 
+    getSeasonData,
+    normalizeSeasonKey
+} from '../utils/dynamicSeasonStats';
+import { 
+    calculateWinProbabilityByRosterId 
+} from '../utils/winProbabilityCalculator';
 import { formatScore } from '../utils/formatUtils';
 
 const Sportsbook = () => {
@@ -49,6 +57,26 @@ const Sportsbook = () => {
     const currentSeason = useMemo(() => {
         return leagueData && Array.isArray(leagueData) ? leagueData[0]?.season : leagueData?.season;
     }, [leagueData]);
+
+    // Dynamic season statistics (replaces hardcoded currentSeasonStats)
+    const dynamicStats = useMemo(() => {
+        if (!processedSeasonalRecords || !currentSeason || !historicalData) {
+            return {};
+        }
+
+        try {
+            return buildDynamicSeasonStats({
+                processedSeasonalRecords,
+                season: currentSeason,
+                historicalData,
+                getTeamDetails,
+                rostersWithDetails
+            });
+        } catch (error) {
+            console.warn('[Sportsbook] Error building dynamic stats:', error);
+            return {};
+        }
+    }, [processedSeasonalRecords, currentSeason, historicalData, getTeamDetails, rostersWithDetails]);
 
     // Initialize current week and Elo ratings
     useEffect(() => {
@@ -295,11 +323,10 @@ const Sportsbook = () => {
 
     // Team power rankings (used for odds calculation)
     const teamPowerRankings = useMemo(() => {
-        if (!processedSeasonalRecords || !currentSeason || !processedSeasonalRecords[currentSeason]) {
+        const seasonData = getSeasonData(processedSeasonalRecords, currentSeason);
+        if (!seasonData) {
             return {};
         }
-
-        const seasonData = processedSeasonalRecords[currentSeason];
         const teams = Object.keys(seasonData).map(rosterId => {
             const team = seasonData[rosterId];
             const powerScore = calculateTeamPowerScore(team, rosterId, currentSeason);
@@ -383,8 +410,10 @@ const Sportsbook = () => {
         };
 
         // Get both upcoming and completed matchups for the selected week
-        const weekMatchups = historicalData.matchupsBySeason[currentSeason]
-            .filter(m => parseInt(m.week) === week);
+        const seasonMatchups = getSeasonData(historicalData.matchupsBySeason, currentSeason);
+        if (!seasonMatchups) return [];
+        
+        const weekMatchups = seasonMatchups.filter(m => parseInt(m.week) === week);
 
         return weekMatchups.map(matchup => {
             const t1 = matchup.t1;
@@ -433,22 +462,54 @@ const Sportsbook = () => {
                                   (currentWeek ? week < currentWeek : true);
                 
                 // Get team details using the same pattern as Gamecenter
-                const rosterForTeam1 = historicalData.rostersBySeason?.[currentSeason]?.find(r => String(r.roster_id) === team1RosterId);
+                const seasonRosters = getSeasonData(historicalData.rostersBySeason, currentSeason);
+                const rosterForTeam1 = seasonRosters?.find(r => String(r.roster_id) === team1RosterId);
                 const team1OwnerId = rosterForTeam1?.owner_id;
                 const team1Details = getTeamDetails(team1OwnerId, currentSeason);
 
-                const rosterForTeam2 = historicalData.rostersBySeason?.[currentSeason]?.find(r => String(r.roster_id) === team2RosterId);
+                const rosterForTeam2 = seasonRosters?.find(r => String(r.roster_id) === team2RosterId);
                 const team2OwnerId = rosterForTeam2?.owner_id;
                 const team2Details = getTeamDetails(team2OwnerId, currentSeason);
                 
-                const team1WinProb = calculateWinProbability(
+                // Calculate win probability using dynamic stats system
+                let team1WinProb = calculateWinProbabilityByRosterId(
                     team1RosterId, 
                     team2RosterId, 
-                    teamPowerRankings, 
-                    eloRatings, 
-                    historicalData,
-                    currentSeason
+                    dynamicStats
                 );
+
+                // Fallback to sportsbook calculations if dynamic stats unavailable
+                if (team1WinProb === 0.5 && (!dynamicStats[team1RosterId] || !dynamicStats[team2RosterId])) {
+                    console.warn(`[Sportsbook] Falling back to legacy calculations for ${team1RosterId} vs ${team2RosterId}`);
+                    team1WinProb = calculateWinProbability(
+                        team1RosterId, 
+                        team2RosterId, 
+                        teamPowerRankings, 
+                        eloRatings, 
+                        historicalData,
+                        currentSeason
+                    );
+                }
+                
+                // Sanity check: ensure the better team (higher DPR) has higher win probability
+                const team1Stats = dynamicStats[team1RosterId] || teamPowerRankings[team1RosterId];
+                const team2Stats = dynamicStats[team2RosterId] || teamPowerRankings[team2RosterId];
+                if (team1Stats && team2Stats) {
+                    const team1DPR = team1Stats.dpr || team1Stats.adjustedDPR || 1.0;
+                    const team2DPR = team2Stats.dpr || team2Stats.adjustedDPR || 1.0;
+                    
+                    // If team1 has significantly higher DPR but lower win probability, something is wrong
+                    if (team1DPR > team2DPR + 0.1 && team1WinProb < 0.5) {
+                        console.warn(`Win probability seems inverted: ${team1Details.name} (DPR: ${team1DPR.toFixed(3)}) has ${(team1WinProb*100).toFixed(1)}% vs ${team2Details.name} (DPR: ${team2DPR.toFixed(3)})`);
+                        // Optionally flip the probability if the discrepancy is large
+                        team1WinProb = 1 - team1WinProb;
+                    } else if (team2DPR > team1DPR + 0.1 && team1WinProb > 0.5) {
+                        console.warn(`Win probability seems inverted: ${team2Details.name} (DPR: ${team2DPR.toFixed(3)}) should beat ${team1Details.name} (DPR: ${team1DPR.toFixed(3)}) but has ${((1-team1WinProb)*100).toFixed(1)}%`);
+                        // Optionally flip the probability if the discrepancy is large  
+                        team1WinProb = 1 - team1WinProb;
+                    }
+                }
+                
                 const team2WinProb = 1 - team1WinProb;
                 
                 // Use enhanced odds calculation with vig
@@ -463,30 +524,71 @@ const Sportsbook = () => {
                         rosterId: team1RosterId,
                         name: team1Details.name,
                         avatar: team1Details.avatar,
-                        record: `${teamPowerRankings[team1RosterId]?.wins || 0}-${teamPowerRankings[team1RosterId]?.losses || 0}`,
-                        avgPoints: teamPowerRankings[team1RosterId]?.averageScore || 0,
-                        powerScore: teamPowerRankings[team1RosterId]?.powerScore || 0,
+                        record: team1Stats?.record || `${teamPowerRankings[team1RosterId]?.wins || 0}-${teamPowerRankings[team1RosterId]?.losses || 0}`,
+                        avgPoints: team1Stats?.avgPerGame || teamPowerRankings[team1RosterId]?.averageScore || 0,
+                        powerScore: team1Stats?.dpr || teamPowerRankings[team1RosterId]?.powerScore || 0,
                         eloRating: eloRatings[team1RosterId] || 1500,
                         momentum: calculateTeamMomentum(team1RosterId, currentSeason, historicalData),
                         probability: team1WinProb,
-                        odds: team1OddsData.americanOdds
+                        odds: team1OddsData.americanOdds,
+                        // Additional dynamic stats info
+                        isHot: team1Stats?.isHot || false,
+                        isCold: team1Stats?.isCold || false,
+                        tier: team1Stats?.tier || null
                     },
                     team2: {
                         rosterId: team2RosterId,
                         name: team2Details.name,
                         avatar: team2Details.avatar,
-                        record: `${teamPowerRankings[team2RosterId]?.wins || 0}-${teamPowerRankings[team2RosterId]?.losses || 0}`,
-                        avgPoints: teamPowerRankings[team2RosterId]?.averageScore || 0,
-                        powerScore: teamPowerRankings[team2RosterId]?.powerScore || 0,
+                        record: team2Stats?.record || `${teamPowerRankings[team2RosterId]?.wins || 0}-${teamPowerRankings[team2RosterId]?.losses || 0}`,
+                        avgPoints: team2Stats?.avgPerGame || teamPowerRankings[team2RosterId]?.averageScore || 0,
+                        powerScore: team2Stats?.dpr || teamPowerRankings[team2RosterId]?.powerScore || 0,
                         eloRating: eloRatings[team2RosterId] || 1500,
                         momentum: calculateTeamMomentum(team2RosterId, currentSeason, historicalData),
                         probability: team2WinProb,
-                        odds: team2OddsData.americanOdds
+                        odds: team2OddsData.americanOdds,
+                        // Additional dynamic stats info
+                        isHot: team2Stats?.isHot || false,
+                        isCold: team2Stats?.isCold || false,
+                        tier: team2Stats?.tier || null
                     },
                     spread: spread,
                     moneyline: { [t1]: t1ML, [t2]: t2ML },
                     winProb,
                 };
+
+                // Debug: Check team stats lookups (especially for teams getting PK lines)
+                const team1InDynamic = dynamicStats[team1RosterId];
+                const team2InDynamic = dynamicStats[team2RosterId];
+                
+                if (!team1InDynamic || !team2InDynamic || 
+                    team1Details.name.includes('Michael Vick') || team2Details.name.includes('Michael Vick')) {
+                    console.log(`[DEBUG] Team stats lookup for ${team1Details.name} vs ${team2Details.name}:`);
+                    console.log(`  Team1: ${team1Details.name} (ID: ${team1RosterId}) - Found: ${team1InDynamic ? 'YES' : 'NO'}`);
+                    console.log(`  Team2: ${team2Details.name} (ID: ${team2RosterId}) - Found: ${team2InDynamic ? 'YES' : 'NO'}`);
+                    
+                    if (!team1InDynamic && !team2InDynamic) {
+                        console.log(`  Available dynamic stats:`, Object.keys(dynamicStats).map(id => `${id}: ${dynamicStats[id].name}`));
+                        console.log(`  Available power rankings:`, Object.keys(teamPowerRankings).map(id => `${id}: ${teamPowerRankings[id].rosterId || id}`));
+                    }
+                    
+                    if (team1InDynamic) console.log(`  Team1 avg score:`, team1InDynamic.averageScore);
+                    if (team2InDynamic) console.log(`  Team2 avg score:`, team2InDynamic.averageScore);
+                }
+
+                // Determine which stats to use and log the decision
+                const useDynamicStats = Object.keys(dynamicStats).length > 0;
+                const statsToUse = useDynamicStats ? dynamicStats : teamPowerRankings;
+                
+                // Enhanced debug for Michael Vick or missing team situations
+                if (!team1InDynamic || !team2InDynamic || 
+                    team1Details.name.includes('Michael Vick') || team2Details.name.includes('Michael Vick')) {
+                    console.log(`[STATS DEBUG] Using ${useDynamicStats ? 'dynamic' : 'power ranking'} stats`);
+                    console.log(`  Dynamic stats count: ${Object.keys(dynamicStats).length}`);
+                    console.log(`  Power rankings count: ${Object.keys(teamPowerRankings).length}`);
+                    console.log(`  Team1 in chosen stats:`, statsToUse[team1RosterId] ? 'YES' : 'NO');
+                    console.log(`  Team2 in chosen stats:`, statsToUse[team2RosterId] ? 'YES' : 'NO');
+                }
 
                 // Generate clean betting markets with proper spread-to-moneyline relationships
                 const bettingMarkets = generateCleanBettingMarkets(
@@ -497,12 +599,24 @@ const Sportsbook = () => {
                         team2Name: team2Details.name,
                         winProbability: team1WinProb
                     },
-                    teamPowerRankings,
+                    statsToUse,
                     {
                         vig: 0.045,
-                        includePropBets: true
+                        includePropBets: true,
+                        weekNumber: week
                     }
                 );
+
+                // Validate betting markets and provide fallbacks for any NaN/invalid values
+                if (bettingMarkets?.total) {
+                    if (isNaN(bettingMarkets.total.over.line) || !bettingMarkets.total.over.line) {
+                        const fallbackTotal = ((team1Stats?.avgPerGame || 120) + (team2Stats?.avgPerGame || 120)) * 1.05;
+                        bettingMarkets.total.over.line = Math.round(fallbackTotal * 2) / 2; // Round to nearest 0.5
+                        bettingMarkets.total.under.line = bettingMarkets.total.over.line;
+                    }
+                    if (isNaN(bettingMarkets.total.over.odds)) bettingMarkets.total.over.odds = -110;
+                    if (isNaN(bettingMarkets.total.under.odds)) bettingMarkets.total.under.odds = -110;
+                }
 
                 // Now add actual scores and spread coverage AFTER markets are generated
                 if (isCompleted) {
@@ -552,7 +666,8 @@ const Sportsbook = () => {
             const team = teamPowerRankings[rosterId];
             
             // Get team details using the same pattern as Gamecenter
-            const rosterForTeam = historicalData.rostersBySeason?.[currentSeason]?.find(r => String(r.roster_id) === rosterId);
+            const seasonRosters = getSeasonData(historicalData.rostersBySeason, currentSeason);
+            const rosterForTeam = seasonRosters?.find(r => String(r.roster_id) === rosterId);
             const ownerId = rosterForTeam?.owner_id;
             const teamDetails = getTeamDetails(ownerId, currentSeason);
             
@@ -602,7 +717,8 @@ const Sportsbook = () => {
             const team = teamPowerRankings[rosterId];
             
             // Get team details using the same pattern as Gamecenter
-            const rosterForTeam = historicalData.rostersBySeason?.[currentSeason]?.find(r => String(r.roster_id) === rosterId);
+            const seasonRosters = getSeasonData(historicalData.rostersBySeason, currentSeason);
+            const rosterForTeam = seasonRosters?.find(r => String(r.roster_id) === rosterId);
             const ownerId = rosterForTeam?.owner_id;
             const teamDetails = getTeamDetails(ownerId, currentSeason);
             
@@ -916,7 +1032,7 @@ const Sportsbook = () => {
                                                                         ? (matchup.actualScores.overHit ? 'text-green-600' : 'text-red-600')
                                                                         : 'text-blue-600'
                                                                 }`}>
-                                                                    {matchup.markets.total.over.line}
+                                                                    {isNaN(matchup.markets.total.over.line) ? 'N/A' : matchup.markets.total.over.line}
                                                                 </div>
                                                                 <div className="text-sm text-blue-600">{formatOdds(matchup.markets.total.over.odds)}</div>
                                                             </div>
@@ -947,7 +1063,7 @@ const Sportsbook = () => {
                                                                         ? (!matchup.actualScores.overHit ? 'text-green-600' : 'text-red-600')
                                                                         : 'text-blue-600'
                                                                 }`}>
-                                                                    {matchup.markets.total.under.line}
+                                                                    {isNaN(matchup.markets.total.under.line) ? 'N/A' : matchup.markets.total.under.line}
                                                                 </div>
                                                                 <div className="text-sm text-blue-600">{formatOdds(matchup.markets.total.under.odds)}</div>
                                                             </div>

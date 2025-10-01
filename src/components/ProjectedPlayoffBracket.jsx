@@ -72,15 +72,46 @@ const ProjectedPlayoffBracket = () => {
     // Confidence removed per request
 
     // Helper: team "rating" for matchup win probability
-    const getTeamRating = (rosterId) => {
-      const stats = seasonalStats[rosterId] || {};
-      const allPlay = typeof stats.allPlayWinPercentage === 'number' ? stats.allPlayWinPercentage : undefined;
-      const adj = typeof stats.adjustedDPR === 'number' ? stats.adjustedDPR : undefined;
-      if (adj && adj > 0) return adj; // normalized around 1
-      if (allPlay !== undefined) return Math.max(0.1, allPlay * 2); // scale ~0..2
-      // fallback to .5 -> 1
-      return 1;
-    };
+      // Helpers borrowed from PowerRankings.js to match projection logic
+      function erf(x) {
+        const sign = x >= 0 ? 1 : -1;
+        x = Math.abs(x);
+        const a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741;
+        const a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
+        const t = 1.0 / (1.0 + p * x);
+        const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+        return sign * y;
+      }
+
+      function getMeanAndVariance(rosterId, season, matchups, N = null) {
+        let teamMatchups = matchups.filter(m => {
+          const t1 = m.t1 !== undefined ? m.t1 : m.team1_roster_id;
+          const t2 = m.t2 !== undefined ? m.t2 : m.team2_roster_id;
+          return String(t1) === String(rosterId) || String(t2) === String(rosterId);
+        });
+        if (N) teamMatchups = teamMatchups.slice(-N);
+        const scores = teamMatchups.map(m => {
+          const t1 = m.t1 !== undefined ? m.t1 : m.team1_roster_id;
+          return String(t1) === String(rosterId)
+            ? (m.t1_score !== undefined ? m.t1_score : m.team1_score)
+            : (m.t2_score !== undefined ? m.t2_score : m.team2_score);
+        }).filter(s => typeof s === 'number');
+        if (scores.length === 0) return { mean: 0, variance: 0, count: 0, recentMean: 0 };
+        const mean = scores.reduce((a, b) => a + b, 0) / scores.length;
+        const variance = scores.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / scores.length;
+        const last3 = scores.slice(-3);
+        const recentMean = last3.length > 0 ? last3.reduce((a, b) => a + b, 0) / last3.length : mean;
+        return { mean, variance, count: scores.length, recentMean };
+      }
+
+      const getTeamRating = (rosterId) => {
+        const stats = seasonalStats[rosterId] || {};
+        const allPlay = typeof stats.allPlayWinPercentage === 'number' ? stats.allPlayWinPercentage : undefined;
+        const adj = typeof stats.adjustedDPR === 'number' ? stats.adjustedDPR : undefined;
+        if (adj && adj > 0) return adj; // normalized around 1
+        if (allPlay !== undefined) return Math.max(0.1, allPlay * 2); // scale ~0..2
+        return 1;
+      };
 
     // Build projected metrics per team
     const teams = rosters.map(r => {
@@ -99,22 +130,74 @@ const ProjectedPlayoffBracket = () => {
         ? stats.averageScore
         : (rec.games > 0 ? (rec.pointsFor / rec.games) : 100); // safe default
 
-      // Schedule-based expected wins: sum over remaining opponents P(win)
-      let expectedWinsFromSchedule = 0;
-      const myRating = getTeamRating(rosterId);
-      remainingList.forEach(({ opponentId }) => {
-        const oppRating = getTeamRating(opponentId);
-        const denom = (myRating + oppRating);
-        const pWin = denom > 0 ? (myRating / denom) : 0.5;
-        expectedWinsFromSchedule += pWin;
+      // Use PowerRankings probabilistic projection to compute expected wins from remaining scheduled matchups
+      // Count actual wins up to completed regular weeks (1-14) - use completed weeks like PowerRankings
+      const nflWeek = currentWeek;
+      const completedWeek = nflWeek > 1 ? nflWeek - 1 : 1;
+      const allMatchups = matchupsFlat;
+      const completedMatchups = allMatchups.filter(m => parseInt(m.week) <= completedWeek && parseInt(m.week) <= 14);
+      // actual wins (owner-based)
+      const rosterIdToOwner = {}; rosters.forEach(rr => { rosterIdToOwner[String(rr.roster_id)] = String(rr.owner_id); });
+      const actualWins = {}; rosters.forEach(rr => { actualWins[String(rr.owner_id)] = 0; });
+      completedMatchups.forEach(m => {
+        const t1 = m.team1_roster_id !== undefined ? String(m.team1_roster_id) : (m.t1 !== undefined ? String(m.t1) : null);
+        const t2 = m.team2_roster_id !== undefined ? String(m.team2_roster_id) : (m.t2 !== undefined ? String(m.t2) : null);
+        if (!t1 || !t2) return;
+        const s1 = Number(m.team1_score ?? m.t1_score ?? 0);
+        const s2 = Number(m.team2_score ?? m.t2_score ?? 0);
+        const o1 = rosterIdToOwner[t1] || t1;
+        const o2 = rosterIdToOwner[t2] || t2;
+        if (s1 > s2) actualWins[o1] = (actualWins[o1] || 0) + 1;
+        else if (s2 > s1) actualWins[o2] = (actualWins[o2] || 0) + 1;
       });
 
-      // If some weeks aren't scheduled for this data, approximate using all-play
+      // Compute projected future wins using scheduled remaining matchups (weeks completedWeek+1..14)
+      const projectedFutureWins = {};
+      rosters.forEach(rr => { projectedFutureWins[String(rr.owner_id)] = 0; });
+      for (let wk = completedWeek + 1; wk <= 14; wk++) {
+        const weekMatchups = matchupsFlat.filter(m => parseInt(m.week) === wk && m.team1_roster_id && m.team2_roster_id);
+        weekMatchups.forEach(m => {
+          const t1id = String(m.team1_roster_id);
+          const t2id = String(m.team2_roster_id);
+          const t1Owner = rosterIdToOwner[t1id] || t1id;
+          const t2Owner = rosterIdToOwner[t2id] || t2id;
+          const t1Stats = getMeanAndVariance(t1id, season, completedMatchups, 4);
+          const t2Stats = getMeanAndVariance(t2id, season, completedMatchups, 4);
+          const t1Mean = t1Stats.mean; const t2Mean = t2Stats.mean;
+          const t1Var = t1Stats.variance; const t2Var = t2Stats.variance;
+          const t1N = t1Stats.count >= 2 ? t1Stats.count : 1;
+          const t2N = t2Stats.count >= 2 ? t2Stats.count : 1;
+          const diff = t1Mean - t2Mean;
+          let stdErr = Math.sqrt((t1Var / t1N) + (t2Var / t2N));
+          
+          // Add safety checks to prevent unrealistic projections
+          if (stdErr <= 0 || t1Stats.count < 2 || t2Stats.count < 2) {
+            // If insufficient data, use league average variance as baseline
+            const leagueAvgStdErr = 15; // reasonable standard error for fantasy football
+            stdErr = Math.max(stdErr, leagueAvgStdErr);
+          }
+          
+          // Cap the difference to prevent extreme projections (no team should be 22+ points better)
+          const cappedDiff = Math.max(-20, Math.min(20, diff));
+          
+          let t1WinProb = 0.5;
+          if (stdErr > 0) {
+            t1WinProb = 0.5 + 0.5 * erf(cappedDiff / (Math.sqrt(2) * stdErr));
+          }
+          t1WinProb = Math.max(0.05, Math.min(0.95, t1WinProb));
+          let t2WinProb = 1 - t1WinProb;
+          t2WinProb = Math.max(0.05, Math.min(0.95, t2WinProb));
+          projectedFutureWins[t1Owner] = (projectedFutureWins[t1Owner] || 0) + t1WinProb;
+          projectedFutureWins[t2Owner] = (projectedFutureWins[t2Owner] || 0) + t2WinProb;
+        });
+      }
+
       const scheduledGames = remainingList.length;
       const unscheduledGames = Math.max(0, remainingRegularWeeks - scheduledGames);
-      expectedWinsFromSchedule += unscheduledGames * allPlayWinPct;
-
-      const projectedWinsTotal = rec.wins + expectedWinsFromSchedule;
+      // fallback: use allPlayWinPct for unscheduled games
+      const expectedWinsFromSchedule = (projectedFutureWins[ownerId] || 0) + (unscheduledGames * allPlayWinPct);
+      // Use Math.round like PowerRankings does
+      const projectedWinsTotal = Math.round((actualWins[ownerId] || 0) + expectedWinsFromSchedule);
       const projectedPointsTotal = rec.pointsFor + ((scheduledGames + unscheduledGames) * avgScore);
 
       return {
@@ -134,7 +217,7 @@ const ProjectedPlayoffBracket = () => {
       };
     });
 
-    // Sort by projected wins desc, tiebreaker projected points desc
+    // Sort by projected record (projected wins desc), tiebreaker projected points desc
     const byProjectedRecord = [...teams].sort((a, b) => {
       if (b.projectedWins !== a.projectedWins) return b.projectedWins - a.projectedWins;
       if (b.projectedPoints !== a.projectedPoints) return b.projectedPoints - a.projectedPoints;
