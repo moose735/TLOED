@@ -832,13 +832,31 @@ const Gamecenter = () => {
 
                                     // Persist coach scores locally for a simple "career" average per roster
                                     try {
-                                        const persist = (rosterId, score) => {
+                                        const persist = (rosterId, score, season, week, ownerId) => {
                                             if (!rosterId) return;
                                             const key = `coachScore:${rosterId}`;
                                             const raw = localStorage.getItem(key);
                                             let arr = raw ? JSON.parse(raw) : [];
+                                            // Avoid persisting incomplete games: require both teams to have scores
+                                            const gameHasScores = (selectedMatchup.team1_score > 0 && selectedMatchup.team2_score > 0);
+                                            if (!gameHasScores) return; // don't persist incomplete matchups
+
+                                            // Dedupe by season/week if present: replace existing entry for same season/week
+                                            if (season && typeof week !== 'undefined') {
+                                                const existingIdx = arr.findIndex(e => e && (e.season === season || String(e.season) === String(season)) && (e.week === week || String(e.week) === String(week)));
+                                                // Include ownerId in persisted entry to make later aggregation robust
+                                                const entry = { ts: Date.now(), score, season, week, ownerId: ownerId != null ? String(ownerId) : null };
+                                                if (existingIdx !== -1) {
+                                                    arr[existingIdx] = entry;
+                                                } else {
+                                                    arr.push(entry);
+                                                }
+                                            } else {
+                                                // Backwards-compatible: push a timestamped score, include ownerId when available
+                                                arr.push({ ts: Date.now(), score, ownerId: ownerId != null ? String(ownerId) : null });
+                                            }
+
                                             // Keep last 200 entries to avoid unbounded growth
-                                            arr.push({ ts: Date.now(), score });
                                             if (arr.length > 200) arr = arr.slice(arr.length - 200);
                                             localStorage.setItem(key, JSON.stringify(arr));
                                         };
@@ -849,16 +867,20 @@ const Gamecenter = () => {
                                             if (!raw) return null;
                                             const arr = JSON.parse(raw);
                                             if (!Array.isArray(arr) || arr.length === 0) return null;
-                                            const sum = arr.reduce((s, r) => s + (r.score || 0), 0);
-                                            return sum / arr.length;
+                                            // Only include entries that have season/week and are not from 2021 if present
+                                            const filtered = arr.filter(e => !(e && (e.season === '2021' || e.season === 2021)));
+                                            if (filtered.length === 0) return null;
+                                            const sum = filtered.reduce((s, r) => s + (r.score || 0), 0);
+                                            return sum / filtered.length;
                                         };
 
                                         // Persist for teams if we have roster IDs
-                                        const team1RosterIdForPersist = rosterForTeam1?.roster_id || team1RosterId;
-                                        const team2RosterIdForPersist = rosterForTeam2?.roster_id || team2RosterId;
+                                        const team1RosterIdForPersist = String(rosterForTeam1?.roster_id || team1RosterId);
+                                        const team2RosterIdForPersist = String(rosterForTeam2?.roster_id || team2RosterId);
 
-                                        if (team1RosterIdForPersist) persist(team1RosterIdForPersist, team1CoachScore);
-                                        if (team2RosterIdForPersist) persist(team2RosterIdForPersist, team2CoachScore);
+                                        // Persist only if the matchup has completed scores
+                                        if (team1RosterIdForPersist) persist(team1RosterIdForPersist, team1CoachScore, selectedSeason, selectedWeek, rosterForTeam1?.owner_id);
+                                        if (team2RosterIdForPersist) persist(team2RosterIdForPersist, team2CoachScore, selectedSeason, selectedWeek, rosterForTeam2?.owner_id);
 
                                         var team1Career = getCareerAverage(team1RosterIdForPersist);
                                         var team2Career = getCareerAverage(team2RosterIdForPersist);

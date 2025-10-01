@@ -35,6 +35,86 @@ const calculateRank = (value, allValues, isHigherBetter = true) => {
     return rank > 0 ? `${rank}${getOrdinalSuffix(rank)}` : 'N/A';
 };
 
+// Gradient based on fixed hex stops (smooth interpolation):
+//   #B12B1D -> #B1671E -> #B19719 -> #7BB11B
+const hexToRgb = (hex) => {
+    const h = hex.replace('#', '');
+    return [
+        parseInt(h.substring(0, 2), 16),
+        parseInt(h.substring(2, 4), 16),
+        parseInt(h.substring(4, 6), 16)
+    ];
+};
+
+const rgbToHex = (r, g, b) => {
+    const toHex = (v) => Math.round(v).toString(16).padStart(2, '0');
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`.toUpperCase();
+};
+
+const lerp = (a, b, t) => a + (b - a) * t;
+
+const interpolateColor = (c1, c2, t) => {
+    return [
+        Math.round(lerp(c1[0], c2[0], t)),
+        Math.round(lerp(c1[1], c2[1], t)),
+        Math.round(lerp(c1[2], c2[2], t))
+    ];
+};
+
+const rgbLuminance = (r, g, b) => {
+    const srgb = [r, g, b].map(v => {
+        v /= 255;
+        return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * srgb[0] + 0.7152 * srgb[1] + 0.0722 * srgb[2];
+};
+
+const computeCellColors = (wins = 0, losses = 0) => {
+    const total = wins + losses;
+    // No games -> neutral (bold per user request)
+    if (!total) return { background: 'rgba(245,245,245,0.9)', color: '#6b7280', fontWeight: '700' };
+
+    const ratio = wins / total; // 0..1
+
+    // Discrete buckets (no gradient):
+    // strong red | light red | yellow (exact .500) | light green | strong green
+    // Thresholds chosen to give two clear red/green buckets around .500
+    let hex;
+    if (ratio === 0.5) {
+        hex = '#ffde57'; // tie yellow (user-provided)
+    } else if (ratio < 0.25) {
+        hex = '#f87171'; // strong red (user-provided)
+    } else if (ratio < 0.5) {
+        hex = '#fecaca'; // light red (user-provided)
+    } else if (ratio <= 0.75) {
+        hex = '#bbf7d0'; // light green (user-provided)
+    } else {
+        hex = '#4ade80'; // strong green (user-provided)
+    }
+
+    const [r, g, b] = hexToRgb(hex);
+    const bg = `rgb(${r}, ${g}, ${b})`;
+
+    // Default contrast-based text color
+    const lum = rgbLuminance(r, g, b);
+    let text = lum < 0.5 ? '#FFFFFF' : '#0F172A';
+
+    // Override font colors per user request for each bucket
+    // strong red -> #b24040
+    // light red -> #d75e5e
+    // tie yellow -> #b89523 (user requested)
+    // light green -> #319350
+    // strong green -> #2c9c60
+    const lowHex = hex.toLowerCase();
+    if (lowHex === '#f87171') text = '#b24040';
+    else if (lowHex === '#fecaca') text = '#d75e5e';
+    else if (lowHex === '#ffde57') text = '#b89523'; // tie yellow font
+    else if (lowHex === '#bbf7d0') text = '#319350';
+    else if (lowHex === '#4ade80') text = '#2c9c60';
+
+    return { background: bg, color: text, fontWeight: '700' };
+};
+
 // Component to render the Head-to-Head Grid and details
 
 const Head2HeadGrid = () => {
@@ -985,13 +1065,13 @@ const Head2HeadGrid = () => {
                     <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Head-to-Head Rivalries</h3>
                     <div className="overflow-x-auto relative"> {/* Added relative for sticky positioning */}
                         {/* Use table-auto so columns size to content; make headers narrower on mobile */}
-                        <table className="min-w-full table-auto bg-white border border-gray-200 rounded-lg shadow-sm">
+                        <table className="min-w-full table-auto bg-white border border-gray-300 rounded-lg shadow-sm">
                             <thead className="bg-blue-50">
                                 <tr>
                                     {/* Empty corner for team names - sticky */}
-                                    <th className="py-1 px-2 sm:py-2 sm:px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 sticky left-0 bg-blue-50 z-20 shadow-sm"></th>
+                                    <th className="py-1 px-2 sm:py-2 sm:px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-300 sticky left-0 bg-blue-50 z-20 shadow-sm"></th>
                                     {sortedDisplayNamesAndOwners.map(team => (
-                                        <th key={team.ownerId} className="py-1 px-2 sm:py-2 sm:px-3 text-center text-[10px] sm:text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 min-w-[70px] sm:min-w-[90px] sticky top-0 bg-blue-50 z-10"> {/* Sticky top for horizontal scroll */}
+                                        <th key={team.ownerId} className="py-1 px-2 sm:py-2 sm:px-3 text-center text-[10px] sm:text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-300 min-w-[70px] sm:min-w-[90px] sticky top-0 bg-blue-50 z-10"> {/* Sticky top for horizontal scroll */}
                                             <div className="truncate max-w-[80px] sm:max-w-[120px]">{team.displayName}</div>
                                         </th>
                                     ))}
@@ -1000,13 +1080,13 @@ const Head2HeadGrid = () => {
                             <tbody>
                                 {sortedDisplayNamesAndOwners.map(rowTeam => ( // Iterate over sorted display names for rows
                                     <tr key={rowTeam.ownerId} className="border-b border-gray-100 last:border-b-0">
-                                        <td className="py-1 px-2 sm:py-2 sm:px-3 text-left text-sm text-gray-800 font-semibold sticky left-0 bg-white z-20 border-r border-gray-200 shadow-sm"> {/* Sticky left for vertical scroll */}
+                                        <td className="py-1 px-2 sm:py-2 sm:px-3 text-left text-sm text-gray-800 font-semibold sticky left-0 bg-white z-20 border-r border-gray-300 shadow-sm"> {/* Sticky left for vertical scroll */}
                                             {rowTeam.displayName}
                                         </td>
                                         {sortedDisplayNamesAndOwners.map(colTeam => { // Iterate over sorted display names for columns
                                             if (rowTeam.ownerId === colTeam.ownerId) {
                                                 return (
-                                                    <td key={`${rowTeam.ownerId}-${colTeam.ownerId}`} className="py-2 px-3 text-center text-sm text-gray-400 bg-gray-100 border-b border-gray-200">
+                                                    <td key={`${rowTeam.ownerId}-${colTeam.ownerId}`} className="py-2 px-3 text-center text-sm text-gray-400 bg-gray-100 border-b border-gray-300 transition duration-150 ease-in-out hover:opacity-75 hover:shadow-md">
                                                         ---
                                                     </td>
                                                 );
@@ -1017,26 +1097,22 @@ const Head2HeadGrid = () => {
 
                                             let recordForDisplay = '0-0';
                                             // Compact cell padding on small screens to make more columns fit
-                                            let cellClassName = 'py-1 px-2 sm:py-2 sm:px-3 text-center text-sm border-b border-gray-200 cursor-pointer ';
+                                            let cellClassName = 'py-1 px-2 sm:py-2 sm:px-3 text-center text-sm border-b border-gray-300 cursor-pointer transition duration-150 ease-in-out hover:opacity-75 hover:shadow-md ';
 
+                                            let inlineStyle = {};
                                             if (rivalry) {
                                                 const rowOwnerRecord = rivalry[rowTeam.ownerId];
                                                 const totalGames = rowOwnerRecord.wins + rowOwnerRecord.losses + rowOwnerRecord.ties;
 
                                                 if (totalGames > 0) {
                                                     recordForDisplay = `${rowOwnerRecord.wins}-${rowOwnerRecord.losses}`;
-                                                    if (rowOwnerRecord.wins > rowOwnerRecord.losses) {
-                                                        cellClassName += 'bg-green-100 text-green-800 hover:bg-green-200';
-                                                    } else if (rowOwnerRecord.losses > rowOwnerRecord.wins) {
-                                                        cellClassName += 'bg-red-100 text-red-800 hover:bg-red-200';
-                                                    } else {
-                                                        cellClassName += 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200';
-                                                    }
+                                                    const { background, color, fontWeight } = computeCellColors(rowOwnerRecord.wins, rowOwnerRecord.losses);
+                                                    inlineStyle = { backgroundColor: background, color, fontWeight };
                                                 } else {
-                                                    cellClassName += 'text-gray-600 bg-white hover:bg-gray-50';
+                                                    inlineStyle = { backgroundColor: '#ffffff', color: '#6b7280' }; // gray text on white
                                                 }
                                             } else {
-                                                    cellClassName += 'text-gray-600 bg-white hover:bg-gray-50';
+                                                inlineStyle = { backgroundColor: '#ffffff', color: '#6b7280' };
                                             }
 
 
@@ -1063,6 +1139,7 @@ const Head2HeadGrid = () => {
                                                             setSelectedRivalryKey(rivalryKey);
                                                         }
                                                     }}
+                                                    style={inlineStyle}
                                                 >
                                                     {recordForDisplay}
                                                 </td>
