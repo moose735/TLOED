@@ -179,6 +179,8 @@ const PowerRankings = () => {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(null);
 	const [currentWeek, setCurrentWeek] = useState(0);
+	// Survivor markers (ownerId -> emoji or null). Moved to component state so render can access it.
+	const [survivorMarkers, setSurvivorMarkers] = useState({});
 	const TIER_THRESHOLD = 0.0455; // 4.55% drop
 	const TIER_COLORS = [
 		'bg-green-200', // Tier 1 (top)
@@ -367,6 +369,69 @@ const PowerRankings = () => {
 
 					// Map ownerId to previous rank
 					const prevRankMap = {};
+		// --- Survivor Pool Status ---
+		// If historicalData contains weekly scores we can simulate a simple survivor pool:
+		// starting week 1, each week eliminate the alive team (from that pool) with the lowest points that week.
+		// Build a map: week -> array of { ownerId, points }
+		const weeklyScoresByOwner = {};
+		if (allMatchups && allMatchups.length > 0) {
+			// collect scores by week and owner
+			allMatchups.forEach(m => {
+				const week = parseInt(m.week);
+				if (!weeklyScoresByOwner[week]) weeklyScoresByOwner[week] = [];
+				const t1Id = m.t1 !== undefined ? m.t1 : m.team1_roster_id;
+				const t2Id = m.t2 !== undefined ? m.t2 : m.team2_roster_id;
+				const t1Owner = rosterIdToOwnerId[String(t1Id)] || t1Id;
+				const t2Owner = rosterIdToOwnerId[String(t2Id)] || t2Id;
+				const t1Score = m.t1_score !== undefined ? m.t1_score : m.team1_score || 0;
+				const t2Score = m.t2_score !== undefined ? m.t2_score : m.team2_score || 0;
+				weeklyScoresByOwner[week].push({ ownerId: t1Owner, points: t1Score });
+				weeklyScoresByOwner[week].push({ ownerId: t2Owner, points: t2Score });
+			});
+		}
+
+		// Simulate survivor eliminations up to completedWeek (only consider weeks where all alive teams have scores)
+		const eliminatedSet = new Set();
+		let aliveSet = new Set(rosters.map(r => r.owner_id));
+		for (let wk = 1; wk <= completedWeek; wk++) {
+			const weekScores = weeklyScoresByOwner[wk] || [];
+			// Filter scores to alive teams only
+			const aliveScores = weekScores.filter(s => aliveSet.has(s.ownerId) && !eliminatedSet.has(s.ownerId));
+			// If not all alive teams have reported scores this week, skip elimination for this week
+			const uniqueAliveScorers = new Set(aliveScores.map(s => s.ownerId));
+			if (uniqueAliveScorers.size < aliveSet.size) {
+				// skip this week - incomplete data
+				continue;
+			}
+			// Find the alive team with lowest points
+			let minOwner = null;
+			let minPoints = Infinity;
+			aliveScores.forEach(s => {
+				if (s.points < minPoints) {
+					minPoints = s.points;
+					minOwner = s.ownerId;
+				}
+			});
+			if (minOwner !== null) {
+				eliminatedSet.add(minOwner);
+				aliveSet.delete(minOwner);
+			}
+			// If only one left, break
+			if (aliveSet.size <= 1) break;
+		}
+
+			// Prepare survivor markers for rendering
+			const survivorMarkersLocal = {};
+			currentRankings.forEach(t => {
+				if (eliminatedSet.has(t.ownerId)) survivorMarkersLocal[t.ownerId] = '💀';
+				else if (aliveSet.size === 1 && aliveSet.has(t.ownerId)) survivorMarkersLocal[t.ownerId] = '🙂';
+				else survivorMarkersLocal[t.ownerId] = null;
+			});
+			// Expose to component render, but only for the current season so emojis persist
+			if (String(season) === String(currentSeason)) {
+				setSurvivorMarkers(survivorMarkersLocal);
+			}
+
 					prevRankings.forEach(team => {
 						prevRankMap[team.ownerId] = team.rank;
 					});
@@ -536,7 +601,9 @@ const renderMovement = (movement) => {
 													/>
 													<div className="min-w-0 flex-1">
 														<h3 className="font-semibold text-gray-800 text-sm truncate">
-															{getTeamName(row.ownerId, row.year)}
+															{getTeamName(row.ownerId, row.year)} {survivorMarkers?.[row.ownerId] && (
+																<span className="ml-1" title={survivorMarkers[row.ownerId] === '💀' ? 'Eliminated from Survivor' : 'Survivor Winner'}>{survivorMarkers[row.ownerId]}</span>
+															)}
 															{row.movement >= 3 && <span title="Hot team" className="ml-1">🔥</span>}
 															{row.movement <= -3 && <span title="Cold team" className="ml-1">❄️</span>}
 														</h3>
@@ -650,7 +717,9 @@ const renderMovement = (movement) => {
 																}}
 															/>
 															<span className="truncate font-semibold text-xs md:text-sm flex items-center gap-1">
-																{getTeamName(row.ownerId, row.year)}
+																{getTeamName(row.ownerId, row.year)} {survivorMarkers?.[row.ownerId] && (
+																	<span className="ml-1" title={survivorMarkers[row.ownerId] === '💀' ? 'Eliminated from Survivor' : 'Survivor Winner'}>{survivorMarkers[row.ownerId]}</span>
+																)}
 																{row.movement >= 3 && <span title="Hot team" className="ml-1">🔥</span>}
 																{row.movement <= -3 && <span title="Cold team" className="ml-1">❄️</span>}
 															</span>

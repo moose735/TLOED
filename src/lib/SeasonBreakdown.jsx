@@ -20,6 +20,7 @@ const SeasonBreakdown = () => {
     const [seasonChampion, setSeasonChampion] = useState('N/A');
     const [seasonRunnerUp, setSeasonRunnerUp] = useState('N/A');
     const [seasonThirdPlace, setSeasonThirdPlace] = useState('N/A');
+    const [seasonSurvivorWinner, setSeasonSurvivorWinner] = useState('N/A');
     const [hypoSubject, setHypoSubject] = useState('');
     const [mockResults, setMockResults] = useState([]);
 
@@ -445,6 +446,80 @@ const SeasonBreakdown = () => {
         return result;
     }, [selectedSeason, historicalData, nflState, getTeamName, seasonStandings, currentSeason]);
 
+    // Compute survivor winner for the selected season using weeklyPointsMap and rosters
+    useEffect(() => {
+        // Do not declare a survivor winner for the current season (not crowned yet)
+        if (!selectedSeason || !historicalData) {
+            setSeasonSurvivorWinner('N/A');
+            return;
+        }
+        if (String(selectedSeason) === String(currentSeason)) {
+            setSeasonSurvivorWinner('N/A');
+            return;
+        }
+        const rosters = historicalData.rostersBySeason?.[selectedSeason] || [];
+        if (!rosters || rosters.length === 0) {
+            setSeasonSurvivorWinner('N/A');
+            return;
+        }
+
+        // Build rosterId -> ownerId
+        const rosterIdToOwner = {};
+        rosters.forEach(r => { rosterIdToOwner[String(r.roster_id)] = r.owner_id; });
+
+        // Build owner set
+        const aliveSet = new Set(Object.values(rosterIdToOwner));
+        const eliminatedSet = new Set();
+
+        // Build weeks list from weeklyPointsMap (only canonical rosterIds)
+        const rosterIds = rosters.map(r => String(r.roster_id));
+        const weeksSet = new Set();
+        rosterIds.forEach(rid => {
+            const map = weeklyPointsMap?.[rid] || {};
+            Object.keys(map).forEach(w => weeksSet.add(w));
+        });
+        const weeks = Array.from(weeksSet).map(Number).filter(n => !isNaN(n)).sort((a,b) => a-b);
+
+        // Simulate eliminations week-by-week
+        for (const wk of weeks) {
+            if (aliveSet.size <= 1) break;
+            const aliveScores = [];
+            rosterIds.forEach(rid => {
+                const ownerId = rosterIdToOwner[rid];
+                if (!aliveSet.has(ownerId) || eliminatedSet.has(ownerId)) return;
+                const pts = weeklyPointsMap?.[rid]?.[String(wk)];
+                if (typeof pts === 'number' && !isNaN(pts)) {
+                    aliveScores.push({ ownerId, pts });
+                }
+            });
+
+            const uniqueAliveScorers = new Set(aliveScores.map(s => s.ownerId));
+            if (uniqueAliveScorers.size < aliveSet.size) {
+                // incomplete data for this week; skip
+                continue;
+            }
+
+            // Find min points
+            let minPoints = Infinity;
+            aliveScores.forEach(s => { if (s.pts < minPoints) minPoints = s.pts; });
+            // Find owners with minPoints
+            const mins = aliveScores.filter(s => s.pts === minPoints).map(s => s.ownerId);
+            if (mins.length === 0) continue;
+            // Deterministic tiebreak: pick smallest ownerId string
+            mins.sort();
+            const elim = mins[0];
+            eliminatedSet.add(elim);
+            aliveSet.delete(elim);
+        }
+
+        let winner = 'N/A';
+        if (aliveSet.size === 1) {
+            const winnerOwner = Array.from(aliveSet)[0];
+            winner = getTeamName ? getTeamName(winnerOwner, selectedSeason) : String(winnerOwner);
+        }
+        setSeasonSurvivorWinner(winner);
+    }, [selectedSeason, historicalData, weeklyPointsMap, getTeamName, currentSeason]);
+
     // Mock schedule: apply subject team's weekly points against each other team's schedule
     const computeMockAgainstSchedule = useCallback((subjectRosterId, scheduleOwnerRosterId) => {
         if (!subjectRosterId || !scheduleOwnerRosterId) return null;
@@ -555,13 +630,38 @@ const SeasonBreakdown = () => {
                         </div>
                     )}
 
+                    {/* Medals for top 3 points scorers */}
+                    {selectedSeason && seasonalMetrics[selectedSeason] && String(selectedSeason) !== String(currentSeason) && (
+                        (() => {
+                            const teams = Object.values(seasonalMetrics[selectedSeason] || {});
+                            const sortedByPoints = teams.slice().sort((a, b) => (b.pointsFor || 0) - (a.pointsFor || 0));
+                            const top3 = sortedByPoints.slice(0, 3);
+                            const medalColors = ['bg-yellow-300', 'bg-gray-300', 'bg-amber-700 text-white'];
+                            return (
+                                <div className="flex items-stretch justify-center gap-4 mb-8">
+                                    {top3.map((t, i) => (
+                                        <div key={t.rosterId || i} className={`w-1/4 min-w-[180px] rounded-lg shadow-md p-4 flex flex-col items-center justify-center ${medalColors[i]}`}>
+                                            <div className="text-3xl font-bold mb-2">{i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}</div>
+                                            <div className="font-semibold text-lg text-center">{t.teamName || getTeamName(t.ownerId, selectedSeason)}</div>
+                                            <div className="text-sm text-gray-700 mt-1">{formatScore(Number(t.pointsFor || 0), 2)} pts</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            );
+                        })()
+                    )}
+
+                    {/* Survivor Winner is shown below in the season stats grid */}
+
                     {/* Season Stats Summary Section */}
                     {seasonStats && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-                            <div className="bg-blue-50 rounded-lg p-4 shadow">
-                                <h4 className="font-bold text-blue-700 mb-1">Points Champion</h4>
-                                <div>{seasonStats.pointsChampion.teamName} ({formatScore(Number(seasonStats.pointsChampion.pointsFor ?? 0) , 2)} pts)</div>
-                            </div>
+                            {String(selectedSeason) !== String(currentSeason) && (
+                                <div className="bg-blue-50 rounded-lg p-4 shadow">
+                                    <h4 className="font-bold text-blue-700 mb-1">Points Champion</h4>
+                                    <div>{seasonStats.pointsChampion.teamName} ({formatScore(Number(seasonStats.pointsChampion.pointsFor ?? 0) , 2)} pts)</div>
+                                </div>
+                            )}
                             <div className="bg-green-50 rounded-lg p-4 shadow">
                                 <h4 className="font-bold text-green-700 mb-1">Best Record</h4>
                                 <div>{seasonStats.bestRecord.teamName} ({seasonStats.bestRecord.wins}-{seasonStats.bestRecord.losses}-{seasonStats.bestRecord.ties})</div>
@@ -597,6 +697,11 @@ const SeasonBreakdown = () => {
                             <div className="bg-gray-50 rounded-lg p-4 shadow">
                                 <h4 className="font-bold text-gray-700 mb-1">Lowest Single-Week Score</h4>
                                 <div>{seasonStats.lowestWeek.team} ({formatScore(typeof seasonStats.lowestWeek.score === 'number' ? seasonStats.lowestWeek.score : NaN, 2)} pts, Week {seasonStats.lowestWeek.week})</div>
+                            </div>
+                            {/* Survivor Winner block */}
+                            <div className="bg-white rounded-lg p-4 shadow">
+                                <h4 className="font-bold text-green-700 mb-1">Survivor Winner</h4>
+                                <div>{seasonSurvivorWinner}</div>
                             </div>
                         </div>
                     )}
