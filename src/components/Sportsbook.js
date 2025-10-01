@@ -648,6 +648,19 @@ const Sportsbook = () => {
 
                 // Generate betting markets once and store them
                 const markets = bettingMarkets;
+                
+                // DEBUG: Log actual spread values being used in UI
+                if (team1Details.name === 'Crude Crushers' || team1Details.name === 'Team of Constant Sorrow') {
+                    console.log(`🎯 UI DEBUG - ${team1Details.name} vs ${team2Details.name}:`);
+                    console.log(`   Team1 ID: ${team1RosterId}, Team2 ID: ${team2RosterId}`);
+                    console.log(`   Team1 avg: ${team1Stats?.avgPerGame || team1Stats?.averageScore}`);
+                    console.log(`   Team2 avg: ${team2Stats?.avgPerGame || team2Stats?.averageScore}`);
+                    console.log(`   Team1 cold: ${team1Stats?.isCold}, Team2 cold: ${team2Stats?.isCold}`);
+                    console.log(`   Spread Team1: ${markets?.spread?.team1?.line}`);
+                    console.log(`   Spread Team2: ${markets?.spread?.team2?.line}`);
+                    console.log(`   ⚠️ EXPECTED: Team1 should be -13.5 based on test algorithm`);
+                }
+                
                 matchupData.markets = markets;
 
                 return matchupData;

@@ -582,22 +582,13 @@ export const generateCleanBettingMarkets = (matchup, teamStats, options = {}) =>
     const scoringDiff = Math.abs(team1AvgScore - team2AvgScore);
     const absPowerDiff = Math.abs(powerAnalysis.powerDiff);
     
-    // Force a minimum spread if there are clear differences between teams
-    if (absSpread < 0.5) {
-        if (scoringDiff >= 8 || absPowerDiff >= 1.5) {
-            // Teams have meaningful differences, calculate proper spread
-            absSpread = Math.max(1.0, scoringDiff * 0.15); // 10 point avg diff = 1.5 point spread
-            absSpread = Math.round(absSpread * 2) / 2; // Round to nearest 0.5
-        } else {
-            // Teams are truly similar, keep as pick'em
-            absSpread = 0;
-            spread = 0;
-        }
-    } else if (absSpread < 3.0 && (scoringDiff >= 15 || absPowerDiff >= 2.5)) {
-        // Even if spread was calculated > 0.5, boost it for teams with large differences
-        const boostedSpread = Math.max(absSpread, scoringDiff * 0.12); // More aggressive for large diffs
-        absSpread = Math.round(boostedSpread * 2) / 2;
+    // Trust the enhanced algorithm results - no conservative overrides
+    // Only set truly equal teams (absSpread < 0.5) to pick'em if they have no meaningful differences
+    if (absSpread < 0.5 && scoringDiff < 5 && absPowerDiff < 1.0) {
+        absSpread = 0;
+        spread = 0;
     }
+    // Otherwise, let the enhanced statistical algorithm determine the spread
     
     if (absSpread > 0) {
         // Ensure spread maintains proper sign
