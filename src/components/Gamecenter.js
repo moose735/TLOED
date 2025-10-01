@@ -29,17 +29,24 @@ const Gamecenter = () => {
     // Effect 2: Populate the week dropdown whenever the selected season changes.
     useEffect(() => {
         if (selectedSeason && historicalData?.matchupsBySeason?.[selectedSeason]) {
-            const weeks = new Set(historicalData.matchupsBySeason[selectedSeason].map(m => m.week));
-            // Filter out playoff weeks (15-17) since playoff matchups aren't determined until regular season ends
-            const regularSeasonWeeks = Array.from(weeks).filter(week => week < 15);
-            setSeasonWeeks(regularSeasonWeeks.sort((a, b) => a - b));
+            // Collect weeks, normalize to numbers, sort and filter out weeks 15-17 (no playoffs configured)
+            const weeksSet = new Set(historicalData.matchupsBySeason[selectedSeason].map(m => Number(m.week)));
+            const weeksArray = Array.from(weeksSet).sort((a, b) => a - b).filter(w => !(w >= 15 && w <= 17));
+            setSeasonWeeks(weeksArray);
         }
     }, [selectedSeason, historicalData]); // Runs only when the season changes
 
     // Effect 3: Fetch the matchups whenever the season or week changes.
     useEffect(() => {
         if (selectedSeason && selectedWeek && historicalData?.matchupsBySeason?.[selectedSeason]) {
-            const filtered = historicalData.matchupsBySeason[selectedSeason].filter(m => m.week == selectedWeek);
+            // Don't show matchups for weeks 15-17 (no playoffs configured)
+            const weekNum = Number(selectedWeek);
+            if (weekNum >= 15 && weekNum <= 17) {
+                setWeeklyMatchups([]);
+                return;
+            }
+
+            const filtered = historicalData.matchupsBySeason[selectedSeason].filter(m => Number(m.week) === weekNum);
             setWeeklyMatchups(filtered);
         }
     }, [selectedSeason, selectedWeek, historicalData]); // Runs only when season or week changes
@@ -306,11 +313,9 @@ const Gamecenter = () => {
         } else {
             // For historical seasons, find the first available week and set it.
             if (historicalData?.matchupsBySeason?.[newSeason]) {
-                const weeks = new Set(historicalData.matchupsBySeason[newSeason].map(m => m.week));
-                // Filter out playoff weeks (15-17) since playoff matchups aren't determined until regular season ends
-                const regularSeasonWeeks = Array.from(weeks).filter(week => week < 15);
-                const firstWeek = regularSeasonWeeks.sort((a, b) => a - b)[0];
-                setSelectedWeek(firstWeek);
+                const weeksSet = new Set(historicalData.matchupsBySeason[newSeason].map(m => Number(m.week)));
+                const weeksArray = Array.from(weeksSet).sort((a, b) => a - b).filter(w => !(w >= 15 && w <= 17));
+                setSelectedWeek(weeksArray.length > 0 ? weeksArray[0] : null);
             }
         }
     };
@@ -361,13 +366,29 @@ const Gamecenter = () => {
         return `${streak}${streakType}`;
     };
 
-    // Helper function to add emojis to streaks for future matchups
-    const formatStreakWithEmoji = (streak) => {
-        if (streak === "N/A") return streak;
-        
-        const isWinning = streak.includes('W');
-        const emoji = isWinning ? '🔥' : '❄️'; // 🔥 for wins, ❄️ for losses
-        return `${streak} ${emoji}`;
+    // Format streak for display: for unstarted/future games show emoji indicators
+    const formatStreakDisplay = (ownerId, streakString, isCompleted) => {
+        // If no streak data, show neutral dash
+        if (!streakString || streakString === 'N/A') return '➖';
+
+        // Determine if we should show emoji (for unstarted or future games)
+        const currentNFLSeason = parseInt(nflState?.season || new Date().getFullYear());
+        const currentNFLWeek = parseInt(nflState?.week || 1);
+        const selectedSeasonInt = parseInt(selectedSeason);
+        const selectedWeekInt = parseInt(selectedWeek);
+
+        const isFuture = selectedSeasonInt > currentNFLSeason || (selectedSeasonInt === currentNFLSeason && selectedWeekInt >= currentNFLWeek);
+
+        if (!isCompleted && isFuture) {
+            // streakString like '2W' or '1L'
+            const num = streakString.replace(/[^0-9]/g, '');
+            const type = streakString.replace(/[^A-Za-z]/g, '');
+            if (type === 'W') return `🔥${num || ''}`;
+            if (type === 'L') return `🥶${num || ''}`;
+            return `➖${num || ''}`;
+        }
+
+        return streakString;
     };
 
     const getHeadToHeadRecord = (ownerId1, ownerId2) => {
@@ -513,7 +534,7 @@ const Gamecenter = () => {
                                                             {team1Details.name}
                                                         </div>
                                                         <div className="text-xs text-gray-500">
-                                                            {!isWeekComplete ? formatStreakWithEmoji(team1Streak) : team1Streak} • Avg: {formatScore(Number(team1AvgPts ?? 0), 1)}
+                                                                {formatStreakDisplay(team1OwnerId, team1Streak, isCompleted)} • Avg: {formatScore(Number(team1AvgPts ?? 0), 1)}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -550,7 +571,7 @@ const Gamecenter = () => {
                                                             {team2Details.name}
                                                         </div>
                                                         <div className="text-xs text-gray-500">
-                                                            {!isWeekComplete ? formatStreakWithEmoji(team2Streak) : team2Streak} • Avg: {formatScore(Number(team2AvgPts ?? 0), 1)}
+                                                            {formatStreakDisplay(team2OwnerId, team2Streak, isCompleted)} • Avg: {formatScore(Number(team2AvgPts ?? 0), 1)}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -618,7 +639,7 @@ const Gamecenter = () => {
                                                     
                                                     <div className="grid grid-cols-3 gap-2 items-center">
                                                         <div className="text-center space-y-1">
-                                                            <div className="text-xs font-semibold">{!isWeekComplete ? formatStreakWithEmoji(team1Streak) : team1Streak}</div>
+                                                            <div className="text-xs font-semibold">{formatStreakDisplay(team1OwnerId, team1Streak, isCompleted)}</div>
                                                             <div className="text-xs font-semibold">{formatScore(Number(team1AvgPts ?? 0), 1)}</div>
                                                         </div>
                                                         
@@ -628,21 +649,42 @@ const Gamecenter = () => {
                                                         </div>
                                                         
                                                         <div className="text-center space-y-1">
-                                                            <div className="text-xs font-semibold">{!isWeekComplete ? formatStreakWithEmoji(team2Streak) : team2Streak}</div>
+                                                            <div className="text-xs font-semibold">{formatStreakDisplay(team2OwnerId, team2Streak, isCompleted)}</div>
                                                             <div className="text-xs font-semibold">{formatScore(Number(team2AvgPts ?? 0), 1)}</div>
                                                         </div>
                                                     </div>
                                                 </div>
                                             </div>
                                         ) : (
-                                            // Future games section - no additional content needed
-                                            <></>
+                                            <>
+                                                {(() => {
+                                                    const currentNFLSeason = parseInt(nflState?.season || new Date().getFullYear());
+                                                    const currentNFLWeek = parseInt(nflState?.week || 1);
+                                                    const selectedSeasonInt = parseInt(selectedSeason);
+                                                    const selectedWeekInt = parseInt(selectedWeek);
+                                                    
+                                                    const isWeekComplete = selectedSeasonInt < currentNFLSeason || 
+                                                                         (selectedSeasonInt === currentNFLSeason && selectedWeekInt < currentNFLWeek);
+                                                    
+                                                    const gameHasScores = matchup.team1_score > 0 && matchup.team2_score > 0;
+                                                    
+                                                    return isWeekComplete && gameHasScores ? (
+                                                        <div className="text-center text-xs text-gray-500">Final</div>
+                                                    ) : (
+                                                        <div className="text-center text-xs text-gray-500">
+                                                            Game in progress or incomplete
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </>
                                         )}
                                         
-                                        {/* Tap indicator for all games */}
-                                        <div className="text-center mt-2">
-                                            <span className="text-xs text-blue-500 font-medium">Tap for details</span>
-                                        </div>
+                                        {/* Tap indicator for completed games */}
+                                        {isCompleted && (
+                                            <div className="text-center mt-2">
+                                                <span className="text-xs text-blue-500 font-medium">Tap for details</span>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -790,31 +832,13 @@ const Gamecenter = () => {
 
                                     // Persist coach scores locally for a simple "career" average per roster
                                     try {
-                                        const persist = (rosterId, score, season, week, ownerId) => {
+                                        const persist = (rosterId, score) => {
                                             if (!rosterId) return;
                                             const key = `coachScore:${rosterId}`;
                                             const raw = localStorage.getItem(key);
                                             let arr = raw ? JSON.parse(raw) : [];
-                                            // Avoid persisting incomplete games: require both teams to have scores
-                                            const gameHasScores = (selectedMatchup.team1_score > 0 && selectedMatchup.team2_score > 0);
-                                            if (!gameHasScores) return; // don't persist incomplete matchups
-
-                                            // Dedupe by season/week if present: replace existing entry for same season/week
-                                            if (season && typeof week !== 'undefined') {
-                                                const existingIdx = arr.findIndex(e => e && (e.season === season || String(e.season) === String(season)) && (e.week === week || String(e.week) === String(week)));
-                                                // Include ownerId in persisted entry to make later aggregation robust
-                                                const entry = { ts: Date.now(), score, season, week, ownerId: ownerId != null ? String(ownerId) : null };
-                                                if (existingIdx !== -1) {
-                                                    arr[existingIdx] = entry;
-                                                } else {
-                                                    arr.push(entry);
-                                                }
-                                            } else {
-                                                // Backwards-compatible: push a timestamped score, include ownerId when available
-                                                arr.push({ ts: Date.now(), score, ownerId: ownerId != null ? String(ownerId) : null });
-                                            }
-
                                             // Keep last 200 entries to avoid unbounded growth
+                                            arr.push({ ts: Date.now(), score });
                                             if (arr.length > 200) arr = arr.slice(arr.length - 200);
                                             localStorage.setItem(key, JSON.stringify(arr));
                                         };
@@ -825,20 +849,16 @@ const Gamecenter = () => {
                                             if (!raw) return null;
                                             const arr = JSON.parse(raw);
                                             if (!Array.isArray(arr) || arr.length === 0) return null;
-                                            // Only include entries that have season/week and are not from 2021 if present
-                                            const filtered = arr.filter(e => !(e && (e.season === '2021' || e.season === 2021)));
-                                            if (filtered.length === 0) return null;
-                                            const sum = filtered.reduce((s, r) => s + (r.score || 0), 0);
-                                            return sum / filtered.length;
+                                            const sum = arr.reduce((s, r) => s + (r.score || 0), 0);
+                                            return sum / arr.length;
                                         };
 
                                         // Persist for teams if we have roster IDs
-                                        const team1RosterIdForPersist = String(rosterForTeam1?.roster_id || team1RosterId);
-                                        const team2RosterIdForPersist = String(rosterForTeam2?.roster_id || team2RosterId);
+                                        const team1RosterIdForPersist = rosterForTeam1?.roster_id || team1RosterId;
+                                        const team2RosterIdForPersist = rosterForTeam2?.roster_id || team2RosterId;
 
-                                        // Persist only if the matchup has completed scores
-                                        if (team1RosterIdForPersist) persist(team1RosterIdForPersist, team1CoachScore, selectedSeason, selectedWeek, rosterForTeam1?.owner_id);
-                                        if (team2RosterIdForPersist) persist(team2RosterIdForPersist, team2CoachScore, selectedSeason, selectedWeek, rosterForTeam2?.owner_id);
+                                        if (team1RosterIdForPersist) persist(team1RosterIdForPersist, team1CoachScore);
+                                        if (team2RosterIdForPersist) persist(team2RosterIdForPersist, team2CoachScore);
 
                                         var team1Career = getCareerAverage(team1RosterIdForPersist);
                                         var team2Career = getCareerAverage(team2RosterIdForPersist);

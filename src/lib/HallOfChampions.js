@@ -23,6 +23,7 @@ const HallOfChampions = () => {
     const championImages = {
         // Example: 2024: require('../assets/images/champions/2024-champion.jpg'),
         // Add images by uncommenting and adding files:
+        2024: require('../assets/images/hall-of-champions/2024-champion.JPG'),
         2023: require('../assets/images/hall-of-champions/2023-champion.jpg'),
         2022: require('../assets/images/hall-of-champions/2022-champion.jpg'),
         2021: require('../assets/images/hall-of-champions/2021-champion.jpg'),

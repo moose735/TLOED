@@ -51,8 +51,6 @@ const LeagueHistory = ({ onTeamNameClick }) => {
     const [seasonAwardsSummary, setSeasonAwardsSummary] = useState({});
     const [sortedYearsForAwards, setSortedYearsForAwards] = useState([]);
     const [showAllSeasons, setShowAllSeasons] = useState(false);
-    const [showCoachDebug, setShowCoachDebug] = useState(false);
-    const [coachDebugData, setCoachDebugData] = useState(null);
 
     // A color palette for the teams in the chart
     const teamColors = [
@@ -240,47 +238,20 @@ const LeagueHistory = ({ onTeamNameClick }) => {
 
         const computeCareerCoachForOwner = (ownerId) => {
             try {
-                // Re-resolve roster IDs for this owner from historicalData.rostersBySeason (exclude 2021)
-                const rosterIds = [];
-                Object.entries(historicalData.rostersBySeason || {}).forEach(([year, rosters]) => {
-                    if (!Array.isArray(rosters)) return;
-                    if (String(year) === '2021') return; // explicitly exclude 2021
-                    rosters.forEach(r => {
-                        if (String(r.owner_id) === String(ownerId) && r.roster_id != null) {
-                            rosterIds.push(String(r.roster_id));
-                        }
-                    });
-                });
-
-                // Fallback to ownerToRosterIds map if none found
-                if (rosterIds.length === 0) {
-                    const rosterSet = ownerToRosterIds[String(ownerId)] || new Set();
-                    rosterSet.forEach(rid => {
-                        if (rosterIdToYear[String(rid)] === '2021') return; // exclude 2021
-                        rosterIds.push(String(rid));
-                    });
-                }
-
+                const rosterSet = ownerToRosterIds[String(ownerId)] || new Set();
                 let allScores = [];
-                rosterIds.forEach(rid => {
-                    try {
-                        const raw = localStorage.getItem(`coachScore:${rid}`);
-                        if (!raw) return;
-                        const arr = JSON.parse(raw);
-                        if (!Array.isArray(arr)) return;
-                        // Only include entries that have season/week and are not from 2021
-                        const filtered = arr.filter(e => !(e && (e.season === '2021' || e.season === 2021)));
-                        // Prefer entries with ownerId matching this ownerId when present
-                        const withOwner = filtered.filter(e => e && e.ownerId != null && String(e.ownerId) === String(ownerId));
-                        const toUse = withOwner.length > 0 ? withOwner : filtered;
-                        toUse.forEach(entry => {
-                            if (typeof entry?.score === 'number') allScores.push(entry.score);
-                        });
-                    } catch (e) {
-                        // ignore per-roster errors
-                    }
-                });
+                rosterSet.forEach(rid => {
+                    // Skip rosters from 2021 — no game-by-game logs for that year
+                    if (rosterIdToYear[String(rid)] === '2021') return;
 
+                    const raw = localStorage.getItem(`coachScore:${rid}`);
+                    if (!raw) return;
+                    const arr = JSON.parse(raw);
+                    if (!Array.isArray(arr)) return;
+                    arr.forEach(entry => {
+                        if (typeof entry?.score === 'number') allScores.push(entry.score);
+                    });
+                });
                 if (allScores.length === 0) return null;
                 const sum = allScores.reduce((s, v) => s + v, 0);
                 return sum / allScores.length;
@@ -289,53 +260,7 @@ const LeagueHistory = ({ onTeamNameClick }) => {
             }
         };
 
-        // Helper: compute career coach % by trying ownerId first, then falling back to resolving rosterIds by team name
-        const computeCareerCoachForTeam = (teamName, ownerId) => {
-            // Try direct ownerId-based lookup first
-            let val = computeCareerCoachForOwner(ownerId);
-            if (val !== null && typeof val === 'number') return val;
-
-            // Fallback: collect rosterIds across seasons where the resolved display name for owner matches teamName
-            const rosterIds = [];
-            Object.entries(historicalData.rostersBySeason || {}).forEach(([year, rosters]) => {
-                if (!Array.isArray(rosters)) return;
-                if (String(year) === '2021') return; // exclude 2021
-                rosters.forEach(r => {
-                    try {
-                        const candidateOwnerId = String(r.owner_id);
-                        const display = getDisplayTeamNameFromContext ? getDisplayTeamNameFromContext(candidateOwnerId, String(year)) : null;
-                        if (display && display === teamName) rosterIds.push(String(r.roster_id));
-                    } catch (e) {
-                        // ignore
-                    }
-                });
-            });
-
-            // If no rosterIds found, fallback to ownerToRosterIds map (excluding 2021)
-            if (rosterIds.length === 0) {
-                const rosterSet = ownerToRosterIds[String(ownerId)] || new Set();
-                rosterSet.forEach(rid => { if (rosterIdToYear[String(rid)] !== '2021') rosterIds.push(String(rid)); });
-            }
-
-            // Aggregate persisted coach entries for those rosterIds
-            let allScores = [];
-            rosterIds.forEach(rid => {
-                try {
-                    const raw = localStorage.getItem(`coachScore:${rid}`);
-                    if (!raw) return;
-                    const arr = JSON.parse(raw);
-                    if (!Array.isArray(arr)) return;
-                    const filtered = arr.filter(e => !(e && (e.season === '2021' || e.season === 2021)));
-                    filtered.forEach(entry => { if (typeof entry?.score === 'number') allScores.push(entry.score); });
-                } catch (e) { /* ignore */ }
-            });
-            if (allScores.length === 0) return null;
-            const sum = allScores.reduce((s, v) => s + v, 0);
-            return sum / allScores.length;
-        };
-
         // Final compilation for All-Time Standings display (SORTED BY WIN PERCENTAGE)
-        // Compute career coach % for each owner by aggregating persisted coachScore:<rosterId> entries
         const compiledStandings = Object.keys(teamOverallStats).map(teamName => {
             const stats = teamOverallStats[teamName];
             if (stats.seasonsPlayed.size === 0) return null;
@@ -386,15 +311,11 @@ const LeagueHistory = ({ onTeamNameClick }) => {
                 thirdPointsYears: getAwardYears('isThirdPlacePoints'),
             } : { championships: 0, championshipsYears: [], runnerUps: 0, runnerUpsYears: [], thirdPlace: 0, thirdPlaceYears: [], firstPoints: 0, firstPointsYears: [], secondPoints: 0, secondPointsYears: [], thirdPoints: 0, thirdPointsYears: [] };
 
-            // Compute career coach % by teamName then ownerId fallback
-            const careerCoach = computeCareerCoachForTeam(teamName, stats.ownerId);
-
             return {
                 team: teamName,
                 seasons: seasonsDisplay,
                 totalDPR: stats.careerDPR,
                 record: `${stats.totalWins}-${stats.totalLosses}-${stats.totalTies}`,
-                careerCoach: careerCoach, // numeric percent e.g. 92.3 or null
                 totalWins: stats.totalWins,
                 winPercentage: winPercentage,
                 // coachScore removed from league history compilation
@@ -404,43 +325,6 @@ const LeagueHistory = ({ onTeamNameClick }) => {
         }).filter(Boolean).sort((a, b) => b.winPercentage - a.winPercentage);
 
     setAllTimeStandings(compiledStandings);
-
-        // Build debug data for coach persistence per team/owner
-        try {
-            const debug = compiledStandings.map(row => {
-                const ownerId = row.ownerId;
-                // Resolve rosterIds used for this owner
-                const rosterIds = [];
-                Object.entries(historicalData.rostersBySeason || {}).forEach(([year, rosters]) => {
-                    if (!Array.isArray(rosters)) return;
-                    if (String(year) === '2021') return;
-                    rosters.forEach(r => { if (String(r.owner_id) === String(ownerId)) rosterIds.push(String(r.roster_id)); });
-                });
-
-                    const perRoster = rosterIds.map(rid => {
-                        try {
-                            const raw = localStorage.getItem(`coachScore:${rid}`);
-                            if (!raw) return { rid, entries: 0, avg: null, ownerIds: [] };
-                            const arr = JSON.parse(raw);
-                            if (!Array.isArray(arr)) return { rid, entries: 0, avg: null, ownerIds: [] };
-                            const filtered = arr.filter(e => !(e && (e.season === '2021' || e.season === 2021)));
-                            const scores = filtered.map(e => e.score).filter(s => typeof s === 'number');
-                            const avg = scores.length > 0 ? scores.reduce((a,b)=>a+b,0)/scores.length : null;
-                            const ownerIds = Array.from(new Set(filtered.map(e => e && e.ownerId != null ? String(e.ownerId) : null).filter(Boolean)));
-                            return { rid, entries: scores.length, avg, ownerIds };
-                        } catch (e) { return { rid, entries: 0, avg: null, ownerIds: [] }; }
-                    });
-
-                const totalEntries = perRoster.reduce((s, p) => s + (p.entries || 0), 0);
-                const combinedScores = perRoster.flatMap(p => p.avg != null ? [p.avg] : []);
-                const combinedAvg = combinedScores.length > 0 ? (combinedScores.reduce((a,b)=>a+b,0)/combinedScores.length) : null;
-
-                return { team: row.team, ownerId, rosterIds, perRoster, totalEntries, combinedAvg };
-            });
-            setCoachDebugData(debug);
-        } catch (e) {
-            setCoachDebugData(null);
-        }
 
         // Prepare data for the total DPR progression line graph (now as rankings 1-12)
         const chartData = [];
@@ -702,8 +586,8 @@ const LeagueHistory = ({ onTeamNameClick }) => {
                                         </div>
                                         <div className="text-right">
                                             <div className="text-lg font-bold text-blue-800">{formatDPR(team.totalDPR)}</div>
-                                            <div className="text-xs text-gray-500">Career DPR</div>
-                                            <div className="text-xs text-gray-500 mt-1">Coach %: <span className="font-semibold text-gray-800">{typeof team.careerCoach === 'number' ? `${formatDPR(team.careerCoach)}%` : 'N/A'}</span></div>
+                                                <div className="text-xs text-gray-500">Career DPR</div>
+                                                {/* Coach (Career) removed from league history mobile view */}
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-3 text-sm mb-2">
@@ -768,7 +652,7 @@ const LeagueHistory = ({ onTeamNameClick }) => {
                                     <th className="py-3 md:py-4 px-3 md:px-4 text-left text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
                                     <th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Seasons</th>
                                     <th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Career DPR</th>
-                                    <th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Coach %</th>
+                                    {/* Coach % column removed */}
                                     <th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record</th>
                                     <th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Win %</th>
                                     <th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Awards</th>
@@ -797,7 +681,7 @@ const LeagueHistory = ({ onTeamNameClick }) => {
                                             </td>
                                             <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold">{team.seasons}</td>
                                             <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold text-blue-800">{formatDPR(team.totalDPR)}</td>
-                                            <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold">{typeof team.careerCoach === 'number' ? `${formatDPR(team.careerCoach)}%` : 'N/A'}</td>
+                                            {/* Coach % cell removed */}
                                             <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold">{team.record}</td>
                                             <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold text-blue-700">{formatPercentage(team.winPercentage)}</td>
                                             <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold">

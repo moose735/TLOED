@@ -371,18 +371,47 @@ const PowerRankings = () => {
 						prevRankMap[team.ownerId] = team.rank;
 					});
 
-					// --- Tiering Algorithm ---
-					let tiers = [];
-					let currentTier = 1;
-					tiers.push(currentTier); // First team is always Tier 1
-					for (let i = 1; i < currentRankings.length; i++) {
-						const prevDPR = currentRankings[i - 1].dpr;
-						const currDPR = currentRankings[i].dpr;
-						const percentDrop = 1 - (currDPR / prevDPR);
-						if (percentDrop > TIER_THRESHOLD) {
-							currentTier++;
+					// --- Adaptive Tiering Algorithm ---
+					// Build absolute DPR drops between adjacent DPRs (prev - next)
+					const absoluteDrops = [];
+					for (let i = 0; i < currentRankings.length - 1; i++) {
+						const prevDPR = currentRankings[i].dpr || 0;
+						const nextDPR = currentRankings[i + 1].dpr || 0;
+						absoluteDrops.push(Math.max(0, (prevDPR - nextDPR)));
+					}
+
+					// Compute mean and stddev of absoluteDrops
+					const dropMean = absoluteDrops.length > 0 ? (absoluteDrops.reduce((a, b) => a + b, 0) / absoluteDrops.length) : 0;
+					const dropVar = absoluteDrops.length > 0 ? (absoluteDrops.reduce((a, b) => a + Math.pow(b - dropMean, 2), 0) / absoluteDrops.length) : 0;
+					const dropStd = Math.sqrt(dropVar);
+
+					// Identify significant drops: those > mean + alpha * stddev
+					const ALPHA = 0.25; // sensitivity - lower -> more breaks (tweaked)
+					const significantIndices = [];
+					absoluteDrops.forEach((d, idx) => {
+						if (d > dropMean + ALPHA * dropStd && d > 0.02) { // require a small absolute DPR floor (~0.02)
+							significantIndices.push(idx);
 						}
+					});
+
+					// Use only statistically significant absolute DPR drops as tier boundaries
+					let tiers = [];
+					if (significantIndices.length === 0) {
+						// No significant gaps: everything is Tier 1
+						for (let i = 0; i < currentRankings.length; i++) tiers.push(1);
+					} else {
+						significantIndices.sort((a, b) => a - b);
+						let currentTier = 1;
+						let nextBoundaryIdx = significantIndices.shift();
 						tiers.push(currentTier);
+						for (let i = 1; i < currentRankings.length; i++) {
+							const gapIdx = i - 1;
+							if (gapIdx === nextBoundaryIdx) {
+								currentTier++;
+								nextBoundaryIdx = significantIndices.length > 0 ? significantIndices.shift() : null;
+							}
+							tiers.push(currentTier);
+						}
 					}
 
 					// Calculate SOS: average opponent season points for each team
