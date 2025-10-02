@@ -18,6 +18,52 @@ const HallOfChampions = () => {
     const [rosterModalOpen, setRosterModalOpen] = useState(false);
     const [rosterModalYear, setRosterModalYear] = useState(null);
 
+    // ===== LEAGUE MVP SELECTIONS =====
+    // INSTRUCTIONS FOR SETTING MVPs:
+    // 1. For each champion year, you can handpick their League MVP from their roster
+    // 2. To find player IDs: Use the "View Roster" button on champion cards to see their players
+    // 3. Common player ID examples: Josh Allen='4046', Lamar Jackson='4881', CMC='4036'
+    // 4. Leave reasonTitle blank or customize it for each MVP
+    // 
+    // FORMAT: year: { playerId: 'sleeper_player_id', name: 'Full Name', position: 'POS', team: 'TEAM', reasonTitle: 'Optional custom title' }
+    const leagueMVPs = {
+        // EXAMPLE ENTRIES - REPLACE WITH YOUR ACTUAL PICKS:
+        // 2024: { 
+        //     playerId: '4046', 
+        //     name: 'Josh Allen', 
+        //     position: 'QB', 
+        //     team: 'BUF',
+        //     reasonTitle: 'Carried the team to championship'
+        // },
+        // 2023: { 
+        //     playerId: '4034', 
+        //     name: 'Dak Prescott', 
+        //     position: 'QB', 
+        //     team: 'DAL',
+        //     reasonTitle: 'Clutch playoff performance'
+        // },
+        
+        // ===== ADD YOUR MVP PICKS HERE =====
+        // Uncomment and fill in the years and players you want:
+
+        2024: { playerId: '4866', name: 'Saquon Barkley', position: 'RB', team: 'PHI', reasonTitle: 'Joe Schmitt' },
+        2023: { playerId: '19', name: 'Joe Flacco', position: 'QB', team: 'CLE', reasonTitle: 'Unlikely Hero' },
+        2022: { playerId: '6786', name: 'CeeDee Lamb', position: 'WR', team: 'DAL', reasonTitle: 'Why they were MVP' },
+        2021: { playerId: '4984', name: 'Josh Allen', position: 'QB', team: 'BUF', reasonTitle: 'Why they were MVP' },
+
+        // Continue adding years as needed...
+    };
+
+    // Helper to get MVP for a specific year
+    const getMVPForYear = (year) => {
+        return leagueMVPs[year] || null;
+    };
+
+    // ===== DEVELOPER HELPER =====
+    // Uncomment the line below to see all champion rosters in browser console
+    // This will help you find player IDs and names for setting MVPs
+    // console.log('Champion Rosters for MVP Selection:', championPlayersByYear);
+
     // Static champion images mapping (add your images here)
     // For easy image management, place images in: /workspaces/TLOED/src/assets/images/champions/
     const championImages = {
@@ -444,6 +490,65 @@ const HallOfChampions = () => {
         );
     };
 
+    // MVP Display Component
+    const MVPDisplay = ({ year, mvp }) => {
+        // If no MVP selected, show a placeholder to remind you to pick one
+        if (!mvp) {
+            return (
+                <div className="mt-4 bg-gray-100 dark:bg-gray-800 rounded-lg p-3 border-2 border-dashed border-gray-300 dark:border-gray-600">
+                    <div className="text-center">
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                            🏆 No MVP selected yet
+                        </p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                            Edit HallOfChampions.js to pick this champion's MVP
+                        </p>
+                    </div>
+                </div>
+            );
+        }
+
+        // Convert MVP data to PlayerAvatar format
+        const mvpPlayer = {
+            playerId: mvp.playerId,
+            name: mvp.name,
+            nflMeta: {
+                first_name: mvp.name?.split(' ')[0] || '',
+                last_name: mvp.name?.split(' ').slice(1).join(' ') || '',
+            }
+        };
+
+        return (
+            <div className="mt-6 bg-white dark:bg-gray-800 rounded-lg p-4 border-2 border-yellow-400 dark:border-yellow-500 shadow-lg">
+                <div className="flex items-center space-x-4">
+                    <div className="flex-shrink-0">
+                        <div className="relative">
+                            <PlayerAvatar
+                                p={mvpPlayer}
+                                size={64}
+                                className="ring-4 ring-yellow-400 dark:ring-yellow-500"
+                            />
+                            <div className="absolute -top-2 -right-2 bg-yellow-400 text-yellow-900 rounded-full px-2 py-1 text-xs font-bold shadow-lg">
+                                👑 MVP
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex-grow">
+                        <h4 className="text-lg font-bold text-black dark:text-yellow-100">
+                            League MVP {year}
+                        </h4>
+                        <p className="text-xl font-semibold text-black dark:text-white">
+                            {mvp.name}
+                        </p>
+                        <p className="text-sm text-black dark:text-gray-200">
+                            {mvp.position} • {mvp.team}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     const openRosterModal = (year) => {
         setRosterModalYear(year);
         setRosterModalOpen(true);
@@ -698,6 +803,9 @@ const HallOfChampions = () => {
 
                         {/* Champion Name */}
                         <div className="text-gray-800 text-lg font-semibold mb-1">{champion.name}</div>
+
+                        {/* MVP Display */}
+                        <MVPDisplay year={champion.year} mvp={getMVPForYear(champion.year)} />
 
                         <div className="flex items-center gap-2 mt-3">
                             {champion.hasBracket && (
