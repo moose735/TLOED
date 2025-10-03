@@ -365,11 +365,11 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
 
                         <div className="grid grid-cols-3 gap-3 text-sm mt-2">
                           <div className="bg-gray-50 rounded-lg p-2">
-                            <div className="text-xs text-gray-500 mb-1">Points Avg</div>
+                            <div className="text-xs text-gray-500 mb-1">PPG</div>
                             <div className="font-semibold text-green-700">{formatPointsAvg(data.pointsPerGame)}</div>
                           </div>
                           <div className="bg-gray-50 rounded-lg p-2">
-                            <div className="text-xs text-gray-500 mb-1">High / Low</div>
+                            <div className="text-xs text-gray-500 mb-1">High / Low PPG</div>
                             <div className="font-semibold">{formatPointsAvg(data.highestSeasonalPointsAvg)} / {formatPointsAvg(data.lowestSeasonalPointsAvg)}</div>
                           </div>
                           <div className="bg-gray-50 rounded-lg p-2">
@@ -473,9 +473,7 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
                                 ) : (
                                   getTeamName(data.ownerId, data.year)
                                 )}</div>
-                                {isDataCurrent && (
-                                  <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full font-semibold">Current</span>
-                                )}
+                                {/* On mobile the green highlight is sufficient for current season; remove redundant 'Current' pill */}
                               </div>
                               <div className="text-xs text-gray-500">Season: {data.year}</div>
                             </div>
@@ -483,7 +481,8 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
 
                           <div className="text-right min-w-[88px]">
                             <div className="text-lg font-bold text-green-800">{formatDPR(data.dpr)}</div>
-                            <div className="text-xs text-gray-500">DPR • {formatPointsAvg(data.pointsPerGame)}</div>
+                              {/* Avoid showing raw DPR underneath adjusted DPR on mobile to reduce redundancy */}
+                              <div className="text-xs text-gray-500">PPG • {formatPointsAvg(data.pointsPerGame)}</div>
                           </div>
                         </div>
 
