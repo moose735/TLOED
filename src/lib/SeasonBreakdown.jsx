@@ -594,30 +594,29 @@ const SeasonBreakdown = () => {
 
                     {/* Podium Section - Now only renders if results exist */}
                     {hasPodiumResults && (
+                        // Render champion first in the DOM so on mobile (stacked column) it appears at the top.
                         <div className="relative flex flex-col sm:flex-row sm:justify-center sm:items-end gap-2 md:gap-4 mb-8">
-                            {/* 2nd Place */}
-                            {seasonRunnerUp !== 'N/A' && (
-                                <div className="relative flex flex-col items-center justify-center bg-gray-300 rounded-lg shadow-lg p-3 sm:p-4 sm:w-1/4 text-center transition-all duration-300 hover:scale-102">
-                                    <div className="mb-2 sm:mb-4 text-4xl sm:text-5xl text-gray-500">
-                                        🥈
-                                    </div>
-                                    <span className="text-lg sm:text-xl font-bold text-gray-700">2nd Place</span>
-                                    <p className="text-sm sm:text-base font-semibold text-gray-800 truncate max-w-[180px]">{seasonRunnerUp}</p>
-                                </div>
-                            )}
-
-                            {/* 1st Place */}
+                            {/* 1st Place (Champion) - render first for mobile stacking */}
                             {seasonChampion !== 'N/A' && (
-                                <div className="relative flex flex-col items-center justify-center bg-gradient-to-br from-yellow-300 to-yellow-500 rounded-lg shadow-lg p-3 sm:p-6 sm:w-1/3 text-center transition-all duration-300 hover:scale-102">
+                                <div className="order-1 sm:order-none relative flex flex-col items-center justify-center bg-gradient-to-br from-yellow-300 to-yellow-500 rounded-lg shadow-lg p-3 sm:p-6 sm:w-1/3 text-center transition-all duration-300 hover:scale-102">
                                     <div className="mb-2 sm:mb-4 text-5xl sm:text-7xl">🏆</div>
                                     <span className="text-xl sm:text-2xl font-bold text-white">SWEEN BOWL CHAMPION</span>
                                     <p className="text-sm sm:text-lg font-semibold text-white truncate max-w-[220px]">{seasonChampion}</p>
                                 </div>
                             )}
 
+                            {/* 2nd Place */}
+                            {seasonRunnerUp !== 'N/A' && (
+                                <div className="order-2 sm:order-none relative flex flex-col items-center justify-center bg-gray-300 rounded-lg shadow-lg p-3 sm:p-4 sm:w-1/4 text-center transition-all duration-300 hover:scale-102">
+                                    <div className="mb-2 sm:mb-4 text-4xl sm:text-5xl text-gray-500">🥈</div>
+                                    <span className="text-lg sm:text-xl font-bold text-gray-700">2nd Place</span>
+                                    <p className="text-sm sm:text-base font-semibold text-gray-800 truncate max-w-[180px]">{seasonRunnerUp}</p>
+                                </div>
+                            )}
+
                             {/* 3rd Place */}
                             {seasonThirdPlace !== 'N/A' && (
-                                <div className="relative flex flex-col items-center justify-center bg-amber-700 rounded-lg shadow-lg p-3 sm:p-4 sm:w-1/4 text-center text-white transition-all duration-300 hover:scale-102">
+                                <div className="order-3 sm:order-none relative flex flex-col items-center justify-center bg-amber-700 rounded-lg shadow-lg p-3 sm:p-4 sm:w-1/4 text-center text-white transition-all duration-300 hover:scale-102">
                                     <div className="mb-2 sm:mb-4 text-4xl sm:text-5xl text-amber-800">🥉</div>
                                     <span className="text-lg sm:text-xl font-bold">3rd Place</span>
                                     <p className="text-sm sm:text-base font-semibold truncate max-w-[160px]">{seasonThirdPlace}</p>
@@ -634,11 +633,11 @@ const SeasonBreakdown = () => {
                             const top3 = sortedByPoints.slice(0, 3);
                             const medalColors = ['bg-yellow-300', 'bg-gray-300', 'bg-amber-700 text-white'];
                             return (
-                                <div className="flex items-stretch justify-center gap-4 mb-8">
+                                <div className="flex flex-wrap items-stretch justify-center gap-4 mb-8">
                                     {top3.map((t, i) => (
-                                        <div key={t.rosterId || i} className={`w-1/4 min-w-[180px] rounded-lg shadow-md p-4 flex flex-col items-center justify-center ${medalColors[i]}`}>
-                                            <div className="text-3xl font-bold mb-2">{i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}</div>
-                                            <div className="font-semibold text-lg text-center">{t.teamName || getTeamName(t.ownerId, selectedSeason)}</div>
+                                        <div key={t.rosterId || i} className={`w-full sm:w-1/3 md:w-1/4 rounded-lg shadow-md p-4 flex flex-col items-center justify-center ${medalColors[i]}`}>
+                                            <div className="text-3xl sm:text-4xl font-bold mb-2">{i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}</div>
+                                            <div className="font-semibold text-lg text-center truncate max-w-[220px]">{t.teamName || getTeamName(t.ownerId, selectedSeason)}</div>
                                             <div className="text-sm text-gray-700 mt-1">{formatScore(Number(t.pointsFor || 0), 2)} pts</div>
                                         </div>
                                     ))}

@@ -747,47 +747,54 @@ const LeagueHistory = ({ onTeamNameClick }) => {
                                                     <div className="text-sm font-semibold text-gray-800">{year}</div>
                                                     <div className="text-xs text-gray-500">Awards</div>
                                                 </div>
-                                                <div className="grid grid-cols-2 gap-2 text-sm text-gray-700">
-                                                    <div className="flex items-center gap-2">
-                                                        <i className="fas fa-trophy text-yellow-500"></i>
-                                                        <div>
-                                                            <div className="text-xs text-gray-500">Champion</div>
-                                                            <div className="font-medium truncate" title={awards.champion}>{awards.champion}</div>
+                                                <div className="space-y-2 text-sm text-gray-700">
+                                                    {/* Playoff awards row - horizontally scrollable on very small screens */}
+                                                    <div className="flex gap-3 overflow-x-auto pb-1">
+                                                        <div className="min-w-[140px] flex-shrink-0 flex items-start gap-2">
+                                                            <i className="fas fa-trophy text-yellow-500 mt-1"></i>
+                                                            <div className="truncate">
+                                                                <div className="text-xs text-gray-500">Champion</div>
+                                                                <div className="font-medium truncate" title={awards.champion}>{awards.champion}</div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="min-w-[140px] flex-shrink-0 flex items-start gap-2">
+                                                            <i className="fas fa-trophy text-gray-400 mt-1"></i>
+                                                            <div className="truncate">
+                                                                <div className="text-xs text-gray-500">2nd Place</div>
+                                                                <div className="font-medium truncate" title={awards.secondPlace}>{awards.secondPlace}</div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="min-w-[140px] flex-shrink-0 flex items-start gap-2">
+                                                            <i className="fas fa-trophy text-amber-800 mt-1"></i>
+                                                            <div className="truncate">
+                                                                <div className="text-xs text-gray-500">3rd Place</div>
+                                                                <div className="font-medium truncate" title={awards.thirdPlace}>{awards.thirdPlace}</div>
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <i className="fas fa-trophy text-gray-400"></i>
-                                                        <div>
-                                                            <div className="text-xs text-gray-500">2nd Place</div>
-                                                            <div className="font-medium truncate" title={awards.secondPlace}>{awards.secondPlace}</div>
+
+                                                    {/* Points awards row - grouped separately so points champions don't get mixed with playoff champs */}
+                                                    <div className="flex gap-3 overflow-x-auto pb-1">
+                                                        <div className="min-w-[140px] flex-shrink-0 flex items-start gap-2">
+                                                            <i className="fas fa-medal text-yellow-500 mt-1"></i>
+                                                            <div className="truncate">
+                                                                <div className="text-xs text-gray-500">Points Champ</div>
+                                                                <div className="font-medium truncate" title={awards.pointsChamp}>{awards.pointsChamp}</div>
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <i className="fas fa-trophy text-amber-800"></i>
-                                                        <div>
-                                                            <div className="text-xs text-gray-500">3rd Place</div>
-                                                            <div className="font-medium truncate" title={awards.thirdPlace}>{awards.thirdPlace}</div>
+                                                        <div className="min-w-[140px] flex-shrink-0 flex items-start gap-2">
+                                                            <i className="fas fa-medal text-gray-400 mt-1"></i>
+                                                            <div className="truncate">
+                                                                <div className="text-xs text-gray-500">Points 2nd</div>
+                                                                <div className="font-medium truncate" title={awards.pointsSecond}>{awards.pointsSecond}</div>
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <i className="fas fa-medal text-yellow-500"></i>
-                                                        <div>
-                                                            <div className="text-xs text-gray-500">Points Champ</div>
-                                                            <div className="font-medium truncate" title={awards.pointsChamp}>{awards.pointsChamp}</div>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <i className="fas fa-medal text-gray-400"></i>
-                                                        <div>
-                                                            <div className="text-xs text-gray-500">Points 2nd</div>
-                                                            <div className="font-medium truncate" title={awards.pointsSecond}>{awards.pointsSecond}</div>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <i className="fas fa-medal text-amber-800"></i>
-                                                        <div>
-                                                            <div className="text-xs text-gray-500">Points 3rd</div>
-                                                            <div className="font-medium truncate" title={awards.pointsThird}>{awards.pointsThird}</div>
+                                                        <div className="min-w-[140px] flex-shrink-0 flex items-start gap-2">
+                                                            <i className="fas fa-medal text-amber-800 mt-1"></i>
+                                                            <div className="truncate">
+                                                                <div className="text-xs text-gray-500">Points 3rd</div>
+                                                                <div className="font-medium truncate" title={awards.pointsThird}>{awards.pointsThird}</div>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
