@@ -465,9 +465,11 @@ const Gamecenter = () => {
                 const points = hasPlayed ? Number(rawPoints || 0) : 0;
 
                 if (player) {
+                    const firstInitial = player.first_name ? `${player.first_name.charAt(0)}.` : '';
+                    const displayName = `${firstInitial} ${player.last_name}`.trim();
                     lineup.push({
                         playerId,
-                        name: `${player.first_name} ${player.last_name}`,
+                        name: displayName,
                         position: player.position,
                         team: player.team,
                         points: points,
@@ -491,9 +493,11 @@ const Gamecenter = () => {
                 const points = hasPlayed ? Number(rawPoints || 0) : 0;
                 
                 if (player) {
+                    const firstInitial = player.first_name ? `${player.first_name.charAt(0)}.` : '';
+                    const displayName = `${firstInitial} ${player.last_name}`.trim();
                     bench.push({
                         playerId,
-                        name: `${player.first_name} ${player.last_name}`,
+                        name: displayName,
                         position: player.position,
                         team: player.team,
                         points: points,
@@ -1276,13 +1280,15 @@ const Gamecenter = () => {
                                                                             <span className="w-8 sm:w-10 text-xs font-medium text-gray-500 flex-shrink-0">{player.lineupPosition}</span>
                                                                             <div className="min-w-0 flex-1">
                                                                                 <div className="font-medium text-gray-800 text-sm sm:text-base truncate">
-                                                                                    <span>{player.name}</span>
+                                                                                    <span className="truncate block">{player.name}</span>
                                                                                 </div>
                                                                                 <div className="text-xs text-gray-500">{player.position} · {player.team || 'FA'}</div>
                                                                             </div>
                                                                         </div>
                                                                         <div className="text-right flex-shrink-0 flex items-center gap-2">
-                                                                            <div className="font-semibold text-gray-800 text-sm sm:text-base">{myHasPlayed ? formatScore(Number(player.points ?? 0), 2) : '---'}</div>
+                                                                            <div className="font-semibold text-gray-800 text-sm sm:text-base w-14 sm:w-16 text-right truncate">
+                                                                                <span className="block text-sm sm:text-base">{myHasPlayed ? formatScore(Number(player.points ?? 0), 2) : '---'}</span>
+                                                                            </div>
                                                                             {outcome === 'win' ? (
                                                                                 <span className="inline-block w-3 h-3 rounded-full bg-green-600" aria-label="scored more" />
                                                                             ) : outcome === 'loss' ? (
@@ -1307,12 +1313,12 @@ const Gamecenter = () => {
                                                                         <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
                                                                             <span className="w-8 sm:w-10 text-xs font-medium text-gray-400 flex-shrink-0">BN</span>
                                                                             <div className="min-w-0 flex-1">
-                                                                                <div className="text-sm text-gray-600 truncate">{player.name}</div>
+                                                                                <div className="text-sm text-gray-600 truncate"><span className="truncate block">{player.name}</span></div>
                                                                                 <div className="text-xs text-gray-400">{player.position} · {player.team || 'FA'}</div>
                                                                             </div>
                                                                         </div>
                                                                         <div className="text-right flex-shrink-0 flex items-center gap-2">
-                                                                            <div className="text-sm text-gray-600">{player.hasPlayed ? formatScore(Number(player.points || 0), 2) : '---'}</div>
+                                                                            <div className="text-sm text-gray-600 w-14 text-right">{player.hasPlayed ? formatScore(Number(player.points || 0), 2) : '---'}</div>
                                                                             {team1OptimalBench.has(player.playerId) && (
                                                                                 <span className="inline-block w-3 h-3 rounded-full bg-yellow-400" aria-label="optimal start" />
                                                                             )}
@@ -1353,7 +1359,9 @@ const Gamecenter = () => {
                                                                             </div>
                                                                         </div>
                                                                         <div className="text-right flex-shrink-0 flex items-center gap-2">
-                                                                            <div className="font-semibold text-gray-800 text-sm sm:text-base">{myHasPlayed ? formatScore(Number(player.points ?? 0), 2) : '---'}</div>
+                                                                            <div className="font-semibold text-gray-800 text-sm sm:text-base w-14 sm:w-16 text-right truncate">
+                                                                                <span className="block text-sm sm:text-base">{myHasPlayed ? formatScore(Number(player.points ?? 0), 2) : '---'}</span>
+                                                                            </div>
                                                                             {outcome === 'win' ? (
                                                                                 <span className="inline-block w-3 h-3 rounded-full bg-green-600" aria-label="scored more" />
                                                                             ) : outcome === 'loss' ? (
@@ -1378,12 +1386,12 @@ const Gamecenter = () => {
                                                                         <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
                                                                             <span className="w-8 sm:w-10 text-xs font-medium text-gray-400 flex-shrink-0">BN</span>
                                                                             <div className="min-w-0 flex-1">
-                                                                                <div className="text-sm text-gray-600 truncate">{player.name}</div>
+                                                                                <div className="text-sm text-gray-600 truncate"><span className="truncate block">{player.name}</span></div>
                                                                                 <div className="text-xs text-gray-400">{player.position} · {player.team || 'FA'}</div>
                                                                             </div>
                                                                         </div>
                                                                         <div className="text-right flex-shrink-0 flex items-center gap-2">
-                                                                            <div className="text-sm text-gray-600">{player.hasPlayed ? formatScore(Number(player.points || 0), 2) : '---'}</div>
+                                                                            <div className="text-sm text-gray-600 w-14 text-right">{player.hasPlayed ? formatScore(Number(player.points || 0), 2) : '---'}</div>
                                                                             {team2OptimalBench.has(player.playerId) && (
                                                                                 <span className="inline-block w-3 h-3 rounded-full bg-yellow-400" aria-label="optimal start" />
                                                                             )}
