@@ -181,6 +181,8 @@ const PowerRankings = () => {
 	const [currentWeek, setCurrentWeek] = useState(0);
 	// Survivor markers (ownerId -> emoji or null). Moved to component state so render can access it.
 	const [survivorMarkers, setSurvivorMarkers] = useState({});
+	// Legend toggle for emoji explanations
+	const [legendOpen, setLegendOpen] = useState(false);
 	const TIER_THRESHOLD = 0.0455; // 4.55% drop
 	const TIER_COLORS = [
 		'bg-green-200', // Tier 1 (top)
@@ -576,13 +578,7 @@ const renderMovement = (movement) => {
 						? `Power Rankings (DPR) - ${powerRankings[0].year} Season (Week ${currentWeek})`
 						: 'Current Power Rankings'}
 				</h2>
-				{/* Emoji legend: 🔥 = Hot, ❄️ = Cold, ☠️ = Eliminated (Survivor) */}
-				<div className="text-center text-xs text-gray-600 mb-4">
-					<span className="mx-2">🔥 Hot — Multi-week upward trend</span>
-					<span className="mx-2">❄️ Cold — Multi-week downward trend</span>
-					<span className="mx-2">☠️ Eliminated — Removed from Survivor</span>
-					<span className="mx-2">🙂 Winner — Survivor winner</span>
-				</div>
+
 				{loading ? (
 					<div className="flex justify-center items-center h-32">
 						<span className="text-sm sm:text-lg text-gray-500 animate-pulse">Calculating power rankings...</span>
@@ -782,10 +778,26 @@ const renderMovement = (movement) => {
 						<span className="text-sm sm:text-lg text-gray-500 text-center px-4">{error}</span>
 					</div>
 				)}
-				<p className="mt-4 sm:mt-6 md:mt-8 text-xs sm:text-sm text-gray-500 text-center px-2">
-					Power Rankings are calculated based on DPR (Dominance Power Ranking) for the newest season available. 
-					Teams are automatically grouped into tiers based on significant performance gaps.
-				</p>
+				<div className="mt-4 sm:mt-6 md:mt-8 text-xs sm:text-sm text-gray-500 text-center px-2">
+					<button
+						className="text-blue-600 underline text-sm mb-2"
+						onClick={() => setLegendOpen(!legendOpen)}
+					>
+						{legendOpen ? 'Hide legend' : 'Legend'}
+					</button>
+					{legendOpen && (
+						<div className="mx-auto max-w-md text-left text-xs text-gray-700 bg-white shadow-sm rounded p-3 mt-2">
+							<div className="flex items-center gap-2 mb-1"><span>🔥</span><span className="text-sm">Hot — Multi-week upward trend</span></div>
+							<div className="flex items-center gap-2 mb-1"><span>❄️</span><span className="text-sm">Cold — Multi-week downward trend</span></div>
+							<div className="flex items-center gap-2 mb-1"><span>☠️</span><span className="text-sm">Eliminated — Removed from Survivor</span></div>
+							<div className="flex items-center gap-2"><span>🙂</span><span className="text-sm">Winner — Survivor winner</span></div>
+						</div>
+					)}
+					<p className="mt-3">
+						Power Rankings are calculated based on DPR (Dominance Power Ranking) for the newest season available. 
+						Teams are automatically grouped into tiers based on significant performance gaps.
+					</p>
+				</div>
 			</div>
 		);
 };

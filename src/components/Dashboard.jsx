@@ -430,10 +430,46 @@ const Dashboard = () => {
                                             const t1Score = Number(matchup.team1.score || 0);
                                             const t2Score = Number(matchup.team2.score || 0);
                                             const bothZero = t1Score === 0 && t2Score === 0;
+                                            // Use same highlight logic as first ticker pass
+                                            const isGameOfWeek = ((localStorage.getItem('gameOfWeek:v1') && JSON.parse(localStorage.getItem('gameOfWeek:v1') || '{}')[currentSeason]?.[String(nflState?.week)]) === String(matchup.matchupId)) ||
+                                                (String(nflState?.week) === String(matchup.week) && (() => {
+                                                    try {
+                                                        if (!processedSeasonalRecords) return false;
+                                                        const seasonData = processedSeasonalRecords?.[currentSeason] || {};
+                                                        const dprVals = Object.values(seasonData).map(t => Number(t?.dpr ?? 0)).filter(v => !isNaN(v));
+                                                        const avgVals = Object.values(seasonData).map(t => Number(t?.averageScore ?? t?.avgPerGame ?? 0)).filter(v => !isNaN(v));
+                                                        const dprMin = dprVals.length ? Math.min(...dprVals) : 0;
+                                                        const dprMax = dprVals.length ? Math.max(...dprVals) : 1;
+                                                        const avgMin = avgVals.length ? Math.min(...avgVals) : 0;
+                                                        const avgMax = avgVals.length ? Math.max(...avgVals) : 1;
+                                                        const normalize = (v, min, max) => (max === min ? 0.5 : (v - min) / (max - min));
+
+                                                        let bestId = null; let bestScore = -Infinity;
+                                                        currentWeekMatchups.forEach(mm => {
+                                                            const r1 = String(mm.team1RosterId);
+                                                            const r2 = String(mm.team2RosterId);
+                                                            const t1 = seasonData[r1] || {};
+                                                            const t2 = seasonData[r2] || {};
+                                                            const dpr1 = Number(t1.dpr ?? 0); const dpr2 = Number(t2.dpr ?? 0);
+                                                            const avg1 = Number(t1.averageScore ?? t1.avgPerGame ?? 0); const avg2 = Number(t2.averageScore ?? t2.avgPerGame ?? 0);
+                                                            const q1 = normalize(dpr1, dprMin, dprMax) * 0.6 + normalize(avg1, avgMin, avgMax) * 0.4;
+                                                            const q2 = normalize(dpr2, dprMin, dprMax) * 0.6 + normalize(avg2, avgMin, avgMax) * 0.4;
+                                                            const harmonicQuality = (q1 + q2) > 0 ? (2 * q1 * q2) / (q1 + q2) : 0;
+                                                            const dprDiff = Math.abs(dpr1 - dpr2); const dprCloseness = 1 / (1 + dprDiff);
+                                                            const avgDiff = Math.abs(avg1 - avg2); const avgCloseness = 1 / (1 + (avgDiff / 10));
+                                                            const minQuality = Math.min(q1, q2);
+                                                            const rawScore = (0.55 * harmonicQuality) + (0.30 * dprCloseness) + (0.15 * avgCloseness);
+                                                            const score = rawScore * (0.6 + 0.4 * minQuality);
+                                                            if (score > bestScore) { bestScore = score; bestId = mm.matchupId; }
+                                                        });
+                                                        return String(bestId) === String(matchup.matchupId);
+                                                    } catch (e) { return false; }
+                                                })());
                                             return (
-                                                <div key={`second-${idx}`} className="mx-6 bg-gray-50 rounded-lg px-4 py-3 border border-gray-200 min-w-[260px]">
+                                                <div key={`second-${idx}`} className={`mx-6 rounded-lg px-4 py-3 min-w-[260px] ${
+                                                    isGameOfWeek ? 'ring-4 ring-yellow-400 ring-opacity-60 bg-yellow-50 border-yellow-300' : 'bg-gray-50 border border-gray-200'
+                                                }`}>
                                                     {bothZero ? (
-                                                        // Vertical middle-aligned stack (match first block)
                                                         <div className="flex flex-col items-center justify-center text-center space-y-1">
                                                             <div className="flex items-center space-x-2">
                                                                 <img
