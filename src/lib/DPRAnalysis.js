@@ -359,25 +359,24 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
 
                             <div className="text-right">
                               <div className="text-lg font-bold text-blue-800">{formatDPR(data.dpr)}</div>
-                              <div className="text-xs text-gray-500 mt-1">PPG • {formatPointsAvg(data.pointsPerGame)}</div>
-                              {/* keep slots for additional stacked info if needed */}
+                              {/* removed duplicate PPG label (PPG is displayed in the compact stat boxes below) */}
                             </div>
-                        </div>
+                          </div>
 
-                        <div className="grid grid-cols-3 gap-3 text-sm mt-2">
-                          <div className="bg-gray-50 rounded-lg p-2">
-                            <div className="text-xs text-gray-500 mb-1">PPG</div>
-                            <div className="font-semibold text-green-700">{formatPointsAvg(data.pointsPerGame)}</div>
+                          <div className="grid grid-cols-3 gap-2 text-xs mt-2">
+                            <div className="bg-gray-50 rounded-lg px-2 py-1 text-center">
+                              <div className="text-[10px] text-gray-500 mb-0.5">PPG</div>
+                              <div className="font-semibold text-green-700 whitespace-nowrap">{formatPointsAvg(data.pointsPerGame)}</div>
+                            </div>
+                            <div className="bg-gray-50 rounded-lg px-2 py-1 text-center">
+                              <div className="text-[10px] text-gray-500 mb-0.5">H / L</div>
+                              <div className="font-semibold whitespace-nowrap">{formatPointsAvg(data.highestSeasonalPointsAvg)} / {formatPointsAvg(data.lowestSeasonalPointsAvg)}</div>
+                            </div>
+                            <div className="bg-gray-50 rounded-lg px-2 py-1 text-center">
+                              <div className="text-[10px] text-gray-500 mb-0.5">Win %</div>
+                              <div className="font-semibold whitespace-nowrap">{formatPercentage(data.winPercentage)}</div>
+                            </div>
                           </div>
-                          <div className="bg-gray-50 rounded-lg p-2">
-                            <div className="text-xs text-gray-500 mb-1">High / Low PPG</div>
-                            <div className="font-semibold">{formatPointsAvg(data.highestSeasonalPointsAvg)} / {formatPointsAvg(data.lowestSeasonalPointsAvg)}</div>
-                          </div>
-                          <div className="bg-gray-50 rounded-lg p-2">
-                            <div className="text-xs text-gray-500 mb-1">Win %</div>
-                            <div className="font-semibold">{formatPercentage(data.winPercentage)}</div>
-                          </div>
-                        </div>
                       </div>
                     ))}
                 </div>
