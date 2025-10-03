@@ -366,9 +366,13 @@ const PowerRankings = () => {
 					const currentRankings = getRankedTeams(completedWeek);
 					logger.debug('DEBUG currentRankings ownerIds:', currentRankings.map(t => t.ownerId));
 					const prevRankings = completedWeek > 1 ? getRankedTeams(completedWeek - 1) : [];
+					const prev2Rankings = completedWeek > 2 ? getRankedTeams(completedWeek - 2) : [];
+					const prev3Rankings = completedWeek > 3 ? getRankedTeams(completedWeek - 3) : [];
 
-					// Map ownerId to previous rank
+					// Map ownerId to previous ranks (1-week, 2-week, 3-week)
 					const prevRankMap = {};
+					const prev2RankMap = {};
+					const prev3RankMap = {};
 		// --- Survivor Pool Status ---
 		// If historicalData contains weekly scores we can simulate a simple survivor pool:
 		// starting week 1, each week eliminate the alive team (from that pool) with the lowest points that week.
@@ -432,9 +436,9 @@ const PowerRankings = () => {
 				setSurvivorMarkers(survivorMarkersLocal);
 			}
 
-					prevRankings.forEach(team => {
-						prevRankMap[team.ownerId] = team.rank;
-					});
+					prevRankings.forEach(team => { prevRankMap[team.ownerId] = team.rank; });
+					prev2Rankings.forEach(team => { prev2RankMap[team.ownerId] = team.rank; });
+					prev3Rankings.forEach(team => { prev3RankMap[team.ownerId] = team.rank; });
 
 					// --- Adaptive Tiering Algorithm ---
 					// Build absolute DPR drops between adjacent DPRs (prev - next)
@@ -493,11 +497,23 @@ const PowerRankings = () => {
 					});
 
 					// Assign tiers, movement, and SOS to teams
+					// Determine multi-week trend movement (prefer 3-week delta, fallback to 2-week, then 1-week)
 					const rankedTeams = currentRankings.map((team, idx) => {
 						const prevRank = prevRankMap[team.ownerId];
+						const prev2Rank = prev2RankMap[team.ownerId];
+						const prev3Rank = prev3RankMap[team.ownerId];
 						let movement = 0;
 						if (prevRank !== undefined) {
-							movement = prevRank - team.rank;
+							movement = prevRank - team.rank; // week-over-week movement (kept for backward compatibility)
+						}
+						// trendMovement: improvement in rank compared to 3 weeks ago (or 2/1 week fallback)
+						let trendMovement = 0;
+						if (prev3Rank !== undefined) {
+							trendMovement = prev3Rank - team.rank;
+						} else if (prev2Rank !== undefined) {
+							trendMovement = prev2Rank - team.rank;
+						} else {
+							trendMovement = movement;
 						}
 						// Projected wins/losses
 						const actual = actualWins[team.ownerId] || 0;
@@ -510,6 +526,7 @@ const PowerRankings = () => {
 							...team,
 							tier: tiers[idx],
 							movement,
+							trendMovement,
 							projectedWins: totalProjWins,
 							projectedLosses: totalProjLosses,
 							projectedRecord,
@@ -559,6 +576,13 @@ const renderMovement = (movement) => {
 						? `Power Rankings (DPR) - ${powerRankings[0].year} Season (Week ${currentWeek})`
 						: 'Current Power Rankings'}
 				</h2>
+				{/* Emoji legend: 🔥 = Hot, ❄️ = Cold, ☠️ = Eliminated (Survivor) */}
+				<div className="text-center text-xs text-gray-600 mb-4">
+					<span className="mx-2">🔥 Hot — Multi-week upward trend</span>
+					<span className="mx-2">❄️ Cold — Multi-week downward trend</span>
+					<span className="mx-2">☠️ Eliminated — Removed from Survivor</span>
+					<span className="mx-2">🙂 Winner — Survivor winner</span>
+				</div>
 				{loading ? (
 					<div className="flex justify-center items-center h-32">
 						<span className="text-sm sm:text-lg text-gray-500 animate-pulse">Calculating power rankings...</span>
@@ -604,8 +628,8 @@ const renderMovement = (movement) => {
 															{getTeamName(row.ownerId, row.year)} {survivorMarkers?.[row.ownerId] && (
 																<span className="ml-1" title={survivorMarkers[row.ownerId] === '💀' ? 'Eliminated from Survivor' : 'Survivor Winner'}>{survivorMarkers[row.ownerId]}</span>
 															)}
-															{row.movement >= 3 && <span title="Hot team" className="ml-1">🔥</span>}
-															{row.movement <= -3 && <span title="Cold team" className="ml-1">❄️</span>}
+															{row.trendMovement >= 2 && <span title="Hot team (multi-week)" className="ml-1">🔥</span>}
+															{row.trendMovement <= -2 && <span title="Cold team (multi-week)" className="ml-1">❄️</span>}
 														</h3>
 														<p className="text-xs text-gray-500">Tier {row.tier}</p>
 													</div>
@@ -720,8 +744,8 @@ const renderMovement = (movement) => {
 																{getTeamName(row.ownerId, row.year)} {survivorMarkers?.[row.ownerId] && (
 																	<span className="ml-1" title={survivorMarkers[row.ownerId] === '💀' ? 'Eliminated from Survivor' : 'Survivor Winner'}>{survivorMarkers[row.ownerId]}</span>
 																)}
-																{row.movement >= 3 && <span title="Hot team" className="ml-1">🔥</span>}
-																{row.movement <= -3 && <span title="Cold team" className="ml-1">❄️</span>}
+																{row.trendMovement >= 2 && <span title="Hot team (multi-week)" className="ml-1">🔥</span>}
+																{row.trendMovement <= -2 && <span title="Cold team (multi-week)" className="ml-1">❄️</span>}
 															</span>
 														</div>
 													</td>

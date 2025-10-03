@@ -75,6 +75,24 @@ async function fetchDataWithCache(url, cacheKey, expirationHours = 1) {
         logger.debug(`[Cache Hit] Returning cached data for ${cacheKey}`);
         return cachedEntry.data;
     }
+    
+    // For NFL players, also check localStorage for persistent caching across sessions
+    if (cacheKey === 'nfl_players') {
+        try {
+            const localStorageKey = 'sleeper_nfl_players_cache';
+            const localCached = localStorage.getItem(localStorageKey);
+            if (localCached) {
+                const parsed = JSON.parse(localCached);
+                if (parsed && (now - parsed.timestamp < expiryMs)) {
+                    logger.debug(`[localStorage Hit] Returning persistent cached NFL players data`);
+                    inMemoryCache.set(cacheKey, parsed, expirationHours);
+                    return parsed.data;
+                }
+            }
+        } catch (e) {
+            logger.warn('Failed to read from localStorage:', e);
+        }
+    }
 
     try {
         logger.debug(`[Cache Miss] Fetching from ${url} for ${cacheKey}`);
@@ -87,7 +105,19 @@ async function fetchDataWithCache(url, cacheKey, expirationHours = 1) {
             throw new Error(`HTTP error! status: ${response.status} for ${url}`);
         }
         const data = await response.json();
-        inMemoryCache.set(cacheKey, { data, timestamp: now, expirationHours });
+        const cacheData = { data, timestamp: now, expirationHours };
+        inMemoryCache.set(cacheKey, cacheData);
+        
+        // For NFL players, also persist to localStorage
+        if (cacheKey === 'nfl_players') {
+            try {
+                localStorage.setItem('sleeper_nfl_players_cache', JSON.stringify(cacheData));
+                logger.debug(`[localStorage Set] NFL players data persisted to localStorage`);
+            } catch (e) {
+                logger.warn('Failed to persist NFL players to localStorage:', e);
+            }
+        }
+        
         logger.debug(`[Cache Set] Data fetched and cached for ${cacheKey}.`);
         return data;
     } catch (error) {
@@ -188,7 +218,9 @@ export async function fetchUsersData(leagueId) {
  * @returns {Promise<Object>} A promise that resolves to an object of NFL player data.
  */
 export async function fetchNFLPlayers() {
-    return fetchDataWithCache('https://api.sleeper.app/v1/players/nfl', 'nfl_players', 24); // Cache for 24 hours
+    // Cache for 7 days (168 hours) to minimize API calls - injury data doesn't change that frequently
+    // Only call this API when absolutely necessary to prevent rate limiting
+    return fetchDataWithCache('https://api.sleeper.app/v1/players/nfl', 'nfl_players', 168);
 }
 
 /**

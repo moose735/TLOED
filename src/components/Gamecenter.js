@@ -97,6 +97,61 @@ const Gamecenter = () => {
         };
     }, [historicalData, processedSeasonalRecords, nflState]);
 
+    // Helper: compute average points for a roster up to and including a specific week in a season
+    const getAverageAtWeek = (rosterId, season, uptoWeek) => {
+        if (!historicalData?.matchupsBySeason?.[season]) {
+            return processedSeasonalRecords?.[season]?.[rosterId]?.averageScore ?? 0;
+        }
+
+        const matchupsForTeam = historicalData.matchupsBySeason[season].filter(m => 
+            (String(m.team1_roster_id) === String(rosterId) || String(m.team2_roster_id) === String(rosterId)) && Number(m.week) <= Number(uptoWeek)
+        );
+
+        let totalPoints = 0;
+        let games = 0;
+
+        matchupsForTeam.forEach(m => {
+            const isTeam1 = String(m.team1_roster_id) === String(rosterId);
+            const teamScore = isTeam1 ? m.team1_score : m.team2_score;
+            const opponentScore = isTeam1 ? m.team2_score : m.team1_score;
+            const completed = (teamScore > 0 || opponentScore > 0);
+            if (completed) {
+                totalPoints += teamScore;
+                games++;
+            }
+        });
+
+        return games > 0 ? (totalPoints / games) : 0;
+    };
+
+    // Helper: compute wins/losses/ties for a roster up to and including a specific week in a season
+    const getRecordAtWeek = (rosterId, season, uptoWeek) => {
+        const matchups = historicalData?.matchupsBySeason?.[season] || [];
+        let wins = 0, losses = 0, ties = 0;
+
+        matchups.forEach(m => {
+            const week = Number(m.week);
+            if (week > Number(uptoWeek)) return;
+            const isTeam1 = String(m.team1_roster_id) === String(rosterId);
+            const isTeam2 = String(m.team2_roster_id) === String(rosterId);
+            if (!isTeam1 && !isTeam2) return;
+
+            const s1 = Number(m.team1_score || 0);
+            const s2 = Number(m.team2_score || 0);
+            if (s1 === 0 && s2 === 0) return; // not completed
+
+            if (s1 === s2) {
+                ties++;
+            } else if ((isTeam1 && s1 > s2) || (isTeam2 && s2 > s1)) {
+                wins++;
+            } else {
+                losses++;
+            }
+        });
+
+        return { wins, losses, ties };
+    };
+
     // --- Data Calculation (Memoized) ---
     const availableSeasons = useMemo(() => 
         historicalData?.matchupsBySeason ? Object.keys(historicalData.matchupsBySeason).sort((a, b) => b - a) : [],
@@ -170,6 +225,136 @@ const Gamecenter = () => {
     
         return luckDataForSeason;
     }, [processedSeasonalRecords, selectedSeason]);
+
+    // --- Game of the Week selection (persist snapshots for past weeks) ---
+    // Choose the matchup that is (a) between good teams (high DPR/avg), (b) competitive (close DPR),
+    // and (c) close in average scoring. Penalize matchups where either team is low-quality.
+    // localStorage helpers: store per-season-week selection under 'gameOfWeek:v1'
+    const readStoredGameOfWeek = (season, week) => {
+        try {
+            const raw = localStorage.getItem('gameOfWeek:v1');
+            if (!raw) return null;
+            const map = JSON.parse(raw || '{}');
+            return map?.[season]?.[week] ?? null;
+        } catch (e) {
+            return null;
+        }
+    };
+
+    const saveStoredGameOfWeek = (season, week, matchupId) => {
+        try {
+            const raw = localStorage.getItem('gameOfWeek:v1');
+            const map = raw ? JSON.parse(raw) : {};
+            if (!map[season]) map[season] = {};
+            map[season][week] = matchupId;
+            localStorage.setItem('gameOfWeek:v1', JSON.stringify(map));
+        } catch (e) {
+            // ignore storage errors
+        }
+    };
+
+    // Helper: compute the best matchup id candidate based on the scoring logic
+    const computeBestMatchupId = () => {
+        if (!weeklyMatchups || weeklyMatchups.length === 0) return null;
+        const seasonData = processedSeasonalRecords?.[selectedSeason] || {};
+
+        // collect DPR and avg for normalization
+        const dprVals = Object.values(seasonData).map(t => Number(t?.dpr ?? 0)).filter(v => !isNaN(v));
+        const avgVals = Object.values(seasonData).map(t => Number(t?.averageScore ?? t?.avgPerGame ?? 0)).filter(v => !isNaN(v));
+
+        const dprMin = dprVals.length ? Math.min(...dprVals) : 0;
+        const dprMax = dprVals.length ? Math.max(...dprVals) : 1;
+        const avgMin = avgVals.length ? Math.min(...avgVals) : 0;
+        const avgMax = avgVals.length ? Math.max(...avgVals) : 1;
+
+        const normalize = (v, min, max) => (max === min ? 0.5 : (v - min) / (max - min));
+
+        let bestId = null;
+        let bestScore = -Infinity;
+
+        weeklyMatchups.forEach(m => {
+            const r1 = String(m.team1_roster_id);
+            const r2 = String(m.team2_roster_id);
+            const t1 = seasonData[r1] || {};
+            const t2 = seasonData[r2] || {};
+
+            const dpr1 = Number(t1.dpr ?? 0);
+            const dpr2 = Number(t2.dpr ?? 0);
+
+            const avg1 = Number(t1.averageScore ?? t1.avgPerGame ?? 0);
+            const avg2 = Number(t2.averageScore ?? t2.avgPerGame ?? 0);
+
+            // quality per-team (0..1)
+            const q1 = normalize(dpr1, dprMin, dprMax) * 0.6 + normalize(avg1, avgMin, avgMax) * 0.4;
+            const q2 = normalize(dpr2, dprMin, dprMax) * 0.6 + normalize(avg2, avgMin, avgMax) * 0.4;
+
+            // harmonic mean to favor both-good-teams
+            const harmonicQuality = (q1 + q2) > 0 ? (2 * q1 * q2) / (q1 + q2) : 0;
+
+            // closeness: DPR closeness and avg closeness
+            const dprDiff = Math.abs(dpr1 - dpr2);
+            const dprCloseness = 1 / (1 + dprDiff);
+            const avgDiff = Math.abs(avg1 - avg2);
+            const avgCloseness = 1 / (1 + (avgDiff / 10));
+
+            // final score: weight quality higher but penalize when one team is weak via multiplying by minQuality
+            const minQuality = Math.min(q1, q2);
+            const rawScore = (0.55 * harmonicQuality) + (0.30 * dprCloseness) + (0.15 * avgCloseness);
+            const score = rawScore * (0.6 + 0.4 * minQuality);
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestId = m.matchup_id;
+            }
+        });
+
+        return bestId;
+    };
+
+    const gameOfWeekMatchupId = useMemo(() => {
+        // If no weekly data, nothing to show
+        if (!weeklyMatchups || weeklyMatchups.length === 0) return null;
+
+        const currentNFLSeason = parseInt(nflState?.season || new Date().getFullYear());
+        const currentNFLWeek = parseInt(nflState?.week || 1);
+        const selectedSeasonInt = parseInt(selectedSeason);
+        const selectedWeekInt = parseInt(selectedWeek);
+
+        // Determine if past / current / future
+        const isCurrentWeek = (selectedSeasonInt === currentNFLSeason && selectedWeekInt === currentNFLWeek);
+        const isPastWeek = (selectedSeasonInt < currentNFLSeason) || (selectedSeasonInt === currentNFLSeason && selectedWeekInt < currentNFLWeek);
+        const isFutureWeek = (selectedSeasonInt > currentNFLSeason) || (selectedSeasonInt === currentNFLSeason && selectedWeekInt > currentNFLWeek);
+
+        if (isFutureWeek) return null; // don't crown future weeks
+
+        if (isCurrentWeek) {
+            // compute live candidate for the current week
+            return computeBestMatchupId();
+        }
+
+        // past week: return stored snapshot if present, otherwise null (we will persist when the week completes)
+        const stored = readStoredGameOfWeek(selectedSeason, selectedWeek);
+        return stored || null;
+    }, [weeklyMatchups, processedSeasonalRecords, selectedSeason, selectedWeek, nflState]);
+
+    // Persist snapshot for completed past weeks: if week is complete and no stored value exists, save the computed candidate
+    useEffect(() => {
+        if (!selectedSeason || !selectedWeek || !weeklyMatchups || weeklyMatchups.length === 0) return;
+
+        const currentNFLSeason = parseInt(nflState?.season || new Date().getFullYear());
+        const currentNFLWeek = parseInt(nflState?.week || 1);
+        const selectedSeasonInt = parseInt(selectedSeason);
+        const selectedWeekInt = parseInt(selectedWeek);
+
+        const isPastWeek = selectedSeasonInt < currentNFLSeason || (selectedSeasonInt === currentNFLSeason && selectedWeekInt < currentNFLWeek);
+        if (!isPastWeek) return; // only persist for past (completed) weeks
+
+        const stored = readStoredGameOfWeek(selectedSeason, selectedWeek);
+        if (stored) return; // already have a snapshot
+
+        const candidate = computeBestMatchupId();
+        if (candidate) saveStoredGameOfWeek(selectedSeason, selectedWeek, candidate);
+    }, [selectedSeason, selectedWeek, weeklyMatchups, nflState]);
 
     // Function to fetch detailed roster data for a specific matchup
     const fetchMatchupRosterData = async (matchup, season, week) => {
@@ -366,29 +551,13 @@ const Gamecenter = () => {
         return `${streak}${streakType}`;
     };
 
-    // Format streak for display: for unstarted/future games show emoji indicators
+    // Format streak for display: always show as N{W/L} (e.g. 2W or 1L). No emojis.
     const formatStreakDisplay = (ownerId, streakString, isCompleted) => {
-        // If no streak data, show neutral dash
-        if (!streakString || streakString === 'N/A') return '➖';
-
-        // Determine if we should show emoji (for unstarted or future games)
-        const currentNFLSeason = parseInt(nflState?.season || new Date().getFullYear());
-        const currentNFLWeek = parseInt(nflState?.week || 1);
-        const selectedSeasonInt = parseInt(selectedSeason);
-        const selectedWeekInt = parseInt(selectedWeek);
-
-        const isFuture = selectedSeasonInt > currentNFLSeason || (selectedSeasonInt === currentNFLSeason && selectedWeekInt >= currentNFLWeek);
-
-        if (!isCompleted && isFuture) {
-            // streakString like '2W' or '1L'
-            const num = streakString.replace(/[^0-9]/g, '');
-            const type = streakString.replace(/[^A-Za-z]/g, '');
-            if (type === 'W') return `🔥${num || ''}`;
-            if (type === 'L') return `🥶${num || ''}`;
-            return `➖${num || ''}`;
-        }
-
-        return streakString;
+        if (!streakString || streakString === 'N/A') return '—';
+        const num = streakString.replace(/[^0-9]/g, '');
+        const type = streakString.replace(/[^A-Za-z]/g, '');
+        if (!num) return type || '—';
+        return `${num}${type}`;
     };
 
     const getHeadToHeadRecord = (ownerId1, ownerId2) => {
@@ -511,12 +680,18 @@ const Gamecenter = () => {
                         return (
                             <div 
                                 key={matchup.matchup_id} 
-                                className={`bg-white rounded-xl shadow-md mobile-card overflow-hidden transition-all duration-300 hover:shadow-lg touch-friendly ${
-                                    isCompleted ? 'cursor-pointer hover:bg-gray-50 active:bg-gray-100' : ''
-                                }`}
+                                className={`rounded-xl mobile-card overflow-hidden transition-all duration-300 touch-friendly ${
+                                    (gameOfWeekMatchupId && String(gameOfWeekMatchupId) === String(matchup.matchup_id)) ? 'ring-4 ring-yellow-400 ring-opacity-60' : 'bg-white shadow-md hover:shadow-lg'
+                                } ${isCompleted ? 'cursor-pointer hover:bg-gray-50 active:bg-gray-100' : ''}`}
                                 onClick={() => handleMatchupClick(matchup)}
                             >
                                 <div className="p-3 sm:p-4">
+                                    {/* Badge for Game of the Week */}
+                                    {gameOfWeekMatchupId && String(gameOfWeekMatchupId) === String(matchup.matchup_id) && (
+                                        <div className="flex justify-center mb-2">
+                                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-yellow-300 text-yellow-900 border border-yellow-400">Game of the Week</span>
+                                        </div>
+                                    )}
                                     {/* Mobile-First Team Layout */}
                                     <div className="space-y-3 sm:space-y-0">
                                         {/* Mobile: Stacked Teams */}
@@ -534,15 +709,17 @@ const Gamecenter = () => {
                                                             {team1Details.name}
                                                         </div>
                                                         <div className="text-xs text-gray-500">
-                                                                {formatStreakDisplay(team1OwnerId, team1Streak, isCompleted)} • Avg: {formatScore(Number(team1AvgPts ?? 0), 1)}
+                                                            {!isCompleted ? (
+                                                                <>{formatStreakDisplay(team1OwnerId, team1Streak, isCompleted)} • Avg: {formatScore(Number(team1AvgPts ?? 0), 2)}</>
+                                                            ) : null}
                                                         </div>
                                                     </div>
                                                 </div>
                                                 <div className="text-right flex-shrink-0">
-                                                    <div className={`font-bold text-lg ${
+                                                        <div className={`font-bold text-lg ${
                                                         isCompleted && shouldHighlightWinner && matchup.team1_score > matchup.team2_score ? 'text-green-600' : 'text-gray-800'
                                                     }`}>
-                                                        {isCompleted ? formatScore(Number(matchup.team1_score ?? 0), 1) : '-'}
+                                                        {isCompleted ? formatScore(Number(matchup.team1_score ?? 0), 2) : '-'}
                                                     </div>
                                                 </div>
                                             </div>
@@ -571,7 +748,9 @@ const Gamecenter = () => {
                                                             {team2Details.name}
                                                         </div>
                                                         <div className="text-xs text-gray-500">
-                                                            {formatStreakDisplay(team2OwnerId, team2Streak, isCompleted)} • Avg: {formatScore(Number(team2AvgPts ?? 0), 1)}
+                                                            {!isCompleted ? (
+                                                                <>{formatStreakDisplay(team2OwnerId, team2Streak, isCompleted)} • Avg: {formatScore(Number(team2AvgPts ?? 0), 2)}</>
+                                                            ) : null}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -579,7 +758,7 @@ const Gamecenter = () => {
                                                     <div className={`font-bold text-lg ${
                                                         isCompleted && shouldHighlightWinner && matchup.team2_score > matchup.team1_score ? 'text-green-600' : 'text-gray-800'
                                                     }`}>
-                                                        {isCompleted ? formatScore(Number(matchup.team2_score ?? 0), 1) : '-'}
+                                                        {isCompleted ? formatScore(Number(matchup.team2_score ?? 0), 2) : '-'}
                                                     </div>
                                                 </div>
                                             </div>
@@ -640,7 +819,7 @@ const Gamecenter = () => {
                                                     <div className="grid grid-cols-3 gap-2 items-center">
                                                         <div className="text-center space-y-1">
                                                             <div className="text-xs font-semibold">{formatStreakDisplay(team1OwnerId, team1Streak, isCompleted)}</div>
-                                                            <div className="text-xs font-semibold">{formatScore(Number(team1AvgPts ?? 0), 1)}</div>
+                                                            <div className="text-xs font-semibold">{formatScore(Number(team1AvgPts ?? 0), 2)}</div>
                                                         </div>
                                                         
                                                         <div className="text-center space-y-1">
@@ -650,7 +829,7 @@ const Gamecenter = () => {
                                                         
                                                         <div className="text-center space-y-1">
                                                             <div className="text-xs font-semibold">{formatStreakDisplay(team2OwnerId, team2Streak, isCompleted)}</div>
-                                                            <div className="text-xs font-semibold">{formatScore(Number(team2AvgPts ?? 0), 1)}</div>
+                                                            <div className="text-xs font-semibold">{formatScore(Number(team2AvgPts ?? 0), 2)}</div>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -726,13 +905,46 @@ const Gamecenter = () => {
                                     
                                     const team1Luck = weeklyLuckData[team1RosterId]?.[selectedWeek - 1] ?? 0;
                                     const team2Luck = weeklyLuckData[team2RosterId]?.[selectedWeek - 1] ?? 0;
-                                    
-                                    const team1AvgPts = getCorrectAveragePoints(team1RosterId, selectedSeason);
-                                    const team2AvgPts = getCorrectAveragePoints(team2RosterId, selectedSeason);
-                                    
+
+                                    // Stats at the time of the game (up to that week)
+                                    const team1AvgAtWeek = getAverageAtWeek(team1RosterId, selectedSeason, selectedWeek);
+                                    const team2AvgAtWeek = getAverageAtWeek(team2RosterId, selectedSeason, selectedWeek);
+
+                                    // Determine if the selected week is considered complete (historical or earlier than current NFL week)
+                                    const currentNFLSeason = parseInt(nflState?.season || new Date().getFullYear());
+                                    const currentNFLWeek = parseInt(nflState?.week || 1);
+                                    const selectedSeasonInt = parseInt(selectedSeason);
+                                    const selectedWeekInt = parseInt(selectedWeek);
+                                    const isWeekComplete = selectedSeasonInt < currentNFLSeason ||
+                                                          (selectedSeasonInt === currentNFLSeason && selectedWeekInt < currentNFLWeek);
+
                                     const h2h = getHeadToHeadRecord(team1OwnerId, team2OwnerId);
-                                    const team1Streak = getWinLossStreak(team1OwnerId, selectedSeason);
-                                    const team2Streak = getWinLossStreak(team2OwnerId, selectedSeason);
+                                    const team1StreakAtWeek = (() => {
+                                        // Build streak only up to the selectedWeek
+                                        const history = teamMatchupHistory[team1OwnerId] || [];
+                                        const seasonHistory = history.filter(m => m.season === selectedSeason && Number(m.week) <= Number(selectedWeek));
+                                        if (seasonHistory.length === 0) return '—';
+                                        let streak = 0; let streakType = '';
+                                        for (let i = seasonHistory.length - 1; i >= 0; i--) {
+                                            const game = seasonHistory[i];
+                                            if (i === seasonHistory.length - 1) { streakType = game.result; streak = 1; }
+                                            else { if (game.result === streakType) streak++; else break; }
+                                        }
+                                        return `${streak}${streakType}`;
+                                    })();
+
+                                    const team2StreakAtWeek = (() => {
+                                        const history = teamMatchupHistory[team2OwnerId] || [];
+                                        const seasonHistory = history.filter(m => m.season === selectedSeason && Number(m.week) <= Number(selectedWeek));
+                                        if (seasonHistory.length === 0) return '—';
+                                        let streak = 0; let streakType = '';
+                                        for (let i = seasonHistory.length - 1; i >= 0; i--) {
+                                            const game = seasonHistory[i];
+                                            if (i === seasonHistory.length - 1) { streakType = game.result; streak = 1; }
+                                            else { if (game.result === streakType) streak++; else break; }
+                                        }
+                                        return `${streak}${streakType}`;
+                                    })();
                                     
                                     const team1Won = selectedMatchup.team1_score > selectedMatchup.team2_score;
                                     const team2Won = selectedMatchup.team2_score > selectedMatchup.team1_score;
@@ -912,15 +1124,22 @@ const Gamecenter = () => {
                                                     <div className="space-y-2 text-xs sm:text-sm">
                                                         <div className="flex justify-between">
                                                             <span>Season Record:</span>
-                                                            <span className="font-medium">{processedSeasonalRecords?.[selectedSeason]?.[team1RosterId]?.wins || 0}-{processedSeasonalRecords?.[selectedSeason]?.[team1RosterId]?.losses || 0}</span>
+                                                            {isWeekComplete ? (
+                                                                (() => {
+                                                                    const r = getRecordAtWeek(team1RosterId, selectedSeason, selectedWeek);
+                                                                    return <span className="font-medium">{r.wins || 0}-{r.losses || 0}{r.ties > 0 ? `-${r.ties}` : ''}</span>;
+                                                                })()
+                                                            ) : (
+                                                                <span className="font-medium">{processedSeasonalRecords?.[selectedSeason]?.[team1RosterId]?.wins || 0}-{processedSeasonalRecords?.[selectedSeason]?.[team1RosterId]?.losses || 0}</span>
+                                                            )}
                                                         </div>
                                                         <div className="flex justify-between">
                                                             <span>Current Streak:</span>
-                                                            <span className="font-medium">{team1Streak}</span>
+                                                            <span className="font-medium">{isWeekComplete ? team1StreakAtWeek : team1Streak}</span>
                                                         </div>
                                                         <div className="flex justify-between">
                                                             <span>Season Avg:</span>
-                                                            <span className="font-medium">{formatScore(Number(team1AvgPts ?? 0), 2)}</span>
+                                                            <span className="font-medium">{isWeekComplete ? formatScore(Number(team1AvgAtWeek ?? 0), 2) : formatScore(Number(team1AvgPts ?? 0), 2)}</span>
                                                         </div>
                                                         <div className="flex justify-between">
                                                             <span>Luck Factor:</span>
@@ -936,15 +1155,22 @@ const Gamecenter = () => {
                                                     <div className="space-y-2 text-xs sm:text-sm">
                                                         <div className="flex justify-between">
                                                             <span>Season Record:</span>
-                                                            <span className="font-medium">{processedSeasonalRecords?.[selectedSeason]?.[team2RosterId]?.wins || 0}-{processedSeasonalRecords?.[selectedSeason]?.[team2RosterId]?.losses || 0}</span>
+                                                            {isWeekComplete ? (
+                                                                (() => {
+                                                                    const r = getRecordAtWeek(team2RosterId, selectedSeason, selectedWeek);
+                                                                    return <span className="font-medium">{r.wins || 0}-{r.losses || 0}{r.ties > 0 ? `-${r.ties}` : ''}</span>;
+                                                                })()
+                                                            ) : (
+                                                                <span className="font-medium">{processedSeasonalRecords?.[selectedSeason]?.[team2RosterId]?.wins || 0}-{processedSeasonalRecords?.[selectedSeason]?.[team2RosterId]?.losses || 0}</span>
+                                                            )}
                                                         </div>
                                                         <div className="flex justify-between">
                                                             <span>Current Streak:</span>
-                                                            <span className="font-medium">{team2Streak}</span>
+                                                            <span className="font-medium">{isWeekComplete ? team2StreakAtWeek : team2Streak}</span>
                                                         </div>
                                                         <div className="flex justify-between">
                                                             <span>Season Avg:</span>
-                                                            <span className="font-medium">{formatScore(Number(team2AvgPts ?? 0), 2)}</span>
+                                                            <span className="font-medium">{isWeekComplete ? formatScore(Number(team2AvgAtWeek ?? 0), 2) : formatScore(Number(team2AvgPts ?? 0), 2)}</span>
                                                         </div>
                                                         <div className="flex justify-between">
                                                             <span>Luck Factor:</span>

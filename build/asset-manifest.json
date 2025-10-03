@@ -1,14 +1,14 @@
 {
   "files": {
-    "main.js": "./static/js/main.6837de3a.js",
+    "main.js": "./static/js/main.279dbda1.js",
     "static/media/2022-champion.jpg": "./static/media/2022-champion.89c19b30c0f504290fe9.jpg",
     "static/media/2021-champion.jpg": "./static/media/2021-champion.34e6429006ec20666e61.jpg",
     "static/media/2024-champion.JPG": "./static/media/2024-champion.25dbec73a1263b7d76bc.JPG",
     "static/media/2023-champion.jpg": "./static/media/2023-champion.1abe39833d904b2f85f0.jpg",
     "index.html": "./index.html",
-    "main.6837de3a.js.map": "./static/js/main.6837de3a.js.map"
+    "main.279dbda1.js.map": "./static/js/main.279dbda1.js.map"
   },
   "entrypoints": [
-    "static/js/main.6837de3a.js"
+    "static/js/main.279dbda1.js"
   ]
 }

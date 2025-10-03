@@ -518,10 +518,52 @@ const Sportsbook = () => {
                 const team1OddsData = calculateBookmakerOdds(team1WinProb);
                 const team2OddsData = calculateBookmakerOdds(team2WinProb);
 
+                // Determine if any STARTING players have recorded points for either team in this matchup
+                // We look for the matchup.teamX_players candidate which should include a `starters` array and a `players_points` map
+                const didStarterScore = (m, side) => {
+                    try {
+                        const candidate = side === 'team1'
+                            ? (m.team1_players || m.team1_details || m.team1_players_points || m.team1_players_points_map || m.team1_players_points_by_id || null)
+                            : (m.team2_players || m.team2_details || m.team2_players_points || m.team2_players_points_map || m.team2_players_points_by_id || null);
+
+                        if (!candidate || typeof candidate !== 'object') return false;
+
+                        // Get starters array (may be named 'starters' or 'starting_lineup')
+                        const starters = candidate.starters || candidate.starting_lineup || candidate.starting_lineup_ids || null;
+                        // Get players_points map
+                        const ptsMap = candidate.players_points || candidate.players_points_map || candidate.players_points_by_id || candidate;
+
+                        if (!ptsMap || typeof ptsMap !== 'object') return false;
+
+                        // If we don't have an explicit starters array, fall back to checking any numeric points (conservative)
+                        if (!Array.isArray(starters) || starters.length === 0) {
+                            return Object.values(ptsMap).some(v => {
+                                const n = (typeof v === 'string') ? Number(v) : v;
+                                return typeof n === 'number' && !isNaN(n) && n > 0;
+                            });
+                        }
+
+                        // Check only starter IDs for recorded points > 0
+                        return starters.some(sid => {
+                            if (sid === null || sid === undefined) return false;
+                            const key = String(sid);
+                            const val = ptsMap[key] !== undefined ? ptsMap[key] : ptsMap[Number(key)];
+                            const n = (typeof val === 'string') ? Number(val) : val;
+                            return typeof n === 'number' && !isNaN(n) && n > 0;
+                        });
+                    } catch (e) {
+                        return false;
+                    }
+                };
+
+                const playersScored = didStarterScore(matchup, 'team1') || didStarterScore(matchup, 'team2');
+
                 const matchupData = {
                     matchupId: matchup.matchup_id,
                     week: week,
                     isCompleted: isCompleted,
+                    // bettingLocked: when a STARTER has recorded points in the current week (in-progress game)
+                    bettingLocked: !!(playersScored && nflState?.week && parseInt(nflState.week) === week),
                     team1: {
                         rosterId: team1RosterId,
                         name: team1Details.name,
@@ -950,27 +992,34 @@ const Sportsbook = () => {
                                                         <div className="space-y-2">
                                                             {/* Team 1 Spread */}
                                                             <div 
-                                                                className={`p-3 rounded-lg text-center transition-colors cursor-pointer h-20 flex flex-col justify-center ${
-                                                                    matchup.isCompleted && matchup.actualScores?.team1CoveredSpread !== null
+                                                                className={`p-3 rounded-lg text-center transition-colors h-20 flex flex-col justify-center ${
+                                                                    matchup.bettingLocked ? 'bg-gray-100 border border-gray-200 cursor-not-allowed opacity-70' : (
+                                                                        matchup.isCompleted && matchup.actualScores?.team1CoveredSpread !== null
                                                                         ? (matchup.actualScores.team1CoveredSpread 
                                                                             ? 'bg-green-100 border-2 border-green-500' 
                                                                             : 'bg-red-100 border-2 border-red-300')
                                                                         : betSlip.some(bet => bet.id === `${matchup.matchupId}-spread-team1`)
                                                                             ? 'bg-blue-100 border-2 border-blue-500'
-                                                                            : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
+                                                                            : 'bg-gray-50 hover:bg-gray-100 border border-gray-200 cursor-pointer'
+                                                                    )
                                                                 }`}
-                                                                onClick={() => !matchup.isCompleted && matchup.markets.spread.team1.line !== "PK" && addBetToSlip({
-                                                                    matchupId: matchup.matchupId,
-                                                                    type: 'spread',
-                                                                    selection: 'team1',
-                                                                    team: matchup.team1.name,
-                                                                    line: matchup.markets.spread.team1.line,
-                                                                    odds: matchup.markets.spread.team1.odds,
-                                                                    description: `${matchup.team1.name} ${matchup.markets.spread.team1.line}`,
-                                                                    season: currentSeason,
-                                                                    week: selectedWeek,
-                                                                    matchup: `${matchup.team1.name} vs ${matchup.team2.name}`
-                                                                })}
+                                                                onClick={() => {
+                                                                    if (matchup.bettingLocked) return addNotification('Betting locked: players have already recorded points for this matchup', 'error');
+                                                                    if (!matchup.isCompleted && matchup.markets.spread.team1.line !== "PK") {
+                                                                        addBetToSlip({
+                                                                            matchupId: matchup.matchupId,
+                                                                            type: 'spread',
+                                                                            selection: 'team1',
+                                                                            team: matchup.team1.name,
+                                                                            line: matchup.markets.spread.team1.line,
+                                                                            odds: matchup.markets.spread.team1.odds,
+                                                                            description: `${matchup.team1.name} ${matchup.markets.spread.team1.line}`,
+                                                                            season: currentSeason,
+                                                                            week: selectedWeek,
+                                                                            matchup: `${matchup.team1.name} vs ${matchup.team2.name}`
+                                                                        });
+                                                                    }
+                                                                }}
                                                             >
                                                                 <div className={`text-lg font-bold mb-1 ${
                                                                     matchup.isCompleted && matchup.actualScores?.team1CoveredSpread !== null
@@ -984,27 +1033,34 @@ const Sportsbook = () => {
                                                             </div>
                                                             {/* Team 2 Spread */}
                                                             <div 
-                                                                className={`p-3 rounded-lg text-center transition-colors cursor-pointer h-20 flex flex-col justify-center ${
-                                                                    matchup.isCompleted && matchup.actualScores?.team1CoveredSpread !== null
+                                                                className={`p-3 rounded-lg text-center transition-colors h-20 flex flex-col justify-center ${
+                                                                    matchup.bettingLocked ? 'bg-gray-100 border border-gray-200 cursor-not-allowed opacity-70' : (
+                                                                        matchup.isCompleted && matchup.actualScores?.team1CoveredSpread !== null
                                                                         ? (!matchup.actualScores.team1CoveredSpread 
                                                                             ? 'bg-green-100 border-2 border-green-500' 
                                                                             : 'bg-red-100 border-2 border-red-300')
                                                                         : betSlip.some(bet => bet.id === `${matchup.matchupId}-spread-team2`)
                                                                             ? 'bg-blue-100 border-2 border-blue-500'
-                                                                            : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
+                                                                            : 'bg-gray-50 hover:bg-gray-100 border border-gray-200 cursor-pointer'
+                                                                    )
                                                                 }`}
-                                                                onClick={() => !matchup.isCompleted && matchup.markets.spread.team2.line !== "PK" && addBetToSlip({
-                                                                    matchupId: matchup.matchupId,
-                                                                    type: 'spread',
-                                                                    selection: 'team2',
-                                                                    team: matchup.team2.name,
-                                                                    line: matchup.markets.spread.team2.line,
-                                                                    odds: matchup.markets.spread.team2.odds,
-                                                                    description: `${matchup.team2.name} ${matchup.markets.spread.team2.line}`,
-                                                                    season: currentSeason,
-                                                                    week: selectedWeek,
-                                                                    matchup: `${matchup.team1.name} vs ${matchup.team2.name}`
-                                                                })}
+                                                                onClick={() => {
+                                                                    if (matchup.bettingLocked) return addNotification('Betting locked: players have already recorded points for this matchup', 'error');
+                                                                    if (!matchup.isCompleted && matchup.markets.spread.team2.line !== "PK") {
+                                                                        addBetToSlip({
+                                                                            matchupId: matchup.matchupId,
+                                                                            type: 'spread',
+                                                                            selection: 'team2',
+                                                                            team: matchup.team2.name,
+                                                                            line: matchup.markets.spread.team2.line,
+                                                                            odds: matchup.markets.spread.team2.odds,
+                                                                            description: `${matchup.team2.name} ${matchup.markets.spread.team2.line}`,
+                                                                            season: currentSeason,
+                                                                            week: selectedWeek,
+                                                                            matchup: `${matchup.team1.name} vs ${matchup.team2.name}`
+                                                                        });
+                                                                    }
+                                                                }}
                                                             >
                                                                 <div className={`text-lg font-bold mb-1 ${
                                                                     matchup.isCompleted && matchup.actualScores?.team1CoveredSpread !== null
@@ -1034,7 +1090,9 @@ const Sportsbook = () => {
                                                         <div className="space-y-2">
                                                             {/* Over */}
                                                             <div 
-                                                                className={`p-3 rounded-lg text-center transition-colors cursor-pointer h-20 flex flex-col justify-center ${
+                                                                className={`p-3 rounded-lg text-center transition-colors h-20 flex flex-col justify-center ${
+                                                                    matchup.bettingLocked
+                                                                        ? 'bg-gray-100 border border-gray-200 cursor-not-allowed opacity-70' : (
                                                                     matchup.isCompleted && matchup.actualScores?.overHit !== null
                                                                         ? (matchup.actualScores.overHit
                                                                             ? 'bg-green-100 border-2 border-green-500' 
@@ -1042,19 +1100,25 @@ const Sportsbook = () => {
                                                                         : betSlip.some(bet => bet.id === `${matchup.matchupId}-total-over`)
                                                                             ? 'bg-blue-100 border-2 border-blue-500'
                                                                             : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
+                                                                )
                                                                 }`}
-                                                                onClick={() => !matchup.isCompleted && addBetToSlip({
-                                                                    matchupId: matchup.matchupId,
-                                                                    type: 'total',
-                                                                    selection: 'over',
-                                                                    team: `${matchup.team1.name} vs ${matchup.team2.name}`,
-                                                                    line: matchup.markets.total.over.line,
-                                                                    odds: matchup.markets.total.over.odds,
-                                                                    description: `Over ${matchup.markets.total.over.line}`,
-                                                                    season: currentSeason,
-                                                                    week: selectedWeek,
-                                                                    matchup: `${matchup.team1.name} vs ${matchup.team2.name}`
-                                                                })}
+                                                                onClick={() => {
+                                                                    if (matchup.bettingLocked) return addNotification('Betting locked: players have already recorded points for this matchup', 'error');
+                                                                    if (!matchup.isCompleted) {
+                                                                        addBetToSlip({
+                                                                            matchupId: matchup.matchupId,
+                                                                            type: 'total',
+                                                                            selection: 'over',
+                                                                            team: `${matchup.team1.name} vs ${matchup.team2.name}`,
+                                                                            line: matchup.markets.total.over.line,
+                                                                            odds: matchup.markets.total.over.odds,
+                                                                            description: `Over ${matchup.markets.total.over.line}`,
+                                                                            season: currentSeason,
+                                                                            week: selectedWeek,
+                                                                            matchup: `${matchup.team1.name} vs ${matchup.team2.name}`
+                                                                        });
+                                                                    }
+                                                                }}
                                                             >
                                                                 <div className="text-xs text-gray-600 mb-1">OVER</div>
                                                                 <div className={`text-lg font-bold mb-1 ${
@@ -1068,7 +1132,9 @@ const Sportsbook = () => {
                                                             </div>
                                                             {/* Under */}
                                                             <div 
-                                                                className={`p-3 rounded-lg text-center transition-colors cursor-pointer h-20 flex flex-col justify-center ${
+                                                                className={`p-3 rounded-lg text-center transition-colors h-20 flex flex-col justify-center ${
+                                                                    matchup.bettingLocked
+                                                                        ? 'bg-gray-100 border border-gray-200 cursor-not-allowed opacity-70' : (
                                                                     matchup.isCompleted && matchup.actualScores?.overHit !== null
                                                                         ? (!matchup.actualScores.overHit
                                                                             ? 'bg-green-100 border-2 border-green-500' 
@@ -1076,19 +1142,25 @@ const Sportsbook = () => {
                                                                         : betSlip.some(bet => bet.id === `${matchup.matchupId}-total-under`)
                                                                             ? 'bg-blue-100 border-2 border-blue-500'
                                                                             : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
+                                                                )
                                                                 }`}
-                                                                onClick={() => !matchup.isCompleted && addBetToSlip({
-                                                                    matchupId: matchup.matchupId,
-                                                                    type: 'total',
-                                                                    selection: 'under',
-                                                                    team: `${matchup.team1.name} vs ${matchup.team2.name}`,
-                                                                    line: matchup.markets.total.under.line,
-                                                                    odds: matchup.markets.total.under.odds,
-                                                                    description: `Under ${matchup.markets.total.under.line}`,
-                                                                    season: currentSeason,
-                                                                    week: selectedWeek,
-                                                                    matchup: `${matchup.team1.name} vs ${matchup.team2.name}`
-                                                                })}
+                                                                onClick={() => {
+                                                                    if (matchup.bettingLocked) return addNotification('Betting locked: players have already recorded points for this matchup', 'error');
+                                                                    if (!matchup.isCompleted) {
+                                                                        addBetToSlip({
+                                                                            matchupId: matchup.matchupId,
+                                                                            type: 'total',
+                                                                            selection: 'under',
+                                                                            team: `${matchup.team1.name} vs ${matchup.team2.name}`,
+                                                                            line: matchup.markets.total.under.line,
+                                                                            odds: matchup.markets.total.under.odds,
+                                                                            description: `Under ${matchup.markets.total.under.line}`,
+                                                                            season: currentSeason,
+                                                                            week: selectedWeek,
+                                                                            matchup: `${matchup.team1.name} vs ${matchup.team2.name}`
+                                                                        });
+                                                                    }
+                                                                }}
                                                             >
                                                                 <div className="text-xs text-gray-600 mb-1">UNDER</div>
                                                                 <div className={`text-lg font-bold mb-1 ${
@@ -1116,29 +1188,36 @@ const Sportsbook = () => {
                                                     </div>
                                                     <div className="space-y-2">
                                                         {/* Team 1 Moneyline */}
-                                                        <div 
-                                                            className={`p-3 rounded-lg text-center transition-colors cursor-pointer h-20 flex flex-col justify-center ${
-                                                                matchup.isCompleted && matchup.actualScores?.team1Won !== null
-                                                                    ? (matchup.actualScores.team1Won 
-                                                                        ? 'bg-green-100 border-2 border-green-500' 
-                                                                        : 'bg-red-100 border-2 border-red-300') 
-                                                                    : betSlip.some(bet => bet.id === `${matchup.matchupId}-moneyline-team1`)
-                                                                        ? 'bg-blue-100 border-2 border-blue-500'
-                                                                        : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
-                                                            }`}
-                                                            onClick={() => !matchup.isCompleted && addBetToSlip({
-                                                                matchupId: matchup.matchupId,
-                                                                type: 'moneyline',
-                                                                selection: 'team1',
-                                                                team: matchup.team1.name,
-                                                                line: 'ML',
-                                                                odds: matchup.markets?.moneyline?.team1?.odds || matchup.team1.odds,
-                                                                description: `${matchup.team1.name} ML`,
-                                                                season: currentSeason,
-                                                                week: selectedWeek,
-                                                                matchup: `${matchup.team1.name} vs ${matchup.team2.name}`
-                                                            })}
-                                                        >
+                                                            <div 
+                                                                className={`p-3 rounded-lg text-center transition-colors h-20 flex flex-col justify-center ${
+                                                                    matchup.bettingLocked ? 'bg-gray-100 border border-gray-200 cursor-not-allowed opacity-70' : (
+                                                                        matchup.isCompleted && matchup.actualScores?.team1Won !== null
+                                                                        ? (matchup.actualScores.team1Won 
+                                                                            ? 'bg-green-100 border-2 border-green-500' 
+                                                                            : 'bg-red-100 border-2 border-red-300') 
+                                                                        : betSlip.some(bet => bet.id === `${matchup.matchupId}-moneyline-team1`)
+                                                                            ? 'bg-blue-100 border-2 border-blue-500'
+                                                                            : 'bg-gray-50 hover:bg-gray-100 border border-gray-200 cursor-pointer'
+                                                                    )
+                                                                }`}
+                                                                onClick={() => {
+                                                                    if (matchup.bettingLocked) return addNotification('Betting locked: players have already recorded points for this matchup', 'error');
+                                                                    if (!matchup.isCompleted) {
+                                                                        addBetToSlip({
+                                                                            matchupId: matchup.matchupId,
+                                                                            type: 'moneyline',
+                                                                            selection: 'team1',
+                                                                            team: matchup.team1.name,
+                                                                            line: 'ML',
+                                                                            odds: matchup.markets?.moneyline?.team1?.odds || matchup.team1.odds,
+                                                                            description: `${matchup.team1.name} ML`,
+                                                                            season: currentSeason,
+                                                                            week: selectedWeek,
+                                                                            matchup: `${matchup.team1.name} vs ${matchup.team2.name}`
+                                                                        });
+                                                                    }
+                                                                }}
+                                                            >
                                                             <div className={`text-lg font-bold ${
                                                                 matchup.isCompleted && matchup.actualScores?.team1Won !== null
                                                                     ? (matchup.actualScores.team1Won ? 'text-green-600' : 'text-red-600')
@@ -1148,29 +1227,36 @@ const Sportsbook = () => {
                                                             </div>
                                                         </div>
                                                         {/* Team 2 Moneyline */}
-                                                        <div 
-                                                            className={`p-3 rounded-lg text-center transition-colors cursor-pointer h-20 flex flex-col justify-center ${
-                                                                matchup.isCompleted && matchup.actualScores?.team1Won !== null
-                                                                    ? (!matchup.actualScores.team1Won 
-                                                                        ? 'bg-green-100 border-2 border-green-500' 
-                                                                        : 'bg-red-100 border-2 border-red-300') 
-                                                                    : betSlip.some(bet => bet.id === `${matchup.matchupId}-moneyline-team2`)
-                                                                        ? 'bg-blue-100 border-2 border-blue-500'
-                                                                        : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
-                                                            }`}
-                                                            onClick={() => !matchup.isCompleted && addBetToSlip({
-                                                                matchupId: matchup.matchupId,
-                                                                type: 'moneyline',
-                                                                selection: 'team2',
-                                                                team: matchup.team2.name,
-                                                                line: 'ML',
-                                                                odds: matchup.markets?.moneyline?.team2?.odds || matchup.team2.odds,
-                                                                description: `${matchup.team2.name} ML`,
-                                                                season: currentSeason,
-                                                                week: selectedWeek,
-                                                                matchup: `${matchup.team1.name} vs ${matchup.team2.name}`
-                                                            })}
-                                                        >
+                                                            <div 
+                                                                className={`p-3 rounded-lg text-center transition-colors h-20 flex flex-col justify-center ${
+                                                                    matchup.bettingLocked ? 'bg-gray-100 border border-gray-200 cursor-not-allowed opacity-70' : (
+                                                                        matchup.isCompleted && matchup.actualScores?.team1Won !== null
+                                                                        ? (!matchup.actualScores.team1Won 
+                                                                            ? 'bg-green-100 border-2 border-green-500' 
+                                                                            : 'bg-red-100 border-2 border-red-300') 
+                                                                        : betSlip.some(bet => bet.id === `${matchup.matchupId}-moneyline-team2`)
+                                                                            ? 'bg-blue-100 border-2 border-blue-500'
+                                                                            : 'bg-gray-50 hover:bg-gray-100 border border-gray-200 cursor-pointer'
+                                                                    )
+                                                                }`}
+                                                                onClick={() => {
+                                                                    if (matchup.bettingLocked) return addNotification('Betting locked: players have already recorded points for this matchup', 'error');
+                                                                    if (!matchup.isCompleted) {
+                                                                        addBetToSlip({
+                                                                            matchupId: matchup.matchupId,
+                                                                            type: 'moneyline',
+                                                                            selection: 'team2',
+                                                                            team: matchup.team2.name,
+                                                                            line: 'ML',
+                                                                            odds: matchup.markets?.moneyline?.team2?.odds || matchup.team2.odds,
+                                                                            description: `${matchup.team2.name} ML`,
+                                                                            season: currentSeason,
+                                                                            week: selectedWeek,
+                                                                            matchup: `${matchup.team1.name} vs ${matchup.team2.name}`
+                                                                        });
+                                                                    }
+                                                                }}
+                                                            >
                                                             <div className={`text-lg font-bold ${
                                                                 matchup.isCompleted && matchup.actualScores?.team1Won !== null
                                                                     ? (!matchup.actualScores.team1Won ? 'text-green-600' : 'text-red-600')

@@ -71,6 +71,7 @@ const TABS = {
     SEASON_BREAKDOWN: 'seasonBreakdown',
     DRAFT_ANALYSIS: 'draftAnalysis',
     KEEPERS: 'keepers',
+    // TRADE_CALCULATOR removed
     ACHIEVEMENTS: 'achievements',
 };
 

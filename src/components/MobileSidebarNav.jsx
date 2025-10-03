@@ -14,6 +14,8 @@ const navGroups = [
     label: 'League',
     children: [
       { label: 'Hall of Champions', link: '/hall-of-champions' },
+      { label: 'Keepers', link: '/keepers' },
+          // Trade Calculator removed
       { label: 'League History', link: '/league-history' },
       { label: 'Record Book', link: '/record-book' },
       { label: 'Season Breakdown', link: '/season-breakdown' },
