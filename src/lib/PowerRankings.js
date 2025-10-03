@@ -620,13 +620,16 @@ const renderMovement = (movement) => {
 														}}
 													/>
 													<div className="min-w-0 flex-1">
-														<h3 className="font-semibold text-gray-800 text-sm truncate">
-															{getTeamName(row.ownerId, row.year)} {survivorMarkers?.[row.ownerId] && (
-																<span className="ml-1" title={survivorMarkers[row.ownerId] === '💀' ? 'Eliminated from Survivor' : 'Survivor Winner'}>{survivorMarkers[row.ownerId]}</span>
-															)}
-															{row.trendMovement >= 2 && <span title="Hot team (multi-week)" className="ml-1">🔥</span>}
-															{row.trendMovement <= -2 && <span title="Cold team (multi-week)" className="ml-1">❄️</span>}
-														</h3>
+														<div className="flex items-center">
+															<h3 className="font-semibold text-gray-800 text-sm truncate flex-1">{getTeamName(row.ownerId, row.year)}</h3>
+															<div className="flex-shrink-0 ml-2 flex items-center space-x-1">
+																{survivorMarkers?.[row.ownerId] && (
+																	<span title={survivorMarkers[row.ownerId] === '💀' ? 'Eliminated from Survivor' : 'Survivor Winner'}>{survivorMarkers[row.ownerId]}</span>
+																)}
+																{row.trendMovement >= 2 && <span title="Hot team (multi-week)">🔥</span>}
+																{row.trendMovement <= -2 && <span title="Cold team (multi-week)">❄️</span>}
+															</div>
+														</div>
 														<p className="text-xs text-gray-500">Tier {row.tier}</p>
 													</div>
 												</div>
@@ -736,13 +739,16 @@ const renderMovement = (movement) => {
 																	e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`;
 																}}
 															/>
-															<span className="truncate font-semibold text-xs md:text-sm flex items-center gap-1">
-																{getTeamName(row.ownerId, row.year)} {survivorMarkers?.[row.ownerId] && (
-																	<span className="ml-1" title={survivorMarkers[row.ownerId] === '💀' ? 'Eliminated from Survivor' : 'Survivor Winner'}>{survivorMarkers[row.ownerId]}</span>
-																)}
-																{row.trendMovement >= 2 && <span title="Hot team (multi-week)" className="ml-1">🔥</span>}
-																{row.trendMovement <= -2 && <span title="Cold team (multi-week)" className="ml-1">❄️</span>}
-															</span>
+															<div className="flex items-center w-full">
+																<span className="truncate font-semibold text-xs md:text-sm flex-1">{getTeamName(row.ownerId, row.year)}</span>
+																<div className="flex-shrink-0 ml-2 flex items-center gap-1">
+																	{survivorMarkers?.[row.ownerId] && (
+																		<span title={survivorMarkers[row.ownerId] === '💀' ? 'Eliminated from Survivor' : 'Survivor Winner'}>{survivorMarkers[row.ownerId]}</span>
+																	)}
+																	{row.trendMovement >= 2 && <span title="Hot team (multi-week)">🔥</span>}
+																	{row.trendMovement <= -2 && <span title="Cold team (multi-week)">❄️</span>}
+																</div>
+															</div>
 														</div>
 													</td>
 													<td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold text-blue-800">{formatDPR(row.dpr)}</td>

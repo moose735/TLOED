@@ -22,7 +22,7 @@ const navGroups = [
       { label: 'Finances', link: '/finances' },
     ],
   },
-  { label: 'Teams', link: '/teams' },
+  { label: 'Teams', link: '/teams', emoji: '👥' },
   {
     label: 'Analysis',
     children: [

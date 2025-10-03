@@ -660,7 +660,7 @@ const AppContent = () => {
                                 className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600"
                                 onClick={() => handleTabClick(NAV_CATEGORIES.TEAMS.tab)}
                             >
-                                <span className="text-base font-medium">� {NAV_CATEGORIES.TEAMS.label}</span>
+                                <span className="text-base font-medium">👥 {NAV_CATEGORIES.TEAMS.label}</span>
                             </button>
                         </li>
                         {/* Analysis Dropdown */}

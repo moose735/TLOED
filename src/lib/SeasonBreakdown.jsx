@@ -594,37 +594,33 @@ const SeasonBreakdown = () => {
 
                     {/* Podium Section - Now only renders if results exist */}
                     {hasPodiumResults && (
-                        <div className="relative flex justify-center items-end h-56 gap-2 md:gap-4 mb-8">
+                        <div className="relative flex flex-col sm:flex-row sm:justify-center sm:items-end gap-2 md:gap-4 mb-8">
                             {/* 2nd Place */}
                             {seasonRunnerUp !== 'N/A' && (
-                                <div className="relative flex flex-col items-center justify-center h-4/5 bg-gray-300 rounded-lg shadow-lg p-2 md:p-4 w-1/3 text-center transition-all duration-300 hover:scale-105">
-                                    <div className="absolute -top-16 left-1/2 -translate-x-1/2">
-                                        <i className="fas fa-trophy text-gray-500 text-5xl"></i>
+                                <div className="relative flex flex-col items-center justify-center bg-gray-300 rounded-lg shadow-lg p-3 sm:p-4 sm:w-1/4 text-center transition-all duration-300 hover:scale-102">
+                                    <div className="mb-2 sm:mb-4 text-4xl sm:text-5xl text-gray-500">
+                                        🥈
                                     </div>
-                                    <span className="text-xl md:text-2xl font-bold text-gray-700">2nd Place</span>
-                                    <p className="text-base md:text-lg font-semibold text-gray-800">{seasonRunnerUp}</p>
+                                    <span className="text-lg sm:text-xl font-bold text-gray-700">2nd Place</span>
+                                    <p className="text-sm sm:text-base font-semibold text-gray-800 truncate max-w-[180px]">{seasonRunnerUp}</p>
                                 </div>
                             )}
 
                             {/* 1st Place */}
                             {seasonChampion !== 'N/A' && (
-                                <div className="relative flex flex-col items-center justify-center h-full bg-gradient-to-br from-yellow-300 to-yellow-500 rounded-lg shadow-lg p-2 md:p-4 w-1/3 text-center transition-all duration-300 hover:scale-105">
-                                    <div className="absolute -top-20 left-1/2 -translate-x-1/2">
-                                        <span className="text-7xl">🏆</span>
-                                    </div>
-                                    <span className="text-2xl md:text-3xl font-bold text-white">SWEEN BOWL CHAMPION</span>
-                                    <p className="text-lg md:text-xl font-semibold text-white">{seasonChampion}</p>
+                                <div className="relative flex flex-col items-center justify-center bg-gradient-to-br from-yellow-300 to-yellow-500 rounded-lg shadow-lg p-3 sm:p-6 sm:w-1/3 text-center transition-all duration-300 hover:scale-102">
+                                    <div className="mb-2 sm:mb-4 text-5xl sm:text-7xl">🏆</div>
+                                    <span className="text-xl sm:text-2xl font-bold text-white">SWEEN BOWL CHAMPION</span>
+                                    <p className="text-sm sm:text-lg font-semibold text-white truncate max-w-[220px]">{seasonChampion}</p>
                                 </div>
                             )}
 
                             {/* 3rd Place */}
                             {seasonThirdPlace !== 'N/A' && (
-                                <div className="relative flex flex-col items-center justify-center h-3/5 bg-amber-700 rounded-lg shadow-lg p-2 md:p-4 w-1/3 text-center text-white transition-all duration-300 hover:scale-105">
-                                    <div className="absolute -top-16 left-1/2 -translate-x-1/2">
-                                        <i className="fas fa-trophy text-amber-800 text-5xl"></i>
-                                    </div>
-                                    <span className="text-xl md:text-2xl font-bold">3rd Place</span>
-                                    <p className="text-base md:text-lg font-semibold">{seasonThirdPlace}</p>
+                                <div className="relative flex flex-col items-center justify-center bg-amber-700 rounded-lg shadow-lg p-3 sm:p-4 sm:w-1/4 text-center text-white transition-all duration-300 hover:scale-102">
+                                    <div className="mb-2 sm:mb-4 text-4xl sm:text-5xl text-amber-800">🥉</div>
+                                    <span className="text-lg sm:text-xl font-bold">3rd Place</span>
+                                    <p className="text-sm sm:text-base font-semibold truncate max-w-[160px]">{seasonThirdPlace}</p>
                                 </div>
                             )}
                         </div>
