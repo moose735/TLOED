@@ -243,22 +243,24 @@ const PlayerRecords = () => {
                     return (
                         <div key={position} className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
                             {/* Header */}
-                                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 sm:p-4 border-b border-gray-200">
+                            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 sm:p-4 border-b border-gray-200">
                                 <div className="flex items-center justify-between">
-                                        <div className="flex items-center space-x-3">
-                                            <span className="text-xl sm:text-2xl">{positionEmojis[position]}</span>
-                                            <div>
-                                                <h3 className="text-base sm:text-lg font-bold text-gray-900">
-                                                    {position} - {activeView === 'weekly' ? 'Best Weekly' : 'Best Seasonal'}
-                                                </h3>
-                                            </div>
+                                    <div className="flex items-center space-x-3">
+                                        <span className="text-xl sm:text-2xl">{positionEmojis[position]}</span>
+                                        <div>
+                                            <h3 className="text-base sm:text-lg font-bold text-gray-900">
+                                                {position} - {activeView === 'weekly' ? 'Best Weekly' : 'Best Seasonal'}
+                                            </h3>
                                         </div>
+                                    </div>
                                 </div>
                             </div>
-                                {/* Always show full content for each position */}
-                                <div className="p-3 sm:p-4">
-                                    {renderPlayerTable(records, activeView === 'weekly')}
-                                </div>
+
+                            {/* Mobile: compact card list for this position */}
+                                                        {/* Table layout for all screen sizes */}
+                            <div className="p-3 sm:p-4">
+                                {renderPlayerTable(records, activeView === 'weekly')}
+                            </div>
                         </div>
                     );
                 })}

@@ -400,7 +400,7 @@ const AppContent = () => {
                         )}
                     </div>
                     
-                    <style jsx>{`
+                    <style>{`
                         @keyframes progress {
                             0% {
                                 width: 0%;

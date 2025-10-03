@@ -420,8 +420,158 @@ const SeasonRecords = () => {
                 </div>
             </div>
 
-            {/* Records Table */}
-            <div className="bg-gradient-to-r from-gray-50 to-white rounded-xl sm:rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+            {/* Records Table (mobile-first) */}
+
+            {/* Mobile: compact card list */}
+            <div className="space-y-3 sm:hidden">
+                {highlightRecords.map((record) => {
+                    if (!record || record.entries.length === 0) {
+                        return null;
+                    }
+
+                    const primary = record.entries[0];
+                    const recordLabel = getRecordLabel(record.key, record);
+                    const teamDisplayName = primary.teamName || getTeamName(primary.ownerId, primary.year);
+                    
+                    let valueDisplay = '';
+                    if (typeof primary.value === 'number') {
+                        if ([
+                            'wins', 'losses', 'topScoreWeeksCount', 'weeklyTop2ScoresCount',
+                            'blowoutWins', 'blowoutLosses', 'slimWins', 'slimLosses', 'tradeCount', 'waiverCount'
+                        ].includes(record.key)) {
+                            valueDisplay = Math.round(primary.value).toLocaleString('en-US', { maximumFractionDigits: 0 });
+                        } else if (['luckRating', 'highestDPR', 'lowestDPR'].includes(record.key)) {
+                            valueDisplay = primary.value.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+                        } else if (record.key === 'pointsFor') {
+                            valueDisplay = primary.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        } else if (record.key === 'winPercentage' || record.key === 'allPlayWinPercentage') {
+                            valueDisplay = (primary.value * 100).toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+                        } else {
+                            valueDisplay = primary.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        }
+                    }
+
+                    return (
+                        <div key={record.key} className="bg-white border border-gray-200 rounded-lg p-3">
+                            <div className="flex items-center">
+                                <div className="flex-1">
+                                    <div className="flex items-center justify-between">
+                                        <div className="truncate">
+                                            <div className="text-sm font-semibold text-gray-900 truncate">{recordLabel}</div>
+                                            <div className="text-xs text-gray-600 truncate mt-1">
+                                                <span className="font-medium">{teamDisplayName}</span>
+                                                {primary.year && (
+                                                    <span className="text-gray-500"> — {primary.year}</span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div className="ml-3 flex items-center gap-3">
+                                            <div className="inline-flex items-center px-2 py-1 rounded-full bg-gradient-to-r from-green-100 to-blue-100 border border-green-200">
+                                                <span className="font-bold text-gray-900 text-sm">{valueDisplay}</span>
+                                            </div>
+
+                                            <button
+                                                onClick={() => toggleSection(record.key)}
+                                                aria-label={`${expandedSections[record.key] ? 'Hide' : 'Show'} top 5 for ${recordLabel}`}
+                                                className="p-2 rounded-md hover:bg-gray-100"
+                                            >
+                                                <svg className={`w-5 h-5 text-gray-600 transition-transform ${expandedSections[record.key] ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Expandable Top5 for mobile */}
+                                    {expandedSections[record.key] && (() => {
+                                        const keyMapping = {
+                                            'wins': 'mostWinsSeason',
+                                            'losses': 'mostLossesSeason', 
+                                            'winPercentage': 'bestWinPctSeason',
+                                            'allPlayWinPercentage': 'bestAllPlayWinPctSeason',
+                                            'topScoreWeeksCount': 'mostWeeklyHighScoresSeason',
+                                            'weeklyTop2ScoresCount': 'mostWeeklyTop2ScoresSeason',
+                                            'blowoutWins': 'mostBlowoutWinsSeason',
+                                            'blowoutLosses': 'mostBlowoutLossesSeason',
+                                            'slimWins': 'mostSlimWinsSeason',
+                                            'slimLosses': 'mostSlimLossesSeason',
+                                            'pointsFor': record.value > 0 ? 'mostPointsSeason' : 'fewestPointsSeason',
+                                            'luckRating': record.value > 0 ? 'bestLuckRatingSeason' : 'worstLuckRatingSeason',
+                                            'highestDPR': 'highestDPRSeason',
+                                            'lowestDPR': 'lowestDPRSeason',
+                                            'tradeCount': 'mostTradesSeason',
+                                            'waiverCount': 'mostWaiversSeason'
+                                        };
+                                        const dataKey = keyMapping[record.key];
+                                        return dataKey && allSeasonData[dataKey] && allSeasonData[dataKey].length > 0;
+                                    })() && (
+                                        <div className="mt-3 space-y-2">
+                                            {(() => {
+                                                const keyMapping = {
+                                                    'wins': 'mostWinsSeason',
+                                                    'losses': 'mostLossesSeason', 
+                                                    'winPercentage': 'bestWinPctSeason',
+                                                    'allPlayWinPercentage': 'bestAllPlayWinPctSeason',
+                                                    'topScoreWeeksCount': 'mostWeeklyHighScoresSeason',
+                                                    'weeklyTop2ScoresCount': 'mostWeeklyTop2ScoresSeason',
+                                                    'blowoutWins': 'mostBlowoutWinsSeason',
+                                                    'blowoutLosses': 'mostBlowoutLossesSeason',
+                                                    'slimWins': 'mostSlimWinsSeason',
+                                                    'slimLosses': 'mostSlimLossesSeason',
+                                                    'pointsFor': record.value > 0 ? 'mostPointsSeason' : 'fewestPointsSeason',
+                                                    'luckRating': record.value > 0 ? 'bestLuckRatingSeason' : 'worstLuckRatingSeason',
+                                                    'highestDPR': 'highestDPRSeason',
+                                                    'lowestDPR': 'lowestDPRSeason',
+                                                    'tradeCount': 'mostTradesSeason',
+                                                    'waiverCount': 'mostWaiversSeason'
+                                                };
+                                                const dataKey = keyMapping[record.key];
+                                                const isMinRecord = ['fewestPointsSeason', 'worstLuckRatingSeason', 'lowestDPRSeason'].includes(dataKey);
+                                                
+                                                return allSeasonData[dataKey]
+                                                    .sort((a, b) => isMinRecord ? a.value - b.value : b.value - a.value)
+                                                    .slice(0, 5)
+                                                    .map((seasonData, idx) => (
+                                                        <div key={`${record.key}-mobile-top5-${seasonData.ownerId}-${seasonData.year}-${idx}`} className="flex items-center justify-between bg-gray-50 rounded-md p-2 border border-gray-100">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="w-7 h-7 flex items-center justify-center bg-blue-100 text-blue-800 rounded-full text-xs font-bold">{idx + 1}</div>
+                                                                <div className="text-sm font-medium text-gray-900 truncate">
+                                                                    {seasonData.teamName || getTeamName(seasonData.ownerId, seasonData.year)} ({seasonData.year})
+                                                                </div>
+                                                            </div>
+                                                            <div className="text-sm font-semibold text-gray-900">
+                                                                {(() => {
+                                                                    if ([
+                                                                        'wins', 'losses', 'topScoreWeeksCount', 'weeklyTop2ScoresCount',
+                                                                        'blowoutWins', 'blowoutLosses', 'slimWins', 'slimLosses', 'tradeCount', 'waiverCount'
+                                                                    ].includes(record.key)) {
+                                                                        return Math.round(seasonData.value).toLocaleString('en-US', { maximumFractionDigits: 0 });
+                                                                    } else if (['luckRating', 'highestDPR', 'lowestDPR'].includes(record.key)) {
+                                                                        return seasonData.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                                                                    } else if (record.key === 'pointsFor') {
+                                                                        return seasonData.value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+                                                                    } else if (record.key === 'winPercentage' || record.key === 'allPlayWinPercentage') {
+                                                                        return (seasonData.value * 100).toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+                                                                    } else {
+                                                                        return seasonData.value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+                                                                    }
+                                                                })()}
+                                                            </div>
+                                                        </div>
+                                                ));
+                                            })()}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+
+            {/* Desktop/table: hidden on small screens */}
+            <div className="hidden sm:block bg-gradient-to-r from-gray-50 to-white rounded-xl sm:rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
                     <table className="min-w-full">
                         <thead>
@@ -605,7 +755,7 @@ const SeasonRecords = () => {
                                                                         }
                                                                         
                                                                         return (
-                                                                            <div key={`${seasonData.teamName}-${seasonData.value}-${seasonData.year}-${index}`} 
+                                                                            <div key={`${record.key}-${seasonData.teamName}-${seasonData.value}-${seasonData.year}-${index}`} 
                                                                                  className="flex items-center justify-between py-2 px-3 bg-white rounded-lg border border-gray-200">
                                                                                 <div className="flex items-center gap-3">
                                                                                     <span className="flex items-center justify-center w-6 h-6 bg-blue-100 text-blue-800 text-xs font-bold rounded-full">

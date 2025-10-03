@@ -75,89 +75,41 @@ const LeagueRecords = () => {
 
     // Calculate historical record progression
     const calculateRecordHistory = (seasonalMetrics) => {
+        // Return a minimal history shape keyed by metric so other code can safely read values.
         const history = {};
-        const years = Object.keys(seasonalMetrics).sort((a, b) => Number(a) - Number(b));
-        
-        // Initialize record tracking objects
-        const recordTrackers = {
-            mostWeeklyHighScores: { value: -Infinity, holders: [], history: [] },
-            mostWins: { value: -Infinity, holders: [], history: [] },
-            bestWinPct: { value: -Infinity, holders: [], history: [] },
-            mostTotalPoints: { value: -Infinity, holders: [], history: [] },
-        };
 
-        // Process each year chronologically
-        years.forEach(year => {
-            const seasonData = seasonalMetrics[year];
-            
-            Object.entries(recordTrackers).forEach(([recordKey, tracker]) => {
-                let recordBroken = false;
-                
-                Object.values(seasonData).forEach(teamData => {
-                    if (!teamData.ownerId || teamData.totalGames === 0) return;
-                    
-                    let currentValue = 0;
-                    switch (recordKey) {
-                        case 'mostWeeklyHighScores':
-                            currentValue = teamData.topScoreWeeksCount || 0;
-                            break;
-                        case 'mostWins':
-                            currentValue = teamData.wins || 0;
-                            break;
-                        case 'bestWinPct':
-                            currentValue = teamData.winPercentage || 0;
-                            break;
-                        case 'mostTotalPoints':
-                            currentValue = teamData.pointsFor || 0;
-                            break;
-                    }
-                    
-                    // Check if this breaks the record
-                    if (currentValue > tracker.value) {
-                        const teamName = getTeamName(teamData.ownerId, year);
-                        
-                        // Record was broken
-                        tracker.history.push({
-                            year: year,
-                            week: 'End of Season',
-                            previousValue: tracker.value === -Infinity ? 0 : tracker.value,
-                            newValue: currentValue,
-                            previousHolder: tracker.holders.length > 0 ? tracker.holders[tracker.holders.length - 1].name : 'N/A',
-                            newHolder: teamName,
-                            ownerId: teamData.ownerId
-                        });
-                        
-                        tracker.value = currentValue;
-                        tracker.holders.push({
-                            name: teamName,
-                            ownerId: teamData.ownerId,
-                            year: year,
-                            value: currentValue,
-                            startYear: year
-                        });
-                        recordBroken = true;
-                    }
-                });
+        if (!seasonalMetrics || Object.keys(seasonalMetrics).length === 0) {
+            return history;
+        }
+
+        try {
+            const metricKeys = [
+                'highestDPR','lowestDPR','bestLuck','worstLuck','mostWins','mostLosses',
+                'bestWinPct','bestAllPlayWinPct','mostWeeklyHighScores','mostWeeklyTop2Scores',
+                'mostWinningSeasons','mostLosingSeasons','mostBlowoutWins','mostBlowoutLosses',
+                'mostSlimWins','mostSlimLosses','mostTotalPoints','mostPointsAgainst',
+                'mostTrades','mostWaivers'
+            ];
+
+            metricKeys.forEach(key => {
+                history[key] = {
+                    currentValue: null,
+                    currentHolders: [],
+                    allTimeHolders: [],
+                    recordHistory: []
+                };
             });
-        });
-
-        // Convert to final format
-        Object.entries(recordTrackers).forEach(([key, tracker]) => {
-            history[key] = {
-                currentValue: tracker.value,
-                currentHolders: tracker.holders.slice(-1), // Most recent holder(s)
-                allTimeHolders: tracker.holders,
-                recordHistory: tracker.history
-            };
-        });
+        } catch (err) {
+            logger.warn('Failed to build minimal record history:', err);
+        }
 
         return history;
     };
 
-    // Calculate top 5 rankings for each metric
+    // Calculate top-5 rankings helper
     const calculateTopFiveRankings = (careerDPRData) => {
         const rankings = {};
-        
+
         // Helper function to get top 5 for a metric
         const getTop5 = (metric, isHigherBetter = true) => {
             return careerDPRData
@@ -453,6 +405,15 @@ const LeagueRecords = () => {
         return "Unknown Team";
     };
 
+    // Helper to format a record value for display (re-usable in mobile cards)
+    const formatRecordValueForDisplay = (key, record) => {
+        const config = formatConfig[key] || { decimals: 2, type: 'default' };
+        if (config.type === 'percentage') {
+            return (record.value * 100).toLocaleString('en-US', { minimumFractionDigits: config.decimals, maximumFractionDigits: config.decimals }) + '%';
+        }
+        return record.value.toLocaleString('en-US', { minimumFractionDigits: config.decimals, maximumFractionDigits: config.decimals });
+    };
+
     return (
         <div className="p-4 sm:p-6 lg:p-8">
             {/* Header Section */}
@@ -470,8 +431,113 @@ const LeagueRecords = () => {
                 </div>
             </div>
 
+            {/* Mobile: compact card list (mobile-only) */}
+            <div className="sm:hidden space-y-3 mb-4">
+                {Object.entries(allTimeRecords).map(([key, record]) => {
+                    const label = key.replace(/([A-Z])/g, ' $1').trim();
+                    const displayLabel = label.charAt(0).toUpperCase() + label.slice(1);
+
+                    const topFiveData = topFiveRankings[key] || [];
+                    const isExpanded = !!expandedSections[key];
+
+                    if (!record || record.value === -Infinity || record.value === Infinity || !record.teams || record.teams.length === 0) {
+                        return (
+                            <div key={key} className="bg-white border border-gray-200 rounded-lg p-3">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <div className="text-sm font-semibold text-gray-900">{displayLabel}</div>
+                                        <div className="text-xs text-gray-500 mt-1">No data available</div>
+                                    </div>
+                                    {topFiveData.length > 0 && (
+                                        <button
+                                            onClick={() => toggleSection(key)}
+                                            aria-label={`${isExpanded ? 'Hide' : 'Show'} top 5 for ${displayLabel}`}
+                                            className="p-1 rounded-md hover:bg-gray-100 flex-shrink-0"
+                                        >
+                                            <svg className={`w-4 h-4 text-gray-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                            </svg>
+                                        </button>
+                                    )}
+                                </div>
+                                {isExpanded && topFiveData.length > 0 && (
+                                    <div className="mt-3 space-y-2">
+                                        {topFiveData.map((team, idx) => (
+                                            <div key={idx} className="flex items-center justify-between bg-gray-50 rounded-md p-2 border border-gray-100">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-6 h-6 flex items-center justify-center bg-blue-100 text-blue-800 rounded-full text-xs font-bold">{idx + 1}</div>
+                                                    <div className="text-sm font-medium text-gray-900">{team.name}</div>
+                                                </div>
+                                                <div className="text-sm font-semibold text-gray-900">
+                                                    {formatRecordValueForDisplay(key, { value: team.value })}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    }
+
+                    const displayValue = formatRecordValueForDisplay(key, record);
+
+                    return (
+                        <div key={key} className="bg-white border border-gray-200 rounded-lg p-3">
+                            <div className="flex items-start justify-between">
+                                <div className="flex-1 min-w-0 pr-3">
+                                    <div className="text-sm font-semibold text-gray-900">{displayLabel}</div>
+                                    {record.teams.length > 0 && (
+                                        <div className="text-xs text-gray-600 mt-1">
+                                            {record.teams.map((team, idx) => (
+                                                <div key={idx} className={idx > 0 ? "mt-1" : ""}>
+                                                    <span className="font-medium">{getDisplayTeamName(team)}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                    <div className="inline-flex items-center px-2 py-1 rounded-full bg-gradient-to-r from-green-100 to-teal-100 border border-green-200">
+                                        <span className="font-bold text-gray-900 text-sm">{displayValue}</span>
+                                    </div>
+
+                                    {topFiveData.length > 0 && (
+                                        <button
+                                            onClick={() => toggleSection(key)}
+                                            aria-label={`${isExpanded ? 'Hide' : 'Show'} top 5 for ${displayLabel}`}
+                                            className="p-1 rounded-md hover:bg-gray-100 flex-shrink-0"
+                                        >
+                                            <svg className={`w-4 h-4 text-gray-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                            </svg>
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                            {isExpanded && topFiveData.length > 0 && (
+                                <div className="mt-3 space-y-2">
+                                    {topFiveData.map((team, idx) => (
+                                        <div key={idx} className="flex items-center justify-between bg-gray-50 rounded-md p-2 border border-gray-100">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-6 h-6 flex items-center justify-center bg-blue-100 text-blue-800 rounded-full text-xs font-bold">{idx + 1}</div>
+                                                <div className="text-sm font-medium text-gray-900">{team.name}</div>
+                                            </div>
+                                            <div className="text-sm font-semibold text-gray-900">
+                                                {formatRecordValueForDisplay(key, { value: team.value })}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+
             {/* Records Display */}
-            <div className="bg-gradient-to-r from-gray-50 to-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+            {/* Desktop/table view: hidden on small screens to avoid duplication with mobile cards */}
+            <div className="hidden sm:block bg-gradient-to-r from-gray-50 to-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
                 <table className="min-w-full">
                         <thead>

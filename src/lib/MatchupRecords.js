@@ -320,10 +320,164 @@ const MatchupRecords = () => {
                 </div>
             </div>
 
-            {/* Records Table */}
-            <div className="bg-gradient-to-r from-gray-50 to-white rounded-xl sm:rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-                <div className="overflow-x-auto">
-                    <table className="min-w-full">
+                    {/* Records Table (mobile-first) */}
+
+                    {/* Mobile: compact card list */}
+                    <div className="space-y-3 sm:hidden">
+                        {recordsToDisplay.map((recordDef) => {
+                            const recordData = aggregatedMatchupRecords[recordDef.key];
+                            if (!recordData || recordData.entries.length === 0) {
+                                return (
+                                    <div key={recordDef.key} className="bg-white border border-gray-200 rounded-lg p-3">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <div className="text-xs font-semibold text-gray-700">{recordDef.label}</div>
+                                                <div className="text-xs text-gray-500">No data</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            }
+
+                            // Get all tied holders (same value as the record)
+                            const recordValue = recordData.value;
+                            const tiedHolders = recordData.entries.filter(entry => {
+                                // Get the value for this entry based on record type
+                                if (recordDef.key === 'mostPointsScored' || recordDef.key === 'fewestPointsScored' || 
+                                    recordDef.key === 'mostPointsInLoss' || recordDef.key === 'fewestPointsInWin') {
+                                    return entry.score === recordValue;
+                                } else if (recordDef.key === 'highestCombinedScore' || recordDef.key === 'lowestCombinedScore') {
+                                    return entry.combinedScore === recordValue;
+                                } else if (recordDef.key === 'biggestBlowout') {
+                                    return entry.margin === recordValue;
+                                } else if (recordDef.key === 'slimmestWin') {
+                                    return entry.margin === recordValue;
+                                }
+                                return false;
+                            });
+                            const primary = tiedHolders[0];
+
+                            return (
+                                <div key={recordDef.key} className="bg-white border border-gray-200 rounded-lg p-3">
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex-1 min-w-0 pr-3">
+                                            <div className="text-sm font-semibold text-gray-900">{recordDef.label}</div>
+                                            {tiedHolders.length > 0 && (
+                                                <div className="text-xs text-gray-600 mt-1">
+                                                    {tiedHolders.map((holder, idx) => (
+                                                        <div key={idx} className={idx > 0 ? "mt-2 pt-2 border-t border-gray-100" : ""}>
+                                                            {(() => {
+                                                                // Show both teams for matchup records - stack vertically for mobile
+                                                                if (recordDef.key === 'highestCombinedScore' || recordDef.key === 'lowestCombinedScore') {
+                                                                    return (
+                                                                        <div>
+                                                                            <div className="font-medium">{holder.team1}</div>
+                                                                            <div className="text-gray-500">vs {holder.team2}</div>
+                                                                            <div className="text-gray-500 mt-1">{holder.year} W{holder.week}</div>
+                                                                        </div>
+                                                                    );
+                                                                } else if (recordDef.key === 'biggestBlowout' || recordDef.key === 'slimmestWin') {
+                                                                    return (
+                                                                        <div>
+                                                                            <div className="font-medium">{holder.winner}</div>
+                                                                            <div className="text-gray-500">def {holder.loser}</div>
+                                                                            <div className="text-gray-500 mt-1">{holder.year} W{holder.week}</div>
+                                                                        </div>
+                                                                    );
+                                                                } else {
+                                                                    // Individual team records
+                                                                    return (
+                                                                        <div>
+                                                                            <div className="font-medium">{holder.team}</div>
+                                                                            {holder.opponent && <div className="text-gray-500">vs {holder.opponent}</div>}
+                                                                            <div className="text-gray-500 mt-1">{holder.year} W{holder.week}</div>
+                                                                        </div>
+                                                                    );
+                                                                }
+                                                            })()}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="flex items-center gap-2 flex-shrink-0">
+                                            {primary && (
+                                                <div className="inline-flex items-center px-2 py-1 rounded-full bg-gradient-to-r from-orange-100 to-red-100 border border-orange-200">
+                                                    <span className="font-bold text-gray-900 text-sm">{formatDisplayValue(recordData.value, recordDef.key)}</span>
+                                                </div>
+                                            )}
+
+                                            <button
+                                                onClick={() => toggleSection(recordDef.key)}
+                                                aria-label={`${expandedSections[recordDef.key] ? 'Hide' : 'Show'} top 5 for ${recordDef.label}`}
+                                                className="p-1 rounded-md hover:bg-gray-100 flex-shrink-0"
+                                            >
+                                                <svg className={`w-4 h-4 text-gray-600 transition-transform ${expandedSections[recordDef.key] ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Expandable Top5 for mobile */}
+                                    {expandedSections[recordDef.key] && allMatchupData[recordDef.key] && allMatchupData[recordDef.key].length > 0 && (
+                                        <div className="mt-3 space-y-2">
+                                            {(() => {
+                                                const sortKey = recordDef.key;
+                                                const isMinRecord = ['fewestPointsScored', 'fewestPointsInWin', 'lowestCombinedScore', 'slimmestWin'].includes(sortKey);
+                                                return allMatchupData[sortKey]
+                                                    .sort((a, b) => isMinRecord ? a.value - b.value : b.value - a.value)
+                                                    .slice(0, 5)
+                                                    .map((matchupData, index) => (
+                                                        <div key={`${sortKey}-mobile-${matchupData.year}-${matchupData.week}-${index}`} className="flex items-start justify-between bg-gray-50 rounded-md p-2 border border-gray-100">
+                                                            <div className="flex items-start gap-3">
+                                                                <div className="w-6 h-6 flex items-center justify-center bg-blue-100 text-blue-800 rounded-full text-xs font-bold mt-1">{index + 1}</div>
+                                                                <div className="text-sm text-gray-900">
+                                                                    {(() => {
+                                                                        if (sortKey === 'highestCombinedScore' || sortKey === 'lowestCombinedScore') {
+                                                                            return (
+                                                                                <div>
+                                                                                    <div className="font-medium">{matchupData.team1}</div>
+                                                                                    <div className="text-gray-500 text-xs">vs {matchupData.team2}</div>
+                                                                                    <div className="text-gray-500 text-xs mt-1">{matchupData.year} W{matchupData.week}</div>
+                                                                                </div>
+                                                                            );
+                                                                        } else if (sortKey === 'biggestBlowout' || sortKey === 'slimmestWin') {
+                                                                            return (
+                                                                                <div>
+                                                                                    <div className="font-medium">{matchupData.winner}</div>
+                                                                                    <div className="text-gray-500 text-xs">def {matchupData.loser}</div>
+                                                                                    <div className="text-gray-500 text-xs mt-1">{matchupData.year} W{matchupData.week}</div>
+                                                                                </div>
+                                                                            );
+                                                                        } else {
+                                                                            return (
+                                                                                <div>
+                                                                                    <div className="font-medium">{matchupData.team}</div>
+                                                                                    {matchupData.opponent && <div className="text-gray-500 text-xs">vs {matchupData.opponent}</div>}
+                                                                                    <div className="text-gray-500 text-xs mt-1">{matchupData.year} W{matchupData.week}</div>
+                                                                                </div>
+                                                                            );
+                                                                        }
+                                                                    })()}
+                                                                </div>
+                                                            </div>
+                                                            <div className="text-sm font-semibold text-gray-900 flex-shrink-0">{matchupData.value.toFixed(2)}</div>
+                                                        </div>
+                                                ));
+                                            })()}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Desktop/table: hidden on small screens */}
+                    <div className="hidden sm:block bg-gradient-to-r from-gray-50 to-white rounded-xl sm:rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full">
                         <thead>
                             <tr className="bg-gradient-to-r from-gray-100 to-gray-50 border-b border-gray-200">
                                 <th className="py-3 px-3 sm:py-4 sm:px-6 text-left text-xs sm:text-sm font-bold text-gray-800 uppercase tracking-wide">

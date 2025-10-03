@@ -205,7 +205,36 @@ const VersusRecords = ({ historicalMatchups, getDisplayTeamName }) => {
         <p className="text-center text-gray-600">No versus matchup data available to display records.</p>
       )}
 
-      <div className="overflow-x-auto">
+      {/* Mobile: compact card list */}
+      <div className="space-y-3 sm:hidden">
+        {recordsToDisplay.map(recordDef => {
+          const recordData = aggregatedVersusRecords[recordDef.key];
+          if (!recordData || recordData.entries.length === 0) {
+            return (
+              <div key={recordDef.key} className="bg-white border border-gray-200 rounded-lg p-3">
+                <div className="text-xs font-semibold text-gray-700">{recordDef.label}</div>
+                <div className="text-xs text-gray-500">N/A</div>
+              </div>
+            );
+          }
+
+          const primary = recordData.entries[0];
+          return (
+            <div key={recordDef.key} className="bg-white border border-gray-200 rounded-lg p-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-gray-900">{recordDef.label}</div>
+                  <div className="text-xs text-gray-600">{primary.team} vs {primary.opponent}</div>
+                </div>
+                <div className="text-sm font-bold text-gray-900">{formatDisplayValue(recordData.value, recordDef.key)}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Desktop table for sm+ */}
+      <div className="hidden sm:block overflow-x-auto">
         <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
           <thead className="bg-gray-100">
             <tr>

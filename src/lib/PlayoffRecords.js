@@ -224,8 +224,8 @@ const PlayoffRecords = ({ historicalMatchups }) => { // Removed getDisplayTeamNa
       const pointsEntry = { team: currentTeamName, points: stats.pointsFor };
       const pointsAgainstEntry = { team: currentTeamName, pointsAgainst: stats.pointsAgainst };
       const championshipsEntry = { team: currentTeamName, championships: stats.championships };
-      const secondPlaceEntry = { team: currentTeamName, place: stats.medals[2] };
-      const thirdPlaceEntry = { team: currentTeamName, place: stats.medals[3] };
+      const secondPlaceEntry = { team: currentTeamName, secondPlaces: stats.medals[2] };
+      const thirdPlaceEntry = { team: currentTeamName, thirdPlaces: stats.medals[3] };
 
       updateRecord(newAggregatedRecords.mostPlayoffAppearances, stats.appearances.size, appearancesEntry);
       updateRecord(newAggregatedRecords.mostPlayoffWins, stats.wins, winsEntry);
@@ -280,9 +280,12 @@ const PlayoffRecords = ({ historicalMatchups }) => { // Removed getDisplayTeamNa
                 } else if (key === 'mostChampionships') {
                     valueA = a.championships;
                     valueB = b.championships;
-                } else if (key === 'most2ndPlaceFinishes' || key === 'most3rdPlaceFinishes') {
-                    valueA = a.place;
-                    valueB = b.place;
+                } else if (key === 'most2ndPlaceFinishes') {
+                    valueA = a.secondPlaces;
+                    valueB = b.secondPlaces;
+                } else if (key === 'most3rdPlaceFinishes') {
+                    valueA = a.thirdPlaces;
+                    valueB = b.thirdPlaces;
                 } else {
                     valueA = a.value; // Fallback to general 'value' if specific key not found
                     valueB = b.value;
@@ -303,7 +306,9 @@ const PlayoffRecords = ({ historicalMatchups }) => { // Removed getDisplayTeamNa
   // Helper to format values for display
   const formatDisplayValue = (value, recordKey) => {
     if (typeof value === 'number') {
-      if (recordKey === 'mostPlayoffAppearances' || recordKey === 'mostPlayoffWins') {
+      if (recordKey === 'mostPlayoffAppearances' || recordKey === 'mostPlayoffWins' || 
+          recordKey === 'mostChampionships' || recordKey === 'most2ndPlaceFinishes' || 
+          recordKey === 'most3rdPlaceFinishes') {
         return value; // Whole number for counts
       } else if (recordKey === 'totalPlayoffPoints' || recordKey === 'mostPlayoffPointsAgainst') {
         return value.toFixed(2); // Two decimal places for points
@@ -349,10 +354,106 @@ const PlayoffRecords = ({ historicalMatchups }) => { // Removed getDisplayTeamNa
                 <h4 className="text-xl font-semibold text-gray-800">No Playoff Data Available</h4>
                 <p className="text-gray-500">Cannot display records without historical playoff data.</p>
             </div>
-        ) : (
-            <div className="bg-gradient-to-r from-gray-50 to-white rounded-xl sm:rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-                <div className="overflow-x-auto">
-                    <table className="min-w-full">
+    ) : ( <>
+
+      {/* Mobile: compact card list */}
+      <div className="space-y-3 sm:hidden">
+        {recordsToDisplay.map((recordDef) => {
+          const recordData = aggregatedPlayoffRecords[recordDef.key];
+          if (!recordData || recordData.entries.length === 0) {
+            return (
+              <div key={recordDef.key} className="bg-white border border-gray-200 rounded-lg p-3">
+                <div className="text-xs font-semibold text-gray-700">{recordDef.label}</div>
+                <div className="text-xs text-gray-500">No data</div>
+              </div>
+            );
+          }
+
+          // Get all tied holders (same value as the record)
+          const recordValue = recordData.value;
+          const tiedHolders = recordData.entries.filter(entry => {
+            // Get the appropriate value field for this record type
+            if (recordDef.key === 'mostPlayoffAppearances') return entry.appearances === recordValue;
+            if (recordDef.key === 'mostPlayoffWins') return entry.wins === recordValue;
+            if (recordDef.key === 'totalPlayoffPoints') return entry.points === recordValue;
+            if (recordDef.key === 'mostPlayoffPointsAgainst') return entry.pointsAgainst === recordValue;
+            if (recordDef.key === 'mostChampionships') return entry.championships === recordValue;
+            if (recordDef.key === 'most2ndPlaceFinishes') return entry.secondPlaces === recordValue;
+            if (recordDef.key === 'most3rdPlaceFinishes') return entry.thirdPlaces === recordValue;
+            return false;
+          });
+          const primary = tiedHolders[0];
+
+          return (
+            <div key={recordDef.key} className="bg-white border border-gray-200 rounded-lg p-3">
+              <div className="flex items-start justify-between">
+                <div className="flex-1 min-w-0 pr-3">
+                  <div className="text-sm font-semibold text-gray-900">{recordDef.label}</div>
+                  {tiedHolders.length > 0 && (
+                    <div className="text-xs text-gray-600 mt-1">
+                      {tiedHolders.map((holder, idx) => (
+                        <div key={idx} className={idx > 0 ? "mt-1" : ""}>
+                          <span className="font-medium">{holder.team}</span>
+                          {holder.season !== undefined && (
+                            <span className="text-gray-500"> — S{holder.season}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="ml-3 flex items-center gap-3">
+                  {primary && (
+                    <div className="inline-flex items-center px-2 py-1 rounded-full bg-gradient-to-r from-gray-100 to-green-100 border border-gray-200">
+                      <span className="font-bold text-gray-900 text-sm">{formatDisplayValue(recordData.value, recordDef.key)}</span>
+                    </div>
+                  )}
+                  <button onClick={() => toggleSection(recordDef.key)} className="p-2 rounded-md hover:bg-gray-100">
+                    <svg className={`w-5 h-5 text-gray-600 transition-transform ${expandedSections[recordDef.key] ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              {(() => {
+                // Map record keys to allPlayoffData keys for mobile
+                const keyMapping = {
+                  'totalPlayoffPoints': 'mostPlayoffPointsFor',
+                  'most2ndPlaceFinishes': 'mostSecondPlaceFinishes',
+                  'most3rdPlaceFinishes': 'mostThirdPlaceFinishes'
+                };
+                const dataKey = keyMapping[recordDef.key] || recordDef.key;
+                return expandedSections[recordDef.key] && allPlayoffData[dataKey] && allPlayoffData[dataKey].length > 0;
+              })() && (
+                <div className="mt-3 space-y-2">
+                  {(() => {
+                    const keyMapping = {
+                      'totalPlayoffPoints': 'mostPlayoffPointsFor',
+                      'most2ndPlaceFinishes': 'mostSecondPlaceFinishes',
+                      'most3rdPlaceFinishes': 'mostThirdPlaceFinishes'
+                    };
+                    const dataKey = keyMapping[recordDef.key] || recordDef.key;
+                    return allPlayoffData[dataKey].filter(data => data.value > 0).sort((a,b) => b.value - a.value).slice(0,5);
+                  })().map((item, idx) => (
+                    <div key={`${recordDef.key}-mobile-${idx}`} className="flex items-center justify-between bg-gray-50 rounded-md p-2 border border-gray-100">
+                      <div className="flex items-center gap-3">
+                        <div className="w-7 h-7 flex items-center justify-center bg-blue-100 text-blue-800 rounded-full text-xs font-bold">{idx+1}</div>
+                        <div className="text-sm font-medium text-gray-900 truncate">{item.team || item.teamName || item.team1}</div>
+                      </div>
+                      <div className="text-sm font-semibold text-gray-900">{item.value.toFixed ? item.value.toFixed(2) : item.value}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="hidden sm:block bg-gradient-to-r from-gray-50 to-white rounded-xl sm:rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="min-w-full">
                         <thead>
                             <tr className="bg-gradient-to-r from-gray-100 to-gray-50 border-b border-gray-200">
                                 <th className="py-3 px-3 sm:py-4 sm:px-6 text-left text-xs sm:text-sm font-bold text-gray-800 uppercase tracking-wide">
@@ -433,7 +534,16 @@ const PlayoffRecords = ({ historicalMatchups }) => { // Removed getDisplayTeamNa
                                         </tr>
                                         
                                         {/* Collapsible Top 5 Section */}
-                                        {isExpanded && allPlayoffData[recordDef.key] && allPlayoffData[recordDef.key].length > 0 && (
+                                        {(() => {
+                                            // Map record keys to allPlayoffData keys
+                                            const keyMapping = {
+                                                'totalPlayoffPoints': 'mostPlayoffPointsFor',
+                                                'most2ndPlaceFinishes': 'mostSecondPlaceFinishes',
+                                                'most3rdPlaceFinishes': 'mostThirdPlaceFinishes'
+                                            };
+                                            const dataKey = keyMapping[recordDef.key] || recordDef.key;
+                                            return isExpanded && allPlayoffData[dataKey] && allPlayoffData[dataKey].length > 0;
+                                        })() && (
                                             <tr className={`${recordGroupIndex % 2 === 0 ? 'bg-gray-50' : 'bg-gray-75'}`}>
                                                 <td colSpan="3" className="p-0">
                                                     <div className="px-3 py-4 sm:px-6 sm:py-6">
@@ -441,7 +551,16 @@ const PlayoffRecords = ({ historicalMatchups }) => { // Removed getDisplayTeamNa
                                                             Top 5 {recordDef.label}
                                                         </h4>
                                                         <div className="space-y-2">
-                                                            {allPlayoffData[recordDef.key]
+                                                            {(() => {
+                                                                const keyMapping = {
+                                                                    'totalPlayoffPoints': 'mostPlayoffPointsFor',
+                                                                    'most2ndPlaceFinishes': 'mostSecondPlaceFinishes',
+                                                                    'most3rdPlaceFinishes': 'mostThirdPlaceFinishes'
+                                                                };
+                                                                const dataKey = keyMapping[recordDef.key] || recordDef.key;
+                                                                return allPlayoffData[dataKey];
+                                                            })()
+                                                                .filter(data => data.value > 0)
                                                                 .sort((a, b) => b.value - a.value)
                                                                 .slice(0, 5)
                                                                 .map((playoffData, index) => (
@@ -469,8 +588,8 @@ const PlayoffRecords = ({ historicalMatchups }) => { // Removed getDisplayTeamNa
                         </tbody>
                     </table>
                 </div>
-            </div>
-        )}
+      </div>
+    </>) }
     </div>
 );
 };

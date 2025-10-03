@@ -187,6 +187,8 @@ const RecordBook = () => {
     const hasStreaksAndMatchupData = allHistoricalMatchupsFlat.length > 0;
     const hasPlayoffData = historicalData && historicalData.winnersBracketBySeason && Object.keys(historicalData.winnersBracketBySeason).length > 0;
 
+    // (Top-5 headers removed by request) — RecordBook now only renders the main record components
+
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
@@ -296,98 +298,133 @@ const RecordBook = () => {
                 {/* Tab Content */}
                 <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
                     {activeTab === 'overall' && (
-                        hasOverallData ? (
-                            <LeagueRecords
-                                historicalData={historicalData}
-                                getTeamName={getTeamName}
-                                calculateAllLeagueMetrics={calculateAllLeagueMetrics}
-                            />
-                        ) : (
-                            <div className="text-center py-16 px-6">
-                                <div className="text-6xl mb-4">📊</div>
-                                <h3 className="text-xl font-semibold text-gray-700 mb-2">No Overall Data</h3>
-                                <p className="text-gray-500">No overall league data available yet.</p>
-                            </div>
-                        )
+                        <>
+                            {hasOverallData ? (
+                                <>
+                                    {/* Mobile header (Top-5 removed) */}
+                                    <LeagueRecords
+                                        historicalData={historicalData}
+                                        getTeamName={getTeamName}
+                                        calculateAllLeagueMetrics={calculateAllLeagueMetrics}
+                                    />
+                                </>
+                            ) : (
+                                <div className="text-center py-16 px-6">
+                                    <div className="text-6xl mb-4">📊</div>
+                                    <h3 className="text-xl font-semibold text-gray-700 mb-2">No Overall Data</h3>
+                                    <p className="text-gray-500">No overall league data available yet.</p>
+                                </div>
+                            )}
+                        </>
                     )}
 
                     
 
                     {activeTab === 'seasonal' && (
-                        hasSeasonalData ? (
-                            <SeasonRecords />
-                        ) : (
-                            <div className="text-center py-16 px-6">
-                                <div className="text-6xl mb-4">📅</div>
-                                <h3 className="text-xl font-semibold text-gray-700 mb-2">No Seasonal Data</h3>
-                                <p className="text-gray-500">No seasonal data available for display.</p>
-                            </div>
-                        )
+                        <>
+                            {hasSeasonalData ? (
+                                <>
+                                    {/* Mobile header (Top-5 removed) */}
+                                    <SeasonRecords />
+                                </>
+                            ) : (
+                                <div className="text-center py-16 px-6">
+                                    <div className="text-6xl mb-4">📅</div>
+                                    <h3 className="text-xl font-semibold text-gray-700 mb-2">No Seasonal Data</h3>
+                                    <p className="text-gray-500">No seasonal data available for display.</p>
+                                </div>
+                            )}
+                        </>
                     )}
 
                     {activeTab === 'streaks' && (
-                        hasStreaksAndMatchupData ? (
-                            <StreaksRecords
-                                historicalMatchups={allHistoricalMatchupsFlat} // Pass the correctly flattened array
-                            />
-                        ) : (
-                            <div className="text-center py-16 px-6">
-                                <div className="text-6xl mb-4">🔥</div>
-                                <h3 className="text-xl font-semibold text-gray-700 mb-2">No Streak Data</h3>
-                                <p className="text-gray-500">No historical matchup data available to calculate streaks.</p>
-                            </div>
-                        )
+                        <>
+                            {hasStreaksAndMatchupData ? (
+                                <>
+                                    {/* Mobile header (Top-5 removed) */}
+                                    <StreaksRecords
+                                        historicalMatchups={allHistoricalMatchupsFlat} // Pass the correctly flattened array
+                                    />
+                                </>
+                            ) : (
+                                <div className="text-center py-16 px-6">
+                                    <div className="text-6xl mb-4">🔥</div>
+                                    <h3 className="text-xl font-semibold text-gray-700 mb-2">No Streak Data</h3>
+                                    <p className="text-gray-500">No historical matchup data available to calculate streaks.</p>
+                                </div>
+                            )}
+                        </>
                     )}
 
                     {activeTab === 'matchup' && (
-                        hasStreaksAndMatchupData ? (
-                            <MatchupRecords />
-                        ) : (
-                            <div className="text-center py-16 px-6">
-                                <div className="text-6xl mb-4">⚔️</div>
-                                <h3 className="text-xl font-semibold text-gray-700 mb-2">No Matchup Data</h3>
-                                <p className="text-gray-500">No historical matchup data available to calculate matchup records.</p>
-                            </div>
-                        )
+                        <>
+                            {hasStreaksAndMatchupData ? (
+                                <>
+                                    {/* Mobile header (Top-5 removed) */}
+                                    <MatchupRecords />
+                                </>
+                            ) : (
+                                <div className="text-center py-16 px-6">
+                                    <div className="text-6xl mb-4">⚔️</div>
+                                    <h3 className="text-xl font-semibold text-gray-700 mb-2">No Matchup Data</h3>
+                                    <p className="text-gray-500">No historical matchup data available to calculate matchup records.</p>
+                                </div>
+                            )}
+                        </>
                     )}
 
                     {activeTab === 'playoffs' && (
-                        hasPlayoffData ? (
-                            <PlayoffRecords
-                                historicalMatchups={allHistoricalMatchupsFlat} // Pass the now fully flattened matchups
-                                getDisplayTeamName={getTeamName} // Pass the team name resolver
-                            />
-                        ) : (
-                            <div className="text-center py-16 px-6">
-                                <div className="text-6xl mb-4">🏆</div>
-                                <h3 className="text-xl font-semibold text-gray-700 mb-2">No Playoff Data</h3>
-                                <p className="text-gray-500">No historical playoff data available.</p>
-                            </div>
-                        )
+                        <>
+                            {hasPlayoffData ? (
+                                <>
+                                    {/* Mobile header (Top-5 removed) */}
+                                    <PlayoffRecords
+                                        historicalMatchups={allHistoricalMatchupsFlat} // Pass the now fully flattened matchups
+                                        getDisplayTeamName={getTeamName} // Pass the team name resolver
+                                    />
+                                </>
+                            ) : (
+                                <div className="text-center py-16 px-6">
+                                    <div className="text-6xl mb-4">🏆</div>
+                                    <h3 className="text-xl font-semibold text-gray-700 mb-2">No Playoff Data</h3>
+                                    <p className="text-gray-500">No historical playoff data available.</p>
+                                </div>
+                            )}
+                        </>
                     )}
 
                     {activeTab === 'players' && (
-                        historicalData ? (
-                            <PlayerRecords />
-                        ) : (
-                            <div className="text-center py-16 px-6">
-                                <div className="text-6xl mb-4">⭐</div>
-                                <h3 className="text-xl font-semibold text-gray-700 mb-2">No Player Data</h3>
-                                <p className="text-gray-500">No historical player data available.</p>
-                            </div>
-                        )
+                        <>
+                            {historicalData ? (
+                                <>
+                                    {/* Mobile header (Top-5 removed) */}
+                                    <PlayerRecords />
+                                </>
+                            ) : (
+                                <div className="text-center py-16 px-6">
+                                    <div className="text-6xl mb-4">⭐</div>
+                                    <h3 className="text-xl font-semibold text-gray-700 mb-2">No Player Data</h3>
+                                    <p className="text-gray-500">No historical player data available.</p>
+                                </div>
+                            )}
+                        </>
                     )}
 
                     {activeTab === 'milestones' && (
-                        historicalData ? (
-                            <MilestoneRecords />
-                        ) : (
-                            <div className="text-center py-16 px-6">
-                                <div className="text-6xl mb-4">🏆</div>
-                                <h3 className="text-xl font-semibold text-gray-700 mb-2">No Milestone Data</h3>
-                                <p className="text-gray-500">No historical data available to compute milestones.</p>
-                            </div>
-                        )
+                        <>
+                            {historicalData ? (
+                                <>
+                                    {/* Mobile header (Top-5 removed) */}
+                                    <MilestoneRecords />
+                                </>
+                            ) : (
+                                <div className="text-center py-16 px-6">
+                                    <div className="text-6xl mb-4">🏆</div>
+                                    <h3 className="text-xl font-semibold text-gray-700 mb-2">No Milestone Data</h3>
+                                    <p className="text-gray-500">No historical data available to compute milestones.</p>
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
             </div>

@@ -4,8 +4,8 @@ import { useSleeperData } from '../contexts/SleeperDataContext'; // Import useSl
 import logger from '../utils/logger';
 
 const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is now the primary data source
-    // Consume historicalData, getTeamName, loading, and error from the context
-    const { historicalData, getTeamName, loading, error } = useSleeperData();
+    // Consume historicalData, getTeamName, loading, error, and nflState from the context
+    const { historicalData, getTeamName, loading, error, nflState } = useSleeperData();
     const [aggregatedStreaks, setAggregatedStreaks] = useState({});
     const [allStreaksData, setAllStreaksData] = useState({});
     const [expandedSections, setExpandedSections] = useState({});
@@ -330,8 +330,13 @@ const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is no
 
                 const weekRanking = weeklyRankings[game.year]?.[game.week];
 
+                // Skip current incomplete week for high score streaks
+                const currentYear = new Date().getFullYear();
+                const currentWeek = nflState?.week || 1;
+                const isCurrentIncompleteWeek = game.year === currentYear && game.week === currentWeek;
+
                 // Highest Score Streak
-                if (teamScoreInWeek === weekRanking.highestScore) {
+                if (!isCurrentIncompleteWeek && teamScoreInWeek === weekRanking.highestScore) {
                     if (currentHighestScoreStreak === 0) {
                         highestScoreStreakStartYear = game.year;
                         highestScoreStreakStartWeek = game.week;
@@ -347,7 +352,7 @@ const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is no
                 }
 
                 // Lowest Score Streak
-                if (teamScoreInWeek === weekRanking.lowestScore) {
+                if (!isCurrentIncompleteWeek && teamScoreInWeek === weekRanking.lowestScore) {
                     if (currentLowestScoreStreak === 0) {
                         lowestScoreStreakStartYear = game.year;
                         lowestScoreStreakStartWeek = game.week;
@@ -363,7 +368,7 @@ const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is no
                 }
 
                 // Top 3 Score Streak
-                if (weekRanking.top3Scores.includes(teamScoreInWeek)) {
+                if (!isCurrentIncompleteWeek && weekRanking.top3Scores.includes(teamScoreInWeek)) {
                     if (currentTop3Streak === 0) {
                         top3StreakStartYear = game.year;
                         top3StreakStartWeek = game.week;
@@ -454,10 +459,114 @@ const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is no
                 </div>
             </div>
 
-            {/* Records Table */}
-            <div className="bg-gradient-to-r from-gray-50 to-white rounded-xl sm:rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-                <div className="overflow-x-auto">
-                    <table className="min-w-full">
+                    {/* Records Table (mobile-first) */}
+
+                    {/* Mobile: compact card list */}
+                    <div className="space-y-3 sm:hidden">
+                        {recordsToDisplay.map((recordDef) => {
+                            const recordData = aggregatedStreaks[recordDef.key];
+                            if (!recordData || recordData.entries.length === 0) {
+                                return (
+                                    <div key={recordDef.key} className="bg-white border border-gray-200 rounded-lg p-3">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <div className="text-xs font-semibold text-gray-700">{recordDef.label}</div>
+                                                <div className="text-xs text-gray-500">No data</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            }
+
+                            // Get all tied holders (same value as the record)
+                            const recordValue = recordData.value;
+                            const tiedHolders = recordData.entries.filter(entry => entry.streak === recordValue);
+                            const primary = tiedHolders[0];
+
+                            return (
+                                <div key={recordDef.key} className="bg-white border border-gray-200 rounded-lg p-3">
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex-1 min-w-0 pr-3">
+                                            <div className="text-sm font-semibold text-gray-900">{recordDef.label}</div>
+                                            {tiedHolders.length > 0 && (
+                                                <div className="text-xs text-gray-600 mt-1">
+                                                    {tiedHolders.map((holder, idx) => (
+                                                        <div key={idx} className={idx > 0 ? "mt-1" : ""}>
+                                                            <span className="font-medium">{holder.team}</span>
+                                                            {holder.startYear !== undefined && (
+                                                                <div className="text-xs text-gray-500 mt-0.5">
+                                                                    {holder.endYear && holder.endWeek && 
+                                                                     (holder.startYear !== holder.endYear || holder.startWeek !== holder.endWeek) ? (
+                                                                        `${holder.startYear} W${holder.startWeek} - ${holder.endYear} W${holder.endWeek}`
+                                                                    ) : (
+                                                                        `${holder.startYear} W${holder.startWeek}`
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="flex items-center gap-2 flex-shrink-0">
+                                            {primary && (
+                                                <div className="inline-flex items-center px-2 py-1 rounded-full bg-gradient-to-r from-purple-100 to-pink-100 border border-purple-200">
+                                                    <span className="font-bold text-gray-900 text-sm">{primary.streak}</span>
+                                                </div>
+                                            )}
+
+                                            <button
+                                                onClick={() => toggleSection(recordDef.key)}
+                                                aria-label={`${expandedSections[recordDef.key] ? 'Hide' : 'Show'} top 5 for ${recordDef.label}`}
+                                                className="p-1 rounded-md hover:bg-gray-100 flex-shrink-0"
+                                            >
+                                                <svg className={`w-4 h-4 text-gray-600 transition-transform ${expandedSections[recordDef.key] ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Expandable Top5 for mobile */}
+                                    {expandedSections[recordDef.key] && allStreaksData[recordDef.key] && allStreaksData[recordDef.key].length > 0 && (
+                                        <div className="mt-3 space-y-2">
+                                            {allStreaksData[recordDef.key]
+                                                .filter(streak => streak.streak > 0)
+                                                .sort((a, b) => b.streak - a.streak)
+                                                .slice(0, 5)
+                                                .map((streak, idx) => (
+                                                    <div key={`${recordDef.key}-mobile-top5-${streak.team}-${streak.streak}-${idx}`} className="flex items-start justify-between bg-gray-50 rounded-md p-2 border border-gray-100">
+                                                        <div className="flex items-start gap-3">
+                                                            <div className="w-6 h-6 flex items-center justify-center bg-blue-100 text-blue-800 rounded-full text-xs font-bold mt-0.5">{idx + 1}</div>
+                                                            <div>
+                                                                <div className="text-sm font-medium text-gray-900">{streak.team}</div>
+                                                                {streak.startYear !== undefined && (
+                                                                    <div className="text-xs text-gray-500 mt-0.5">
+                                                                        {streak.endYear && streak.endWeek && 
+                                                                         (streak.startYear !== streak.endYear || streak.startWeek !== streak.endWeek) ? (
+                                                                            `${streak.startYear} W${streak.startWeek} - ${streak.endYear} W${streak.endWeek}`
+                                                                        ) : (
+                                                                            `${streak.startYear} W${streak.startWeek}`
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-sm font-semibold text-gray-900 flex-shrink-0">{streak.streak}</div>
+                                                    </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Desktop/table: hidden on small screens */}
+                    <div className="hidden sm:block bg-gradient-to-r from-gray-50 to-white rounded-xl sm:rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full">
                         <thead>
                             <tr className="bg-gradient-to-r from-gray-100 to-gray-50 border-b border-gray-200">
                                 <th className="py-3 px-3 sm:py-4 sm:px-6 text-left text-xs sm:text-sm font-bold text-gray-800 uppercase tracking-wide">
@@ -579,6 +688,7 @@ const StreaksRecords = ({ historicalMatchups }) => { // historicalMatchups is no
                                                         </h4>
                                                         <div className="space-y-2">
                                                             {allStreaksData[recordDef.key]
+                                                                .filter(streak => streak.streak > 0)
                                                                 .sort((a, b) => b.streak - a.streak)
                                                                 .slice(0, 5)
                                                                 .map((streak, index) => (
