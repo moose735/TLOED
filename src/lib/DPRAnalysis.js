@@ -486,18 +486,18 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-2 mt-3 text-sm">
-                          <div className="bg-gray-50 rounded p-2 text-center">
-                            <div className="text-xs text-gray-500">Record</div>
-                            <div className="font-semibold">{renderRecord(data.wins, data.losses, data.ties)}</div>
+                        <div className="grid grid-cols-3 gap-2 text-xs mt-3">
+                          <div className="bg-gray-50 rounded px-2 py-1 text-center">
+                            <div className="text-[10px] text-gray-500 mb-0.5">Rec</div>
+                            <div className="font-semibold whitespace-nowrap">{renderRecord(data.wins, data.losses, data.ties)}</div>
                           </div>
-                          <div className="bg-gray-50 rounded p-2 text-center">
-                            <div className="text-xs text-gray-500">Win %</div>
-                            <div className="font-semibold">{formatPercentage(data.winPercentage)}</div>
+                          <div className="bg-gray-50 rounded px-2 py-1 text-center">
+                            <div className="text-[10px] text-gray-500 mb-0.5">Win %</div>
+                            <div className="font-semibold whitespace-nowrap">{formatPercentage(data.winPercentage)}</div>
                           </div>
-                          <div className="bg-gray-50 rounded p-2 text-center">
-                            <div className="text-xs text-gray-500">High / Low</div>
-                            <div className="font-semibold">{formatPointsAvg(data.highestPointsGame)} / {formatPointsAvg(data.lowestPointsGame)}</div>
+                          <div className="bg-gray-50 rounded px-2 py-1 text-center">
+                            <div className="text-[10px] text-gray-500 mb-0.5">H / L</div>
+                            <div className="font-semibold whitespace-nowrap">{formatPointsAvg(data.highestPointsGame)} / {formatPointsAvg(data.lowestPointsGame)}</div>
                           </div>
                         </div>
                       </div>

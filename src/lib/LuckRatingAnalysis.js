@@ -195,10 +195,18 @@ const LuckRatingAnalysis = ({ onTeamNameClick }) => {
                             </div>
                           </div>
 
-                          <div className="text-right">
+                          <div className="flex flex-col items-end space-y-1 min-w-[96px]">
                             <div className={`text-lg font-bold ${data.luckRating > 0 ? 'text-green-600' : data.luckRating < 0 ? 'text-red-600' : 'text-gray-700'}`}>{formatLuckRating(data.luckRating)}</div>
-                            <div className="text-xs text-gray-500 mt-1">Actual • {data.actualWins}</div>
-                            <div className="text-xs text-gray-500">Projected • {formatLuckRating(data.projectedWins)}</div>
+                            <div className="flex gap-2 w-full">
+                              <div className="flex-1 bg-gray-50 rounded px-2 py-1 text-center">
+                                <div className="text-[10px] text-gray-500">Actual</div>
+                                <div className="font-semibold">{data.actualWins}</div>
+                              </div>
+                              <div className="flex-1 bg-gray-50 rounded px-2 py-1 text-center">
+                                <div className="text-[10px] text-gray-500">Proj</div>
+                                <div className="font-semibold">{formatLuckRating(data.projectedWins)}</div>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
