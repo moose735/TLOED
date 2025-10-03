@@ -25,6 +25,9 @@ const RecordBook = () => {
         error: dataError
     } = useSleeperData();
 
+    // Mobile helpers: hide heavy tables by default on small screens, allow toggling
+    const [mobileShowFull, setMobileShowFull] = useState(false);
+
     // Handle loading state
     if (dataIsLoading) {
         return (
@@ -295,11 +298,45 @@ const RecordBook = () => {
                 <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
                     {activeTab === 'overall' && (
                         hasOverallData ? (
-                            <LeagueRecords
-                                historicalData={historicalData}
-                                getTeamName={getTeamName}
-                                calculateAllLeagueMetrics={calculateAllLeagueMetrics}
-                            />
+                            <>
+                                {/* Mobile summary + toggle */}
+                                <div className="sm:hidden p-4">
+                                    <div className="flex items-start justify-between">
+                                        <div>
+                                            <div className="text-sm font-semibold text-gray-800">Overall Records</div>
+                                            <div className="text-xs text-gray-500">Career leaders, top records and leaders across league history.</div>
+                                        </div>
+                                        <button
+                                            className="ml-3 text-sm px-3 py-2 rounded-md bg-blue-50 text-blue-700"
+                                            onClick={() => setMobileShowFull(v => !v)}
+                                        >
+                                            {mobileShowFull ? 'Hide full' : 'Show full table'}
+                                        </button>
+                                    </div>
+                                    <div className="mt-3 text-sm text-gray-600">
+                                        <div>Seasons: {historicalData?.matchupsBySeason ? Object.keys(historicalData.matchupsBySeason).length : 0}</div>
+                                        <div className="mt-1">Teams: {historicalData?.rostersBySeason ? Object.values(historicalData.rostersBySeason)[0]?.length || 0 : 0}</div>
+                                    </div>
+                                    {mobileShowFull && (
+                                        <div className="mt-3 overflow-x-auto">
+                                            <LeagueRecords
+                                                historicalData={historicalData}
+                                                getTeamName={getTeamName}
+                                                calculateAllLeagueMetrics={calculateAllLeagueMetrics}
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Desktop / larger screens: render full component */}
+                                <div className="hidden sm:block">
+                                    <LeagueRecords
+                                        historicalData={historicalData}
+                                        getTeamName={getTeamName}
+                                        calculateAllLeagueMetrics={calculateAllLeagueMetrics}
+                                    />
+                                </div>
+                            </>
                         ) : (
                             <div className="text-center py-16 px-6">
                                 <div className="text-6xl mb-4">📊</div>
@@ -313,7 +350,31 @@ const RecordBook = () => {
 
                     {activeTab === 'seasonal' && (
                         hasSeasonalData ? (
-                            <SeasonRecords />
+                            <>
+                                <div className="sm:hidden p-4">
+                                    <div className="flex items-start justify-between">
+                                        <div>
+                                            <div className="text-sm font-semibold text-gray-800">Seasonal Records</div>
+                                            <div className="text-xs text-gray-500">Single-season leaders and records.</div>
+                                        </div>
+                                        <button
+                                            className="ml-3 text-sm px-3 py-2 rounded-md bg-green-50 text-green-700"
+                                            onClick={() => setMobileShowFull(v => !v)}
+                                        >
+                                            {mobileShowFull ? 'Hide full' : 'Show full table'}
+                                        </button>
+                                    </div>
+                                    {mobileShowFull && (
+                                        <div className="mt-3 overflow-x-auto">
+                                            <SeasonRecords />
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="hidden sm:block">
+                                    <SeasonRecords />
+                                </div>
+                            </>
                         ) : (
                             <div className="text-center py-16 px-6">
                                 <div className="text-6xl mb-4">📅</div>
@@ -325,9 +386,31 @@ const RecordBook = () => {
 
                     {activeTab === 'streaks' && (
                         hasStreaksAndMatchupData ? (
-                            <StreaksRecords
-                                historicalMatchups={allHistoricalMatchupsFlat} // Pass the correctly flattened array
-                            />
+                            <>
+                                <div className="sm:hidden p-4">
+                                    <div className="flex items-start justify-between">
+                                        <div>
+                                            <div className="text-sm font-semibold text-gray-800">Streak Records</div>
+                                            <div className="text-xs text-gray-500">Longest runs and consecutive records.</div>
+                                        </div>
+                                        <button
+                                            className="ml-3 text-sm px-3 py-2 rounded-md bg-purple-50 text-purple-700"
+                                            onClick={() => setMobileShowFull(v => !v)}
+                                        >
+                                            {mobileShowFull ? 'Hide full' : 'Show full table'}
+                                        </button>
+                                    </div>
+                                    {mobileShowFull && (
+                                        <div className="mt-3 overflow-x-auto">
+                                            <StreaksRecords historicalMatchups={allHistoricalMatchupsFlat} />
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="hidden sm:block">
+                                    <StreaksRecords historicalMatchups={allHistoricalMatchupsFlat} />
+                                </div>
+                            </>
                         ) : (
                             <div className="text-center py-16 px-6">
                                 <div className="text-6xl mb-4">🔥</div>
@@ -339,7 +422,31 @@ const RecordBook = () => {
 
                     {activeTab === 'matchup' && (
                         hasStreaksAndMatchupData ? (
-                            <MatchupRecords />
+                            <>
+                                <div className="sm:hidden p-4">
+                                    <div className="flex items-start justify-between">
+                                        <div>
+                                            <div className="text-sm font-semibold text-gray-800">Game Records</div>
+                                            <div className="text-xs text-gray-500">Single-game highs and game-level records.</div>
+                                        </div>
+                                        <button
+                                            className="ml-3 text-sm px-3 py-2 rounded-md bg-orange-50 text-orange-700"
+                                            onClick={() => setMobileShowFull(v => !v)}
+                                        >
+                                            {mobileShowFull ? 'Hide full' : 'Show full table'}
+                                        </button>
+                                    </div>
+                                    {mobileShowFull && (
+                                        <div className="mt-3 overflow-x-auto">
+                                            <MatchupRecords />
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="hidden sm:block">
+                                    <MatchupRecords />
+                                </div>
+                            </>
                         ) : (
                             <div className="text-center py-16 px-6">
                                 <div className="text-6xl mb-4">⚔️</div>
@@ -351,10 +458,31 @@ const RecordBook = () => {
 
                     {activeTab === 'playoffs' && (
                         hasPlayoffData ? (
-                            <PlayoffRecords
-                                historicalMatchups={allHistoricalMatchupsFlat} // Pass the now fully flattened matchups
-                                getDisplayTeamName={getTeamName} // Pass the team name resolver
-                            />
+                            <>
+                                <div className="sm:hidden p-4">
+                                    <div className="flex items-start justify-between">
+                                        <div>
+                                            <div className="text-sm font-semibold text-gray-800">Playoff Records</div>
+                                            <div className="text-xs text-gray-500">Postseason highs and bracket records.</div>
+                                        </div>
+                                        <button
+                                            className="ml-3 text-sm px-3 py-2 rounded-md bg-red-50 text-red-700"
+                                            onClick={() => setMobileShowFull(v => !v)}
+                                        >
+                                            {mobileShowFull ? 'Hide full' : 'Show full table'}
+                                        </button>
+                                    </div>
+                                    {mobileShowFull && (
+                                        <div className="mt-3 overflow-x-auto">
+                                            <PlayoffRecords historicalMatchups={allHistoricalMatchupsFlat} getDisplayTeamName={getTeamName} />
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="hidden sm:block">
+                                    <PlayoffRecords historicalMatchups={allHistoricalMatchupsFlat} getDisplayTeamName={getTeamName} />
+                                </div>
+                            </>
                         ) : (
                             <div className="text-center py-16 px-6">
                                 <div className="text-6xl mb-4">🏆</div>
@@ -366,7 +494,31 @@ const RecordBook = () => {
 
                     {activeTab === 'players' && (
                         historicalData ? (
-                            <PlayerRecords />
+                            <>
+                                <div className="sm:hidden p-4">
+                                    <div className="flex items-start justify-between">
+                                        <div>
+                                            <div className="text-sm font-semibold text-gray-800">Player Records</div>
+                                            <div className="text-xs text-gray-500">Individual player achievements and records.</div>
+                                        </div>
+                                        <button
+                                            className="ml-3 text-sm px-3 py-2 rounded-md bg-indigo-50 text-indigo-700"
+                                            onClick={() => setMobileShowFull(v => !v)}
+                                        >
+                                            {mobileShowFull ? 'Hide full' : 'Show full table'}
+                                        </button>
+                                    </div>
+                                    {mobileShowFull && (
+                                        <div className="mt-3 overflow-x-auto">
+                                            <PlayerRecords />
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="hidden sm:block">
+                                    <PlayerRecords />
+                                </div>
+                            </>
                         ) : (
                             <div className="text-center py-16 px-6">
                                 <div className="text-6xl mb-4">⭐</div>
@@ -378,7 +530,31 @@ const RecordBook = () => {
 
                     {activeTab === 'milestones' && (
                         historicalData ? (
-                            <MilestoneRecords />
+                            <>
+                                <div className="sm:hidden p-4">
+                                    <div className="flex items-start justify-between">
+                                        <div>
+                                            <div className="text-sm font-semibold text-gray-800">Milestones</div>
+                                            <div className="text-xs text-gray-500">Career milestones and notable achievements.</div>
+                                        </div>
+                                        <button
+                                            className="ml-3 text-sm px-3 py-2 rounded-md bg-yellow-50 text-yellow-700"
+                                            onClick={() => setMobileShowFull(v => !v)}
+                                        >
+                                            {mobileShowFull ? 'Hide full' : 'Show full table'}
+                                        </button>
+                                    </div>
+                                    {mobileShowFull && (
+                                        <div className="mt-3 overflow-x-auto">
+                                            <MilestoneRecords />
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="hidden sm:block">
+                                    <MilestoneRecords />
+                                </div>
+                            </>
                         ) : (
                             <div className="text-center py-16 px-6">
                                 <div className="text-6xl mb-4">🏆</div>
