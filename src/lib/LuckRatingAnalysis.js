@@ -172,7 +172,7 @@ const LuckRatingAnalysis = ({ onTeamNameClick }) => {
                     .sort((a, b) => (b.luckRating || 0) - (a.luckRating || 0))
                     .map((data, index) => (
                       <div key={data.team} className="bg-white rounded-lg shadow-md mobile-card p-4 border-l-4 border-blue-500">
-                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center space-x-3">
                             <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">{index + 1}</div>
                             <img
@@ -191,22 +191,23 @@ const LuckRatingAnalysis = ({ onTeamNameClick }) => {
                                   data.team
                                 )}
                               </div>
-                              {/* removed duplicate 'Actual' here; will show stacked values under the luck rating on the right for mobile */}
+                              {/* compact boxes are rendered below the header to match DPR mobile layout */}
                             </div>
                           </div>
 
-                          <div className="flex flex-col items-end min-w-[104px]">
+                          <div className="text-right min-w-[96px]">
                             <div className={`text-lg font-bold ${data.luckRating > 0 ? 'text-green-600' : data.luckRating < 0 ? 'text-red-600' : 'text-gray-700'}`}>{formatLuckRating(data.luckRating)}</div>
-                            <div className="grid grid-cols-2 gap-2 text-xs mt-2 w-full">
-                              <div className="bg-gray-50 rounded px-2 py-1 text-center">
-                                <div className="text-[10px] text-gray-500 mb-0.5">Actual</div>
-                                <div className="font-semibold whitespace-nowrap">{data.actualWins}</div>
-                              </div>
-                              <div className="bg-gray-50 rounded px-2 py-1 text-center">
-                                <div className="text-[10px] text-gray-500 mb-0.5">Proj</div>
-                                <div className="font-semibold whitespace-nowrap">{formatLuckRating(data.projectedWins)}</div>
-                              </div>
-                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-xs mt-2">
+                          <div className="bg-gray-50 rounded px-2 py-1 text-center">
+                            <div className="text-[10px] text-gray-500 mb-0.5">Actual</div>
+                            <div className="font-semibold whitespace-nowrap">{data.actualWins}</div>
+                          </div>
+                          <div className="bg-gray-50 rounded px-2 py-1 text-center">
+                            <div className="text-[10px] text-gray-500 mb-0.5">Proj</div>
+                            <div className="font-semibold whitespace-nowrap">{formatLuckRating(data.projectedWins)}</div>
                           </div>
                         </div>
                       </div>
@@ -294,9 +295,7 @@ const LuckRatingAnalysis = ({ onTeamNameClick }) => {
                                   data.team
                                 )}
                               </div>
-                              {Number(data.year) === Number(dataCurrentSeason) && (
-                                <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full font-semibold">Current</span>
-                              )}
+                              {/* On mobile the green highlight is sufficient for current season; remove redundant 'Current' pill */}
                             </div>
                             <div className="text-xs text-gray-500">Season: {data.year}</div>
                           </div>
@@ -304,10 +303,19 @@ const LuckRatingAnalysis = ({ onTeamNameClick }) => {
 
                         <div className="text-right min-w-[88px]">
                           <div className={`text-lg font-bold ${data.luckRating > 0 ? 'text-green-600' : data.luckRating < 0 ? 'text-red-600' : 'text-gray-700'}`}>{formatLuckRating(data.luckRating)}</div>
-                          <div className="text-xs text-gray-500">Luck • Actual {data.actualWins}</div>
                         </div>
                       </div>
 
+                      <div className="grid grid-cols-2 gap-2 text-xs mt-2">
+                        <div className="bg-gray-50 rounded px-2 py-1 text-center">
+                          <div className="text-[10px] text-gray-500 mb-0.5">Actual</div>
+                          <div className="font-semibold whitespace-nowrap">{data.actualWins}</div>
+                        </div>
+                        <div className="bg-gray-50 rounded px-2 py-1 text-center">
+                          <div className="text-[10px] text-gray-500 mb-0.5">Proj</div>
+                          <div className="font-semibold whitespace-nowrap">{formatLuckRating(data.projectedWins)}</div>
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
