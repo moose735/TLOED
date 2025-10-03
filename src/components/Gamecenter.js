@@ -164,6 +164,10 @@ const Gamecenter = () => {
             return history;
         }
     
+        // Determine current NFL season/week so we only include truly completed matchups for the current season
+        const currentNFLSeason = parseInt(nflState?.season || new Date().getFullYear());
+        const currentNFLWeek = parseInt(nflState?.week || 1);
+
         Object.keys(historicalData.matchupsBySeason).forEach(season => {
             const seasonRosters = historicalData.rostersBySeason[season];
             if (!seasonRosters) return;
@@ -174,7 +178,18 @@ const Gamecenter = () => {
             }, {});
     
             historicalData.matchupsBySeason[season].forEach(matchup => {
-                if (matchup.team1_score > 0 || matchup.team2_score > 0) { // Completed matchup
+                const s1 = Number(matchup.team1_score || 0);
+                const s2 = Number(matchup.team2_score || 0);
+                const weekInt = Number(matchup.week);
+                const seasonInt = Number(season);
+
+                // A matchup is considered completed for history if it's in a past week/season.
+                // We DO NOT want to include current-week matchups even if both teams have scores (live games).
+                const isHistoricalComplete = seasonInt < currentNFLSeason || (seasonInt === currentNFLSeason && weekInt < currentNFLWeek);
+                // Only treat a matchup with both scores as historical-complete if the week is strictly before the current NFL week
+                const hasBothScores = (s1 > 0 && s2 > 0) && (seasonInt < currentNFLSeason || (seasonInt === currentNFLSeason && weekInt < currentNFLWeek));
+
+                if (isHistoricalComplete || hasBothScores) { // Completed matchup
                     const owner1 = rosterIdToOwnerId[matchup.team1_roster_id];
                     const owner2 = rosterIdToOwnerId[matchup.team2_roster_id];
     
@@ -182,13 +197,14 @@ const Gamecenter = () => {
                         if (!history[owner1]) history[owner1] = [];
                         if (!history[owner2]) history[owner2] = [];
     
+
                         let result1 = 'T';
-                        if (matchup.team1_score > matchup.team2_score) result1 = 'W';
-                        if (matchup.team1_score < matchup.team2_score) result1 = 'L';
-    
+                        if (s1 > s2) result1 = 'W';
+                        if (s1 < s2) result1 = 'L';
+
                         let result2 = 'T';
-                        if (matchup.team2_score > matchup.team1_score) result2 = 'W';
-                        if (matchup.team2_score < matchup.team1_score) result2 = 'L';
+                        if (s2 > s1) result2 = 'W';
+                        if (s2 < s1) result2 = 'L';
     
                         history[owner1].push({ season, week: matchup.week, result: result1, opponent: owner2 });
                         history[owner2].push({ season, week: matchup.week, result: result2, opponent: owner1 });
@@ -206,7 +222,7 @@ const Gamecenter = () => {
         });
     
         return history;
-    }, [historicalData]);
+    }, [historicalData, nflState]);
 
     const weeklyLuckData = useMemo(() => {
         if (!processedSeasonalRecords || !selectedSeason || !processedSeasonalRecords[selectedSeason]) {
@@ -442,8 +458,12 @@ const Gamecenter = () => {
             for (let i = 0; i < rosterData.starters.length; i++) {
                 const playerId = rosterData.starters[i];
                 const player = nflPlayers?.[playerId];
-                const points = rosterData.players_points?.[playerId] || 0;
-                
+                // Detect whether players_points explicitly contains this playerId. If the key is missing,
+                // the player has not yet played (in-progress). If present, even a 0 means they played and scored 0.
+                const hasPlayed = rosterData.players_points && Object.prototype.hasOwnProperty.call(rosterData.players_points, playerId);
+                const rawPoints = rosterData.players_points?.[playerId];
+                const points = hasPlayed ? Number(rawPoints || 0) : 0;
+
                 if (player) {
                     lineup.push({
                         playerId,
@@ -451,6 +471,7 @@ const Gamecenter = () => {
                         position: player.position,
                         team: player.team,
                         points: points,
+                        hasPlayed: !!hasPlayed,
                         isStarter: true,
                         lineupPosition: lineupPositions[i] || 'FLEX'
                     });
@@ -465,7 +486,9 @@ const Gamecenter = () => {
             
             for (const playerId of benchPlayers) {
                 const player = nflPlayers?.[playerId];
-                const points = rosterData.players_points?.[playerId] || 0;
+                const hasPlayed = rosterData.players_points && Object.prototype.hasOwnProperty.call(rosterData.players_points, playerId);
+                const rawPoints = rosterData.players_points?.[playerId];
+                const points = hasPlayed ? Number(rawPoints || 0) : 0;
                 
                 if (player) {
                     bench.push({
@@ -474,6 +497,7 @@ const Gamecenter = () => {
                         position: player.position,
                         team: player.team,
                         points: points,
+                        hasPlayed: !!hasPlayed,
                         isStarter: false
                     });
                 }
@@ -510,12 +534,11 @@ const Gamecenter = () => {
     };
 
     const handleMatchupClick = (matchup) => {
-        const isCompleted = matchup.team1_score > 0 || matchup.team2_score > 0;
-        if (isCompleted) {
-            setSelectedMatchup(matchup);
-            // Fetch detailed roster data for this matchup
-            fetchMatchupRosterData(matchup, selectedSeason, selectedWeek);
-        }
+        // Allow opening the matchup modal for the selected week even if it's the current in-progress week.
+        // We still treat historical completeness separately for streaks and winner highlighting.
+        setSelectedMatchup(matchup);
+        // Fetch detailed roster data for this matchup (roster data may be unavailable for some historical seasons)
+        fetchMatchupRosterData(matchup, selectedSeason, selectedWeek);
     };
 
     const closeMatchupModal = () => {
@@ -652,7 +675,10 @@ const Gamecenter = () => {
                         const team2OwnerId = rosterForTeam2?.owner_id;
                         const team2Details = getTeamDetails(team2OwnerId, selectedSeason);
                         
-                        const isCompleted = matchup.team1_score > 0 || matchup.team2_score > 0;
+                        // Treat a matchup as "complete" for UI/streak purposes only when the week is historically complete.
+                        // This avoids counting live/current-week leads as wins in streak calculations.
+                        const s1 = Number(matchup.team1_score || 0);
+                        const s2 = Number(matchup.team2_score || 0);
 
                         // Determine if we should highlight winners (only if week is complete OR all players have played)
                         const currentNFLSeason = parseInt(nflState?.season || new Date().getFullYear());
@@ -664,15 +690,19 @@ const Gamecenter = () => {
                                              (selectedSeasonInt === currentNFLSeason && selectedWeekInt < currentNFLWeek);
                         
                         // For current week/season, check if all players have played (this would need roster data)
-                        // For now, we'll use the simpler logic: only highlight if week is historically complete
+                        // For now, only consider a matchup "complete" (clickable / counts toward streaks) when the week is historically complete.
+                        const isMatchupComplete = isWeekComplete;
                         const shouldHighlightWinner = isWeekComplete;
 
                         const team1Luck = weeklyLuckData[team1RosterId]?.[selectedWeek - 1] ?? 0;
                         const team2Luck = weeklyLuckData[team2RosterId]?.[selectedWeek - 1] ?? 0;
 
-                        // Use stats at the time of the game (up to the selectedWeek) to match desktop/modal behavior
-                        const team1AvgPts = getAverageAtWeek(team1RosterId, selectedSeason, selectedWeek);
-                        const team2AvgPts = getAverageAtWeek(team2RosterId, selectedSeason, selectedWeek);
+                        // Use stats at the time of the game (up to the selectedWeek) for modal/historical views.
+                        // For the main card on the current season we want an average that excludes the current in-progress week
+                        // so use getCorrectAveragePoints which recalculates season averages excluding incomplete weeks.
+                        const isCurrentSeason = parseInt(selectedSeason) === parseInt(nflState?.season);
+                        const team1AvgPts = isCurrentSeason ? getCorrectAveragePoints(team1RosterId, selectedSeason) : getAverageAtWeek(team1RosterId, selectedSeason, selectedWeek);
+                        const team2AvgPts = isCurrentSeason ? getCorrectAveragePoints(team2RosterId, selectedSeason) : getAverageAtWeek(team2RosterId, selectedSeason, selectedWeek);
 
                         const h2h = getHeadToHeadRecord(team1OwnerId, team2OwnerId);
                         const team1Streak = getWinLossStreak(team1OwnerId, selectedSeason);
@@ -683,7 +713,7 @@ const Gamecenter = () => {
                                 key={matchup.matchup_id} 
                                 className={`rounded-xl mobile-card overflow-hidden transition-all duration-300 touch-friendly ${
                                     (gameOfWeekMatchupId && String(gameOfWeekMatchupId) === String(matchup.matchup_id)) ? 'ring-4 ring-yellow-400 ring-opacity-60' : 'bg-white shadow-md hover:shadow-lg'
-                                } ${isCompleted ? 'cursor-pointer hover:bg-gray-50 active:bg-gray-100' : ''}`}
+                                } ${isMatchupComplete ? 'cursor-pointer hover:bg-gray-50 active:bg-gray-100' : ''}`}
                                 onClick={() => handleMatchupClick(matchup)}
                             >
                                 <div className="p-3 sm:p-4">
@@ -710,17 +740,17 @@ const Gamecenter = () => {
                                                             {team1Details.name}
                                                         </div>
                                                         <div className="text-xs text-gray-500">
-                                                            {!isCompleted ? (
-                                                                <>{formatStreakDisplay(team1OwnerId, team1Streak, isCompleted)} • Avg: {formatScore(Number(team1AvgPts ?? 0), 2)}</>
+                                                            {!isMatchupComplete ? (
+                                                                <>{formatStreakDisplay(team1OwnerId, team1Streak, isMatchupComplete)} • Avg: {formatScore(Number(team1AvgPts ?? 0), 2)}</>
                                                             ) : null}
                                                         </div>
                                                     </div>
                                                 </div>
                                                 <div className="text-right flex-shrink-0">
                                                         <div className={`font-bold text-lg ${
-                                                        isCompleted && shouldHighlightWinner && matchup.team1_score > matchup.team2_score ? 'text-green-600' : 'text-gray-800'
+                                                        isMatchupComplete && shouldHighlightWinner && matchup.team1_score > matchup.team2_score ? 'text-green-600' : 'text-gray-800'
                                                     }`}>
-                                                        {isCompleted ? formatScore(Number(matchup.team1_score ?? 0), 2) : '-'}
+                                                        {(s1 > 0 || s2 > 0) ? formatScore(Number(matchup.team1_score ?? 0), 2) : '-'}
                                                     </div>
                                                 </div>
                                             </div>
@@ -749,17 +779,17 @@ const Gamecenter = () => {
                                                             {team2Details.name}
                                                         </div>
                                                         <div className="text-xs text-gray-500">
-                                                            {!isCompleted ? (
-                                                                <>{formatStreakDisplay(team2OwnerId, team2Streak, isCompleted)} • Avg: {formatScore(Number(team2AvgPts ?? 0), 2)}</>
+                                                            {!isMatchupComplete ? (
+                                                                <>{formatStreakDisplay(team2OwnerId, team2Streak, isMatchupComplete)} • Avg: {formatScore(Number(team2AvgPts ?? 0), 2)}</>
                                                             ) : null}
                                                         </div>
                                                     </div>
                                                 </div>
                                                 <div className="text-right flex-shrink-0">
                                                     <div className={`font-bold text-lg ${
-                                                        isCompleted && shouldHighlightWinner && matchup.team2_score > matchup.team1_score ? 'text-green-600' : 'text-gray-800'
+                                                        isMatchupComplete && shouldHighlightWinner && matchup.team2_score > matchup.team1_score ? 'text-green-600' : 'text-gray-800'
                                                     }`}>
-                                                        {isCompleted ? formatScore(Number(matchup.team2_score ?? 0), 2) : '-'}
+                                                        {(s1 > 0 || s2 > 0) ? formatScore(Number(matchup.team2_score ?? 0), 2) : '-'}
                                                     </div>
                                                 </div>
                                             </div>
@@ -774,9 +804,9 @@ const Gamecenter = () => {
                                                     <div className="font-semibold text-gray-700 text-sm leading-tight break-words mb-1">
                                                         {team1Details.name}
                                                     </div>
-                                                    <div className={`font-bold text-lg ${isCompleted && shouldHighlightWinner && matchup.team1_score > matchup.team2_score ? 'text-green-600' : 'text-gray-800'}`}>
-                                                        {isCompleted ? formatScore(Number(matchup.team1_score ?? 0), 2) : '-'}
-                                                    </div>
+                                                            <div className={`font-bold text-lg ${isMatchupComplete && shouldHighlightWinner && matchup.team1_score > matchup.team2_score ? 'text-green-600' : 'text-gray-800'}`}>
+                                                            {(s1 > 0 || s2 > 0) ? formatScore(Number(matchup.team1_score ?? 0), 2) : '-'}
+                                                        </div>
                                                 </div>
                                             </div>
 
@@ -792,8 +822,8 @@ const Gamecenter = () => {
                                                     <div className="font-semibold text-gray-700 text-sm leading-tight break-words mb-1">
                                                         {team2Details.name}
                                                     </div>
-                                                    <div className={`font-bold text-lg ${isCompleted && shouldHighlightWinner && matchup.team2_score > matchup.team1_score ? 'text-green-600' : 'text-gray-800'}`}>
-                                                        {isCompleted ? formatScore(Number(matchup.team2_score ?? 0), 2) : '-'}
+                                                    <div className={`font-bold text-lg ${isMatchupComplete && shouldHighlightWinner && matchup.team2_score > matchup.team1_score ? 'text-green-600' : 'text-gray-800'}`}>
+                                                        {(s1 > 0 || s2 > 0) ? formatScore(Number(matchup.team2_score ?? 0), 2) : '-'}
                                                     </div>
                                                 </div>
                                             </div>
@@ -802,7 +832,7 @@ const Gamecenter = () => {
 
                                     {/* Bottom Stats Section */}
                                     <div className="border-t border-gray-200 mt-3 pt-3">
-                                        {!isCompleted ? (
+                                        {!isMatchupComplete ? (
                                             <div className="text-xs text-gray-600">
                                                 {/* Mobile Stats Layout */}
                                                 <div className="sm:hidden space-y-1">
@@ -819,7 +849,7 @@ const Gamecenter = () => {
                                                     
                                                     <div className="grid grid-cols-3 gap-2 items-center">
                                                         <div className="text-center space-y-1">
-                                                            <div className="text-xs font-semibold">{formatStreakDisplay(team1OwnerId, team1Streak, isCompleted)}</div>
+                                                            <div className="text-xs font-semibold">{formatStreakDisplay(team1OwnerId, team1Streak, isMatchupComplete)}</div>
                                                             <div className="text-xs font-semibold">{formatScore(Number(team1AvgPts ?? 0), 2)}</div>
                                                         </div>
                                                         
@@ -829,7 +859,7 @@ const Gamecenter = () => {
                                                         </div>
                                                         
                                                         <div className="text-center space-y-1">
-                                                            <div className="text-xs font-semibold">{formatStreakDisplay(team2OwnerId, team2Streak, isCompleted)}</div>
+                                                            <div className="text-xs font-semibold">{formatStreakDisplay(team2OwnerId, team2Streak, isMatchupComplete)}</div>
                                                             <div className="text-xs font-semibold">{formatScore(Number(team2AvgPts ?? 0), 2)}</div>
                                                         </div>
                                                     </div>
@@ -860,7 +890,7 @@ const Gamecenter = () => {
                                         )}
                                         
                                         {/* Tap indicator for completed games */}
-                                        {isCompleted && (
+                                        {(isMatchupComplete && (s1 > 0 && s2 > 0 ? (selectedSeasonInt < currentNFLSeason || (selectedSeasonInt === currentNFLSeason && selectedWeekInt < currentNFLWeek)) : true)) && (
                                             <div className="text-center mt-2">
                                                 <span className="text-xs text-blue-500 font-medium">Tap for details</span>
                                             </div>
@@ -907,9 +937,17 @@ const Gamecenter = () => {
                                     const team1Luck = weeklyLuckData[team1RosterId]?.[selectedWeek - 1] ?? 0;
                                     const team2Luck = weeklyLuckData[team2RosterId]?.[selectedWeek - 1] ?? 0;
 
+                                    // Also compute the current season streaks so modal can show 'Current Streak' when needed
+                                    const team1Streak = getWinLossStreak(team1OwnerId, selectedSeason);
+                                    const team2Streak = getWinLossStreak(team2OwnerId, selectedSeason);
+
                                     // Stats at the time of the game (up to that week)
                                     const team1AvgAtWeek = getAverageAtWeek(team1RosterId, selectedSeason, selectedWeek);
                                     const team2AvgAtWeek = getAverageAtWeek(team2RosterId, selectedSeason, selectedWeek);
+
+                                    // Season averages (used when week is not historical-complete)
+                                    const team1AvgPts = getCorrectAveragePoints(team1RosterId, selectedSeason);
+                                    const team2AvgPts = getCorrectAveragePoints(team2RosterId, selectedSeason);
 
                                     // Determine if the selected week is considered complete (historical or earlier than current NFL week)
                                     const currentNFLSeason = parseInt(nflState?.season || new Date().getFullYear());
@@ -1223,9 +1261,14 @@ const Gamecenter = () => {
                                                             <div className="space-y-1 sm:space-y-2">
                                                                 {matchupRosterData.team1.lineup.map((player, idx) => {
                                                                     const opp = matchupRosterData.team2.lineup[idx];
-                                                                    const oppPts = opp?.points ?? 0;
-                                                                    const myPts = player?.points ?? 0;
-                                                                    const outcome = myPts > oppPts ? 'win' : myPts < oppPts ? 'loss' : 'tie';
+                                                                    const myHasPlayed = !!player.hasPlayed;
+                                                                    const oppHasPlayed = !!opp?.hasPlayed;
+                                                                    const myPts = myHasPlayed ? (player?.points ?? 0) : null;
+                                                                    const oppPts = oppHasPlayed ? (opp?.points ?? 0) : null;
+                                                                    let outcome = 'pending';
+                                                                    if (myHasPlayed && oppHasPlayed) {
+                                                                        outcome = myPts > oppPts ? 'win' : myPts < oppPts ? 'loss' : 'tie';
+                                                                    }
 
                                                                     return (
                                                                     <div key={player.playerId} className="flex justify-between items-center py-2 border-b border-gray-200 last:border-b-0">
@@ -1239,13 +1282,13 @@ const Gamecenter = () => {
                                                                             </div>
                                                                         </div>
                                                                         <div className="text-right flex-shrink-0 flex items-center gap-2">
-                                                                            <div className="font-semibold text-gray-800 text-sm sm:text-base">{formatScore(Number(player.points || 0), 2)}</div>
+                                                                            <div className="font-semibold text-gray-800 text-sm sm:text-base">{myHasPlayed ? formatScore(Number(player.points ?? 0), 2) : '---'}</div>
                                                                             {outcome === 'win' ? (
                                                                                 <span className="inline-block w-3 h-3 rounded-full bg-green-600" aria-label="scored more" />
                                                                             ) : outcome === 'loss' ? (
                                                                                 <span className="inline-block w-3 h-3 rounded-full bg-red-600" aria-label="scored less" />
                                                                             ) : (
-                                                                                <span className="inline-block w-3 h-3 rounded-full bg-gray-300" aria-label="tied" />
+                                                                                <span className="inline-block w-3 h-3 rounded-full bg-gray-300" aria-label="pending" />
                                                                             )}
                                                                         </div>
                                                                     </div>
@@ -1269,7 +1312,7 @@ const Gamecenter = () => {
                                                                             </div>
                                                                         </div>
                                                                         <div className="text-right flex-shrink-0 flex items-center gap-2">
-                                                                            <div className="text-sm text-gray-600">{player.points > 0 ? formatScore(Number(player.points || 0), 2) : '---'}</div>
+                                                                            <div className="text-sm text-gray-600">{player.hasPlayed ? formatScore(Number(player.points || 0), 2) : '---'}</div>
                                                                             {team1OptimalBench.has(player.playerId) && (
                                                                                 <span className="inline-block w-3 h-3 rounded-full bg-yellow-400" aria-label="optimal start" />
                                                                             )}
@@ -1289,9 +1332,14 @@ const Gamecenter = () => {
                                                             <div className="space-y-1 sm:space-y-2">
                                                                 {matchupRosterData.team2.lineup.map((player, idx) => {
                                                                     const opp = matchupRosterData.team1.lineup[idx];
-                                                                    const oppPts = opp?.points ?? 0;
-                                                                    const myPts = player?.points ?? 0;
-                                                                    const outcome = myPts > oppPts ? 'win' : myPts < oppPts ? 'loss' : 'tie';
+                                                                    const myHasPlayed = !!player.hasPlayed;
+                                                                    const oppHasPlayed = !!opp?.hasPlayed;
+                                                                    const myPts = myHasPlayed ? (player?.points ?? 0) : null;
+                                                                    const oppPts = oppHasPlayed ? (opp?.points ?? 0) : null;
+                                                                    let outcome = 'pending';
+                                                                    if (myHasPlayed && oppHasPlayed) {
+                                                                        outcome = myPts > oppPts ? 'win' : myPts < oppPts ? 'loss' : 'tie';
+                                                                    }
 
                                                                     return (
                                                                     <div key={player.playerId} className="flex justify-between items-center py-2 border-b border-gray-200 last:border-b-0">
@@ -1305,13 +1353,13 @@ const Gamecenter = () => {
                                                                             </div>
                                                                         </div>
                                                                         <div className="text-right flex-shrink-0 flex items-center gap-2">
-                                                                            <div className="font-semibold text-gray-800 text-sm sm:text-base">{formatScore(Number(player.points || 0), 2)}</div>
+                                                                            <div className="font-semibold text-gray-800 text-sm sm:text-base">{myHasPlayed ? formatScore(Number(player.points ?? 0), 2) : '---'}</div>
                                                                             {outcome === 'win' ? (
                                                                                 <span className="inline-block w-3 h-3 rounded-full bg-green-600" aria-label="scored more" />
                                                                             ) : outcome === 'loss' ? (
                                                                                 <span className="inline-block w-3 h-3 rounded-full bg-red-600" aria-label="scored less" />
                                                                             ) : (
-                                                                                <span className="inline-block w-3 h-3 rounded-full bg-gray-300" aria-label="tied" />
+                                                                                <span className="inline-block w-3 h-3 rounded-full bg-gray-300" aria-label="pending" />
                                                                             )}
                                                                         </div>
                                                                     </div>
@@ -1335,7 +1383,7 @@ const Gamecenter = () => {
                                                                             </div>
                                                                         </div>
                                                                         <div className="text-right flex-shrink-0 flex items-center gap-2">
-                                                                            <div className="text-sm text-gray-600">{player.points > 0 ? formatScore(Number(player.points || 0), 2) : '---'}</div>
+                                                                            <div className="text-sm text-gray-600">{player.hasPlayed ? formatScore(Number(player.points || 0), 2) : '---'}</div>
                                                                             {team2OptimalBench.has(player.playerId) && (
                                                                                 <span className="inline-block w-3 h-3 rounded-full bg-yellow-400" aria-label="optimal start" />
                                                                             )}
