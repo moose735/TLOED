@@ -191,12 +191,13 @@ const LuckRatingAnalysis = ({ onTeamNameClick }) => {
                                   data.team
                                 )}
                               </div>
-                              <div className="text-xs text-gray-500">Actual: {data.actualWins}</div>
+                              {/* removed duplicate 'Actual' here; will show stacked values under the luck rating on the right for mobile */}
                             </div>
                           </div>
 
                           <div className="text-right">
                             <div className={`text-lg font-bold ${data.luckRating > 0 ? 'text-green-600' : data.luckRating < 0 ? 'text-red-600' : 'text-gray-700'}`}>{formatLuckRating(data.luckRating)}</div>
+                            <div className="text-xs text-gray-500 mt-1">Actual • {data.actualWins}</div>
                             <div className="text-xs text-gray-500">Projected • {formatLuckRating(data.projectedWins)}</div>
                           </div>
                         </div>

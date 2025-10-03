@@ -670,8 +670,9 @@ const Gamecenter = () => {
                         const team1Luck = weeklyLuckData[team1RosterId]?.[selectedWeek - 1] ?? 0;
                         const team2Luck = weeklyLuckData[team2RosterId]?.[selectedWeek - 1] ?? 0;
 
-                        const team1AvgPts = getCorrectAveragePoints(team1RosterId, selectedSeason);
-                        const team2AvgPts = getCorrectAveragePoints(team2RosterId, selectedSeason);
+                        // Use stats at the time of the game (up to the selectedWeek) to match desktop/modal behavior
+                        const team1AvgPts = getAverageAtWeek(team1RosterId, selectedSeason, selectedWeek);
+                        const team2AvgPts = getAverageAtWeek(team2RosterId, selectedSeason, selectedWeek);
 
                         const h2h = getHeadToHeadRecord(team1OwnerId, team2OwnerId);
                         const team1Streak = getWinLossStreak(team1OwnerId, selectedSeason);
@@ -1238,7 +1239,7 @@ const Gamecenter = () => {
                                                                             </div>
                                                                         </div>
                                                                         <div className="text-right flex-shrink-0 flex items-center gap-2">
-                                                                            <div className="font-semibold text-gray-800 text-sm sm:text-base">{player.points.toFixed(2)}</div>
+                                                                            <div className="font-semibold text-gray-800 text-sm sm:text-base">{formatScore(Number(player.points || 0), 2)}</div>
                                                                             {outcome === 'win' ? (
                                                                                 <span className="inline-block w-3 h-3 rounded-full bg-green-600" aria-label="scored more" />
                                                                             ) : outcome === 'loss' ? (
@@ -1268,7 +1269,7 @@ const Gamecenter = () => {
                                                                             </div>
                                                                         </div>
                                                                         <div className="text-right flex-shrink-0 flex items-center gap-2">
-                                                                            <div className="text-sm text-gray-600">{player.points > 0 ? player.points.toFixed(2) : '---'}</div>
+                                                                            <div className="text-sm text-gray-600">{player.points > 0 ? formatScore(Number(player.points || 0), 2) : '---'}</div>
                                                                             {team1OptimalBench.has(player.playerId) && (
                                                                                 <span className="inline-block w-3 h-3 rounded-full bg-yellow-400" aria-label="optimal start" />
                                                                             )}
@@ -1304,7 +1305,7 @@ const Gamecenter = () => {
                                                                             </div>
                                                                         </div>
                                                                         <div className="text-right flex-shrink-0 flex items-center gap-2">
-                                                                            <div className="font-semibold text-gray-800 text-sm sm:text-base">{player.points.toFixed(2)}</div>
+                                                                            <div className="font-semibold text-gray-800 text-sm sm:text-base">{formatScore(Number(player.points || 0), 2)}</div>
                                                                             {outcome === 'win' ? (
                                                                                 <span className="inline-block w-3 h-3 rounded-full bg-green-600" aria-label="scored more" />
                                                                             ) : outcome === 'loss' ? (
@@ -1334,7 +1335,7 @@ const Gamecenter = () => {
                                                                             </div>
                                                                         </div>
                                                                         <div className="text-right flex-shrink-0 flex items-center gap-2">
-                                                                            <div className="text-sm text-gray-600">{player.points > 0 ? player.points.toFixed(2) : '---'}</div>
+                                                                            <div className="text-sm text-gray-600">{player.points > 0 ? formatScore(Number(player.points || 0), 2) : '---'}</div>
                                                                             {team2OptimalBench.has(player.playerId) && (
                                                                                 <span className="inline-block w-3 h-3 rounded-full bg-yellow-400" aria-label="optimal start" />
                                                                             )}

@@ -357,10 +357,11 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
                             </div>
                           </div>
 
-                          <div className="text-right">
-                            <div className="text-lg font-bold text-blue-800">{formatDPR(data.dpr)}</div>
-                            <div className="text-xs text-gray-500">DPR • {formatPointsAvg(data.pointsPerGame)}</div>
-                          </div>
+                            <div className="text-right">
+                              <div className="text-lg font-bold text-blue-800">{formatDPR(data.dpr)}</div>
+                              <div className="text-xs text-gray-500 mt-1">PPG • {formatPointsAvg(data.pointsPerGame)}</div>
+                              {/* keep slots for additional stacked info if needed */}
+                            </div>
                         </div>
 
                         <div className="grid grid-cols-3 gap-3 text-sm mt-2">
