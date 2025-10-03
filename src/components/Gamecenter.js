@@ -1320,59 +1320,60 @@ const Gamecenter = () => {
                                                         </div>
                                                     </div>
 
-                                                    {/* Benches: left and right columns (one per team) */}
-                                                    <div>
-                                                        <details className="bg-gray-50 rounded-lg mobile-card">
-                                                            <summary className="font-semibold text-gray-700 p-3 sm:p-4 text-sm sm:text-base cursor-pointer hover:bg-gray-100 rounded-lg touch-friendly">
-                                                                Bench ({matchupRosterData.team1.bench.length} players)
-                                                            </summary>
-                                                            <div className="p-3 sm:p-4 pt-0 space-y-1">
-                                                                {matchupRosterData.team1.bench.map((player) => (
-                                                                    <div key={player.playerId} className="flex justify-between items-center py-1">
-                                                                        <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
-                                                                            <span className="w-8 sm:w-10 text-xs font-medium text-gray-400 flex-shrink-0">BN</span>
-                                                                            <div className="min-w-0 flex-1">
-                                                                                <div className="text-sm text-gray-600 truncate"><span className="truncate block">{player.name}</span></div>
-                                                                                <div className="text-xs text-gray-400">{player.position} · {player.team || 'FA'}</div>
-                                                                            </div>
-                                                                        </div>
-                                                                        <div className="text-right flex-shrink-0 flex items-center gap-2">
-                                                                            <div className="text-sm font-semibold text-gray-800 w-14 text-right">{player.hasPlayed ? formatScore(Number(player.points || 0), 2) : '---'}</div>
-                                                                            {team1OptimalBench.has(player.playerId) && (
-                                                                                <span className="inline-block w-3 h-3 rounded-full bg-yellow-400" aria-label="optimal start" />
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        </details>
-                                                    </div>
+                                                    {/* Benches: single full-width window (pair rows like starters) */}
+                                                    <div className="col-span-2">
+                                                        <div className="bg-gray-50 rounded-lg p-3 sm:p-4 mobile-card">
+                                                            <h5 className="font-semibold text-gray-700 mb-3 text-sm sm:text-base">Bench</h5>
+                                                            <div className="space-y-0">
+                                                                {(() => {
+                                                                    const leftBench = matchupRosterData.team1.bench || [];
+                                                                    const rightBench = matchupRosterData.team2.bench || [];
+                                                                    const maxLen = Math.max(leftBench.length, rightBench.length);
+                                                                    return Array.from({ length: maxLen }).map((_, idx) => {
+                                                                        const leftPlayer = leftBench[idx] || {};
+                                                                        const rightPlayer = rightBench[idx] || {};
+                                                                        const leftHasPlayed = !!leftPlayer?.hasPlayed;
+                                                                        const rightHasPlayed = !!rightPlayer?.hasPlayed;
+                                                                        const leftScore = leftHasPlayed ? formatScore(Number(leftPlayer.points || 0), 2) : '---';
+                                                                        const rightScore = rightHasPlayed ? formatScore(Number(rightPlayer.points || 0), 2) : '---';
+                                                                        const pos = 'BN';
 
-                                                    <div>
-                                                        <details className="bg-gray-50 rounded-lg mobile-card">
-                                                            <summary className="font-semibold text-gray-700 p-3 sm:p-4 text-sm sm:text-base cursor-pointer hover:bg-gray-100 rounded-lg touch-friendly">
-                                                                Bench ({matchupRosterData.team2.bench.length} players)
-                                                            </summary>
-                                                            <div className="p-3 sm:p-4 pt-0 space-y-1">
-                                                                {matchupRosterData.team2.bench.map((player) => (
-                                                                    <div key={player.playerId} className="flex justify-between items-center py-1">
-                                                                        <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
-                                                                            <span className="w-8 sm:w-10 text-xs font-medium text-gray-400 flex-shrink-0">BN</span>
-                                                                            <div className="min-w-0 flex-1">
-                                                                                <div className="text-sm text-gray-600 truncate"><span className="truncate block">{player.name}</span></div>
-                                                                                <div className="text-xs text-gray-400">{player.position} · {player.team || 'FA'}</div>
+                                                                        // For bench rows we do NOT compare left/right across teams.
+                                                                        // Only mark a player with the 'optimal start' yellow dot if they are in the optimal set for their team.
+                                                                        const outcomeLeft = null;
+                                                                        const outcomeRight = null;
+
+                                                                        return (
+                                                                            <div key={`bench-row-${idx}`} className="grid grid-cols-3 items-center border-b border-gray-200 last:border-b-0 py-2">
+                                                                                <div className="min-w-0">
+                                                                                    <div className="font-medium text-gray-800 text-sm sm:text-base truncate overflow-hidden whitespace-nowrap">{leftPlayer.name}</div>
+                                                                                    <div className="text-xs text-gray-400">{leftPlayer.position} · {leftPlayer.team || 'FA'}</div>
+                                                                                </div>
+
+                                                                                <div className="flex items-center justify-center gap-2 h-10">
+                                                                                        <div className="flex items-center gap-2">
+                                                                                        <div className="w-12 text-right text-sm font-semibold text-gray-800">{leftScore}</div>
+                                                                                        <div className={`inline-block w-3 h-3 rounded-full ${team1OptimalBench.has(leftPlayer.playerId) ? 'bg-yellow-400' : 'bg-gray-300'}`} />
+                                                                                    </div>
+                                                                                    <div className="mx-1 flex-shrink-0">
+                                                                                        <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 text-xs font-semibold text-gray-700">{pos}</span>
+                                                                                    </div>
+                                                                                        <div className="flex items-center gap-2">
+                                                                                        <div className={`inline-block w-3 h-3 rounded-full ${team2OptimalBench.has(rightPlayer.playerId) ? 'bg-yellow-400' : 'bg-gray-300'}`} />
+                                                                                        <div className="w-12 text-left text-sm font-semibold text-gray-800">{rightScore}</div>
+                                                                                    </div>
+                                                                                </div>
+
+                                                                                <div className="min-w-0 text-right">
+                                                                                    <div className="font-medium text-gray-800 text-sm sm:text-base truncate overflow-hidden whitespace-nowrap">{rightPlayer.name}</div>
+                                                                                    <div className="text-xs text-gray-400">{rightPlayer.position} · {rightPlayer.team || 'FA'}</div>
+                                                                                </div>
                                                                             </div>
-                                                                        </div>
-                                                                        <div className="text-right flex-shrink-0 flex items-center gap-2">
-                                                                            <div className="text-sm font-semibold text-gray-800 w-14 text-right">{player.hasPlayed ? formatScore(Number(player.points || 0), 2) : '---'}</div>
-                                                                            {team2OptimalBench.has(player.playerId) && (
-                                                                                <span className="inline-block w-3 h-3 rounded-full bg-yellow-400" aria-label="optimal start" />
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                ))}
+                                                                        );
+                                                                    });
+                                                                })()}
                                                             </div>
-                                                        </details>
+                                                        </div>
                                                     </div>
                                                 </div>
                                                 )
