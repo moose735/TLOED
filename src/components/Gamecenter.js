@@ -20,11 +20,31 @@ const Gamecenter = () => {
     useEffect(() => {
         logger.debug('Gamecenter useEffect 1 - loading:', loading, 'leagueData:', leagueData, 'nflState:', nflState);
         if (!loading && leagueData && Array.isArray(leagueData) && leagueData[0]?.season && nflState?.week) {
-            logger.debug('Setting selectedSeason to:', leagueData[0].season, 'and selectedWeek to:', nflState.week);
-            setSelectedSeason(leagueData[0].season);
-            setSelectedWeek(nflState.week);
+            const leagueSeason = leagueData[0].season;
+            const nflWeek = nflState.week;
+            
+            logger.debug('Setting selectedSeason to:', leagueSeason, 'and selectedWeek to:', nflWeek);
+            setSelectedSeason(leagueSeason);
+            
+            // Only set the NFL week if we have data for that season
+            // This prevents trying to show 2024 Week 5 when we only have data up to Week 4
+            if (historicalData?.matchupsBySeason?.[leagueSeason]) {
+                const availableWeeks = [...new Set(historicalData.matchupsBySeason[leagueSeason].map(m => Number(m.week)))].sort((a, b) => a - b);
+                const hasNflWeekData = availableWeeks.includes(Number(nflWeek));
+                
+                if (hasNflWeekData) {
+                    setSelectedWeek(nflWeek);
+                } else {
+                    // Fall back to the latest available week
+                    const latestWeek = Math.max(...availableWeeks.filter(w => w >= 1 && w <= 14));
+                    logger.debug('NFL week', nflWeek, 'not available for season', leagueSeason, 'using latest available week:', latestWeek);
+                    setSelectedWeek(latestWeek);
+                }
+            } else {
+                setSelectedWeek(nflWeek);
+            }
         }
-    }, [loading, leagueData, nflState]); // Runs when loading status or context data changes
+    }, [loading, leagueData, nflState, historicalData]); // Runs when loading status or context data changes
 
     // Effect 2: Populate the week dropdown whenever the selected season changes.
     useEffect(() => {
@@ -341,6 +361,8 @@ const Gamecenter = () => {
         const isPastWeek = (selectedSeasonInt < currentNFLSeason) || (selectedSeasonInt === currentNFLSeason && selectedWeekInt < currentNFLWeek);
         const isFutureWeek = (selectedSeasonInt > currentNFLSeason) || (selectedSeasonInt === currentNFLSeason && selectedWeekInt > currentNFLWeek);
 
+
+
         if (isFutureWeek) return null; // don't crown future weeks
 
         if (isCurrentWeek) {
@@ -371,6 +393,148 @@ const Gamecenter = () => {
         const candidate = computeBestMatchupId();
         if (candidate) saveStoredGameOfWeek(selectedSeason, selectedWeek, candidate);
     }, [selectedSeason, selectedWeek, weeklyMatchups, nflState]);
+
+    // --- Frisky Game of the Week selection (based on largest luck score difference) ---
+    // Frisky Game represents the matchup between teams with the largest difference in Luck scores
+    // If it matches Game of the Week, use the second largest difference instead
+    const computeFriskyGameId = () => {
+        if (!weeklyMatchups || weeklyMatchups.length === 0 || !weeklyLuckData) {
+            return null;
+        }
+
+        // For current week: Use luck scores from the latest completed week to determine team spreads
+        // For past weeks: Use luck scores from that specific week
+        const currentNFLSeason = parseInt(nflState?.season || new Date().getFullYear());
+        const currentNFLWeek = parseInt(nflState?.week || 1);
+        const selectedSeasonInt = parseInt(selectedSeason);
+        const selectedWeekInt = parseInt(selectedWeek);
+        const isCurrentWeek = (selectedSeasonInt === currentNFLSeason && selectedWeekInt === currentNFLWeek);
+
+        let weekToUseForLuck;
+        if (isCurrentWeek) {
+            // For current week: Use the latest completed week's luck scores
+            const anyTeamKey = Object.keys(weeklyLuckData)[0];
+            const weeksAvailable = anyTeamKey ? (weeklyLuckData[anyTeamKey] || []).length : 0;
+            weekToUseForLuck = weeksAvailable; // Use the latest available week
+        } else {
+            // For past weeks: Try to use that specific week, fallback to latest available
+            const anyTeamKey = Object.keys(weeklyLuckData)[0];
+            const weeksAvailable = anyTeamKey ? (weeklyLuckData[anyTeamKey] || []).length : 0;
+            weekToUseForLuck = (weeksAvailable >= selectedWeekInt) ? selectedWeekInt : weeksAvailable;
+        }
+
+        if (weekToUseForLuck <= 0) return null;
+
+        // Calculate luck differences for each matchup using the determined week
+        const matchupLuckData = weeklyMatchups.map(m => {
+            const team1RosterId = String(m.team1_roster_id);
+            const team2RosterId = String(m.team2_roster_id);
+
+            const team1Luck = weeklyLuckData[team1RosterId]?.[weekToUseForLuck - 1] ?? 0;
+            const team2Luck = weeklyLuckData[team2RosterId]?.[weekToUseForLuck - 1] ?? 0;
+
+            const luckDifference = Math.abs(team1Luck - team2Luck);
+
+            return {
+                matchupId: m.matchup_id,
+                luckDifference,
+                team1Luck,
+                team2Luck,
+                team1RosterId,
+                team2RosterId
+            };
+        });
+
+        // Sort by luck difference (descending)
+        matchupLuckData.sort((a, b) => b.luckDifference - a.luckDifference);
+
+        // If no matchups have luck differences, return null
+        if (matchupLuckData.length === 0 || matchupLuckData[0].luckDifference === 0) {
+            return null;
+        }
+
+        // Get the Game of the Week ID for comparison
+        const gameOfWeekId = gameOfWeekMatchupId;
+
+        // If the largest luck difference matchup is the same as Game of the Week, use the second largest
+        if (matchupLuckData.length > 1 && String(matchupLuckData[0].matchupId) === String(gameOfWeekId)) {
+            return matchupLuckData[1].matchupId;
+        }
+        return matchupLuckData[0].matchupId;
+    };
+
+    const readStoredFriskyGame = (season, week) => {
+        try {
+            const raw = localStorage.getItem('friskyGame:v1');
+            if (!raw) return null;
+            const map = JSON.parse(raw || '{}');
+            return map?.[season]?.[week] ?? null;
+        } catch (e) {
+            return null;
+        }
+    };
+
+    const saveStoredFriskyGame = (season, week, matchupId) => {
+        try {
+            const raw = localStorage.getItem('friskyGame:v1');
+            const map = raw ? JSON.parse(raw) : {};
+            if (!map[season]) map[season] = {};
+            map[season][week] = matchupId;
+            localStorage.setItem('friskyGame:v1', JSON.stringify(map));
+        } catch (e) {
+            // ignore storage errors
+        }
+    };
+
+    const friskyGameMatchupId = useMemo(() => {
+        // If no weekly data, nothing to show
+        if (!weeklyMatchups || weeklyMatchups.length === 0 || !weeklyLuckData) {
+            return null;
+        }
+
+        const currentNFLSeason = parseInt(nflState?.season || new Date().getFullYear());
+        const currentNFLWeek = parseInt(nflState?.week || 1);
+        const selectedSeasonInt = parseInt(selectedSeason);
+        const selectedWeekInt = parseInt(selectedWeek);
+
+        // Use the SAME logic as Game of the Week
+        const isCurrentWeek = (selectedSeasonInt === currentNFLSeason && selectedWeekInt === currentNFLWeek);
+        const isPastWeek = (selectedSeasonInt < currentNFLSeason) || (selectedSeasonInt === currentNFLSeason && selectedWeekInt < currentNFLWeek);
+        const isFutureWeek = (selectedSeasonInt > currentNFLSeason) || (selectedSeasonInt === currentNFLSeason && selectedWeekInt > currentNFLWeek);
+
+
+
+        if (isFutureWeek) return null; // don't crown future weeks
+
+        if (isCurrentWeek) {
+            // compute live candidate for the current week
+            return computeFriskyGameId();
+        }
+
+        // past week: return stored snapshot if present, otherwise null
+        const stored = readStoredFriskyGame(selectedSeason, selectedWeek);
+        return stored || null;
+    }, [weeklyMatchups, weeklyLuckData, selectedSeason, selectedWeek, nflState, gameOfWeekMatchupId]);
+
+    // Persist snapshot for completed past weeks: if week is complete and no stored value exists, save the computed candidate
+    useEffect(() => {
+        if (!selectedSeason || !selectedWeek || !weeklyMatchups || weeklyMatchups.length === 0 || !weeklyLuckData) return;
+
+        const currentNFLSeason = parseInt(nflState?.season || new Date().getFullYear());
+        const currentNFLWeek = parseInt(nflState?.week || 1);
+        const selectedSeasonInt = parseInt(selectedSeason);
+        const selectedWeekInt = parseInt(selectedWeek);
+
+        // Use the SAME logic as Game of the Week
+        const isPastWeek = selectedSeasonInt < currentNFLSeason || (selectedSeasonInt === currentNFLSeason && selectedWeekInt < currentNFLWeek);
+        if (!isPastWeek) return; // only persist for past (completed) weeks
+
+        const stored = readStoredFriskyGame(selectedSeason, selectedWeek);
+        if (stored) return; // already have a snapshot
+
+        const candidate = computeFriskyGameId();
+        if (candidate) saveStoredFriskyGame(selectedSeason, selectedWeek, candidate);
+    }, [selectedSeason, selectedWeek, weeklyMatchups, weeklyLuckData, nflState, gameOfWeekMatchupId]);
 
     // Function to fetch detailed roster data for a specific matchup
     const fetchMatchupRosterData = async (matchup, season, week) => {
@@ -716,15 +880,33 @@ const Gamecenter = () => {
                             <div 
                                 key={matchup.matchup_id} 
                                 className={`rounded-xl mobile-card overflow-hidden transition-all duration-300 touch-friendly ${
-                                    (gameOfWeekMatchupId && String(gameOfWeekMatchupId) === String(matchup.matchup_id)) ? 'ring-4 ring-yellow-400 ring-opacity-60' : 'bg-white shadow-md hover:shadow-lg'
+                                    (gameOfWeekMatchupId && String(gameOfWeekMatchupId) === String(matchup.matchup_id)) ? 'ring-4 ring-yellow-400 ring-opacity-60' : 
+                                    (friskyGameMatchupId && String(friskyGameMatchupId) === String(matchup.matchup_id)) ? 'ring-4 ring-purple-400 ring-opacity-60' : 
+                                    'bg-white shadow-md hover:shadow-lg'
                                 } ${isMatchupComplete ? 'cursor-pointer hover:bg-gray-50 active:bg-gray-100' : ''}`}
                                 onClick={() => handleMatchupClick(matchup)}
                             >
                                 <div className="p-3 sm:p-4">
-                                    {/* Badge for Game of the Week */}
+                                    {/* Badge for Game of the Week with Burton Hotel Sponsorship */}
                                     {gameOfWeekMatchupId && String(gameOfWeekMatchupId) === String(matchup.matchup_id) && (
-                                        <div className="flex justify-center mb-2">
+                                        <div className="flex flex-col items-center mb-2 space-y-1">
                                             <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-yellow-300 text-yellow-900 border border-yellow-400">Game of the Week</span>
+                                            <div className="flex items-center space-x-1 text-xs text-gray-600">
+                                                <span>Sponsored by</span>
+                                                <img 
+                                                    src={`${process.env.PUBLIC_URL}/ThdIISRZ_400x400.jpg`}
+                                                    alt="The Burton Hotel"
+                                                    className="w-5 h-5 rounded-full object-cover"
+                                                    onError={(e) => { e.target.style.display = 'none'; }}
+                                                />
+                                                <span className="font-medium text-[#8B4513]">The Burton Hotel</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {/* Badge for Frisky Game of the Week */}
+                                    {friskyGameMatchupId && String(friskyGameMatchupId) === String(matchup.matchup_id) && (
+                                        <div className="flex justify-center mb-2">
+                                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-purple-300 text-purple-900 border border-purple-400">Frisky Game of the Week</span>
                                         </div>
                                     )}
                                     {/* Mobile-First Team Layout */}

@@ -71,6 +71,69 @@ const Dashboard = () => {
         });
     }, [historicalData, currentSeason, nflState, getTeamName, getTeamDetails]);
 
+    // Weekly luck data for current season
+    const weeklyLuckData = useMemo(() => {
+        if (!processedSeasonalRecords || !currentSeason || !processedSeasonalRecords[currentSeason]) {
+            return {};
+        }
+
+        const luckDataForSeason = {};
+        const teams = processedSeasonalRecords[currentSeason];
+
+        Object.keys(teams).forEach(rosterId => {
+            const team = teams[rosterId];
+            if (team.weeklyLuck) {
+                luckDataForSeason[rosterId] = team.weeklyLuck;
+            }
+        });
+
+        return luckDataForSeason;
+    }, [processedSeasonalRecords, currentSeason]);
+
+    // Helper function to determine Frisky Game of the Week
+    const getFriskyGameId = useCallback((matchups, gameOfWeekId) => {
+        if (!matchups || matchups.length === 0 || !weeklyLuckData || !nflState) return null;
+
+        // Always use the latest completed week's luck scores to determine team spreads
+        // This works for both current week (use latest completed) and dashboard display
+        const anyTeam = Object.keys(weeklyLuckData)[0];
+        const weeksAvailable = anyTeam ? (weeklyLuckData[anyTeam] || []).length : 0;
+        const weekToUseForLuck = weeksAvailable; // Always use the latest available week
+        
+        if (weekToUseForLuck <= 0) return null;
+
+        // Calculate luck differences for each matchup using latest completed week's luck
+        const matchupLuckData = matchups.map(m => {
+            const team1RosterId = String(m.team1RosterId);
+            const team2RosterId = String(m.team2RosterId);
+
+            const team1Luck = weeklyLuckData[team1RosterId]?.[weekToUseForLuck - 1] ?? 0;
+            const team2Luck = weeklyLuckData[team2RosterId]?.[weekToUseForLuck - 1] ?? 0;
+
+            const luckDifference = Math.abs(team1Luck - team2Luck);
+
+            return {
+                matchupId: m.matchupId,
+                luckDifference,
+                team1Luck,
+                team2Luck
+            };
+        });
+
+        // Sort by luck difference (descending)
+        matchupLuckData.sort((a, b) => b.luckDifference - a.luckDifference);
+
+        // If no matchups have luck differences, return null
+        if (matchupLuckData.length === 0 || matchupLuckData[0].luckDifference === 0) return null;
+
+        // If the largest luck difference matchup is the same as Game of the Week, use the second largest
+        if (matchupLuckData.length > 1 && String(matchupLuckData[0].matchupId) === String(gameOfWeekId)) {
+            return matchupLuckData[1].matchupId;
+        }
+
+        return matchupLuckData[0].matchupId;
+    }, [weeklyLuckData, nflState]);
+
     // Get recent transactions (last 10)
     const recentTransactions = useMemo(() => {
         if (!transactions || transactions.length === 0) return [];
@@ -317,9 +380,9 @@ const Dashboard = () => {
                                             const t1Score = Number(matchup.team1.score || 0);
                                             const t2Score = Number(matchup.team2.score || 0);
                                             const bothZero = t1Score === 0 && t2Score === 0;
-                                            return (
-                                                <div key={`first-${idx}`} className={`mx-6 rounded-lg px-4 py-3 min-w-[260px] ${
-                                                    ((localStorage.getItem('gameOfWeek:v1') && JSON.parse(localStorage.getItem('gameOfWeek:v1') || '{}')[currentSeason]?.[String(nflState?.week)]) === String(matchup.matchupId)) ||
+                                            
+                                            // Check if this is Game of the Week
+                                            const isGameOfWeek = ((localStorage.getItem('gameOfWeek:v1') && JSON.parse(localStorage.getItem('gameOfWeek:v1') || '{}')[currentSeason]?.[String(nflState?.week)]) === String(matchup.matchupId)) ||
                                                     (String(nflState?.week) === String(matchup.week) && (() => {
                                                         // compute live candidate if processedSeasonalRecords available
                                                         try {
@@ -354,9 +417,31 @@ const Dashboard = () => {
                                                             });
                                                             return String(bestId) === String(matchup.matchupId);
                                                         } catch (e) { return false; }
-                                                    })())
-                                                ? 'ring-4 ring-yellow-400 ring-opacity-60 bg-yellow-50 border-yellow-300' : 'bg-gray-50 border border-gray-200'
-                                                }` }>
+                                                    })());
+
+                                            // Check for stored Frisky Game or compute it
+                                            const gameOfWeekId = isGameOfWeek ? matchup.matchupId : null;
+                                            const isFriskyGame = ((localStorage.getItem('friskyGame:v1') && JSON.parse(localStorage.getItem('friskyGame:v1') || '{}')[currentSeason]?.[String(nflState?.week)]) === String(matchup.matchupId)) ||
+                                                (String(nflState?.week) === String(matchup.week) && (() => {
+                                                    try {
+                                                        const currentGameOfWeekId = isGameOfWeek ? matchup.matchupId : 
+                                                            currentWeekMatchups.find(m => {
+                                                                const storedId = (localStorage.getItem('gameOfWeek:v1') && JSON.parse(localStorage.getItem('gameOfWeek:v1') || '{}')[currentSeason]?.[String(nflState?.week)]);
+                                                                if (storedId) return String(storedId) === String(m.matchupId);
+                                                                // Try to compute it...
+                                                                return false; // Simplified for now
+                                                            })?.matchupId;
+                                                        const friskyId = getFriskyGameId(currentWeekMatchups, currentGameOfWeekId);
+                                                        return String(friskyId) === String(matchup.matchupId);
+                                                    } catch (e) { return false; }
+                                                })());
+                                            
+                                            return (
+                                                <div key={`first-${idx}`} className={`mx-6 rounded-lg px-4 py-3 min-w-[260px] ${
+                                                    isGameOfWeek ? 'ring-4 ring-yellow-400 ring-opacity-60 bg-yellow-50 border-yellow-300' : 
+                                                    isFriskyGame ? 'ring-4 ring-purple-400 ring-opacity-60 bg-purple-50 border-purple-300' : 
+                                                    'bg-gray-50 border border-gray-200'
+                                                }`}>
                                                     {bothZero ? (
                                                         // Vertical middle-aligned stack: Team1, 'vs', Team2
                                                         <div className="flex flex-col items-center justify-center text-center space-y-1">
@@ -465,9 +550,28 @@ const Dashboard = () => {
                                                         return String(bestId) === String(matchup.matchupId);
                                                     } catch (e) { return false; }
                                                 })());
+
+                                            // Check for Frisky Game
+                                            const gameOfWeekId = isGameOfWeek ? matchup.matchupId : null;
+                                            const isFriskyGame = ((localStorage.getItem('friskyGame:v1') && JSON.parse(localStorage.getItem('friskyGame:v1') || '{}')[currentSeason]?.[String(nflState?.week)]) === String(matchup.matchupId)) ||
+                                                (String(nflState?.week) === String(matchup.week) && (() => {
+                                                    try {
+                                                        const currentGameOfWeekId = isGameOfWeek ? matchup.matchupId : 
+                                                            currentWeekMatchups.find(m => {
+                                                                const storedId = (localStorage.getItem('gameOfWeek:v1') && JSON.parse(localStorage.getItem('gameOfWeek:v1') || '{}')[currentSeason]?.[String(nflState?.week)]);
+                                                                if (storedId) return String(storedId) === String(m.matchupId);                                                            
+                                                                return false; // Simplified for now
+                                                            })?.matchupId;
+                                                        const friskyId = getFriskyGameId(currentWeekMatchups, currentGameOfWeekId);
+                                                        return String(friskyId) === String(matchup.matchupId);
+                                                    } catch (e) { return false; }
+                                                })());
+
                                             return (
                                                 <div key={`second-${idx}`} className={`mx-6 rounded-lg px-4 py-3 min-w-[260px] ${
-                                                    isGameOfWeek ? 'ring-4 ring-yellow-400 ring-opacity-60 bg-yellow-50 border-yellow-300' : 'bg-gray-50 border border-gray-200'
+                                                    isGameOfWeek ? 'ring-4 ring-yellow-400 ring-opacity-60 bg-yellow-50 border-yellow-300' : 
+                                                    isFriskyGame ? 'ring-4 ring-purple-400 ring-opacity-60 bg-purple-50 border-purple-300' : 
+                                                    'bg-gray-50 border border-gray-200'
                                                 }`}>
                                                     {bothZero ? (
                                                         <div className="flex flex-col items-center justify-center text-center space-y-1">
