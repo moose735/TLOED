@@ -24,10 +24,10 @@ const SeasonRecords = () => {
         mostBlowoutLossesSeason: { value: -Infinity, entries: [], key: 'blowoutLosses' },
         mostSlimWinsSeason: { value: -Infinity, entries: [], key: 'slimWins' },
         mostSlimLossesSeason: { value: -Infinity, entries: [], key: 'slimLosses' },
-        mostPointsSeason: { value: -Infinity, entries: [], key: 'pointsFor' },
-        fewestPointsSeason: { value: Infinity, entries: [], key: 'pointsFor' },
-        bestLuckRatingSeason: { value: -Infinity, entries: [], key: 'luckRating' },
-        worstLuckRatingSeason: { value: Infinity, entries: [], key: 'luckRating' },
+        mostPointsSeason: { value: -Infinity, entries: [], key: 'mostPointsFor' },
+        fewestPointsSeason: { value: Infinity, entries: [], key: 'fewestPointsFor' },
+        bestLuckRatingSeason: { value: -Infinity, entries: [], key: 'bestLuckRating' },
+        worstLuckRatingSeason: { value: Infinity, entries: [], key: 'worstLuckRating' },
         highestDPRSeason: { value: -Infinity, entries: [], key: 'highestDPR' },
         lowestDPRSeason: { value: Infinity, entries: [], key: 'lowestDPR' },
         mostTradesSeason: { value: -Infinity, entries: [], key: 'tradeCount' },
@@ -76,10 +76,10 @@ const SeasonRecords = () => {
 
     // Helper function to create a clean label from a record key
     const getRecordLabel = (recordKey, recordInstance) => {
-        if (recordKey === 'luckRating') {
+        if (recordKey === 'bestLuckRating' || recordKey === 'worstLuckRating') {
             return recordInstance.value > 0 ? 'Best Luck Rating' : 'Worst Luck Rating';
         }
-        if (recordKey === 'pointsFor') {
+        if (recordKey === 'mostPointsFor' || recordKey === 'fewestPointsFor') {
             return recordInstance.value > 0 ? 'Most Points For' : 'Fewest Points For';
         }
         if (recordKey === 'highestDPR') {
@@ -122,10 +122,10 @@ const SeasonRecords = () => {
                 mostBlowoutLossesSeason: { value: -Infinity, entries: [], key: 'blowoutLosses' },
                 mostSlimWinsSeason: { value: -Infinity, entries: [], key: 'slimWins' },
                 mostSlimLossesSeason: { value: -Infinity, entries: [], key: 'slimLosses' },
-                mostPointsSeason: { value: -Infinity, entries: [], key: 'pointsFor' },
-                fewestPointsSeason: { value: Infinity, entries: [], key: 'pointsFor' },
-                bestLuckRatingSeason: { value: -Infinity, entries: [], key: 'luckRating' },
-                worstLuckRatingSeason: { value: Infinity, entries: [], key: 'luckRating' },
+                mostPointsSeason: { value: -Infinity, entries: [], key: 'mostPointsFor' },
+                fewestPointsSeason: { value: Infinity, entries: [], key: 'fewestPointsFor' },
+                bestLuckRatingSeason: { value: -Infinity, entries: [], key: 'bestLuckRating' },
+                worstLuckRatingSeason: { value: Infinity, entries: [], key: 'worstLuckRating' },
                 mostTradesSeason: { value: -Infinity, entries: [], key: 'tradeCount' },
                 mostWaiversSeason: { value: -Infinity, entries: [], key: 'waiverCount' },
                 highestPointsShareSeason: { value: -Infinity, entries: [], key: 'seasonalHighestPointsShare' },
@@ -188,10 +188,10 @@ const SeasonRecords = () => {
         let currentMostBlowoutLossesSeason = { value: -Infinity, entries: [], key: 'blowoutLosses' };
         let currentMostSlimWinsSeason = { value: -Infinity, entries: [], key: 'slimWins' };
         let currentMostSlimLossesSeason = { value: Infinity, entries: [], key: 'slimLosses' };
-        let currentMostPointsSeason = { value: -Infinity, entries: [], key: 'pointsFor' };
-        let currentFewestPointsSeason = { value: Infinity, entries: [], key: 'pointsFor' };
-        let currentBestLuckRatingSeason = { value: -Infinity, entries: [], key: 'luckRating' };
-        let currentWorstLuckRatingSeason = { value: Infinity, entries: [], key: 'luckRating' };
+        let currentMostPointsSeason = { value: -Infinity, entries: [], key: 'mostPointsFor' };
+        let currentFewestPointsSeason = { value: Infinity, entries: [], key: 'fewestPointsFor' };
+        let currentBestLuckRatingSeason = { value: -Infinity, entries: [], key: 'bestLuckRating' };
+        let currentWorstLuckRatingSeason = { value: Infinity, entries: [], key: 'worstLuckRating' };
         let currentMostTradesSeason = { value: -Infinity, entries: [], key: 'tradeCount' };
         let currentMostWaiversSeason = { value: -Infinity, entries: [], key: 'waiverCount' };
         let currentHighestPointsShareSeason = { value: -Infinity, entries: [], key: 'seasonalHighestPointsShare' };
@@ -474,9 +474,9 @@ const SeasonRecords = () => {
                             'blowoutWins', 'blowoutLosses', 'slimWins', 'slimLosses', 'tradeCount', 'waiverCount'
                         ].includes(record.key)) {
                             valueDisplay = Math.round(primary.value).toLocaleString('en-US', { maximumFractionDigits: 0 });
-                        } else if (['luckRating', 'highestDPR', 'lowestDPR'].includes(record.key)) {
+                        } else if (['bestLuckRating', 'worstLuckRating', 'highestDPR', 'lowestDPR'].includes(record.key)) {
                             valueDisplay = primary.value.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
-                        } else if (record.key === 'pointsFor') {
+                        } else if (record.key === 'mostPointsFor' || record.key === 'fewestPointsFor') {
                             valueDisplay = primary.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                         } else if (record.key === 'winPercentage' || record.key === 'allPlayWinPercentage' || record.key === 'seasonalHighestPointsShare' || record.key === 'seasonalLowestPointsShare') {
                             valueDisplay = (primary.value * 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
@@ -590,9 +590,9 @@ const SeasonRecords = () => {
                                                                         'blowoutWins', 'blowoutLosses', 'slimWins', 'slimLosses', 'tradeCount', 'waiverCount'
                                                                     ].includes(record.key)) {
                                                                         return Math.round(seasonData.value).toLocaleString('en-US', { maximumFractionDigits: 0 });
-                                                                    } else if (['luckRating', 'highestDPR', 'lowestDPR'].includes(record.key)) {
+                                                                    } else if (['bestLuckRating', 'worstLuckRating', 'highestDPR', 'lowestDPR'].includes(record.key)) {
                                                                         return seasonData.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                                                                    } else if (record.key === 'pointsFor') {
+                                                                    } else if (record.key === 'mostPointsFor' || record.key === 'fewestPointsFor') {
                                                                         return seasonData.value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
                                                                     } else if (record.key === 'winPercentage' || record.key === 'allPlayWinPercentage' || record.key === 'seasonalHighestPointsShare' || record.key === 'seasonalLowestPointsShare') {
                                                                         return (seasonData.value * 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
@@ -655,9 +655,9 @@ const SeasonRecords = () => {
                                                         'blowoutWins', 'blowoutLosses', 'slimWins', 'slimLosses', 'tradeCount', 'waiverCount'
                                                     ].includes(record.key)) {
                                                         valueDisplay = Math.round(entry.value).toLocaleString('en-US', { maximumFractionDigits: 0 });
-                                                    } else if (['luckRating', 'highestDPR', 'lowestDPR'].includes(record.key)) {
+                                                    } else if (['bestLuckRating', 'worstLuckRating', 'highestDPR', 'lowestDPR'].includes(record.key)) {
                                                         valueDisplay = entry.value.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
-                                                    } else if (record.key === 'pointsFor') {
+                                                    } else if (record.key === 'mostPointsFor' || record.key === 'fewestPointsFor') {
                                                         valueDisplay = entry.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                                                     } else if (record.key === 'winPercentage' || record.key === 'allPlayWinPercentage' || record.key === 'seasonalHighestPointsShare' || record.key === 'seasonalLowestPointsShare') {
                                                         valueDisplay = (entry.value * 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
@@ -791,9 +791,9 @@ const SeasonRecords = () => {
                                                                             'blowoutWins', 'blowoutLosses', 'slimWins', 'slimLosses', 'tradeCount', 'waiverCount'
                                                                         ].includes(record.key)) {
                                                                             displayValue = Math.round(seasonData.value).toLocaleString('en-US', { maximumFractionDigits: 0 });
-                                                                        } else if (['luckRating', 'adjustedDPR'].includes(record.key)) {
+                                                                        } else if (['bestLuckRating', 'worstLuckRating', 'adjustedDPR'].includes(record.key)) {
                                                                             displayValue = seasonData.value.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
-                                                                        } else if (record.key === 'pointsFor') {
+                                                                        } else if (record.key === 'mostPointsFor' || record.key === 'fewestPointsFor') {
                                                                             displayValue = seasonData.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                                                                         } else if (record.key === 'winPercentage' || record.key === 'allPlayWinPercentage' || record.key === 'seasonalHighestPointsShare' || record.key === 'seasonalLowestPointsShare') {
                                                                             displayValue = (seasonData.value * 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';

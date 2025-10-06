@@ -52,6 +52,11 @@ const LeagueHistory = ({ onTeamNameClick }) => {
     const [sortedYearsForAwards, setSortedYearsForAwards] = useState([]);
     const [showAllSeasons, setShowAllSeasons] = useState(false);
     const [averageScoreChartData, setAverageScoreChartData] = useState([]);
+    
+    // Season range filtering for charts
+    const [availableYears, setAvailableYears] = useState([]);
+    const [selectedStartYear, setSelectedStartYear] = useState('');
+    const [selectedEndYear, setSelectedEndYear] = useState('');
 
     // A color palette for the teams in the chart
     const teamColors = [
@@ -520,6 +525,18 @@ const LeagueHistory = ({ onTeamNameClick }) => {
         logger.debug('LeagueHistory: averageScoresData calculated:', averageScoresData);
         setAverageScoreChartData(averageScoresData);
 
+        // Set available years for filtering
+        const years = allYears.map(String).sort();
+        setAvailableYears(years);
+        
+        // Initialize year range if not set
+        if (!selectedStartYear && years.length > 0) {
+            setSelectedStartYear(years[0]);
+        }
+        if (!selectedEndYear && years.length > 0) {
+            setSelectedEndYear(years[years.length - 1]);
+        }
+
         // Set the season awards summary and sorted years
         setSeasonAwardsSummary(newSeasonAwardsSummary);
         setSortedYearsForAwards(Object.keys(newSeasonAwardsSummary).map(Number).sort((a, b) => b - a)); // Sort descending
@@ -680,6 +697,27 @@ const LeagueHistory = ({ onTeamNameClick }) => {
             setSortBy(column);
             setSortOrder('desc');
         }
+    };
+
+    // Filter chart data based on selected year range
+    const getFilteredChartData = (data) => {
+        if (!selectedStartYear || !selectedEndYear || !data.length) return data;
+        
+        const startYear = parseInt(selectedStartYear);
+        const endYear = parseInt(selectedEndYear);
+        
+        return data.filter(item => {
+            const year = parseInt(item.year);
+            return year >= startYear && year <= endYear;
+        });
+    };
+
+    // Calculate interval for X-axis labels based on data length
+    const getXAxisInterval = (dataLength) => {
+        if (dataLength <= 5) return 0; // Show all labels
+        if (dataLength <= 10) return 1; // Show every other label
+        if (dataLength <= 15) return 2; // Show every 3rd label
+        return Math.floor(dataLength / 8); // Show ~8 labels maximum
     };
 
     return (
@@ -989,60 +1027,184 @@ const LeagueHistory = ({ onTeamNameClick }) => {
                         )}
                     </section>
 
+                    {/* Chart Controls */}
+                    {(averageScoreChartData.length > 0 || seasonalDPRChartData.length > 0) && availableYears.length > 5 && (
+                        <section className="mb-6">
+                            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                                <h4 className="text-lg font-semibold text-gray-800 mb-3">Chart Display Options</h4>
+                                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 items-start sm:items-center">
+                                        <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Show seasons:</label>
+                                        <div className="flex gap-2 items-center">
+                                            <select
+                                                value={selectedStartYear}
+                                                onChange={(e) => setSelectedStartYear(e.target.value)}
+                                                className="px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            >
+                                                {availableYears.map(year => (
+                                                    <option key={year} value={year}>{year}</option>
+                                                ))}
+                                            </select>
+                                            <span className="text-gray-500">to</span>
+                                            <select
+                                                value={selectedEndYear}
+                                                onChange={(e) => setSelectedEndYear(e.target.value)}
+                                                className="px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            >
+                                                {availableYears.map(year => (
+                                                    <option key={year} value={year}>{year}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => {
+                                                if (availableYears.length > 0) {
+                                                    const recent = availableYears.slice(-5);
+                                                    setSelectedStartYear(recent[0]);
+                                                    setSelectedEndYear(recent[recent.length - 1]);
+                                                }
+                                            }}
+                                            className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-sm hover:bg-blue-200 transition-colors"
+                                        >
+                                            Last 5 seasons
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                if (availableYears.length > 0) {
+                                                    setSelectedStartYear(availableYears[0]);
+                                                    setSelectedEndYear(availableYears[availableYears.length - 1]);
+                                                }
+                                            }}
+                                            className="px-3 py-1 bg-gray-100 text-gray-700 rounded text-sm hover:bg-gray-200 transition-colors"
+                                        >
+                                            All seasons
+                                        </button>
+                                    </div>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-2">
+                                    {availableYears.length > 10 && "Tip: Use season filters for better mobile viewing with many seasons"}
+                                </p>
+                            </div>
+                        </section>
+                    )}
+
                     {/* Average Matchup Score Chart */}
                     <section className="mb-8">
                         <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Average Matchup Score by Season</h3>
                         <p className="text-sm text-gray-600 mb-4">Team yearly average scores over time. Shows highest and lowest team season averages with overall league average.</p>
                         {averageScoreChartData.length > 0 ? (
-                            <ResponsiveContainer width="100%" aspect={2.5}>
-                                <ComposedChart
-                                    data={averageScoreChartData}
-                                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                                >
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                                    <XAxis 
-                                        dataKey="year" 
-                                        label={{ value: "Season", position: "insideBottom", offset: -5 }}
-                                        tick={{ fontSize: 12 }}
-                                    />
-                                    <YAxis
-                                        label={{ value: "Avg Points", angle: -90, position: "insideLeft", offset: 0 }}
-                                        domain={['dataMin - 5', 'dataMax + 5']}
-                                        tick={{ fontSize: 12 }}
-                                    />
-                                    <Tooltip content={<AverageScoreTooltip />} />
-                                    <Legend />
-                                    
-                                    {/* Lines for boundaries */}
-                                    <Line
-                                        type="monotone"
-                                        dataKey="highest"
-                                        stroke="#10B981"
-                                        strokeWidth={2}
-                                        dot={{ r: 3, fill: '#10B981' }}
-                                        name="Highest Team Avg"
-                                    />
-                                    <Line
-                                        type="monotone"
-                                        dataKey="lowest"
-                                        stroke="#EF4444"
-                                        strokeWidth={2}
-                                        dot={{ r: 3, fill: '#EF4444' }}
-                                        name="Lowest Team Avg"
-                                    />
-                                    
-                                    {/* Line for league average (prominent) */}
-                                    <Line
-                                        type="monotone"
-                                        dataKey="average"
-                                        stroke="#3B82F6"
-                                        strokeWidth={3}
-                                        dot={{ r: 4, fill: '#3B82F6', strokeWidth: 2, stroke: '#FFF' }}
-                                        activeDot={{ r: 6, stroke: '#3B82F6', strokeWidth: 2, fill: '#FFF' }}
-                                        name="League Average"
-                                    />
-                                </ComposedChart>
-                            </ResponsiveContainer>
+                            <div className="w-full">
+                                {/* Mobile: Use taller aspect ratio for better readability */}
+                                <div className="sm:hidden">
+                                    <div className="w-full" style={{ height: '300px', minHeight: '300px' }}>
+                                        <ResponsiveContainer width="100%" height="100%" minHeight={300}>
+                                            <ComposedChart
+                                                data={getFilteredChartData(averageScoreChartData)}
+                                                margin={{ top: 20, right: 15, left: 15, bottom: 20 }}
+                                            >
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                            <XAxis 
+                                                dataKey="year" 
+                                                tick={{ fontSize: 10 }}
+                                                interval={getXAxisInterval(getFilteredChartData(averageScoreChartData).length)}
+                                                angle={-45}
+                                                textAnchor="end"
+                                                height={50}
+                                            />
+                                            <YAxis
+                                                label={{ value: "Avg Points", angle: -90, position: "insideLeft", style: { textAnchor: 'middle', fontSize: '10px' } }}
+                                                domain={['dataMin - 5', 'dataMax + 5']}
+                                                tick={{ fontSize: 10 }}
+                                                width={40}
+                                            />
+                                            <Tooltip content={<AverageScoreTooltip />} />
+                                            <Legend 
+                                                wrapperStyle={{ fontSize: '11px' }}
+                                                iconSize={8}
+                                            />
+                                            
+                                            <Line
+                                                type="monotone"
+                                                dataKey="highest"
+                                                stroke="#10B981"
+                                                strokeWidth={2}
+                                                dot={{ r: 2, fill: '#10B981' }}
+                                                name="Highest Avg"
+                                            />
+                                            <Line
+                                                type="monotone"
+                                                dataKey="lowest"
+                                                stroke="#EF4444"
+                                                strokeWidth={2}
+                                                dot={{ r: 2, fill: '#EF4444' }}
+                                                name="Lowest Avg"
+                                            />
+                                            <Line
+                                                type="monotone"
+                                                dataKey="average"
+                                                stroke="#3B82F6"
+                                                strokeWidth={3}
+                                                dot={{ r: 3, fill: '#3B82F6', strokeWidth: 2, stroke: '#FFF' }}
+                                                activeDot={{ r: 5, stroke: '#3B82F6', strokeWidth: 2, fill: '#FFF' }}
+                                                name="League Avg"
+                                            />
+                                        </ComposedChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+                                
+                                {/* Desktop: Use wider aspect ratio */}
+                                <div className="hidden sm:block">
+                                    <ResponsiveContainer width="100%" aspect={2.5}>
+                                        <ComposedChart
+                                            data={getFilteredChartData(averageScoreChartData)}
+                                            margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                                        >
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                            <XAxis 
+                                                dataKey="year" 
+                                                label={{ value: "Season", position: "insideBottom", offset: -5 }}
+                                                tick={{ fontSize: 12 }}
+                                            />
+                                            <YAxis
+                                                label={{ value: "Avg Points", angle: -90, position: "insideLeft", offset: 0 }}
+                                                domain={['dataMin - 5', 'dataMax + 5']}
+                                                tick={{ fontSize: 12 }}
+                                            />
+                                            <Tooltip content={<AverageScoreTooltip />} />
+                                            <Legend />
+                                            
+                                            <Line
+                                                type="monotone"
+                                                dataKey="highest"
+                                                stroke="#10B981"
+                                                strokeWidth={2}
+                                                dot={{ r: 3, fill: '#10B981' }}
+                                                name="Highest Team Avg"
+                                            />
+                                            <Line
+                                                type="monotone"
+                                                dataKey="lowest"
+                                                stroke="#EF4444"
+                                                strokeWidth={2}
+                                                dot={{ r: 3, fill: '#EF4444' }}
+                                                name="Lowest Team Avg"
+                                            />
+                                            <Line
+                                                type="monotone"
+                                                dataKey="average"
+                                                stroke="#3B82F6"
+                                                strokeWidth={3}
+                                                dot={{ r: 4, fill: '#3B82F6', strokeWidth: 2, stroke: '#FFF' }}
+                                                activeDot={{ r: 6, stroke: '#3B82F6', strokeWidth: 2, fill: '#FFF' }}
+                                                name="League Average"
+                                            />
+                                        </ComposedChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
                         ) : (
                             <p className="text-center text-gray-600">No average score data available for charting.</p>
                         )}
@@ -1052,37 +1214,95 @@ const LeagueHistory = ({ onTeamNameClick }) => {
                     <section className="mb-8">
                         <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Total DPR Progression Over Seasons</h3>
                         {seasonalDPRChartData.length > 0 ? (
-                            <ResponsiveContainer width="100%" aspect={1.5}> {/* Changed aspect ratio */}
-                                <LineChart
-                                    data={seasonalDPRChartData}
-                                    margin={{ top: 20, right: 10, left: 10, bottom: 5 }}
-                                >
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis dataKey="year" label={{ value: "Season", position: "insideBottom", offset: 0 }} />
-                                    <YAxis
-                                        label={{ value: "Rank (1 = Best)", angle: -90, position: "insideLeft", offset: 0 }}
-                                        domain={[1, numTeams]}
-                                        tickFormatter={value => `#${value}`}
-                                        ticks={yAxisTicks}
-                                        reversed={true}
-                                        allowDataOverflow={true}
-                                        padding={{ top: 10, bottom: 10 }}
-                                    />
-                                    <Tooltip content={<CustomTooltip />} />
-                                    <Legend />
-                                    {uniqueTeamsForChart.map((team, index) => (
-                                        <Line
-                                            key={team}
-                                            type="monotone"
-                                            dataKey={team} // Now directly uses the team name which holds the DPR value
-                                            stroke={teamColors[index % teamColors.length]}
-                                            activeDot={{ r: 8 }}
-                                            dot={{ r: 4 }}
-                                            strokeWidth={2}
-                                        />
-                                    ))}
-                                </LineChart>
-                            </ResponsiveContainer>
+                            <div className="w-full">
+                                {/* Mobile: Use fixed height for better readability */}
+                                <div className="sm:hidden">
+                                    <div className="w-full" style={{ height: '350px', minHeight: '350px' }}>
+                                        <ResponsiveContainer width="100%" height="100%" minHeight={350}>
+                                            <LineChart
+                                                data={getFilteredChartData(seasonalDPRChartData)}
+                                            margin={{ top: 20, right: 5, left: 5, bottom: 40 }}
+                                        >
+                                            <CartesianGrid strokeDasharray="3 3" />
+                                            <XAxis 
+                                                dataKey="year" 
+                                                tick={{ fontSize: 10 }}
+                                                interval={getXAxisInterval(getFilteredChartData(seasonalDPRChartData).length)}
+                                                angle={-45}
+                                                textAnchor="end"
+                                                height={50}
+                                            />
+                                            <YAxis
+                                                label={{ value: "Rank", angle: -90, position: "insideLeft", style: { textAnchor: 'middle', fontSize: '10px' } }}
+                                                domain={[1, numTeams]}
+                                                tickFormatter={value => `#${value}`}
+                                                ticks={yAxisTicks}
+                                                reversed={true}
+                                                allowDataOverflow={true}
+                                                padding={{ top: 10, bottom: 10 }}
+                                                tick={{ fontSize: 10 }}
+                                                width={30}
+                                            />
+                                            <Tooltip content={<CustomTooltip />} />
+                                            <Legend 
+                                                wrapperStyle={{ fontSize: '10px' }}
+                                                iconSize={6}
+                                                layout="horizontal"
+                                                align="center"
+                                                verticalAlign="bottom"
+                                                height={36}
+                                            />
+                                            {uniqueTeamsForChart.map((team, index) => (
+                                                <Line
+                                                    key={team}
+                                                    type="monotone"
+                                                    dataKey={team}
+                                                    stroke={teamColors[index % teamColors.length]}
+                                                    activeDot={{ r: 5 }}
+                                                    dot={{ r: 2 }}
+                                                    strokeWidth={2}
+                                                />
+                                            ))}
+                                        </LineChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+                                
+                                {/* Desktop: Use wider aspect ratio */}
+                                <div className="hidden sm:block">
+                                    <ResponsiveContainer width="100%" aspect={1.5}>
+                                        <LineChart
+                                            data={getFilteredChartData(seasonalDPRChartData)}
+                                            margin={{ top: 20, right: 10, left: 10, bottom: 5 }}
+                                        >
+                                            <CartesianGrid strokeDasharray="3 3" />
+                                            <XAxis dataKey="year" label={{ value: "Season", position: "insideBottom", offset: 0 }} />
+                                            <YAxis
+                                                label={{ value: "Rank (1 = Best)", angle: -90, position: "insideLeft", offset: 0 }}
+                                                domain={[1, numTeams]}
+                                                tickFormatter={value => `#${value}`}
+                                                ticks={yAxisTicks}
+                                                reversed={true}
+                                                allowDataOverflow={true}
+                                                padding={{ top: 10, bottom: 10 }}
+                                            />
+                                            <Tooltip content={<CustomTooltip />} />
+                                            <Legend />
+                                            {uniqueTeamsForChart.map((team, index) => (
+                                                <Line
+                                                    key={team}
+                                                    type="monotone"
+                                                    dataKey={team}
+                                                    stroke={teamColors[index % teamColors.length]}
+                                                    activeDot={{ r: 8 }}
+                                                    dot={{ r: 4 }}
+                                                    strokeWidth={2}
+                                                />
+                                            ))}
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
                         ) : (
                             <p className="text-center text-gray-600">No total DPR progression data available for charting.</p>
                         )}

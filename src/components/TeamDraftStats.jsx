@@ -127,8 +127,50 @@ const TeamDraftStats = ({ ownerId, allDraftHistory = [], totalRounds = 12, total
             <h3 className="text-lg sm:text-xl font-bold text-gray-800 mb-3 sm:mb-4 border-b pb-2">Draft Habits</h3>
             <div className="bg-white border border-gray-200 rounded-lg p-3">
                 <p className="text-sm text-gray-600">Round-by-Round Position Mix (percent)</p>
-                <div className="w-full h-64 mt-2">
-                    <ResponsiveContainer width="100%" height="100%">
+                
+                {/* Mobile: Optimized chart layout */}
+                <div className="sm:hidden w-full h-72 mt-2" style={{ minHeight: '288px' }}>
+                    <ResponsiveContainer width="100%" height="100%" minHeight={288}>
+                        <BarChart 
+                            data={positionByRoundData} 
+                            margin={{ top: 8, right: 8, left: 8, bottom: 35 }}
+                        >
+                            <XAxis 
+                                dataKey="round" 
+                                tick={{ fontSize: 10 }}
+                                interval={0}
+                                angle={-45}
+                                textAnchor="end"
+                                height={50}
+                            />
+                            <YAxis 
+                                domain={[0, 100]} 
+                                tick={{ fontSize: 10 }} 
+                                unit="%" 
+                                width={35}
+                            />
+                            <Tooltip 
+                                formatter={(value, name) => [`${Number(value).toFixed(1)}%`, name]}
+                                wrapperStyle={{ fontSize: 11 }}
+                            />
+                            <Legend 
+                                wrapperStyle={{ fontSize: 10 }}
+                                iconSize={8}
+                                layout="horizontal"
+                                align="center"
+                                verticalAlign="bottom"
+                                height={30}
+                            />
+                            {POSITIONS.map(pos => (
+                                <Bar key={pos} dataKey={pos} stackId="a" fill={POSITION_COLORS[pos]} />
+                            ))}
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+
+                {/* Desktop: Original layout */}
+                <div className="hidden sm:block w-full h-64 mt-2" style={{ minHeight: '256px' }}>
+                    <ResponsiveContainer width="100%" height="100%" minHeight={256}>
                         <BarChart data={positionByRoundData} margin={{ top: 8, right: 16, left: 8, bottom: 4 }}>
                             <XAxis dataKey="round" tick={{ fontSize: 12 }} />
                             <YAxis domain={[0, 100]} tick={{ fontSize: 12 }} unit="%" />
@@ -140,6 +182,7 @@ const TeamDraftStats = ({ ownerId, allDraftHistory = [], totalRounds = 12, total
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
+                
                 <div className="mt-3" />
             </div>
         </section>

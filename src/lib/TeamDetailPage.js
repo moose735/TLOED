@@ -68,6 +68,11 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
     } = useSleeperData();
 
     const [teamOverallStats, setTeamOverallStats] = useState(null);
+    
+    // Season filtering for charts
+    const [availableSeasons, setAvailableSeasons] = useState([]);
+    const [selectedStartSeason, setSelectedStartSeason] = useState('');
+    const [selectedEndSeason, setSelectedEndSeason] = useState('');
     const [teamSeasonHistory, setTeamSeasonHistory] = useState([]);
     const [lastFiveGames, setLastFiveGames] = useState([]);
     const [recordInvolvements, setRecordInvolvements] = useState([]);
@@ -715,6 +720,19 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
     setTeamOverallStats(overallStats);
     setTeamSeasonHistory(compiledSeasonHistory);
     setRecordInvolvements(involvement);
+    
+    // Set available seasons for filtering
+    const seasons = compiledSeasonHistory.map(s => s.year).sort();
+    setAvailableSeasons(seasons);
+    
+    // Initialize season range if not set
+    if (!selectedStartSeason && seasons.length > 0) {
+        setSelectedStartSeason(seasons[0]);
+    }
+    if (!selectedEndSeason && seasons.length > 0) {
+        setSelectedEndSeason(seasons[seasons.length - 1]);
+    }
+    
     // Aggregate all-time, playoff, streak, and season records for this team
     aggregateTeamCareerRecords(currentTeamName, currentTeamOwnerId).then(setTeamCareerRecords);
     setLoadingStats(false);
@@ -831,9 +849,34 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
             
             return (valA < valB ? -1 : valA > valB ? 1 : 0) * (sortOrder === 'asc' ? 1 : -1);
         });
-        }, [teamSeasonHistory, sortBy, sortOrder, financialDataByYear, teamOverallStats?.ownerId]);    const handleSort = (column) => {
+        }, [teamSeasonHistory, sortBy, sortOrder, financialDataByYear, teamOverallStats?.ownerId]);
+
+    const handleSort = (column) => {
         if (sortBy === column) setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
         else { setSortBy(column); setSortOrder('asc'); }
+    };
+
+    // Filter season history based on selected range
+    const getFilteredSeasonHistory = () => {
+        if (!selectedStartSeason || !selectedEndSeason || !teamSeasonHistory.length) {
+            return teamSeasonHistory;
+        }
+        
+        const startYear = parseInt(selectedStartSeason);
+        const endYear = parseInt(selectedEndSeason);
+        
+        return teamSeasonHistory.filter(season => {
+            const year = parseInt(season.year);
+            return year >= startYear && year <= endYear;
+        });
+    };
+
+    // Calculate interval for X-axis labels based on data length
+    const getXAxisInterval = (dataLength) => {
+        if (dataLength <= 5) return 0; // Show all labels
+        if (dataLength <= 10) return 1; // Show every other label
+        if (dataLength <= 15) return 2; // Show every 3rd label
+        return Math.floor(dataLength / 8); // Show ~8 labels maximum
     };
 
     if (loadingStats) {
@@ -1042,13 +1085,74 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
                 )}
             </section>
 
+            {/* Season Filter Controls */}
+            {teamSeasonHistory.length > 5 && (
+                <section className="mb-6">
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                        <h4 className="text-base font-semibold text-gray-800 mb-2">Chart Display Options</h4>
+                        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                            <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+                                <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Show seasons:</label>
+                                <div className="flex gap-2 items-center">
+                                    <select
+                                        value={selectedStartSeason}
+                                        onChange={(e) => setSelectedStartSeason(e.target.value)}
+                                        className="px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    >
+                                        {availableSeasons.map(season => (
+                                            <option key={season} value={season}>{season}</option>
+                                        ))}
+                                    </select>
+                                    <span className="text-gray-500">to</span>
+                                    <select
+                                        value={selectedEndSeason}
+                                        onChange={(e) => setSelectedEndSeason(e.target.value)}
+                                        className="px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    >
+                                        {availableSeasons.map(season => (
+                                            <option key={season} value={season}>{season}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => {
+                                        if (availableSeasons.length > 0) {
+                                            const recent = availableSeasons.slice(-5);
+                                            setSelectedStartSeason(recent[0]);
+                                            setSelectedEndSeason(recent[recent.length - 1]);
+                                        }
+                                    }}
+                                    className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-colors"
+                                >
+                                    Last 5
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        if (availableSeasons.length > 0) {
+                                            setSelectedStartSeason(availableSeasons[0]);
+                                            setSelectedEndSeason(availableSeasons[availableSeasons.length - 1]);
+                                        }
+                                    }}
+                                    className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs hover:bg-gray-200 transition-colors"
+                                >
+                                    All
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            )}
+
             {/* Combo Graph: DPR (bar), Finish (line) by Season */}
             <section className="mb-8">
                 <h3 className="text-lg sm:text-xl font-bold text-gray-800 mb-3 sm:mb-4 border-b pb-2">DPR &amp; Finish by Season</h3>
                 {teamSeasonHistory.length > 0 ? (
                     (() => {
+                        const filteredHistory = getFilteredSeasonHistory();
                         // Calculate dynamic DPR range
-                        const dprVals = teamSeasonHistory
+                        const dprVals = filteredHistory
                             .map(s => typeof s.adjustedDPR === 'number' ? Number(s.adjustedDPR) : null)
                             .filter(v => typeof v === 'number' && !isNaN(v));
                         let minDPR = Math.min(...dprVals);
@@ -1065,54 +1169,130 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
                             maxDPR = Math.min(1.5, maxDPR);
                         }
                         return (
-                            <div className="w-full h-[220px] xs:h-[260px] sm:h-[340px] md:h-[400px] px-0 xs:px-1 sm:px-2">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <ComposedChart
-                                        data={teamSeasonHistory.map(s => ({
-                                            season: s.year,
-                                            dpr: typeof s.adjustedDPR === 'number' ? Number(s.adjustedDPR) : null,
-                                            finish: typeof s.finish === 'string' && s.finish !== 'N/A' ? parseInt(s.finish.replace(/^T-/, '').match(/\d+/)?.[0] || '0') : null
-                                        }))}
-                                        margin={{ top: 10, right: 20, left: 0, bottom: 10 }}
-                                    >
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                        <XAxis dataKey="season" tick={{ fontSize: 10 }} padding={{ left: 8, right: 8 }}>
-                                            <Label value="Season" offset={-6} position="insideBottom" style={{ fontSize: 11 }} />
-                                        </XAxis>
-                                        <YAxis yAxisId="left" orientation="left" domain={[minDPR, maxDPR]} tickCount={8} tick={{ fontSize: 10 }} width={32} allowDecimals={true} allowDataOverflow={true}>
-                                            <Label value="DPR" angle={-90} position="insideLeft" style={{ textAnchor: 'middle', fontSize: 11 }} />
-                                        </YAxis>
-                                        <YAxis
-                                            yAxisId="right"
-                                            orientation="right"
-                                            domain={[1, 12]}
-                                            reversed
-                                            tick={{ fontSize: 10 }}
-                                            width={32}
-                                            allowDecimals={false}
-                                            allowDataOverflow={true}
-                                            ticks={[1,2,3,4,5,6,7,8,9,10,11,12]}
-                                        >
-                                            <Label value="Finish" angle={90} position="insideRight" style={{ textAnchor: 'middle', fontSize: 11 }} />
-                                        </YAxis>
-                                        <Tooltip 
-                                            wrapperStyle={{ fontSize: 12 }} 
-                                            formatter={(value, name, props) => {
-                                                if (name === 'dpr' && typeof value === 'number') {
-                                                    // Always round to 3 decimals, even if value is e.g. 1 or 0.9
-                                                    return [Number(value).toFixed(3), 'DPR'];
-                                                }
-                                                if (name === 'finish' && typeof value === 'number') {
-                                                    return [Math.round(value), 'Finish'];
-                                                }
-                                                return [value, name];
-                                            }} 
-                                        />
-                                        <Legend verticalAlign="top" height={28} iconSize={14} wrapperStyle={{ fontSize: 12, paddingBottom: 2 }} />
-                                        <Bar yAxisId="left" dataKey="dpr" name="DPR" fill="#2563eb" barSize={18} radius={[5, 5, 0, 0]} />
-                                        <Line yAxisId="right" type="monotone" dataKey="finish" name="Finish" stroke="#f59e42" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                                    </ComposedChart>
-                                </ResponsiveContainer>
+                            <div className="w-full">
+                                {/* Mobile: Optimized layout with better spacing */}
+                                <div className="sm:hidden">
+                                    <div className="w-full h-[280px] px-1" style={{ minHeight: '280px' }}>
+                                        <ResponsiveContainer width="100%" height="100%" minHeight={280}>
+                                            <ComposedChart
+                                                data={filteredHistory.map(s => ({
+                                                    season: s.year,
+                                                    dpr: typeof s.adjustedDPR === 'number' ? Number(s.adjustedDPR) : null,
+                                                    finish: typeof s.finish === 'string' && s.finish !== 'N/A' ? parseInt(s.finish.replace(/^T-/, '').match(/\d+/)?.[0] || '0') : null
+                                                }))}
+                                                margin={{ top: 10, right: 15, left: 5, bottom: 25 }}
+                                            >
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                                <XAxis 
+                                                    dataKey="season" 
+                                                    tick={{ fontSize: 9 }}
+                                                    interval={getXAxisInterval(filteredHistory.length)}
+                                                    angle={-45}
+                                                    textAnchor="end"
+                                                    height={40}
+                                                />
+                                                <YAxis 
+                                                    yAxisId="left" 
+                                                    orientation="left" 
+                                                    domain={[minDPR, maxDPR]} 
+                                                    tickCount={6} 
+                                                    tick={{ fontSize: 9 }} 
+                                                    width={28} 
+                                                    allowDecimals={true} 
+                                                    allowDataOverflow={true}
+                                                >
+                                                    <Label value="DPR" angle={-90} position="insideLeft" style={{ textAnchor: 'middle', fontSize: 9 }} />
+                                                </YAxis>
+                                                <YAxis
+                                                    yAxisId="right"
+                                                    orientation="right"
+                                                    domain={[1, 12]}
+                                                    reversed
+                                                    tick={{ fontSize: 9 }}
+                                                    width={25}
+                                                    allowDecimals={false}
+                                                    allowDataOverflow={true}
+                                                    ticks={[1,3,6,9,12]}
+                                                >
+                                                    <Label value="Rank" angle={90} position="insideRight" style={{ textAnchor: 'middle', fontSize: 9 }} />
+                                                </YAxis>
+                                                <Tooltip 
+                                                    wrapperStyle={{ fontSize: 11 }} 
+                                                    formatter={(value, name, props) => {
+                                                        if (name === 'dpr' && typeof value === 'number') {
+                                                            return [Number(value).toFixed(3), 'DPR'];
+                                                        }
+                                                        if (name === 'finish' && typeof value === 'number') {
+                                                            return [Math.round(value), 'Finish'];
+                                                        }
+                                                        return [value, name];
+                                                    }} 
+                                                />
+                                                <Legend 
+                                                    verticalAlign="top" 
+                                                    height={20} 
+                                                    iconSize={10} 
+                                                    wrapperStyle={{ fontSize: 10, paddingBottom: 2 }} 
+                                                />
+                                                <Bar yAxisId="left" dataKey="dpr" name="DPR" fill="#2563eb" barSize={12} radius={[3, 3, 0, 0]} />
+                                                <Line yAxisId="right" type="monotone" dataKey="finish" name="Finish" stroke="#f59e42" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 4 }} />
+                                            </ComposedChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+
+                                {/* Desktop: Original layout */}
+                                <div className="hidden sm:block">
+                                    <div className="w-full h-[220px] xs:h-[260px] sm:h-[340px] md:h-[400px] px-0 xs:px-1 sm:px-2">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <ComposedChart
+                                                data={filteredHistory.map(s => ({
+                                                    season: s.year,
+                                                    dpr: typeof s.adjustedDPR === 'number' ? Number(s.adjustedDPR) : null,
+                                                    finish: typeof s.finish === 'string' && s.finish !== 'N/A' ? parseInt(s.finish.replace(/^T-/, '').match(/\d+/)?.[0] || '0') : null
+                                                }))}
+                                                margin={{ top: 10, right: 20, left: 0, bottom: 10 }}
+                                            >
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                                <XAxis dataKey="season" tick={{ fontSize: 10 }} padding={{ left: 8, right: 8 }}>
+                                                    <Label value="Season" offset={-6} position="insideBottom" style={{ fontSize: 11 }} />
+                                                </XAxis>
+                                                <YAxis yAxisId="left" orientation="left" domain={[minDPR, maxDPR]} tickCount={8} tick={{ fontSize: 10 }} width={32} allowDecimals={true} allowDataOverflow={true}>
+                                                    <Label value="DPR" angle={-90} position="insideLeft" style={{ textAnchor: 'middle', fontSize: 11 }} />
+                                                </YAxis>
+                                                <YAxis
+                                                    yAxisId="right"
+                                                    orientation="right"
+                                                    domain={[1, 12]}
+                                                    reversed
+                                                    tick={{ fontSize: 10 }}
+                                                    width={32}
+                                                    allowDecimals={false}
+                                                    allowDataOverflow={true}
+                                                    ticks={[1,2,3,4,5,6,7,8,9,10,11,12]}
+                                                >
+                                                    <Label value="Finish" angle={90} position="insideRight" style={{ textAnchor: 'middle', fontSize: 11 }} />
+                                                </YAxis>
+                                                <Tooltip 
+                                                    wrapperStyle={{ fontSize: 12 }} 
+                                                    formatter={(value, name, props) => {
+                                                        if (name === 'dpr' && typeof value === 'number') {
+                                                            // Always round to 3 decimals, even if value is e.g. 1 or 0.9
+                                                            return [Number(value).toFixed(3), 'DPR'];
+                                                        }
+                                                        if (name === 'finish' && typeof value === 'number') {
+                                                            return [Math.round(value), 'Finish'];
+                                                        }
+                                                        return [value, name];
+                                                    }} 
+                                                />
+                                                <Legend verticalAlign="top" height={28} iconSize={14} wrapperStyle={{ fontSize: 12, paddingBottom: 2 }} />
+                                                <Bar yAxisId="left" dataKey="dpr" name="DPR" fill="#2563eb" barSize={18} radius={[5, 5, 0, 0]} />
+                                                <Line yAxisId="right" type="monotone" dataKey="finish" name="Finish" stroke="#f59e42" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                                            </ComposedChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
                             </div>
                         );
                     })()
