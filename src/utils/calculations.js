@@ -132,11 +132,16 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
                 weeklyTop2ScoresCount: 0, // Regular season only
                 actualWinsRecord: 0, // Actual regular season wins (for luck calculation)
                 seasonalExpectedWinsSum: 0, // Accumulates expected wins for luck calculation for THIS season
+                regularSeasonWins: 0, // Regular season wins only (excluding playoffs)
+                regularSeasonLosses: 0, // Regular season losses only (excluding playoffs)
+                regularSeasonTies: 0, // Regular season ties only (excluding playoffs)
+                regularSeasonGames: 0, // Regular season games only (excluding playoffs)
                 rank: 'N/A', // Initialize rank
                 pointsRank: 'N/A', // Initialize points rank
                 isChampion: false,
                 isRunnerUp: false,
                 isThirdPlace: false,
+                isRegularSeasonChampion: false, // Initialize regular season champion flag
                 isPointsChampion: false, // Initialize points award flags
                 isPointsRunnerUp: false,
                 isThirdPlacePoints: false, // Initialized
@@ -309,10 +314,18 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
                         // Accumulate wins/losses/ties
                         if (currentTeamScoreInWeek > opponentScore) {
                             currentTeamStats.wins++;
+                            if (isRegularSeasonMatch) currentTeamStats.regularSeasonWins++;
                         } else if (currentTeamScoreInWeek < opponentScore) {
                             currentTeamStats.losses++;
+                            if (isRegularSeasonMatch) currentTeamStats.regularSeasonLosses++;
                         } else {
                             currentTeamStats.ties++;
+                            if (isRegularSeasonMatch) currentTeamStats.regularSeasonTies++;
+                        }
+
+                        // Track regular season games separately
+                        if (isRegularSeasonMatch) {
+                            currentTeamStats.regularSeasonGames++;
                         }
 
                         // Regular season specific stats (all-play, blowout/slim, top score weeks)
@@ -445,6 +458,10 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
                 rawDPR: rawDPR,
                 luckRating: seasonalLuckRating,
                 actualWinsRecord: stats.actualWinsRecord, // ADDED THIS LINE
+                regularSeasonWins: stats.regularSeasonWins, // Regular season wins only
+                regularSeasonLosses: stats.regularSeasonLosses, // Regular season losses only
+                regularSeasonTies: stats.regularSeasonTies, // Regular season ties only
+                regularSeasonGames: stats.regularSeasonGames, // Regular season games only
                 seasonalExpectedWinsSum: stats.seasonalExpectedWinsSum, // ADDED THIS LINE
                 allPlayWins: stats.allPlayWins, // Add these for debugging
                 allPlayLosses: stats.allPlayLosses,
@@ -465,6 +482,7 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
                 isChampion: false, // Reset to false, will be set by playoff results
                 isRunnerUp: false,
                 isThirdPlace: false,
+                isRegularSeasonChampion: false, // Reset regular season champion flag
                 isPointsChampion: false, // Initialize points award flags
                 isPointsRunnerUp: false,
                 isThirdPlacePoints: false,
@@ -512,39 +530,81 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
             }
         });
 
-        // --- APPLY PLAYOFF FINISHES AND POINTS RANKING LOGIC (CONDITIONAL ON PLAYOFF COMPLETION) ---
-        // Both playoff awards and points awards are assigned only if the season's playoffs are complete
-        if (isCurrentYearPlayoffsComplete) {
-            // POINTS RANKING LOGIC
-            const teamsRawForPointsSorting = Object.values(seasonalMetrics[year]);
+        // --- REGULAR SEASON CHAMPION LOGIC (ONLY FOR COMPLETED REGULAR SEASONS) ---
+        // Only award Regular Season Titles after the regular season is complete
+        // For past seasons: always award (regular season is definitely complete)
+        // For current season: only award if current week is >= playoff start week
+        const isRegularSeasonComplete = year < currentNFLSeason || 
+                                      (year === currentNFLSeason && currentNFLWeek >= playoffStartWeek);
 
-            const teamsSortedByPoints = teamsRawForPointsSorting
-                .filter(teamStats => typeof teamStats.pointsFor === 'number' && !isNaN(teamStats.pointsFor))
-                .sort((a, b) => b.pointsFor - a.pointsFor);
+        if (isRegularSeasonComplete) {
+            // Determine regular season champion based on best regular season record
+            const teamsForRegularSeasonRanking = Object.values(seasonalMetrics[year])
+                .filter(team => team.wins + team.losses + team.ties > 0); // Only include teams that played games
 
-
-            if (teamsSortedByPoints.length > 0) {
-                let currentRank = 1;
-                for (let i = 0; i < teamsSortedByPoints.length; i++) {
-                    const teamStats = teamsSortedByPoints[i];
-                    if (i > 0 && teamStats.pointsFor < teamsSortedByPoints[i - 1].pointsFor) {
-                        currentRank = i + 1;
+            if (teamsForRegularSeasonRanking.length > 0) {
+                // Sort teams by total season record (this includes playoffs, but for now it's our best bet)
+                const teamsSortedByRecord = teamsForRegularSeasonRanking.sort((a, b) => {
+                    const winPctA = (a.wins + a.losses + a.ties) > 0 ? (a.wins + 0.5 * a.ties) / (a.wins + a.losses + a.ties) : 0;
+                    const winPctB = (b.wins + b.losses + b.ties) > 0 ? (b.wins + 0.5 * b.ties) / (b.wins + b.losses + b.ties) : 0;
+                    
+                    // Primary sort by win percentage
+                    if (winPctB !== winPctA) {
+                        return winPctB - winPctA;
                     }
-                    if (seasonalMetrics[year][teamStats.rosterId]) {
-                        seasonalMetrics[year][teamStats.rosterId].pointsRank = currentRank;
-                        if (currentRank === 1) {
-                            seasonalMetrics[year][teamStats.rosterId].isPointsChampion = true;
-                        } else if (currentRank === 2) {
-                            seasonalMetrics[year][teamStats.rosterId].isPointsRunnerUp = true;
-                        } else if (currentRank === 3) {
-                            seasonalMetrics[year][teamStats.rosterId].isThirdPlacePoints = true;
-                        }
+                    // Secondary sort by total wins
+                    if (b.wins !== a.wins) {
+                        return b.wins - a.wins;
                     }
+                    // Final tiebreaker by total season points
+                    return b.pointsFor - a.pointsFor;
+                });
+
+                // The team with the best record is the regular season champion
+                const regularSeasonChampion = teamsSortedByRecord[0];
+                if (regularSeasonChampion && seasonalMetrics[year][regularSeasonChampion.rosterId]) {
+                    seasonalMetrics[year][regularSeasonChampion.rosterId].isRegularSeasonChampion = true;
                 }
-                const topTeamRosterId = teamsSortedByPoints[0].rosterId;
-            } else {
             }
+        }
 
+        // --- POINTS RANKING LOGIC (ALWAYS APPLIED) ---
+        // Points champions should be determined for all seasons based on total season points
+        const teamsRawForPointsSorting = Object.values(seasonalMetrics[year]);
+        const teamsSortedByPoints = teamsRawForPointsSorting
+            .filter(teamStats => typeof teamStats.pointsFor === 'number' && !isNaN(teamStats.pointsFor))
+            .sort((a, b) => b.pointsFor - a.pointsFor);
+
+        if (teamsSortedByPoints.length > 0) {
+            // Set points champion (team with most points)
+            const pointsChampion = teamsSortedByPoints[0];
+            if (pointsChampion && seasonalMetrics[year][pointsChampion.rosterId]) {
+                seasonalMetrics[year][pointsChampion.rosterId].isPointsChampion = true;
+                seasonalMetrics[year][pointsChampion.rosterId].pointsRank = 1;
+
+            }
+            
+            // Set points runner-up and third place if there are enough teams
+            if (teamsSortedByPoints.length > 1) {
+                const pointsRunnerUp = teamsSortedByPoints[1];
+                if (pointsRunnerUp && seasonalMetrics[year][pointsRunnerUp.rosterId]) {
+                    seasonalMetrics[year][pointsRunnerUp.rosterId].isPointsRunnerUp = true;
+                    seasonalMetrics[year][pointsRunnerUp.rosterId].pointsRank = 2;
+                }
+            }
+            
+            if (teamsSortedByPoints.length > 2) {
+                const pointsThird = teamsSortedByPoints[2];
+                if (pointsThird && seasonalMetrics[year][pointsThird.rosterId]) {
+                    seasonalMetrics[year][pointsThird.rosterId].isThirdPlacePoints = true;
+                    seasonalMetrics[year][pointsThird.rosterId].pointsRank = 3;
+                }
+            }
+        }
+
+        // --- APPLY PLAYOFF FINISHES LOGIC (CONDITIONAL ON PLAYOFF COMPLETION) ---
+        // Playoff awards are assigned only if the season's playoffs are complete
+        if (isCurrentYearPlayoffsComplete) {
             // PLAYOFF FINISHES LOGIC
             if (winnersBracket && losersBracket && (winnersBracket.length > 0 || losersBracket.length > 0)) {
                 const rosterIdToOwnerIdMap = new Map(rosters.map(r => [String(r.roster_id), String(r.owner_id)]));
@@ -634,9 +694,11 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
         stats.championships = 0;
         stats.runnerUps = 0;
         stats.thirdPlaces = 0;
+        stats.regularSeasonTitles = 0;
         stats.firstPoints = 0;
         stats.secondPoints = 0;
         stats.thirdPoints = 0;
+        stats.mostPointsTitles = 0; // Same as firstPoints, but with different name for display
         stats.playoffAppearancesCount = 0;
         stats.totalLuckRating = 0;
         stats.totalDPRSum = 0;
@@ -682,7 +744,13 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
                     if (teamSeasonalData.isChampion) stats.championships++;
                     if (teamSeasonalData.isRunnerUp) stats.runnerUps++;
                     if (teamSeasonalData.isThirdPlace) stats.thirdPlaces++;
-                    if (teamSeasonalData.isPointsChampion) stats.firstPoints++;
+                    if (teamSeasonalData.isRegularSeasonChampion) {
+                        stats.regularSeasonTitles++;
+                    }
+                    if (teamSeasonalData.isPointsChampion) {
+                        stats.firstPoints++;
+                        stats.mostPointsTitles++; // Track most points titles separately for display
+                    }
                     if (teamSeasonalData.isPointsRunnerUp) stats.secondPoints++;
                     if (teamSeasonalData.isThirdPlacePoints) stats.thirdPoints++;
 
@@ -806,7 +874,9 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
             championships: stats.championships,
             runnerUps: stats.runnerUps,
             thirdPlaces: stats.thirdPlaces,
+            regularSeasonTitles: stats.regularSeasonTitles,
             pointsChampionships: stats.firstPoints,
+            mostPointsTitles: stats.mostPointsTitles,
             pointsRunnerUps: stats.secondPoints,
             thirdPlacePoints: stats.thirdPoints,
             playoffAppearancesCount: stats.playoffAppearancesCount,
@@ -851,7 +921,6 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
     });
 
     finalCareerDPRData.sort((a, b) => b.dpr - a.dpr);
-
 
     return { seasonalMetrics, careerDPRData: finalCareerDPRData };
 };

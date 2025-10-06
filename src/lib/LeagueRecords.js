@@ -37,6 +37,8 @@ const LeagueRecords = () => {
         mostWaivers: { decimals: 0, type: 'count' },
         highestPointsShare: { decimals: 2, type: 'percentage' },
         lowestPointsShare: { decimals: 2, type: 'percentage' },
+        mostPointsChampionships: { decimals: 0, type: 'count' },
+        mostRegularSeasonTitles: { decimals: 0, type: 'count' },
     };
 
     const updateRecord = (currentRecord, newValue, teamInfo) => {
@@ -90,7 +92,7 @@ const LeagueRecords = () => {
                 'bestWinPct','bestAllPlayWinPct','mostWeeklyHighScores','mostWeeklyTop2Scores',
                 'mostWinningSeasons','mostLosingSeasons','mostBlowoutWins','mostBlowoutLosses',
                 'mostSlimWins','mostSlimLosses','mostTotalPoints','mostPointsAgainst',
-                'mostTrades','mostWaivers'
+                'mostTrades','mostWaivers','mostPointsChampionships','mostRegularSeasonTitles'
             ];
 
             metricKeys.forEach(key => {
@@ -141,6 +143,8 @@ const LeagueRecords = () => {
         rankings.mostPointsAgainst = getTop5('pointsAgainst', true);
         rankings.highestPointsShare = getTop5('highestPointsShare', true);
         rankings.lowestPointsShare = getTop5('lowestPointsShare', false);
+        rankings.mostPointsChampionships = getTop5('mostPointsTitles', true);
+        rankings.mostRegularSeasonTitles = getTop5('regularSeasonTitles', true);
 
         // Luck-based rankings using totalLuckRating
         rankings.bestLuck = careerDPRData
@@ -277,6 +281,8 @@ const LeagueRecords = () => {
         let mostWaivers = { value: -Infinity, teams: [], key: 'mostWaivers' };
         let highestPointsShare = { value: -Infinity, teams: [], key: 'highestPointsShare' };
         let lowestPointsShare = { value: Infinity, teams: [], key: 'lowestPointsShare' };
+        let mostPointsChampionships = { value: -Infinity, teams: [], key: 'mostPointsChampionships' };
+        let mostRegularSeasonTitles = { value: -Infinity, teams: [], key: 'mostRegularSeasonTitles' };
 
         calculatedCareerDPRs.forEach(careerStats => {
             const teamName = careerStats.teamName;
@@ -326,6 +332,10 @@ const LeagueRecords = () => {
                 updateLowestRecord(lowestPointsShare, careerStats.lowestPointsShare, { name: teamName, value: careerStats.lowestPointsShare, ownerId: ownerId });
             }
             
+            // Calculate championship records
+            updateRecord(mostPointsChampionships, careerStats.mostPointsTitles || 0, { name: teamName, value: careerStats.mostPointsTitles || 0, ownerId: ownerId });
+            updateRecord(mostRegularSeasonTitles, careerStats.regularSeasonTitles || 0, { name: teamName, value: careerStats.regularSeasonTitles || 0, ownerId: ownerId });
+            
             let winningSeasonsCount = 0;
             let losingSeasonsCount = 0;
 
@@ -367,6 +377,8 @@ const LeagueRecords = () => {
             mostWaivers,
             highestPointsShare,
             lowestPointsShare,
+            mostPointsChampionships,
+            mostRegularSeasonTitles,
         });
     };
 

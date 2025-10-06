@@ -229,6 +229,8 @@ const SeasonBreakdown = () => {
         const teams = Object.values(seasonalMetrics[selectedSeason]);
         // Points Champion
         const pointsChampion = teams.reduce((a, b) => (a.pointsFor > b.pointsFor ? a : b), {});
+        // Regular Season Champion (team with isRegularSeasonChampion flag)
+        const regularSeasonChampion = teams.find(team => team.isRegularSeasonChampion) || teams.reduce((a, b) => (a.wins > b.wins ? a : b), {});
         // Best Record
         const bestRecord = teams.reduce((a, b) => (a.wins > b.wins ? a : b), {});
         // Luckiest/Unluckiest
@@ -272,6 +274,7 @@ const SeasonBreakdown = () => {
 
         seasonStats = {
             pointsChampion,
+            regularSeasonChampion,
             bestRecord,
             luckiest,
             unluckiest,
@@ -655,6 +658,12 @@ const SeasonBreakdown = () => {
                                 <div className="bg-blue-50 rounded-lg p-4 shadow">
                                     <h4 className="font-bold text-blue-700 mb-1">Points Champion</h4>
                                     <div>{seasonStats.pointsChampion.teamName} ({formatScore(Number(seasonStats.pointsChampion.pointsFor ?? 0) , 2)} pts)</div>
+                                </div>
+                            )}
+                            {String(selectedSeason) !== String(currentSeason) && (
+                                <div className="bg-emerald-50 rounded-lg p-4 shadow">
+                                    <h4 className="font-bold text-emerald-700 mb-1">Regular Season Champion</h4>
+                                    <div>{seasonStats.regularSeasonChampion.teamName} ({seasonStats.regularSeasonChampion.wins}-{seasonStats.regularSeasonChampion.losses}-{seasonStats.regularSeasonChampion.ties})</div>
                                 </div>
                             )}
                             <div className="bg-green-50 rounded-lg p-4 shadow">
