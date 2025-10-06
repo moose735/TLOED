@@ -53,32 +53,32 @@ const HallOfChampions = () => {
             name: 'Saquon Barkley', 
             position: 'RB', 
             team: 'PHI', 
-            reasonTitle: 'Joe Schmitt'
-            // staticHeadshot: require('../assets/images/mvp-headshots/2024-saquon-barkley-phi.jpg')
+            reasonTitle: 'Joe Schmitt',
+            staticHeadshot: require('../assets/images/mvp-headshots/2024-saquon-barkley-phi.png')
         },
         2023: { 
             playerId: '19', 
             name: 'Joe Flacco', 
             position: 'QB', 
             team: 'CLE', 
-            reasonTitle: 'Unlikely Hero'
-            // staticHeadshot: require('../assets/images/mvp-headshots/2023-joe-flacco-cle.jpg')
+            reasonTitle: 'Unlikely Hero',
+            staticHeadshot: require('../assets/images/mvp-headshots/2023-joe-flacco-cle.png')
         },
         2022: { 
             playerId: '6786', 
             name: 'CeeDee Lamb', 
             position: 'WR', 
             team: 'DAL', 
-            reasonTitle: 'Why they were MVP'
-            // staticHeadshot: require('../assets/images/mvp-headshots/2022-ceedee-lamb-dal.jpg')
+            reasonTitle: 'Why they were MVP',
+            staticHeadshot: require('../assets/images/mvp-headshots/2022-ceedee-lamb-dal.png')
         },
         2021: { 
             playerId: '4984', 
             name: 'Josh Allen', 
             position: 'QB', 
             team: 'BUF', 
-            reasonTitle: 'Why they were MVP'
-            // staticHeadshot: require('../assets/images/mvp-headshots/2021-josh-allen-buf.jpg')
+            reasonTitle: 'Why they were MVP',
+            staticHeadshot: require('../assets/images/mvp-headshots/2021-josh-allen-buf.png')
         },
 
         // Continue adding years as needed...
