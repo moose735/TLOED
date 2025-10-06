@@ -24,8 +24,16 @@ const HallOfChampions = () => {
     // 2. To find player IDs: Use the "View Roster" button on champion cards to see their players
     // 3. Common player ID examples: Josh Allen='4046', Lamar Jackson='4881', CMC='4036'
     // 4. Leave reasonTitle blank or customize it for each MVP
+    // 5. IMPORTANT: Add static headshot images to preserve historical accuracy when players retire/change teams
     // 
-    // FORMAT: year: { playerId: 'sleeper_player_id', name: 'Full Name', position: 'POS', team: 'TEAM', reasonTitle: 'Optional custom title' }
+    // FORMAT: year: { 
+    //   playerId: 'sleeper_player_id', 
+    //   name: 'Full Name', 
+    //   position: 'POS', 
+    //   team: 'TEAM', 
+    //   reasonTitle: 'Optional custom title',
+    //   staticHeadshot: 'path/to/image.jpg' // RECOMMENDED: Add static headshot to preserve historical accuracy
+    // }
     const leagueMVPs = {
         // EXAMPLE ENTRIES - REPLACE WITH YOUR ACTUAL PICKS:
         // 2024: { 
@@ -33,23 +41,45 @@ const HallOfChampions = () => {
         //     name: 'Josh Allen', 
         //     position: 'QB', 
         //     team: 'BUF',
-        //     reasonTitle: 'Carried the team to championship'
-        // },
-        // 2023: { 
-        //     playerId: '4034', 
-        //     name: 'Dak Prescott', 
-        //     position: 'QB', 
-        //     team: 'DAL',
-        //     reasonTitle: 'Clutch playoff performance'
+        //     reasonTitle: 'Carried the team to championship',
+        //     staticHeadshot: require('../assets/images/mvp-headshots/2024-josh-allen.jpg')
         // },
         
         // ===== ADD YOUR MVP PICKS HERE =====
         // Uncomment and fill in the years and players you want:
 
-        2024: { playerId: '4866', name: 'Saquon Barkley', position: 'RB', team: 'PHI', reasonTitle: 'Joe Schmitt' },
-        2023: { playerId: '19', name: 'Joe Flacco', position: 'QB', team: 'CLE', reasonTitle: 'Unlikely Hero' },
-        2022: { playerId: '6786', name: 'CeeDee Lamb', position: 'WR', team: 'DAL', reasonTitle: 'Why they were MVP' },
-        2021: { playerId: '4984', name: 'Josh Allen', position: 'QB', team: 'BUF', reasonTitle: 'Why they were MVP' },
+        2024: { 
+            playerId: '4866', 
+            name: 'Saquon Barkley', 
+            position: 'RB', 
+            team: 'PHI', 
+            reasonTitle: 'Joe Schmitt'
+            // staticHeadshot: require('../assets/images/mvp-headshots/2024-saquon-barkley-phi.jpg')
+        },
+        2023: { 
+            playerId: '19', 
+            name: 'Joe Flacco', 
+            position: 'QB', 
+            team: 'CLE', 
+            reasonTitle: 'Unlikely Hero'
+            // staticHeadshot: require('../assets/images/mvp-headshots/2023-joe-flacco-cle.jpg')
+        },
+        2022: { 
+            playerId: '6786', 
+            name: 'CeeDee Lamb', 
+            position: 'WR', 
+            team: 'DAL', 
+            reasonTitle: 'Why they were MVP'
+            // staticHeadshot: require('../assets/images/mvp-headshots/2022-ceedee-lamb-dal.jpg')
+        },
+        2021: { 
+            playerId: '4984', 
+            name: 'Josh Allen', 
+            position: 'QB', 
+            team: 'BUF', 
+            reasonTitle: 'Why they were MVP'
+            // staticHeadshot: require('../assets/images/mvp-headshots/2021-josh-allen-buf.jpg')
+        },
 
         // Continue adding years as needed...
     };
@@ -57,6 +87,16 @@ const HallOfChampions = () => {
     // Helper to get MVP for a specific year
     const getMVPForYear = (year) => {
         return leagueMVPs[year] || null;
+    };
+
+    // Helper to safely load static headshot images
+    const getStaticHeadshot = (imagePath) => {
+        try {
+            return imagePath || null;
+        } catch (error) {
+            logger.debug && logger.debug('Static headshot not found:', imagePath);
+            return null;
+        }
     };
 
     // ===== DEVELOPER HELPER =====
@@ -450,11 +490,14 @@ const HallOfChampions = () => {
     // ...existing code...
 
     // Small presentational component to show a player's headshot with a fallback to initials
-    const PlayerAvatar = ({ p, size = 40, className = '' }) => {
-        // Prefer explicit headshot fields, otherwise build Sleeper CDN URL from playerId
+    const PlayerAvatar = ({ p, size = 40, className = '', staticHeadshot = null }) => {
+        // Priority order for headshot sources:
+        // 1. Static headshot (for MVP historical preservation)
+        // 2. Explicit headshot fields from NFL metadata
+        // 3. Built Sleeper CDN URL from playerId
         const explicit = p?.nflMeta?.headshot || p?.nflMeta?.headshot_url || p?.nflMeta?.img || null;
         const built = p?.playerId ? getSleeperPlayerHeadshotUrl(p.playerId) : null;
-        const imgUrl = explicit || built;
+        const imgUrl = staticHeadshot || explicit || built;
         const initials = p?.nflMeta ? `${(p.nflMeta.first_name?.[0] || '')}${(p.nflMeta.last_name?.[0] || '')}`.toUpperCase() : (p.playerId || '').slice(0,2).toUpperCase();
         const [imgError, setImgError] = useState(false);
 
@@ -527,6 +570,7 @@ const HallOfChampions = () => {
                                 p={mvpPlayer}
                                 size={64}
                                 className="ring-4 ring-yellow-400 dark:ring-yellow-500"
+                                staticHeadshot={getStaticHeadshot(mvp.staticHeadshot)}
                             />
                             <div className="absolute -top-2 -right-2 bg-yellow-400 text-yellow-900 rounded-full px-2 py-1 text-xs font-bold shadow-lg">
                                 👑 MVP

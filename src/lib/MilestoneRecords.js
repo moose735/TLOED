@@ -677,28 +677,6 @@ const MilestoneRecords = () => {
 
                     {/* Milestone thresholds */}
                     <div className="space-y-4">
-                        {/* Mobile: show thresholds as cards for small screens */}
-                        <div className="space-y-3 sm:hidden">
-                            {(getDisplayedThresholds(activeMilestone) || []).map(threshold => {
-                                const achievers = getMilestoneAchievers(activeMilestone, threshold);
-                                return (
-                                    <div key={`mobile-th-${threshold}`} className="bg-white border border-gray-200 rounded-lg p-3">
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <div className="text-sm font-semibold text-gray-900">{formatStatValue(threshold, activeMilestone)} {milestones[activeMilestone].title}</div>
-                                                <div className="text-xs text-gray-600 mt-1">{achievers.length} achieved</div>
-                                            </div>
-                                            <button onClick={() => toggleThresholdExpansion(activeMilestone, threshold)} className="p-2 rounded-md hover:bg-gray-100">
-                                                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                                </svg>
-                                            </button>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-
                         {(getDisplayedThresholds(activeMilestone) || []).map(threshold => {
                                             const achievers = getMilestoneAchievers(activeMilestone, threshold);
                                             const watchers = getMilestoneWatchers(activeMilestone, threshold);

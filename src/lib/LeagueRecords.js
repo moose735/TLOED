@@ -35,6 +35,8 @@ const LeagueRecords = () => {
         mostPointsAgainst: { decimals: 2, type: 'points' },
         mostTrades: { decimals: 0, type: 'count' },
         mostWaivers: { decimals: 0, type: 'count' },
+        highestPointsShare: { decimals: 2, type: 'percentage' },
+        lowestPointsShare: { decimals: 2, type: 'percentage' },
     };
 
     const updateRecord = (currentRecord, newValue, teamInfo) => {
@@ -137,6 +139,8 @@ const LeagueRecords = () => {
         rankings.mostSlimLosses = getTop5('slimLosses', true);
         rankings.mostTotalPoints = getTop5('pointsFor', true);
         rankings.mostPointsAgainst = getTop5('pointsAgainst', true);
+        rankings.highestPointsShare = getTop5('highestPointsShare', true);
+        rankings.lowestPointsShare = getTop5('lowestPointsShare', false);
 
         // Luck-based rankings using totalLuckRating
         rankings.bestLuck = careerDPRData
@@ -235,6 +239,19 @@ const LeagueRecords = () => {
             .sort((a, b) => b.value - a.value)
             .slice(0, 5);
 
+        // Add points share rankings
+        rankings.highestPointsShare = calculatedCareerDPRs
+            .map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.pointsShare }))
+            .filter(team => typeof team.value === 'number' && team.value > 0)
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 5);
+            
+        rankings.lowestPointsShare = calculatedCareerDPRs
+            .map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.pointsShare }))
+            .filter(team => typeof team.value === 'number' && team.value > 0)
+            .sort((a, b) => a.value - b.value)
+            .slice(0, 5);
+
         setTopFiveRankings(rankings);
         
         // Calculate all-time records
@@ -258,6 +275,8 @@ const LeagueRecords = () => {
         let worstLuck = { value: Infinity, teams: [], key: 'worstLuck' };
         let mostTrades = { value: -Infinity, teams: [], key: 'mostTrades' };
         let mostWaivers = { value: -Infinity, teams: [], key: 'mostWaivers' };
+        let highestPointsShare = { value: -Infinity, teams: [], key: 'highestPointsShare' };
+        let lowestPointsShare = { value: Infinity, teams: [], key: 'lowestPointsShare' };
 
         calculatedCareerDPRs.forEach(careerStats => {
             const teamName = careerStats.teamName;
@@ -272,6 +291,12 @@ const LeagueRecords = () => {
             if (typeof careerStats.totalLuckRating === 'number' && !isNaN(careerStats.totalLuckRating)) {
                 updateRecord(bestLuck, careerStats.totalLuckRating, { name: teamName, value: careerStats.totalLuckRating, ownerId: ownerId });
                 updateLowestRecord(worstLuck, careerStats.totalLuckRating, { name: teamName, value: careerStats.totalLuckRating, ownerId: ownerId });
+            }
+
+            // Update points share records
+            if (typeof careerStats.pointsShare === 'number' && careerStats.pointsShare > 0) {
+                updateRecord(highestPointsShare, careerStats.pointsShare, { name: teamName, value: careerStats.pointsShare, ownerId: ownerId });
+                updateLowestRecord(lowestPointsShare, careerStats.pointsShare, { name: teamName, value: careerStats.pointsShare, ownerId: ownerId });
             }
 
             if (careerStats.totalGames > 0) {
@@ -292,6 +317,14 @@ const LeagueRecords = () => {
             // Calculate transaction counts
             updateRecord(mostTrades, careerStats.careerTradeFees, { name: teamName, value: careerStats.careerTradeFees, ownerId: ownerId });
             updateRecord(mostWaivers, careerStats.careerWaiverFees, { name: teamName, value: careerStats.careerWaiverFees, ownerId: ownerId });
+            
+            // Calculate points share records
+            if (careerStats.highestPointsShare !== undefined && careerStats.highestPointsShare > 0) {
+                updateRecord(highestPointsShare, careerStats.highestPointsShare, { name: teamName, value: careerStats.highestPointsShare, ownerId: ownerId });
+            }
+            if (careerStats.lowestPointsShare !== undefined && careerStats.lowestPointsShare < 100) {
+                updateLowestRecord(lowestPointsShare, careerStats.lowestPointsShare, { name: teamName, value: careerStats.lowestPointsShare, ownerId: ownerId });
+            }
             
             let winningSeasonsCount = 0;
             let losingSeasonsCount = 0;
@@ -332,6 +365,8 @@ const LeagueRecords = () => {
             mostPointsAgainst,
             mostTrades,
             mostWaivers,
+            highestPointsShare,
+            lowestPointsShare,
         });
     };
 

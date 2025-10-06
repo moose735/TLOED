@@ -32,6 +32,8 @@ const SeasonRecords = () => {
         lowestDPRSeason: { value: Infinity, entries: [], key: 'lowestDPR' },
         mostTradesSeason: { value: -Infinity, entries: [], key: 'tradeCount' },
         mostWaiversSeason: { value: -Infinity, entries: [], key: 'waiverCount' },
+        highestPointsShareSeason: { value: -Infinity, entries: [], key: 'seasonalHighestPointsShare' },
+        lowestPointsShareSeason: { value: Infinity, entries: [], key: 'seasonalLowestPointsShare' },
     }));
 
     // State for collapsible sections
@@ -68,6 +70,8 @@ const SeasonRecords = () => {
         luckRating: { decimals: 2, type: 'decimal' },
         tradeCount: { decimals: 0, type: 'count' },
         waiverCount: { decimals: 0, type: 'count' },
+        seasonalHighestPointsShare: { decimals: 2, type: 'percentage' },
+        seasonalLowestPointsShare: { decimals: 2, type: 'percentage' },
     };
 
     // Helper function to create a clean label from a record key
@@ -89,6 +93,12 @@ const SeasonRecords = () => {
         }
         if (recordKey === 'waiverCount') {
             return 'Most FA/Waivers in a Season';
+        }
+        if (recordKey === 'seasonalHighestPointsShare') {
+            return 'Highest Points Share';
+        }
+        if (recordKey === 'seasonalLowestPointsShare') {
+            return 'Lowest Points Share';
         }
         const cleanedKey = recordKey
             .replace(/Season$/, '')
@@ -118,6 +128,8 @@ const SeasonRecords = () => {
                 worstLuckRatingSeason: { value: Infinity, entries: [], key: 'luckRating' },
                 mostTradesSeason: { value: -Infinity, entries: [], key: 'tradeCount' },
                 mostWaiversSeason: { value: -Infinity, entries: [], key: 'waiverCount' },
+                highestPointsShareSeason: { value: -Infinity, entries: [], key: 'seasonalHighestPointsShare' },
+                lowestPointsShareSeason: { value: Infinity, entries: [], key: 'seasonalLowestPointsShare' },
             });
             setAllSeasonData({});
             return;
@@ -142,7 +154,9 @@ const SeasonRecords = () => {
             highestDPRSeason: [],
             lowestDPRSeason: [],
             mostTradesSeason: [],
-            mostWaiversSeason: []
+            mostWaiversSeason: [],
+            highestPointsShareSeason: [],
+            lowestPointsShareSeason: []
         };
 
         // Helper function to add data to all season data collection
@@ -180,6 +194,8 @@ const SeasonRecords = () => {
         let currentWorstLuckRatingSeason = { value: Infinity, entries: [], key: 'luckRating' };
         let currentMostTradesSeason = { value: -Infinity, entries: [], key: 'tradeCount' };
         let currentMostWaiversSeason = { value: -Infinity, entries: [], key: 'waiverCount' };
+        let currentHighestPointsShareSeason = { value: -Infinity, entries: [], key: 'seasonalHighestPointsShare' };
+        let currentLowestPointsShareSeason = { value: Infinity, entries: [], key: 'seasonalLowestPointsShare' };
 
         // Helper to update records (handles ties)
         const updateRecord = (currentRecord, newValue, teamInfo, isMin = false) => {
@@ -310,6 +326,19 @@ const SeasonRecords = () => {
                         addToAllSeasonData('highestDPRSeason', teamStats.adjustedDPR, { ...baseEntry, value: teamStats.adjustedDPR });
                         addToAllSeasonData('lowestDPRSeason', teamStats.adjustedDPR, { ...baseEntry, value: teamStats.adjustedDPR });
                     }
+                    // Add all teams' seasonal points share data for Top 5 rankings
+                    if (typeof teamStats.seasonalPointsShare === 'number' && !isNaN(teamStats.seasonalPointsShare)) {
+                        addToAllSeasonData('highestPointsShareSeason', teamStats.seasonalPointsShare, { ...baseEntry, value: teamStats.seasonalPointsShare });
+                        addToAllSeasonData('lowestPointsShareSeason', teamStats.seasonalPointsShare, { ...baseEntry, value: teamStats.seasonalPointsShare });
+                    }
+                    
+                    // Update records only for teams that achieved season high/low
+                    if (typeof teamStats.seasonalHighestPointsShare === 'number' && !isNaN(teamStats.seasonalHighestPointsShare)) {
+                        updateRecord(currentHighestPointsShareSeason, teamStats.seasonalHighestPointsShare, { ...baseEntry, value: teamStats.seasonalHighestPointsShare });
+                    }
+                    if (typeof teamStats.seasonalLowestPointsShare === 'number' && !isNaN(teamStats.seasonalLowestPointsShare)) {
+                        updateRecord(currentLowestPointsShareSeason, teamStats.seasonalLowestPointsShare, { ...baseEntry, value: teamStats.seasonalLowestPointsShare }, true);
+                    }
                 });
             });
 
@@ -318,7 +347,8 @@ const SeasonRecords = () => {
              currentMostWeeklyHighScoresSeason, currentMostWeeklyTop2ScoresSeason, currentMostBlowoutWinsSeason,
              currentMostBlowoutLossesSeason, currentMostSlimWinsSeason, currentMostSlimLossesSeason,
              currentMostPointsSeason, currentFewestPointsSeason, currentBestLuckRatingSeason, currentWorstLuckRatingSeason,
-             currentHighestDPRSeason, currentLowestDPRSeason, currentMostTradesSeason, currentMostWaiversSeason].forEach(record => {
+             currentHighestDPRSeason, currentLowestDPRSeason, currentMostTradesSeason, currentMostWaiversSeason,
+             currentHighestPointsShareSeason, currentLowestPointsShareSeason].forEach(record => {
                 if (record && record.entries.length > 1) {
                     record.entries.sort((a, b) => {
                         if (a.year !== b.year) return parseInt(a.year) - parseInt(b.year);
@@ -346,6 +376,8 @@ const SeasonRecords = () => {
                 lowestDPRSeason: currentLowestDPRSeason,
                 mostTradesSeason: currentMostTradesSeason,
                 mostWaiversSeason: currentMostWaiversSeason,
+                highestPointsShareSeason: currentHighestPointsShareSeason,
+                lowestPointsShareSeason: currentLowestPointsShareSeason,
             });
             
             logger.debug("Season Records - Final transaction counts:");
@@ -399,6 +431,8 @@ const SeasonRecords = () => {
         seasonalHighlights.lowestDPRSeason,
         seasonalHighlights.mostTradesSeason,
         seasonalHighlights.mostWaiversSeason,
+        seasonalHighlights.highestPointsShareSeason,
+        seasonalHighlights.lowestPointsShareSeason,
     ].filter(
         (record) => record && record.value !== -Infinity && record.value !== Infinity && record.entries && record.entries.length > 0
     );
@@ -444,8 +478,8 @@ const SeasonRecords = () => {
                             valueDisplay = primary.value.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
                         } else if (record.key === 'pointsFor') {
                             valueDisplay = primary.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                        } else if (record.key === 'winPercentage' || record.key === 'allPlayWinPercentage') {
-                            valueDisplay = (primary.value * 100).toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+                        } else if (record.key === 'winPercentage' || record.key === 'allPlayWinPercentage' || record.key === 'seasonalHighestPointsShare' || record.key === 'seasonalLowestPointsShare') {
+                            valueDisplay = (primary.value * 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
                         } else {
                             valueDisplay = primary.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                         }
@@ -501,7 +535,9 @@ const SeasonRecords = () => {
                                             'highestDPR': 'highestDPRSeason',
                                             'lowestDPR': 'lowestDPRSeason',
                                             'tradeCount': 'mostTradesSeason',
-                                            'waiverCount': 'mostWaiversSeason'
+                                            'waiverCount': 'mostWaiversSeason',
+                                            'seasonalHighestPointsShare': 'highestPointsShareSeason',
+                                            'seasonalLowestPointsShare': 'lowestPointsShareSeason'
                                         };
                                         const dataKey = keyMapping[record.key];
                                         return dataKey && allSeasonData[dataKey] && allSeasonData[dataKey].length > 0;
@@ -524,10 +560,12 @@ const SeasonRecords = () => {
                                                     'highestDPR': 'highestDPRSeason',
                                                     'lowestDPR': 'lowestDPRSeason',
                                                     'tradeCount': 'mostTradesSeason',
-                                                    'waiverCount': 'mostWaiversSeason'
+                                                    'waiverCount': 'mostWaiversSeason',
+                                                    'seasonalHighestPointsShare': 'highestPointsShareSeason',
+                                                    'seasonalLowestPointsShare': 'lowestPointsShareSeason'
                                                 };
                                                 const dataKey = keyMapping[record.key];
-                                                const isMinRecord = ['fewestPointsSeason', 'worstLuckRatingSeason', 'lowestDPRSeason'].includes(dataKey);
+                                                const isMinRecord = ['fewestPointsSeason', 'worstLuckRatingSeason', 'lowestDPRSeason', 'lowestPointsShareSeason'].includes(dataKey);
                                                 
                                                 return allSeasonData[dataKey]
                                                     .sort((a, b) => isMinRecord ? a.value - b.value : b.value - a.value)
@@ -536,8 +574,13 @@ const SeasonRecords = () => {
                                                         <div key={`${record.key}-mobile-top5-${seasonData.ownerId}-${seasonData.year}-${idx}`} className="flex items-center justify-between bg-gray-50 rounded-md p-2 border border-gray-100">
                                                             <div className="flex items-center gap-3">
                                                                 <div className="w-7 h-7 flex items-center justify-center bg-blue-100 text-blue-800 rounded-full text-xs font-bold">{idx + 1}</div>
-                                                                <div className="text-sm font-medium text-gray-900 truncate">
-                                                                    {seasonData.teamName || getTeamName(seasonData.ownerId, seasonData.year)} ({seasonData.year})
+                                                                <div className="flex flex-col">
+                                                                    <div className="text-sm font-medium text-gray-900 truncate">
+                                                                        {seasonData.teamName || getTeamName(seasonData.ownerId, seasonData.year)}
+                                                                    </div>
+                                                                    <div className="text-xs text-gray-500">
+                                                                        {seasonData.year}
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                             <div className="text-sm font-semibold text-gray-900">
@@ -551,8 +594,8 @@ const SeasonRecords = () => {
                                                                         return seasonData.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                                                                     } else if (record.key === 'pointsFor') {
                                                                         return seasonData.value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-                                                                    } else if (record.key === 'winPercentage' || record.key === 'allPlayWinPercentage') {
-                                                                        return (seasonData.value * 100).toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+                                                                    } else if (record.key === 'winPercentage' || record.key === 'allPlayWinPercentage' || record.key === 'seasonalHighestPointsShare' || record.key === 'seasonalLowestPointsShare') {
+                                                                        return (seasonData.value * 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
                                                                     } else {
                                                                         return seasonData.value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
                                                                     }
@@ -616,8 +659,8 @@ const SeasonRecords = () => {
                                                         valueDisplay = entry.value.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
                                                     } else if (record.key === 'pointsFor') {
                                                         valueDisplay = entry.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                                                    } else if (record.key === 'winPercentage' || record.key === 'allPlayWinPercentage') {
-                                                        valueDisplay = (entry.value * 100).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + '%';
+                                                    } else if (record.key === 'winPercentage' || record.key === 'allPlayWinPercentage' || record.key === 'seasonalHighestPointsShare' || record.key === 'seasonalLowestPointsShare') {
+                                                        valueDisplay = (entry.value * 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
                                                     } else {
                                                         valueDisplay = entry.value;
                                                     }
@@ -698,7 +741,9 @@ const SeasonRecords = () => {
                                                 'highestDPR': 'highestDPRSeason',
                                                 'lowestDPR': 'lowestDPRSeason',
                                                 'tradeCount': 'mostTradesSeason',
-                                                'waiverCount': 'mostWaiversSeason'
+                                                'waiverCount': 'mostWaiversSeason',
+                                                'seasonalHighestPointsShare': 'highestPointsShareSeason',
+                                                'seasonalLowestPointsShare': 'lowestPointsShareSeason'
                                             };
                                             const dataKey = keyMapping[record.key];
                                             return dataKey && allSeasonData[dataKey] && allSeasonData[dataKey].length > 0;
@@ -728,11 +773,13 @@ const SeasonRecords = () => {
                                                                     'highestDPR': 'highestDPRSeason',
                                                                     'lowestDPR': 'lowestDPRSeason',
                                                                     'tradeCount': 'mostTradesSeason',
-                                                                    'waiverCount': 'mostWaiversSeason'
+                                                                    'waiverCount': 'mostWaiversSeason',
+                                                                    'seasonalHighestPointsShare': 'highestPointsShareSeason',
+                                                                    'seasonalLowestPointsShare': 'lowestPointsShareSeason'
                                                                 };
                                                                 const dataKey = keyMapping[record.key];
                                                                 const sortKey = record.key;
-                                                                const isMinRecord = ['fewestPointsSeason', 'worstLuckRatingSeason', 'lowestDPRSeason'].includes(dataKey);
+                                                                const isMinRecord = ['fewestPointsSeason', 'worstLuckRatingSeason', 'lowestDPRSeason', 'lowestPointsShareSeason'].includes(dataKey);
                                                                 
                                                                 return allSeasonData[dataKey]
                                                                     .sort((a, b) => isMinRecord ? a.value - b.value : b.value - a.value)
@@ -748,8 +795,8 @@ const SeasonRecords = () => {
                                                                             displayValue = seasonData.value.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
                                                                         } else if (record.key === 'pointsFor') {
                                                                             displayValue = seasonData.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                                                                        } else if (record.key === 'winPercentage' || record.key === 'allPlayWinPercentage') {
-                                                                            displayValue = (seasonData.value * 100).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + '%';
+                                                                        } else if (record.key === 'winPercentage' || record.key === 'allPlayWinPercentage' || record.key === 'seasonalHighestPointsShare' || record.key === 'seasonalLowestPointsShare') {
+                                                                            displayValue = (seasonData.value * 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
                                                                         } else {
                                                                             displayValue = seasonData.value;
                                                                         }

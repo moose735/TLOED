@@ -6,7 +6,7 @@ import logger from '../utils/logger';
 import { calculatePlayoffFinishes } from '../utils/playoffRankings'; // Import the playoff calculation function
 
 // Recharts for charting
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Bar, Cell, Area, AreaChart } from 'recharts';
 
 // Helper function to get ordinal suffix (1st, 2nd, 3rd, 4th, etc.)
 const getOrdinalSuffix = (n) => {
@@ -51,12 +51,32 @@ const LeagueHistory = ({ onTeamNameClick }) => {
     const [seasonAwardsSummary, setSeasonAwardsSummary] = useState({});
     const [sortedYearsForAwards, setSortedYearsForAwards] = useState([]);
     const [showAllSeasons, setShowAllSeasons] = useState(false);
+    const [averageScoreChartData, setAverageScoreChartData] = useState([]);
 
     // A color palette for the teams in the chart
     const teamColors = [
         '#8884d8', '#82ca9d', '#ffc658', '#f5222d', '#fa8c16', '#a0d911', '#52c41a', '#1890ff',
         '#2f54eb', '#722ed1', '#eb2f96', '#faad14', '#13c2c2', '#eb2f96', '#fadb14', '#52c41a'
     ];
+
+    // Custom tooltip for the average score chart
+    const AverageScoreTooltip = ({ active, payload, label }) => {
+        if (active && payload && payload.length > 0) {
+            const data = payload[0].payload;
+            return (
+                <div className="bg-white p-3 border border-gray-300 rounded shadow-lg">
+                    <p className="font-semibold">{`Season ${label}`}</p>
+                    <p className="text-green-600">{`Highest: ${data.highest.toFixed(1)} (${data.highestTeam})`}</p>
+                    <p className="text-blue-600">{`Average: ${data.average.toFixed(1)}`}</p>
+                    <p className="text-red-600">{`Lowest: ${data.lowest.toFixed(1)} (${data.lowestTeam})`}</p>
+                    <p className="text-gray-600">{`Range: ${data.range.toFixed(1)} pts`}</p>
+                </div>
+            );
+        }
+        return null;
+    };
+
+
 
     useEffect(() => {
         if (contextLoading || contextError || !historicalData || !historicalData.matchupsBySeason || Object.keys(historicalData.matchupsBySeason).length === 0) {
@@ -65,6 +85,7 @@ const LeagueHistory = ({ onTeamNameClick }) => {
             setUniqueTeamsForChart([]);
             setSeasonAwardsSummary({});
             setSortedYearsForAwards([]);
+            setAverageScoreChartData([]);
             return;
         }
 
@@ -388,6 +409,116 @@ const LeagueHistory = ({ onTeamNameClick }) => {
             chartData.push(yearDataPoint);
         });
         setSeasonalDPRChartData(chartData);
+
+        // Calculate average matchup scores data for the box plot chart
+        const averageScoresData = [];
+        logger.debug('LeagueHistory: Starting average score calculation for years:', allYears);
+        logger.debug('LeagueHistory: historicalData.matchupsBySeason keys:', Object.keys(historicalData.matchupsBySeason || {}));
+        
+        allYears.forEach(year => {
+            const matchupsForYear = historicalData.matchupsBySeason[year] || [];
+            const rostersForYear = historicalData.rostersBySeason[year] || [];
+            
+            logger.debug(`LeagueHistory: Year ${year} - matchups: ${matchupsForYear.length}, rosters: ${rostersForYear.length}`);
+            
+            if (matchupsForYear.length === 0 || rostersForYear.length === 0) {
+                logger.debug(`LeagueHistory: Skipping year ${year} - no data`);
+                return;
+            }
+            
+            // Calculate total points and games for each team
+            const teamPointsData = {};
+            
+            // Initialize team data - use roster_id as key since matchups use roster_id
+            const rosterIdToOwnerMap = {};
+            rostersForYear.forEach(roster => {
+                const ownerId = roster.owner_id;
+                const rosterId = roster.roster_id;
+                const teamName = getDisplayTeamNameFromContext(ownerId, year);
+                
+                rosterIdToOwnerMap[rosterId] = ownerId;
+                teamPointsData[rosterId] = {
+                    ownerId: ownerId,
+                    teamName: teamName,
+                    totalPoints: 0,
+                    games: 0
+                };
+            });
+            
+            // Sum up points from matchups to calculate team season averages
+            matchupsForYear.forEach((matchup, index) => {
+                // Handle different matchup data structures
+                const team1Id = matchup.team1_roster_id || matchup.t1;
+                const team2Id = matchup.team2_roster_id || matchup.t2;
+                const team1Score = matchup.team1_score || matchup.t1_score || 0;
+                const team2Score = matchup.team2_score || matchup.t2_score || 0;
+                
+                if (index === 0) {
+                    logger.debug(`LeagueHistory: Sample matchup for ${year}:`, {
+                        team1Id, team2Id, team1Score, team2Score,
+                        keys: Object.keys(matchup)
+                    });
+                }
+                
+                if (team1Id && teamPointsData[team1Id]) {
+                    if (team1Score > 0) {
+                        teamPointsData[team1Id].totalPoints += team1Score;
+                        teamPointsData[team1Id].games += 1;
+                    }
+                }
+                
+                if (team2Id && teamPointsData[team2Id]) {
+                    if (team2Score > 0) {
+                        teamPointsData[team2Id].totalPoints += team2Score;
+                        teamPointsData[team2Id].games += 1;
+                    }
+                }
+            });
+            
+            // Calculate each team's season average
+            const teamSeasonAverages = [];
+            const teamAverageScores = {};
+            
+            Object.values(teamPointsData).forEach(teamData => {
+                if (teamData.games > 0) {
+                    const seasonAvg = teamData.totalPoints / teamData.games;
+                    teamSeasonAverages.push(seasonAvg);
+                    teamAverageScores[teamData.teamName] = seasonAvg;
+                }
+            });
+            
+            logger.debug(`LeagueHistory: Team season averages for year ${year}:`, teamAverageScores);
+            
+            if (teamSeasonAverages.length > 0) {
+                // Calculate statistics from team season averages
+                teamSeasonAverages.sort((a, b) => a - b);
+                const highest = Math.max(...teamSeasonAverages);
+                const lowest = Math.min(...teamSeasonAverages);
+                const average = teamSeasonAverages.reduce((sum, score) => sum + score, 0) / teamSeasonAverages.length;
+                
+                // Find team names for highest and lowest season averages
+                const highestTeam = Object.keys(teamAverageScores).find(team => Math.abs(teamAverageScores[team] - highest) < 0.01) || 'Unknown';
+                const lowestTeam = Object.keys(teamAverageScores).find(team => Math.abs(teamAverageScores[team] - lowest) < 0.01) || 'Unknown';
+                
+                const yearData = {
+                    year: year,
+                    highest: parseFloat(highest.toFixed(1)),
+                    lowest: parseFloat(lowest.toFixed(1)),
+                    average: parseFloat(average.toFixed(1)),
+                    range: parseFloat((highest - lowest).toFixed(1)),
+                    highestTeam: highestTeam,
+                    lowestTeam: lowestTeam
+                };
+                
+                logger.debug(`LeagueHistory: Adding team average data for year ${year}:`, yearData);
+                averageScoresData.push(yearData);
+            } else {
+                logger.debug(`LeagueHistory: No team season averages calculated for year ${year}`);
+            }
+        });
+        
+        logger.debug('LeagueHistory: averageScoresData calculated:', averageScoresData);
+        setAverageScoreChartData(averageScoresData);
 
         // Set the season awards summary and sorted years
         setSeasonAwardsSummary(newSeasonAwardsSummary);
@@ -855,6 +986,65 @@ const LeagueHistory = ({ onTeamNameClick }) => {
                             </>
                         ) : (
                             <p className="text-center text-gray-600">No season-by-season award data available.</p>
+                        )}
+                    </section>
+
+                    {/* Average Matchup Score Chart */}
+                    <section className="mb-8">
+                        <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Average Matchup Score by Season</h3>
+                        <p className="text-sm text-gray-600 mb-4">Team yearly average scores over time. Shows highest and lowest team season averages with overall league average.</p>
+                        {averageScoreChartData.length > 0 ? (
+                            <ResponsiveContainer width="100%" aspect={2.5}>
+                                <ComposedChart
+                                    data={averageScoreChartData}
+                                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                                >
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                    <XAxis 
+                                        dataKey="year" 
+                                        label={{ value: "Season", position: "insideBottom", offset: -5 }}
+                                        tick={{ fontSize: 12 }}
+                                    />
+                                    <YAxis
+                                        label={{ value: "Avg Points", angle: -90, position: "insideLeft", offset: 0 }}
+                                        domain={['dataMin - 5', 'dataMax + 5']}
+                                        tick={{ fontSize: 12 }}
+                                    />
+                                    <Tooltip content={<AverageScoreTooltip />} />
+                                    <Legend />
+                                    
+                                    {/* Lines for boundaries */}
+                                    <Line
+                                        type="monotone"
+                                        dataKey="highest"
+                                        stroke="#10B981"
+                                        strokeWidth={2}
+                                        dot={{ r: 3, fill: '#10B981' }}
+                                        name="Highest Team Avg"
+                                    />
+                                    <Line
+                                        type="monotone"
+                                        dataKey="lowest"
+                                        stroke="#EF4444"
+                                        strokeWidth={2}
+                                        dot={{ r: 3, fill: '#EF4444' }}
+                                        name="Lowest Team Avg"
+                                    />
+                                    
+                                    {/* Line for league average (prominent) */}
+                                    <Line
+                                        type="monotone"
+                                        dataKey="average"
+                                        stroke="#3B82F6"
+                                        strokeWidth={3}
+                                        dot={{ r: 4, fill: '#3B82F6', strokeWidth: 2, stroke: '#FFF' }}
+                                        activeDot={{ r: 6, stroke: '#3B82F6', strokeWidth: 2, fill: '#FFF' }}
+                                        name="League Average"
+                                    />
+                                </ComposedChart>
+                            </ResponsiveContainer>
+                        ) : (
+                            <p className="text-center text-gray-600">No average score data available for charting.</p>
                         )}
                     </section>
 

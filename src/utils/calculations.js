@@ -9,7 +9,7 @@ import { calculatePlayoffFinishes } from './playoffRankings'; // Import the play
  * @param {number} teamWinPercentage - Win percentage of the team for the period (season or career).
  * @returns {number} The raw DPR value (Power Rating).
  */
-// Raw DPR = (((Points scored avg *6)) +((Points scored max+points scored min)*2)+((win%*200)*2))/10
+// Raw DPR = ((Points scored avg *6)) +((Points scored max+points scored min)*2)+((win%*200)*2))/10
 export const calculateRawDPR = (averageScore, teamHighScore, teamLowScore, teamWinPercentage) => {
     const pointsComponent = averageScore * 6;
     const deviationComponent = (teamHighScore + teamLowScore) * 2;
@@ -121,6 +121,7 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
                 allPlayTies: 0,
                 weeklyScores: [], // Store all weekly scores for this roster for seasonal high/low/avg
                 weeklyLuck: [], // ADD THIS: To store weekly luck values
+                weeklyPointsShares: [], // Store weekly points share percentages
                 highScore: -Infinity,
                 lowScore: Infinity,
                 topScoreWeeksCount: 0, // Regular season only
@@ -167,6 +168,7 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
                     weeklyTop2ScoresCount: 0,
                     actualCareerWinsRecord: 0,
                     careerExpectedWinsSum: 0, // Accumulates expected wins for overall career luck
+                    // Points share will be calculated as career total / league total at the end
                     // Initialize career award counts
                     championships: 0,
                     runnerUps: 0,
@@ -352,6 +354,20 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
                             const weeklyLuck = actualWeeklyResult - weeklyExpectedWins;
                             currentTeamStats.weeklyLuck.push(weeklyLuck);
 
+                            // Calculate points share for this week (only for regular season)
+                            const totalWeeklyPoints = weekScoresForAllTeams.reduce((sum, team) => sum + team.score, 0);
+                            if (totalWeeklyPoints > 0) {
+                                const weeklyPointsShare = (currentTeamScoreInWeek / totalWeeklyPoints) * 100;
+                                
+                                // Track for seasonal stats
+                                if (!currentTeamStats.weeklyPointsShares) {
+                                    currentTeamStats.weeklyPointsShares = [];
+                                }
+                                currentTeamStats.weeklyPointsShares.push(weeklyPointsShare);
+                                
+                // Career points share will be calculated later from total career points
+                            }
+
                             // Weekly High Score / Top 2 Score (only for regular season)
                             const highestScoreInWeek = weekScoresForAllTeams.reduce((max, team) => Math.max(max, team.score), -Infinity);
                             const sortedWeekScores = [...weekScoresForAllTeams].sort((a, b) => b.score - a.score);
@@ -466,6 +482,33 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
                 seasonalMetrics[year][rosterId].adjustedDPR = seasonalMetrics[year][rosterId].rawDPR / avgRawDPRInSeason;
             } else {
                 seasonalMetrics[year][rosterId].adjustedDPR = 0;
+            }
+        });
+
+        // Calculate seasonal points share for each team
+        const totalSeasonPoints = Object.values(seasonalMetrics[year]).reduce((sum, team) => sum + team.pointsFor, 0);
+        const seasonPointsShares = [];
+        
+        Object.keys(seasonalMetrics[year]).forEach(rosterId => {
+            const team = seasonalMetrics[year][rosterId];
+            const pointsShare = totalSeasonPoints > 0 ? (team.pointsFor / totalSeasonPoints) : 0;
+            team.seasonalPointsShare = pointsShare;
+            seasonPointsShares.push(pointsShare);
+        });
+        
+        // Find highest and lowest points share for this season
+        const highestSeasonalPointsShare = seasonPointsShares.length > 0 ? Math.max(...seasonPointsShares) : 0;
+        const lowestSeasonalPointsShare = seasonPointsShares.length > 0 ? Math.min(...seasonPointsShares) : 0;
+        
+        // Add the highest and lowest to each team's record (for seasonal records tracking)
+        Object.keys(seasonalMetrics[year]).forEach(rosterId => {
+            const team = seasonalMetrics[year][rosterId];
+            // Only assign the seasonal high/low to the teams that actually achieved them
+            if (team.seasonalPointsShare === highestSeasonalPointsShare) {
+                team.seasonalHighestPointsShare = highestSeasonalPointsShare;
+            }
+            if (team.seasonalPointsShare === lowestSeasonalPointsShare) {
+                team.seasonalLowestPointsShare = lowestSeasonalPointsShare;
             }
         });
 
@@ -598,6 +641,7 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
         stats.totalLuckRating = 0;
         stats.totalDPRSum = 0;
         stats.seasonsWithDPRData = 0;
+        // Points share will be calculated from career total points vs league total
 
 
         // Aggregate all stats from seasonalMetrics into careerTeamStatsRaw
@@ -641,6 +685,8 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
                     if (teamSeasonalData.isPointsChampion) stats.firstPoints++;
                     if (teamSeasonalData.isPointsRunnerUp) stats.secondPoints++;
                     if (teamSeasonalData.isThirdPlacePoints) stats.thirdPoints++;
+
+                    // Points share calculation happens after aggregation is complete
 
                     // Only include a season's DPR in the career average if the team played games in that season
                     if (teamSeasonalData.adjustedDPR !== undefined && teamSeasonalData.adjustedDPR !== null && teamSeasonalData.totalGames > 0) {
@@ -728,7 +774,6 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
         // Career Luck Rating: Actual Career Wins - Total Expected Wins from all-play across career
         const careerLuckRating = stats.actualCareerWinsRecord - stats.careerExpectedWinsSum;
 
-
         finalCareerDPRData.push({
             ownerId: ownerId,
             teamName: stats.teamName,
@@ -770,6 +815,18 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
         });
     });
 
+    // Calculate total league points and each team's points share
+    let totalLeaguePoints = 0;
+    Object.keys(careerTeamStatsRaw).forEach(ownerId => {
+        totalLeaguePoints += careerTeamStatsRaw[ownerId].pointsFor;
+    });
+
+    // Calculate points share for each team and add to finalCareerDPRData
+    finalCareerDPRData.forEach(teamData => {
+        const teamPoints = teamData.pointsFor;
+        // Don't multiply by 100 here - the formatting function will do that
+        teamData.pointsShare = totalLeaguePoints > 0 ? (teamPoints / totalLeaguePoints) : 0;
+    });
 
     // Calculate the average of all seasonal league average raw DPRs (per user formula)
     // For each season, get the league average raw DPR (mean of all teams' rawDPR for that season)
