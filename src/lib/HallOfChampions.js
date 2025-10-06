@@ -89,6 +89,46 @@ const HallOfChampions = () => {
         return leagueMVPs[year] || null;
     };
 
+    // ===== HARDCODED 2021 CHAMPION ROSTER =====
+    // Since 2021 data is from Yahoo (not Sleeper), we need to manually define the roster
+    // This ensures the 2021 champion's players are included in multi-time champion calculations
+    // 
+    // INSTRUCTIONS TO CUSTOMIZE:
+    // 1. Replace the example players below with the actual 2021 championship roster
+    // 2. Find Sleeper player IDs by searching current rosters or using Sleeper API
+    // 3. Set isStarter: true for players who were in the starting lineup during championship
+    // 4. Use 2021 NFL team abbreviations (teams players were on during 2021 season)
+    // 5. For DEF, use team abbreviation as playerId (e.g., 'BUF' for Buffalo Bills defense)
+    //
+    // EXAMPLE FORMAT: { playerId: '4984', name: 'Josh Allen', position: 'QB', team: 'BUF', isStarter: true }
+    const hardcoded2021Roster = [
+        // ===== REPLACE THESE WITH ACTUAL 2021 CHAMPIONSHIP ROSTER =====
+        // Starting lineup (set isStarter: true)
+        { playerId: '4984', name: 'Josh Allen', position: 'QB', team: 'BUF', isStarter: true },
+        { playerId: '5000', name: 'Chase Edmonds', position: 'RB', team: 'ARI', isStarter: true },
+        { playerId: '4962', name: 'Sony Michel', position: 'RB', team: 'LAR', isStarter: true },
+        { playerId: '6786', name: 'CeeDee Lamb', position: 'WR', team: 'DAL', isStarter: true },
+        { playerId: '2078', name: 'Odell Beckham Jr', position: 'WR', team: 'LAR', isStarter: true },
+        { playerId: '1466', name: 'Travis Kelce', position: 'TE', team: 'KC', isStarter: true },
+        { playerId: '4950', name: 'Christian Kirk', position: 'WR', team: 'JAX', isStarter: true }, // FLEX
+        { playerId: '59', name: 'Mason Crosby', position: 'K', team: 'GB', isStarter: true },
+        { playerId: 'PHI', name: 'Philadelphia Eagles', position: 'DEF', team: 'PHI', isStarter: true },
+        
+        // Bench players (set isStarter: false)
+        { playerId: '6826', name: 'Cole Kmet', position: 'TE', team: 'CHI', isStarter: false },
+        { playerId: '6945', name: 'Antonio Gibson', position: 'RB', team: 'WAS', isStarter: false },
+        { playerId: '1689', name: 'Adam Thielen', position: 'WR', team: 'MIN', isStarter: false },
+        { playerId: '5038', name: 'Michael Gallup', position: 'WR', team: 'DAL', isStarter: false },
+        { playerId: '6989', name: 'Marquez Callaway', position: 'WR', team: 'NE', isStarter: false },
+        { playerId: '6770', name: 'Joe Burrow', position: 'QB', team: 'CIN', isStarter: false },
+        { playerId: '6824', name: 'Donovan Peoples-Jones', position: 'WR', team: 'CLE', isStarter: false },
+        { playerId: '4149', name: 'Jamaal Williams', position: 'RB', team: 'DET', isStarter: false },
+        { playerId: '2168', name: 'Devonta Freeman', position: 'RB', team: 'ATL', isStarter: false },
+        { playerId: '4028', name: 'Kansas City Chiefs', position: 'DEF', team: 'KC', isStarter: false },
+        // Add all remaining bench players from the 2021 championship roster
+        // This ensures accurate multi-time champion calculations
+    ];
+
     // Helper to safely load static headshot images
     const getStaticHeadshot = (imagePath) => {
         try {
@@ -342,11 +382,16 @@ const HallOfChampions = () => {
             const rosterId = findWinningRosterId(year);
             let players = null;
 
-            // Try: historicalData.rostersBySeason[year] may contain roster objects with players
-            const rostersForYear = historicalData.rostersBySeason?.[year] || historicalData.rostersBySeason?.[String(year)];
-            if (rostersForYear && Array.isArray(rostersForYear)) {
-                const rosterObj = rostersForYear.find(r => String(r.roster_id) === String(rosterId));
-                players = getPlayersFromRosterObj(rosterObj);
+            // Special case for 2021: Use hardcoded roster since it's from Yahoo, not Sleeper
+            if (year === 2021) {
+                players = hardcoded2021Roster.map(p => p.playerId);
+            } else {
+                // Try: historicalData.rostersBySeason[year] may contain roster objects with players
+                const rostersForYear = historicalData.rostersBySeason?.[year] || historicalData.rostersBySeason?.[String(year)];
+                if (rostersForYear && Array.isArray(rostersForYear)) {
+                    const rosterObj = rostersForYear.find(r => String(r.roster_id) === String(rosterId));
+                    players = getPlayersFromRosterObj(rosterObj);
+                }
             }
 
             // Fallback: check matchups for the championship week or last playoff week for that roster
@@ -388,7 +433,25 @@ const HallOfChampions = () => {
 
             // Normalize players to array of objects using nflPlayers map if available
                 const normalized = [];
-                if (Array.isArray(players)) {
+                
+                // Special handling for 2021 hardcoded roster
+                if (year === 2021 && Array.isArray(players)) {
+                    // For 2021, we already have the full player objects with roster info
+                    hardcoded2021Roster.forEach(playerData => {
+                        const meta = (nflPlayers && nflPlayers[playerData.playerId]) || null;
+                        
+                        normalized.push({
+                            playerId: playerData.playerId,
+                            name: playerData.name || (meta ? `${meta.first_name} ${meta.last_name}` : playerData.playerId),
+                            position: playerData.position || (meta ? meta.position : null),
+                            nflMeta: meta || null,
+                            teamAtChampionship: playerData.team || meta?.team || null,
+                            starterPoints: null, // No points data available for 2021 Yahoo season
+                            isStarter: playerData.isStarter || false
+                        });
+                    });
+                } else if (Array.isArray(players)) {
+                    // Standard processing for Sleeper years
                     // Try to find the championship matchup to extract starter points
                     const winnersBracket = historicalData.winnersBracketBySeason?.[year] || [];
                     const championshipGame = winnersBracket.find(g => g.p === 1 && g.w);
