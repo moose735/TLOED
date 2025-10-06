@@ -7,6 +7,8 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore, doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { getTransactionTotal } from '../utils/financialCalculations';
 import { formatScore } from '../utils/formatUtils';
+import { generateTransactionCountsFromSleeper, createTransactionCountSummary, createWeeklyTransactionReport } from '../utils/transactionIntegration';
+import { CURRENT_LEAGUE_ID } from '../config';
 
 // Your Firebase Config (should be replaced by env vars in a real app)
 const firebaseConfig = {
@@ -50,6 +52,11 @@ const FinancialTracker = () => {
 	const [potentialFormInput, setPotentialFormInput] = useState({ description: '', amount: '' });
     const [showPotentialForm, setShowPotentialForm] = useState(null);
     const [selectedYear, setSelectedYear] = useState('');
+    
+    // Transaction import state
+    const [importStatus, setImportStatus] = useState({ loading: false, message: '', type: '' });
+    const [showImportPreview, setShowImportPreview] = useState(false);
+    const [previewData, setPreviewData] = useState(null);
 
 	// State to hold data for the selected year only
 	const [currentYearData, setCurrentYearData] = useState({ transactions: [], potentialFees: [], potentialPayouts: [] });
@@ -495,6 +502,52 @@ const FinancialTracker = () => {
 		}
 	};
 
+	// Transaction import handlers
+	const handleImportFromSleeper = async () => {
+		if (!isAdmin || !selectedYear) {
+			setImportStatus({ message: 'Please select a year and ensure you are logged in as admin', type: 'error' });
+			return;
+		}
+
+		setImportStatus({ loading: true, message: 'Analyzing Sleeper transactions...', type: 'info' });
+
+		try {
+			// Get current league ID and roster data
+			const currentLeagueId = CURRENT_LEAGUE_ID;
+			const currentYear = parseInt(selectedYear);
+			const rostersData = historicalData?.rostersBySeason?.[currentYear];
+
+			if (!rostersData) {
+				throw new Error(`No roster data found for ${currentYear}`);
+			}
+
+			// Generate transaction counts from Sleeper
+			const result = await generateTransactionCountsFromSleeper(currentLeagueId, rostersData);
+			
+			// Create summary for preview
+			const summary = createTransactionCountSummary(result.counts, usersData);
+			const weeklyReport = createWeeklyTransactionReport(result.counts, usersData);
+			
+			setPreviewData({ 
+				counts: result.counts, 
+				summary, 
+				weeklyReport, 
+				rawResult: result 
+			});
+			setShowImportPreview(true);
+			setImportStatus({ 
+				message: `Found ${result.summary.totalTrades} trades, ${result.summary.totalWaivers} waivers, ${result.summary.totalFreeAgents} FA pickups`, 
+				type: 'success' 
+			});
+
+		} catch (error) {
+			logger.error('Error importing transactions:', error);
+			setImportStatus({ message: `Import failed: ${error.message}`, type: 'error' });
+		}
+	};
+
+
+
 	// Helper function to render the truncated or full list of teams
 	const renderTeams = (transactionId, teams, allMembers, expandedId, setExpandedId) => {
         const teamNames = Array.isArray(teams) ?
@@ -870,6 +923,191 @@ const FinancialTracker = () => {
 					)}
 				</div>
 			)}
+			
+			{/* Sleeper Transaction Analysis Section */}
+			{isAdmin && selectedYear && (
+				<div className="mb-8 bg-white rounded-lg shadow-md p-6 border border-purple-200">
+					<h3 className="text-xl font-semibold text-purple-800 mb-4">Analyze Transactions from Sleeper</h3>
+					<p className="text-gray-600 mb-4">
+						Get detailed transaction counts (trades, waivers, FA pickups) from Sleeper API for {selectedYear}.
+					</p>
+					
+					<div className="flex gap-4 items-center mb-4">
+						<button
+							onClick={handleImportFromSleeper}
+							disabled={importStatus.loading}
+							className="bg-purple-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-purple-700 disabled:bg-gray-400 transition duration-200"
+						>
+							{importStatus.loading ? 'Analyzing...' : 'Analyze Transactions'}
+						</button>
+						
+						{importStatus.message && (
+							<div className={`p-3 rounded-lg text-sm font-medium ${
+								importStatus.type === 'success' ? 'bg-green-100 text-green-800' : 
+								importStatus.type === 'error' ? 'bg-red-100 text-red-800' : 
+								importStatus.type === 'warning' ? 'bg-yellow-100 text-yellow-800' :
+								'bg-blue-100 text-blue-800'
+							}`}>
+								{importStatus.message}
+							</div>
+						)}
+					</div>
+
+					{/* Transaction Count Display */}
+					{showImportPreview && previewData && (
+						<div className="border border-gray-300 rounded-lg p-4 bg-gray-50">
+							<h4 className="font-semibold text-lg mb-3">Transaction Analysis for {selectedYear}</h4>
+							
+							{/* Overall Summary */}
+							<div className="mb-6 p-4 bg-blue-50 rounded-lg">
+								<h5 className="font-medium mb-2">Season Totals:</h5>
+								<div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
+									<div className="bg-white p-3 rounded">
+										<div className="text-2xl font-bold text-blue-600">{previewData.rawResult.summary.totalTrades}</div>
+										<div className="text-sm text-gray-600">Total Trades</div>
+									</div>
+									<div className="bg-white p-3 rounded">
+										<div className="text-2xl font-bold text-green-600">{previewData.rawResult.summary.totalWaivers}</div>
+										<div className="text-sm text-gray-600">Waiver Claims</div>
+									</div>
+									<div className="bg-white p-3 rounded">
+										<div className="text-2xl font-bold text-orange-600">{previewData.rawResult.summary.totalFreeAgents}</div>
+										<div className="text-sm text-gray-600">FA Pickups</div>
+									</div>
+									<div className="bg-white p-3 rounded">
+										<div className="text-2xl font-bold text-purple-600">{previewData.rawResult.summary.totalTrades + previewData.rawResult.summary.totalWaivers + previewData.rawResult.summary.totalFreeAgents}</div>
+										<div className="text-sm text-gray-600">All Transactions</div>
+									</div>
+								</div>
+							</div>
+
+							{/* Summary by team */}
+							<div className="mb-6">
+								<h5 className="font-medium mb-2">Transaction Counts by Team:</h5>
+								<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+									{Object.entries(previewData.summary).map(([ownerId, summary]) => (
+										<div key={ownerId} className="bg-white p-3 rounded border">
+											<div className="font-medium text-sm">{summary.teamName}</div>
+											<div className="text-xs text-gray-600 mt-1">
+												<div>Trades: {summary.trades}</div>
+												<div>Waivers: {summary.waivers}</div>
+												<div>FA Pickups: {summary.freeAgents}</div>
+											</div>
+											<div className="font-semibold text-sm mt-2 pt-2 border-t">
+												Total: {summary.totalTransactions} transactions
+											</div>
+										</div>
+									))}
+								</div>
+							</div>
+
+							{/* Weekly Breakdown */}
+							<div className="mb-4">
+								<h5 className="font-medium mb-3">Weekly Breakdown:</h5>
+								<div className="max-h-96 overflow-y-auto space-y-3">
+									{Object.entries(previewData.weeklyReport)
+										.sort(([a], [b]) => parseInt(a) - parseInt(b))
+										.map(([week, weekData]) => {
+											const totalWeekTransactions = weekData.trades.length + weekData.waivers.length + weekData.freeAgents.length;
+											if (totalWeekTransactions === 0) return null;
+											
+											return (
+												<div key={week} className="bg-white border rounded-lg p-4">
+													<div className="flex items-center justify-between mb-3">
+														<h6 className="font-semibold text-base">Week {week}</h6>
+														<div className="text-sm text-gray-600">
+															{totalWeekTransactions} transaction{totalWeekTransactions !== 1 ? 's' : ''}
+														</div>
+													</div>
+													
+													{/* Trades */}
+													{weekData.trades.length > 0 && (
+														<div className="mb-3">
+															<div className="text-sm font-medium text-blue-600 mb-1">
+																Trades ({weekData.trades.length})
+															</div>
+															{weekData.trades.map((trade, idx) => (
+																<div key={idx} className="text-xs text-gray-700 ml-4 mb-1">
+																	• {trade.teamNames.join(' ↔ ')}
+																	{trade.playersTraded.adds > 0 && (
+																		<span className="text-gray-500"> ({trade.playersTraded.adds} players)</span>
+																	)}
+																</div>
+															))}
+														</div>
+													)}
+													
+													{/* Waivers */}
+													{weekData.waivers.length > 0 && (
+														<div className="mb-3">
+															<div className="text-sm font-medium text-green-600 mb-1">
+																Waiver Claims ({weekData.waivers.reduce((sum, w) => sum + w.pickupCount, 0)})
+															</div>
+															{(() => {
+																const waiversByTeam = weekData.waivers.reduce((acc, waiver) => {
+																	if (!acc[waiver.teamName]) {
+																		acc[waiver.teamName] = 0;
+																	}
+																	acc[waiver.teamName] += waiver.pickupCount;
+																	return acc;
+																}, {});
+																
+																return Object.entries(waiversByTeam).map(([teamName, count]) => (
+																	<div key={teamName} className="text-xs text-gray-700 ml-4 mb-1">
+																		• {teamName}: {count} pickup{count !== 1 ? 's' : ''}
+																	</div>
+																));
+															})()}
+														</div>
+													)}
+													
+													{/* Free Agents */}
+													{weekData.freeAgents.length > 0 && (
+														<div className="mb-1">
+															<div className="text-sm font-medium text-orange-600 mb-1">
+																FA Pickups ({weekData.freeAgents.reduce((sum, fa) => sum + fa.pickupCount, 0)})
+															</div>
+															{(() => {
+																const faByTeam = weekData.freeAgents.reduce((acc, fa) => {
+																	if (!acc[fa.teamName]) {
+																		acc[fa.teamName] = 0;
+																	}
+																	acc[fa.teamName] += fa.pickupCount;
+																	return acc;
+																}, {});
+																
+																return Object.entries(faByTeam).map(([teamName, count]) => (
+																	<div key={teamName} className="text-xs text-gray-700 ml-4 mb-1">
+																		• {teamName}: {count} pickup{count !== 1 ? 's' : ''}
+																	</div>
+																));
+															})()}
+														</div>
+													)}
+												</div>
+											);
+										})}
+								</div>
+							</div>
+
+							{/* Close button */}
+							<div className="flex justify-end">
+								<button
+									onClick={() => {
+										setShowImportPreview(false);
+										setPreviewData(null);
+										setImportStatus({ message: '', type: '' });
+									}}
+									className="bg-gray-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-gray-600"
+								>
+									Close
+								</button>
+							</div>
+						</div>
+					)}
+				</div>
+			)}
+			
 			<div className="mb-10 bg-white rounded-lg shadow-md p-6 border border-gray-100">
 				<h3 className="text-xl font-semibold text-blue-800">League Members & Dues</h3>
 				<div className="overflow-x-auto">
