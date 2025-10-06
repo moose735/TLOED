@@ -57,6 +57,19 @@ const FinancialTracker = () => {
     const [importStatus, setImportStatus] = useState({ loading: false, message: '', type: '' });
     const [showImportPreview, setShowImportPreview] = useState(false);
     const [previewData, setPreviewData] = useState(null);
+    
+    // Bulk transaction entry state
+    const [showBulkEntry, setShowBulkEntry] = useState(false);
+    const [bulkTransactions, setBulkTransactions] = useState([{
+        id: Date.now(),
+        type: 'Fee',
+        amount: '',
+        category: '',
+        description: '',
+        week: '',
+        teams: [],
+        quantity: 1
+    }]);
 
 	// State to hold data for the selected year only
 	const [currentYearData, setCurrentYearData] = useState({ transactions: [], potentialFees: [], potentialPayouts: [] });
@@ -548,6 +561,150 @@ const FinancialTracker = () => {
 
 
 
+	// Bulk transaction handlers
+	const addBulkTransaction = () => {
+		setBulkTransactions(prev => [...prev, {
+			id: Date.now() + Math.random(),
+			type: 'Fee',
+			amount: '',
+			category: '',
+			description: '',
+			week: '',
+			teams: [],
+			quantity: 1
+		}]);
+	};
+
+	const removeBulkTransaction = (id) => {
+		setBulkTransactions(prev => prev.filter(t => t.id !== id));
+	};
+
+	const updateBulkTransaction = (id, field, value) => {
+		setBulkTransactions(prev => prev.map(t => {
+			if (t.id !== id) return t;
+			
+			let updatedTransaction = { ...t, [field]: value };
+			
+			// Auto-populate weekly winners logic
+			if (field === 'category' || field === 'week' || field === 'type') {
+				const week = field === 'week' ? value : t.week;
+				const category = field === 'category' ? value : t.category;
+				const type = field === 'type' ? value : t.type;
+				
+				if (week && type === 'Payout' && (category === 'Weekly 1st' || category === 'Weekly 2nd') && weeklyTopScorers[selectedYear]?.[week]) {
+					const idx = category === 'Weekly 1st' ? 0 : 1;
+					const topUserId = weeklyTopScorers[selectedYear][week][idx];
+					
+					if (topUserId) {
+						updatedTransaction.teams = [topUserId];
+						
+						// Get points for description
+						const matchups = historicalData.matchupsBySeason?.[selectedYear]?.filter(m => String(m.week) === String(week));
+						let points = null;
+						if (matchups) {
+							for (const m of matchups) {
+								if (historicalData.rostersBySeason?.[selectedYear]) {
+									if (String(m.team1_roster_id) && historicalData.rostersBySeason[selectedYear].find(r => String(r.roster_id) === String(m.team1_roster_id) && r.owner_id === topUserId)) {
+										points = m.team1_score;
+									}
+									if (String(m.team2_roster_id) && historicalData.rostersBySeason[selectedYear].find(r => String(r.roster_id) === String(m.team2_roster_id) && r.owner_id === topUserId)) {
+										points = m.team2_score;
+									}
+								}
+							}
+						}
+						if (points !== null && !isNaN(points)) {
+							updatedTransaction.description = `${category} (${formatScore(Number(points ?? 0), 2)} pts)`;
+						}
+					}
+				}
+				
+				// Auto-populate Total Points winners
+				if (type === 'Payout' && category && category.startsWith('Total Points')) {
+					const leaders = totalPointsLeaders[selectedYear];
+					let leaderIndex = -1;
+					if (category === 'Total Points 1st') leaderIndex = 0;
+					if (category === 'Total Points 2nd') leaderIndex = 1;
+					if (category === 'Total Points 3rd') leaderIndex = 2;
+					
+					if (leaders && leaders[leaderIndex]) {
+						const leader = leaders[leaderIndex];
+						updatedTransaction.teams = [leader.userId];
+						updatedTransaction.description = `${category} (${formatScore(Number(leader.score ?? 0), 2)} pts)`;
+					}
+				}
+				
+				// Clear teams and description if switching away from auto-populated categories
+				if (type === 'Payout' && category && !category.startsWith('Weekly') && !category.startsWith('Total Points')) {
+					if (field === 'category') {
+						updatedTransaction.teams = [];
+						updatedTransaction.description = '';
+					}
+				}
+				if (type === 'Fee') {
+					if (field === 'type') {
+						updatedTransaction.teams = [];
+						updatedTransaction.description = '';
+					}
+				}
+			}
+			
+			return updatedTransaction;
+		}));
+	};
+
+	const submitBulkTransactions = async (e) => {
+		e.preventDefault();
+		if (!isAdmin || !db) return;
+
+		const validTransactions = bulkTransactions.filter(t => 
+			t.amount && t.category && t.teams.length > 0
+		);
+
+		if (validTransactions.length === 0) {
+			setTransactionMessage({ text: 'Please fill out at least one complete transaction.', type: 'error' });
+			return;
+		}
+
+		try {
+			const docRef = doc(db, 'league_finances', selectedYear);
+			const newTransactions = validTransactions.map(bulkTxn => ({
+				id: `${Date.now()}_${Math.random()}`,
+				type: bulkTxn.type,
+				amount: Number(bulkTxn.amount),
+				category: bulkTxn.category,
+				description: bulkTxn.description,
+				week: bulkTxn.week,
+				team: bulkTxn.teams,
+				quantity: Number(bulkTxn.quantity),
+				date: new Date().toISOString().split('T')[0]
+			}));
+
+			await setDoc(docRef, {
+				...currentYearData,
+				transactions: [...currentYearData.transactions, ...newTransactions]
+			}, { merge: true });
+
+			setTransactionMessage({ text: `Successfully added ${newTransactions.length} transactions!`, type: 'success' });
+			
+			// Reset bulk form
+			setBulkTransactions([{
+				id: Date.now(),
+				type: 'Fee',
+				amount: '',
+				category: '',
+				description: '',
+				week: '',
+				teams: [],
+				quantity: 1
+			}]);
+
+		} catch (error) {
+			logger.error('Error adding bulk transactions:', error);
+			setTransactionMessage({ text: 'Error adding transactions.', type: 'error' });
+		}
+	};
+
 	// Helper function to render the truncated or full list of teams
 	const renderTeams = (transactionId, teams, allMembers, expandedId, setExpandedId) => {
         const teamNames = Array.isArray(teams) ?
@@ -678,10 +835,30 @@ const FinancialTracker = () => {
 			{/* Commish-only transaction entry section */}
 			{isAdmin && (
 				<div className="mb-8 bg-white rounded-lg shadow-md p-6 border border-blue-200">
-					<form
-						className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end bg-blue-50 p-4 rounded-lg"
-						onSubmit={handleAddOrUpdateTransaction}
-					>
+					{/* Toggle between single and bulk entry */}
+					<div className="flex gap-2 mb-4">
+						<button
+							type="button"
+							onClick={() => setShowBulkEntry(false)}
+							className={`px-4 py-2 rounded-lg font-medium transition ${!showBulkEntry ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+						>
+							Single Entry
+						</button>
+						<button
+							type="button"
+							onClick={() => setShowBulkEntry(true)}
+							className={`px-4 py-2 rounded-lg font-medium transition ${showBulkEntry ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+						>
+							Bulk Entry
+						</button>
+					</div>
+
+					{!showBulkEntry ? (
+						/* Single Transaction Form */
+						<form
+							className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end bg-blue-50 p-4 rounded-lg"
+							onSubmit={handleAddOrUpdateTransaction}
+						>
 						<div>
 							<label className="block text-xs font-semibold mb-1 text-gray-700">Type</label>
 							<select
@@ -916,6 +1093,176 @@ const FinancialTracker = () => {
 							</button>
 						</div>
 					</form>
+					) : (
+						/* Bulk Transaction Form */
+						<div className="bg-green-50 p-4 rounded-lg">
+							<div className="flex justify-between items-center mb-4">
+								<h4 className="text-lg font-semibold text-green-800">Bulk Transaction Entry</h4>
+								<button
+									type="button"
+									onClick={addBulkTransaction}
+									className="bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700"
+								>
+									+ Add Transaction
+								</button>
+							</div>
+							
+							<form onSubmit={submitBulkTransactions}>
+								<div className="space-y-4 max-h-[600px] overflow-y-auto">
+									{bulkTransactions.map((txn, index) => (
+										<div key={txn.id} className="bg-white p-4 rounded-lg border shadow-sm">
+											<div className="flex justify-between items-center mb-3">
+												<h5 className="font-medium text-gray-800">Transaction #{index + 1}</h5>
+												{bulkTransactions.length > 1 && (
+													<button
+														type="button"
+														onClick={() => removeBulkTransaction(txn.id)}
+														className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600"
+													>
+														Remove
+													</button>
+												)}
+											</div>
+											
+											<div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+												<div>
+													<label className="block text-sm font-medium mb-1 text-gray-700">Type</label>
+													<select
+														className="w-full border rounded-lg px-3 py-2"
+														value={txn.type}
+														onChange={e => updateBulkTransaction(txn.id, 'type', e.target.value)}
+													>
+														<option value="Fee">Fee</option>
+														<option value="Payout">Payout</option>
+													</select>
+												</div>
+												
+												<div>
+													<label className="block text-sm font-medium mb-1 text-gray-700">Amount ($)</label>
+													<input
+														type="number"
+														step="0.01"
+														className="w-full border rounded-lg px-3 py-2"
+														value={txn.amount}
+														onChange={e => updateBulkTransaction(txn.id, 'amount', e.target.value)}
+														placeholder="0.00"
+													/>
+												</div>
+												
+												<div>
+													<label className="block text-sm font-medium mb-1 text-gray-700">Category</label>
+													<select
+														className="w-full border rounded-lg px-3 py-2"
+														value={txn.category}
+														onChange={e => updateBulkTransaction(txn.id, 'category', e.target.value)}
+													>
+														<option value="">Select Category...</option>
+														{(txn.type === 'Fee' ? FEE_DESCRIPTIONS : PAYOUT_DESCRIPTIONS).map(opt => (
+															<option key={opt} value={opt}>{opt}</option>
+														))}
+													</select>
+												</div>
+											</div>
+											
+											<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+												<div>
+													<label className="block text-sm font-medium mb-1 text-gray-700">Week #</label>
+													<input
+														type="number"
+														min="0"
+														className="w-full border rounded-lg px-3 py-2"
+														value={txn.week}
+														onChange={e => updateBulkTransaction(txn.id, 'week', e.target.value)}
+														placeholder="e.g. 1, 2, 3..."
+													/>
+												</div>
+												
+												<div>
+													<label className="block text-sm font-medium mb-1 text-gray-700">Quantity</label>
+													<input
+														type="number"
+														min="1"
+														className="w-full border rounded-lg px-3 py-2"
+														value={txn.quantity}
+														onChange={e => updateBulkTransaction(txn.id, 'quantity', e.target.value)}
+													/>
+												</div>
+											</div>
+											
+											<div className="mb-4">
+												<label className="block text-sm font-medium mb-2 text-gray-700">
+													Teams ({txn.teams.length} selected)
+												</label>
+												<div className="border rounded-lg p-3 max-h-32 overflow-y-auto bg-gray-50">
+													<div className="space-y-1">
+														{allMembers.map(member => (
+															<label key={member.userId} className="flex items-center gap-2 cursor-pointer hover:bg-white p-1 rounded">
+																<input
+																	type="checkbox"
+																	className="rounded"
+																	checked={txn.teams.includes(member.userId)}
+																	onChange={e => {
+																		const isChecked = e.target.checked;
+																		const currentTeams = txn.teams;
+																		const newTeams = isChecked 
+																			? [...currentTeams, member.userId]
+																			: currentTeams.filter(id => id !== member.userId);
+																		updateBulkTransaction(txn.id, 'teams', newTeams);
+																	}}
+																/>
+																<span className="text-sm">{member.displayName}</span>
+															</label>
+														))}
+													</div>
+												</div>
+												<div className="flex gap-2 mt-2">
+													<button
+														type="button"
+														onClick={() => updateBulkTransaction(txn.id, 'teams', allMembers.map(m => m.userId))}
+														className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200"
+													>
+														Select All
+													</button>
+													<button
+														type="button"
+														onClick={() => updateBulkTransaction(txn.id, 'teams', [])}
+														className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-gray-200"
+													>
+														Clear All
+													</button>
+												</div>
+											</div>
+											
+											<div>
+												<label className="block text-sm font-medium mb-1 text-gray-700">Description</label>
+												<input
+													type="text"
+													className="w-full border rounded-lg px-3 py-2"
+													value={txn.description}
+													onChange={e => updateBulkTransaction(txn.id, 'description', e.target.value)}
+													placeholder="Transaction description..."
+												/>
+											</div>
+										</div>
+									))}
+								</div>
+								
+								<div className="flex justify-between items-center mt-6">
+									<div className="text-sm text-gray-600">
+										{bulkTransactions.filter(t => t.amount && t.category && t.teams.length > 0).length} of {bulkTransactions.length} transactions ready to submit
+									</div>
+									<button 
+										type="submit" 
+										className="bg-green-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-green-700"
+										disabled={bulkTransactions.filter(t => t.amount && t.category && t.teams.length > 0).length === 0}
+									>
+										Submit All Transactions
+									</button>
+								</div>
+							</form>
+						</div>
+					)}
+					
 					{transactionMessage.text && (
 						<div className={`mt-4 p-3 rounded-lg text-sm font-medium ${transactionMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
 							{transactionMessage.text}
