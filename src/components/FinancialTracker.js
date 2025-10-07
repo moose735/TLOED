@@ -39,7 +39,7 @@ const FinancialTracker = () => {
 		description: '',
 		week: '',
 		team: [],
-		quantity: 1
+		quantity: ''
 	});
 	const [transactionMessage, setTransactionMessage] = useState({ text: '', type: '' });
 	const [editingTransaction, setEditingTransaction] = useState(null);
@@ -60,7 +60,7 @@ const FinancialTracker = () => {
     
     // Bulk transaction entry state
     const [showBulkEntry, setShowBulkEntry] = useState(false);
-    const [bulkTransactions, setBulkTransactions] = useState([{
+	const [bulkTransactions, setBulkTransactions] = useState([{
         id: Date.now(),
         type: 'Fee',
         amount: '',
@@ -68,8 +68,18 @@ const FinancialTracker = () => {
         description: '',
         week: '',
         teams: [],
-        quantity: 1
+		quantity: ''
     }]);
+
+// Defaults for bulk entry (apply to all rows except teams)
+const [bulkDefaults, setBulkDefaults] = useState({
+	type: 'Fee',
+	category: '',
+	week: '',
+quantity: '',
+description: '',
+amount: ''
+});
 
 	// State to hold data for the selected year only
 	const [currentYearData, setCurrentYearData] = useState({ transactions: [], potentialFees: [], potentialPayouts: [] });
@@ -369,7 +379,7 @@ const FinancialTracker = () => {
 		if (editingTransaction) {
 			// **FIX:** Now using the unique 'id' for editing.
 			newTransactions = currentYearData.transactions.map(t =>
-				t.id === editingTransaction.id ? { ...transaction, id: editingTransaction.id, date: new Date().toISOString() } : t
+				t.id === editingTransaction.id ? { ...transaction, id: editingTransaction.id, date: new Date().toISOString(), quantity: Number(transaction.quantity) || 1 } : t
 			);
 			messageText = 'Transaction updated successfully!';
 			setEditingTransaction(null);
@@ -395,6 +405,7 @@ const FinancialTracker = () => {
 					...transaction,
 					id: crypto.randomUUID(),
 					team: transaction.team,
+					quantity: Number(transaction.quantity) || 1,
 					date: new Date().toISOString()
 				});
 			}
@@ -424,7 +435,7 @@ const FinancialTracker = () => {
 		setTransaction({
 			...transactionToEdit,
 			team: Array.isArray(transactionToEdit.team) ? transactionToEdit.team : [transactionToEdit.team],
-			quantity: transactionToEdit.quantity || 1, // Use existing quantity or default to 1
+			quantity: typeof transactionToEdit.quantity !== 'undefined' && transactionToEdit.quantity !== null ? String(transactionToEdit.quantity) : '',
 		});
 		setTransactionMessage({ text: 'Editing transaction...', type: 'info' });
 	};
@@ -575,6 +586,18 @@ const FinancialTracker = () => {
 		}]);
 	};
 
+const applyBulkDefaultsToAll = () => {
+	setBulkTransactions(prev => prev.map(t => ({
+		...t,
+		type: bulkDefaults.type || t.type,
+		category: bulkDefaults.category || t.category,
+		week: bulkDefaults.week || t.week,
+		quantity: bulkDefaults.quantity || t.quantity,
+		description: bulkDefaults.description || t.description,
+		amount: bulkDefaults.amount || t.amount
+	})));
+};
+
 	const removeBulkTransaction = (id) => {
 		setBulkTransactions(prev => prev.filter(t => t.id !== id));
 	};
@@ -676,7 +699,7 @@ const FinancialTracker = () => {
 				description: bulkTxn.description,
 				week: bulkTxn.week,
 				team: bulkTxn.teams,
-				quantity: Number(bulkTxn.quantity),
+				quantity: Number(bulkTxn.quantity) || 1,
 				date: new Date().toISOString().split('T')[0]
 			}));
 
@@ -1012,7 +1035,8 @@ const FinancialTracker = () => {
 									step="1"
 									className="w-full border rounded-lg px-2 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
 									value={transaction.quantity}
-									onChange={e => setTransaction(t => ({ ...t, quantity: parseInt(e.target.value) || 1 }))}
+									onChange={e => setTransaction(t => ({ ...t, quantity: e.target.value }))}
+									onFocus={e => e.target.select()}
 								/>
 							</div>
 						)}
@@ -1108,6 +1132,47 @@ const FinancialTracker = () => {
 							</div>
 							
 							<form onSubmit={submitBulkTransactions}>
+								{/* Bulk defaults: apply common settings to all rows (except teams) */}
+								<div className="bg-white p-3 rounded border mb-4">
+									<div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+										<div>
+											<label className="block text-sm font-medium mb-1">Type</label>
+											<select className="w-full border rounded px-2 py-1" value={bulkDefaults.type} onChange={e => setBulkDefaults(d => ({ ...d, type: e.target.value }))}>
+												<option value="Fee">Fee</option>
+												<option value="Payout">Payout</option>
+											</select>
+										</div>
+										<div>
+											<label className="block text-sm font-medium mb-1">Category</label>
+											<select className="w-full border rounded px-2 py-1" value={bulkDefaults.category} onChange={e => setBulkDefaults(d => ({ ...d, category: e.target.value }))}>
+												<option value="">Any / Select...</option>
+												{(bulkDefaults.type === 'Fee' ? FEE_DESCRIPTIONS : PAYOUT_DESCRIPTIONS).map(opt => (
+													<option key={opt} value={opt}>{opt}</option>
+												))}
+											</select>
+										</div>
+										<div>
+											<label className="block text-sm font-medium mb-1">Week</label>
+											<input type="number" min="0" className="w-full border rounded px-2 py-1" value={bulkDefaults.week} onChange={e => setBulkDefaults(d => ({ ...d, week: e.target.value }))} />
+										</div>
+										<div>
+											<label className="block text-sm font-medium mb-1">Quantity</label>
+											<input type="number" min="1" className="w-full border rounded px-2 py-1" value={bulkDefaults.quantity} onChange={e => setBulkDefaults(d => ({ ...d, quantity: e.target.value }))} onFocus={e => e.target.select()} />
+										</div>
+										<div>
+											<label className="block text-sm font-medium mb-1">Amount ($)</label>
+											<input type="number" step="0.01" className="w-full border rounded px-2 py-1" value={bulkDefaults.amount} onChange={e => setBulkDefaults(d => ({ ...d, amount: e.target.value }))} />
+										</div>
+										<div>
+											<label className="block text-sm font-medium mb-1">Description</label>
+											<input type="text" className="w-full border rounded px-2 py-1" value={bulkDefaults.description} onChange={e => setBulkDefaults(d => ({ ...d, description: e.target.value }))} />
+										</div>
+									</div>
+									<div className="mt-3 flex items-center justify-end">
+										<button type="button" onClick={applyBulkDefaultsToAll} className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">Apply to All</button>
+									</div>
+								</div>
+
 								<div className="space-y-4 max-h-[600px] overflow-y-auto">
 									{bulkTransactions.map((txn, index) => (
 										<div key={txn.id} className="bg-white p-4 rounded-lg border shadow-sm">
@@ -1185,6 +1250,7 @@ const FinancialTracker = () => {
 														className="w-full border rounded-lg px-3 py-2"
 														value={txn.quantity}
 														onChange={e => updateBulkTransaction(txn.id, 'quantity', e.target.value)}
+														onFocus={e => e.target.select()}
 													/>
 												</div>
 											</div>
@@ -1626,6 +1692,24 @@ const FinancialTracker = () => {
 								</div>
 							</div>
 							<div className="mt-2 text-xs text-gray-700 truncate">{t.description}</div>
+							{/* Mobile action buttons for admin */}
+							{isAdmin && (
+								<div className="mt-3 flex items-center justify-end gap-3">
+									<button
+										className="text-blue-600 hover:text-blue-800 font-bold text-lg"
+										title="Edit transaction"
+										onClick={() => handleEditTransaction(t)}
+									>
+										&#9998;
+									</button>
+									<button
+										className="text-red-600 hover:text-red-800 font-bold text-lg"
+										onClick={() => handleDeleteTransaction([t])}
+									>
+										&#10006;
+									</button>
+								</div>
+							)}
 						</div>
 					))}
 				</div>
