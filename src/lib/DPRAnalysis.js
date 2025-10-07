@@ -360,6 +360,67 @@ const DPRAnalysis = () => {
     }
   };
 
+  // --- Playoff probability estimation based on historical DPR ---
+  // Build historical rows (exclude average row, null DPRs, and CURRENT season rows)
+  const historicalRows = seasonalDPRData.filter(r => r && !r.isAverageRow && typeof r.dpr === 'number' && r.year != null && !r.isCurrentSeason);
+
+  // Define fixed DPR buckets (adjust boundaries if desired)
+  const dprBucketBounds = [0.8, 0.9, 1.0, 1.1, 1.2];
+  const dprBuckets = [];
+  // Prepare bucket structures
+  for (let i = 0; i <= dprBucketBounds.length; i++) {
+    const min = i === 0 ? -Infinity : dprBucketBounds[i - 1];
+    const max = i === dprBucketBounds.length ? Infinity : dprBucketBounds[i];
+    const label = min === -Infinity
+      ? `< ${dprBucketBounds[0]}`
+      : (max === Infinity
+        ? `>= ${dprBucketBounds[dprBucketBounds.length - 1]}`
+        : `${min.toFixed(2)} - ${max.toFixed(2)}`);
+    dprBuckets.push({ min, max, label, count: 0, made: 0 });
+  }
+
+  // Populate bucket counts using historical rows
+  historicalRows.forEach(row => {
+    const dpr = Number(row.dpr);
+    const made = didMakePlayoffs(row) ? 1 : 0;
+    for (let i = 0; i < dprBuckets.length; i++) {
+      if (dpr > dprBuckets[i].min && dpr <= dprBuckets[i].max) {
+        dprBuckets[i].count += 1;
+        dprBuckets[i].made += made;
+        break;
+      }
+    }
+  });
+
+  // Compute empirical rates and safety for small samples
+  const dprBucketStats = dprBuckets.map(b => ({
+    label: b.label,
+    count: b.count,
+    made: b.made,
+    rate: b.count > 0 ? (b.made / b.count) : null
+  }));
+
+  // Helper to get probability for a DPR value
+  const getPlayoffProbabilityForDPR = (dprValue) => {
+    if (typeof dprValue !== 'number' || isNaN(dprValue)) return null;
+    for (let i = 0; i < dprBuckets.length; i++) {
+      if (dprValue > dprBuckets[i].min && dprValue <= dprBuckets[i].max) {
+        return dprBuckets[i].count > 0 ? (dprBuckets[i].made / dprBuckets[i].count) : null;
+      }
+    }
+    return null;
+  };
+
+  // Prepare current-season teams (if any) to display their DPR and empirical playoff probability
+  const currentSeasonTeams = (seasonalDPRData || []).filter(r => r && r.isCurrentSeason && !r.isAverageRow).map(r => ({
+    rosterId: r.rosterId,
+    ownerId: r.ownerId,
+    team: r.team,
+    year: r.year,
+    dpr: r.dpr,
+    playoffProb: getPlayoffProbabilityForDPR(Number(r.dpr))
+  }));
+
   return (
     <div className="w-full">
       <h2 className="text-2xl font-bold text-gray-800 mb-4 border-b pb-2 text-center">
@@ -480,6 +541,58 @@ const DPRAnalysis = () => {
           {/* Seasonal DPR Rankings (Consolidated) */}
           <section className="mb-8">
             <h3 className="text-xl font-bold text-green-800 mb-4 border-b pb-2">Best Seasons by DPR</h3>
+            {/* Playoff probability summary based on historical DPR buckets */}
+            <div className="mb-4">
+              <h4 className="text-sm font-semibold text-gray-700 mb-2">Empirical Playoff Probability by DPR</h4>
+              <div className="overflow-x-auto bg-white rounded shadow-sm">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-gray-600 uppercase">
+                      <th className="px-3 py-2">DPR Range</th>
+                      <th className="px-3 py-2 text-right">Samples</th>
+                      <th className="px-3 py-2 text-right">Made Playoffs</th>
+                      <th className="px-3 py-2 text-right">Empirical %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dprBucketStats.map((b) => (
+                      <tr key={b.label} className="border-t">
+                        <td className="px-3 py-2 text-gray-800">{b.label}</td>
+                        <td className="px-3 py-2 text-right text-gray-700">{b.count}</td>
+                        <td className="px-3 py-2 text-right text-gray-700">{b.made}</td>
+                        <td className="px-3 py-2 text-right font-semibold text-gray-800">{b.rate === null ? 'N/A' : `${Math.round(b.rate * 100)}%`}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {currentSeasonTeams.length > 0 && (
+                <div className="mt-3">
+                  <h4 className="text-sm font-semibold text-gray-700 mb-2">Current Season - Empirical Playoff Chance</h4>
+                  <div className="overflow-x-auto bg-white rounded shadow-sm">
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-xs text-gray-600 uppercase">
+                          <th className="px-3 py-2">Team</th>
+                          <th className="px-3 py-2 text-right">DPR</th>
+                          <th className="px-3 py-2 text-right">Empirical %</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {currentSeasonTeams.map(t => (
+                          <tr key={`${t.rosterId}-${t.year}`} className="border-t">
+                            <td className="px-3 py-2 text-gray-800">{t.team}</td>
+                            <td className="px-3 py-2 text-right text-gray-700">{formatDPR(t.dpr)}</td>
+                            <td className="px-3 py-2 text-right font-semibold">{t.playoffProb === null ? 'N/A' : `${Math.round(t.playoffProb * 100)}%`}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
             {seasonalDPRData.length > 0 ? (
               <>
                 {/* Mobile Cards View (PowerRankings-like) */}
