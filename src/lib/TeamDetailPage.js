@@ -21,6 +21,7 @@ import {
     CartesianGrid,
     Label
 } from 'recharts';
+import OverallDraftPositionChart from '../components/OverallDraftPositionChart';
 
 const getOrdinalSuffix = (n) => {
     if (typeof n !== 'number' || isNaN(n)) return '';
@@ -1464,6 +1465,9 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
                 </div>
             </section>
             {/* Team Draft Habits (moved to bottom) */}
+            <div className="mt-4">
+                <OverallDraftPositionChart allDraftHistory={allDraftHistory || []} totalRounds={12} totalTeams={12} compact />
+            </div>
             <TeamDraftStats ownerId={teamOverallStats.ownerId} allDraftHistory={allDraftHistory} totalRounds={12} totalTeams={12} />
         </div>
     );

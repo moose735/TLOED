@@ -13,7 +13,7 @@ import {
 // chart of positions taken across all drafts (not per-team). It mirrors the
 // logic from TeamDraftStats but uses the provided allDraftHistory input.
 
-const OverallDraftPositionChart = ({ allDraftHistory = [], totalRounds = 12, totalTeams = 12 }) => {
+const OverallDraftPositionChart = ({ allDraftHistory = [], totalRounds = 12, totalTeams = 12, compact = false }) => {
     const POSITIONS = ['QB','RB','WR','TE','K','DEF'];
     const POSITION_COLORS = {
         QB: '#ef4444', // red
@@ -54,34 +54,63 @@ const OverallDraftPositionChart = ({ allDraftHistory = [], totalRounds = 12, tot
         return rounds.map(r => {
             const totalKnown = r.__total || 0;
             const out = { round: r.round };
+
+            // Build raw percentages (not yet rounded) from counts
+            const rawPerc = {};
             POSITIONS.forEach(p => {
-                out[p] = totalKnown > 0 ? ((r[p] || 0) / totalKnown * 100) : 0;
+                rawPerc[p] = totalKnown > 0 ? ((r[p] || 0) / totalKnown * 100) : 0;
             });
+
+            // Sum and normalize tiny floating point error: if the sum exceeds 100 by a tiny amount,
+            // subtract the excess from the largest bucket so the stacked bars never exceed 100%.
+            let sum = POSITIONS.reduce((s, p) => s + (Number.isFinite(rawPerc[p]) ? rawPerc[p] : 0), 0);
+            if (sum > 100) {
+                const excess = sum - 100;
+                // find position with largest value
+                let largestPos = POSITIONS[0];
+                for (const p of POSITIONS) {
+                    if ((rawPerc[p] || 0) > (rawPerc[largestPos] || 0)) largestPos = p;
+                }
+                rawPerc[largestPos] = Math.max(0, (rawPerc[largestPos] || 0) - excess);
+                // recompute sum for safety
+                sum = POSITIONS.reduce((s, p) => s + (Number.isFinite(rawPerc[p]) ? rawPerc[p] : 0), 0);
+            }
+
+            // Store rounded values (3 decimals) as numbers for charting
+            POSITIONS.forEach(p => {
+                const raw = Number.isFinite(rawPerc[p]) ? rawPerc[p] : 0;
+                out[p] = Number(Math.max(0, Math.min(100, raw)).toFixed(3));
+            });
+
             out.__unknown = r.__unknown || 0;
             return out;
         });
     }, [picks, totalRounds]);
 
-    return (
-        <section className="mb-6 sm:mb-8">
-            <h3 className="text-lg sm:text-xl font-bold text-gray-800 mb-3 sm:mb-4 border-b pb-2">Draft Position Mix (All-Time)</h3>
-            <div className="bg-white border border-gray-200 rounded-lg p-3">
-                <p className="text-sm text-gray-600">Percent of picks by position per round (all seasons)</p>
+    const containerHeight = compact ? 180 : 260;
 
-                <div className="w-full h-72 mt-2" style={{ minHeight: 288 }}>
-                    <ResponsiveContainer width="100%" height="100%" minHeight={288}>
-                        <BarChart data={positionByRoundData} margin={{ top: 8, right: 16, left: 8, bottom: 35 }}>
-                            <XAxis dataKey="round" tick={{ fontSize: 11 }} interval={0} angle={-45} textAnchor="end" height={50} />
-                            <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} unit="%" width={40} />
-                            <Tooltip formatter={(value, name) => [`${Number(value).toFixed(1)}%`, name]} wrapperStyle={{ fontSize: 11 }} />
-                            <Legend wrapperStyle={{ fontSize: 12 }} iconSize={10} />
+    return (
+        <section className={compact ? 'mb-2 sm:mb-4' : 'mb-4 sm:mb-6'}>
+            <div className="w-full">
+                <div className={`w-full ${compact ? 'h-48' : 'h-72'} mt-0`} style={{ minHeight: containerHeight }}>
+                    <ResponsiveContainer width="100%" height="100%" minHeight={containerHeight}>
+                        <BarChart data={positionByRoundData} margin={{ top: 6, right: 4, left: 4, bottom: compact ? 12 : 18 }}>
+                            <XAxis dataKey="round" tick={{ fontSize: compact ? 9 : 10, fill: '#ffffff' }} interval={0} angle={compact ? -25 : -30} textAnchor="end" height={compact ? 30 : 36} axisLine={{ stroke: 'rgba(255,255,255,0.12)' }} tickLine={{ stroke: 'rgba(255,255,255,0.12)' }} />
+                            <YAxis domain={[0, 100]} ticks={[0,25,50,75,100]} tick={{ fontSize: compact ? 9 : 10, fill: '#ffffff' }} width={compact ? 30 : 36} tickFormatter={(v) => `${Math.round(Number(v) || 0)}%`} axisLine={{ stroke: 'rgba(255,255,255,0.12)' }} tickLine={{ stroke: 'rgba(255,255,255,0.12)' }} />
+                            <Tooltip formatter={(value, name) => {
+                                const num = Number(value) || 0;
+                                const safe = Math.max(0, Math.min(100, num));
+                                const display = (100 - safe) < 0.01 ? 100 : Number(safe.toFixed(1));
+                                return [`${display}%`, name];
+                            }} wrapperStyle={{ fontSize: 11 }} />
+                            {/* legend text color white */}
+                            {!compact && <Legend wrapperStyle={{ fontSize: 12, color: '#ffffff' }} iconSize={10} layout="horizontal" verticalAlign="top" align="right" />}
                             {POSITIONS.map(pos => (
                                 <Bar key={pos} dataKey={pos} stackId="a" fill={POSITION_COLORS[pos]} />
                             ))}
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
-
             </div>
         </section>
     );

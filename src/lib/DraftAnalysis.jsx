@@ -807,21 +807,25 @@ const DraftAnalysis = () => {
             {/* All-Time Draft Overview - Show when Overview is selected */}
             {selectedSeason === "Overview" && (
                 <div className="px-0 sm:px-6 py-6 mb-8">
-                    <h2 className="text-3xl font-semibold mb-6 text-center text-yellow-400">All-Time Draft Overview</h2>
+                    <h2 className="text-2xl sm:text-3xl font-semibold mb-4 text-center text-yellow-400">All-Time Draft Overview</h2>
                     
                     {overviewLoading ? (
                         <div className="text-center py-8">
                             <p className="text-gray-400">Computing all-time draft data with real Draft Value...</p>
                         </div>
                     ) : overviewData ? (
-                        <div className="space-y-6">
+                        <div className="space-y-4">
                             {/* Overall position-by-round chart (all-time) */}
-                            <div>
-                                {/* Lazy import-like inclusion: use the same picks array from overviewData context */}
-                                {/* We'll render an all-time position chart here using a small component */}
-                                
-                                {/* Note: import added at top of file */}
-                                <OverallDraftPositionChart allDraftHistory={allDraftHistory || []} totalRounds={overviewData?.settings?.rounds || 12} totalTeams={overviewData?.settings?.teams || 12} />
+                            <div className="bg-gray-700 rounded-lg p-3 sm:p-4 shadow-md">
+                                <div className="flex items-start justify-between">
+                                    <div>
+                                        <h3 className="text-xl sm:text-2xl font-semibold text-yellow-200 mb-1">Draft Position Mix</h3>
+                                        <p className="text-gray-200 text-sm mb-2">Percent of picks by position per round</p>
+                                    </div>
+                                </div>
+                                <div className="w-full mt-1">
+                                    <OverallDraftPositionChart allDraftHistory={allDraftHistory || []} totalRounds={overviewData?.settings?.rounds || 12} totalTeams={overviewData?.settings?.teams || 12} compact />
+                                </div>
                             </div>
                             {/* Top Picks and Worst Picks Side by Side */}
                                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -972,7 +976,7 @@ const DraftAnalysis = () => {
                 <div className="px-0 sm:px-6 py-6 mb-8">
                     <h2 className="text-3xl font-semibold mb-4 text-center text-green-400">{selectedSeason} Draft Summary</h2>
 
-                    {/* Tab Navigation - Removed Overview tab */}
+                    {/* Tab Navigation */}
                     <div className="flex justify-center mb-6 border-b border-gray-600">
                         <button
                             className={`py-2 px-4 text-lg font-medium ${activeTab === 'board' ? 'border-b-2 border-blue-400 text-blue-400' : 'text-gray-400 hover:text-gray-200'}`}
@@ -986,7 +990,6 @@ const DraftAnalysis = () => {
                         >
                             Draft Summary
                         </button>
-                        {/* Keepers tab removed per user request */}
                     </div>
 
                     {/* Conditional Rendering of Tabs */}
