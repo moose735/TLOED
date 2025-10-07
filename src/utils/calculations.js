@@ -576,30 +576,22 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
             .sort((a, b) => b.pointsFor - a.pointsFor);
 
         if (teamsSortedByPoints.length > 0) {
-            // Set points champion (team with most points)
-            const pointsChampion = teamsSortedByPoints[0];
-            if (pointsChampion && seasonalMetrics[year][pointsChampion.rosterId]) {
-                seasonalMetrics[year][pointsChampion.rosterId].isPointsChampion = true;
-                seasonalMetrics[year][pointsChampion.rosterId].pointsRank = 1;
-
-            }
-            
-            // Set points runner-up and third place if there are enough teams
-            if (teamsSortedByPoints.length > 1) {
-                const pointsRunnerUp = teamsSortedByPoints[1];
-                if (pointsRunnerUp && seasonalMetrics[year][pointsRunnerUp.rosterId]) {
-                    seasonalMetrics[year][pointsRunnerUp.rosterId].isPointsRunnerUp = true;
-                    seasonalMetrics[year][pointsRunnerUp.rosterId].pointsRank = 2;
+            // Assign points rankings to ALL teams (1st through last place)
+            teamsSortedByPoints.forEach((teamStats, index) => {
+                const rank = index + 1;
+                if (teamStats && seasonalMetrics[year][teamStats.rosterId]) {
+                    seasonalMetrics[year][teamStats.rosterId].pointsRank = rank;
+                    
+                    // Set special flags for top 3
+                    if (rank === 1) {
+                        seasonalMetrics[year][teamStats.rosterId].isPointsChampion = true;
+                    } else if (rank === 2) {
+                        seasonalMetrics[year][teamStats.rosterId].isPointsRunnerUp = true;
+                    } else if (rank === 3) {
+                        seasonalMetrics[year][teamStats.rosterId].isThirdPlacePoints = true;
+                    }
                 }
-            }
-            
-            if (teamsSortedByPoints.length > 2) {
-                const pointsThird = teamsSortedByPoints[2];
-                if (pointsThird && seasonalMetrics[year][pointsThird.rosterId]) {
-                    seasonalMetrics[year][pointsThird.rosterId].isThirdPlacePoints = true;
-                    seasonalMetrics[year][pointsThird.rosterId].pointsRank = 3;
-                }
-            }
+            });
         }
 
         // --- APPLY PLAYOFF FINISHES LOGIC (CONDITIONAL ON PLAYOFF COMPLETION) ---
