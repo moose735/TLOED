@@ -815,15 +815,15 @@ const DraftAnalysis = () => {
                         </div>
                     ) : overviewData ? (
                         <div className="space-y-4">
-                            {/* Overall position-by-round chart (all-time) */}
-                            <div className="bg-gray-700 rounded-lg p-3 sm:p-4 shadow-md">
+                            {/* Overall position-by-round chart (all-time) - use compact variant for better fit */}
+                            <div className="bg-gray-700 rounded-lg p-4 shadow-md">
                                 <div className="flex items-start justify-between">
                                     <div>
                                         <h3 className="text-xl sm:text-2xl font-semibold text-yellow-200 mb-1">Draft Position Mix</h3>
                                         <p className="text-gray-200 text-sm mb-2">Percent of picks by position per round</p>
                                     </div>
                                 </div>
-                                <div className="w-full mt-1">
+                                <div className="w-full mt-2">
                                     <OverallDraftPositionChart allDraftHistory={allDraftHistory || []} totalRounds={overviewData?.settings?.rounds || 12} totalTeams={overviewData?.settings?.teams || 12} compact />
                                 </div>
                             </div>

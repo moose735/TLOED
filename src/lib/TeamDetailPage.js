@@ -940,7 +940,7 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
     }
 
     return (
-        <div className="w-full bg-white p-4 sm:p-6 md:p-8 rounded-lg shadow-md mt-4 sm:mt-8">
+        <div className="w-full bg-white p-3 sm:p-6 md:p-8 mt-4 sm:mt-8 mx-0 sm:mx-auto max-w-full -mx-4 sm:mx-0 rounded-none sm:rounded-lg shadow-none sm:shadow-md">
             <h2 className="text-2xl sm:text-3xl font-bold text-blue-700 mb-4 sm:mb-6 text-center border-b pb-2 sm:pb-3">
                 {teamName}
                 <span className="block text-base sm:text-lg font-medium text-gray-600 mt-1 sm:mt-2">
@@ -1466,9 +1466,8 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
             </section>
             {/* Team Draft Habits (moved to bottom) */}
             <div className="mt-4">
-                <OverallDraftPositionChart allDraftHistory={allDraftHistory || []} totalRounds={12} totalTeams={12} compact />
+                <TeamDraftStats ownerId={teamOverallStats.ownerId} allDraftHistory={allDraftHistory} totalRounds={12} totalTeams={12} />
             </div>
-            <TeamDraftStats ownerId={teamOverallStats.ownerId} allDraftHistory={allDraftHistory} totalRounds={12} totalTeams={12} />
         </div>
     );
 };

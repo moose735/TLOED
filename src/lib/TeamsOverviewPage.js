@@ -64,7 +64,7 @@ const TeamsOverviewPage = ({ selectedTeamName: initialSelectedTeamName }) => {
   }
 
   return (
-    <div className="container mx-auto p-4">
+    <div className="mx-2 sm:mx-auto p-2 sm:p-4">
       <div className="mb-6 text-center">
         <label htmlFor="team-select" className="block text-lg font-medium text-gray-700 mb-2">
           Select a Team:

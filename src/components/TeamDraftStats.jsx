@@ -168,14 +168,40 @@ const TeamDraftStats = ({ ownerId, allDraftHistory = [], totalRounds = 12, total
                     </ResponsiveContainer>
                 </div>
 
-                {/* Desktop: Original layout */}
-                <div className="hidden sm:block w-full h-64 mt-2" style={{ minHeight: '256px' }}>
-                    <ResponsiveContainer width="100%" height="100%" minHeight={256}>
-                        <BarChart data={positionByRoundData} margin={{ top: 8, right: 16, left: 8, bottom: 4 }}>
-                            <XAxis dataKey="round" tick={{ fontSize: 12 }} />
-                            <YAxis domain={[0, 100]} tick={{ fontSize: 12 }} unit="%" />
-                            <Tooltip formatter={(value, name) => [`${Number(value).toFixed(1)}%`, name]} />
-                            <Legend />
+                {/* Desktop: Compact layout (match mobile variant but tuned for desktop readability) */}
+                <div className="hidden sm:block w-full h-72 mt-2" style={{ minHeight: '288px' }}>
+                    <ResponsiveContainer width="100%" height="100%" minHeight={288}>
+                        <BarChart 
+                            data={positionByRoundData} 
+                            margin={{ top: 8, right: 8, left: 8, bottom: 35 }}
+                        >
+                            <XAxis 
+                                dataKey="round" 
+                                tick={{ fontSize: 11 }}
+                                interval={0}
+                                angle={-30}
+                                textAnchor="end"
+                                height={45}
+                            />
+                            <YAxis 
+                                domain={[0, 100]} 
+                                tick={{ fontSize: 11 }} 
+                                unit="%" 
+                                width={40}
+                                ticks={[0,25,50,75,100]}
+                            />
+                            <Tooltip 
+                                formatter={(value, name) => [`${Number(value).toFixed(1)}%`, name]}
+                                wrapperStyle={{ fontSize: 12 }}
+                            />
+                            <Legend 
+                                wrapperStyle={{ fontSize: 11 }}
+                                iconSize={8}
+                                layout="horizontal"
+                                align="center"
+                                verticalAlign="bottom"
+                                height={30}
+                            />
                             {POSITIONS.map(pos => (
                                 <Bar key={pos} dataKey={pos} stackId="a" fill={POSITION_COLORS[pos]} />
                             ))}
