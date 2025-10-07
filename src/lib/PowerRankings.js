@@ -573,11 +573,7 @@ const renderMovement = (movement) => {
 
 		return (
 			<div className="w-full max-w-7xl mx-auto px-0 sm:px-4 md:px-6 lg:px-8 font-inter overflow-x-hidden">
-				<h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-800 mb-4 sm:mb-6 md:mb-8 text-center tracking-tight px-2">
-					{powerRankings.length > 0
-						? `Power Rankings (DPR) - ${powerRankings[0].year} Season (Week ${currentWeek})`
-						: 'Current Power Rankings'}
-				</h2>
+				<h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-800 mb-4 sm:mb-6 md:mb-8 text-center tracking-tight px-2">Power Rankings</h2>
 
 				{loading ? (
 					<div className="flex justify-center items-center h-32">

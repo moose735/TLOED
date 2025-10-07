@@ -309,6 +309,35 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
     }
   })();
 
+  // Helper: determine whether a seasonal row indicates the team made the playoffs
+  const didMakePlayoffs = (row) => {
+    try {
+      // Prefer explicit flags in seasonalMetrics if available
+      const year = row.year;
+      const rosterId = row.rosterId;
+      if (year && rosterId && seasonalMetrics && seasonalMetrics[year] && seasonalMetrics[year][rosterId]) {
+        const meta = seasonalMetrics[year][rosterId];
+        // if any of these flags are true, they participated in playoff bracket
+        if (meta.isChampion || meta.isRunnerUp || meta.isThirdPlace || meta.isPointsChampion || meta.playoffAppearancesCount > 0) return true;
+        // Some data sets use 'rank' to identify playoff teams (e.g., top 6)
+        if (typeof meta.rank === 'number' && meta.rank > 0) {
+          // assume top 6 qualify by default unless league settings available; this is a reasonable heuristic
+          return meta.rank <= 6;
+        }
+      }
+      // Fallback: if we have wins and losses and league size, approximate by top-half finishing
+      if (typeof row.wins === 'number' && typeof row.losses === 'number') {
+        const games = (row.wins || 0) + (row.losses || 0) + (row.ties || 0);
+        // if they have a winning record, more likely they made playoffs; conservative: require >= .500
+        const pct = games > 0 ? ((row.wins || 0) + 0.5 * (row.ties || 0)) / games : 0;
+        return pct >= 0.5;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  };
+
   return (
     <div className="w-full">
       <h2 className="text-2xl font-bold text-gray-800 mb-4 border-b pb-2 text-center">
@@ -447,11 +476,8 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
                 {/* Mobile Cards View (PowerRankings-like) */}
                 <div className="sm:hidden space-y-3">
                   {displayedSeasonalDPRData.map((data, idx) => {
-                    if (data.isAverageRow) {
-                      return (
-                        <div key={`avg-${idx}`} className="bg-yellow-100 rounded-lg p-3 text-center font-bold">{data.team}</div>
-                      );
-                    }
+                    // hide average-season row on mobile (noisy)
+                    if (data.isAverageRow) return null;
                     const isDataCurrent = data.year && Number(data.year) === Number(dataCurrentSeason);
                     return (
                       <div key={`${data.rosterId}-${data.year}`} className={`min-w-0 w-full overflow-hidden rounded-lg shadow p-2 ${isDataCurrent ? 'border-l-4 border-green-500 bg-green-50' : 'bg-white'}`}>
@@ -466,14 +492,19 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
                             />
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2 min-w-0">
-                                <div className="font-semibold text-sm truncate">{onTeamNameClick ? (
-                                  <button onClick={() => onTeamNameClick(getTeamName(data.ownerId, data.year))} className="text-gray-800 hover:underline p-0 bg-transparent border-none truncate">
-                                    {getTeamName(data.ownerId, data.year)}
-                                  </button>
-                                ) : (
-                                  <span className="truncate">{getTeamName(data.ownerId, data.year)}</span>
-                                )}</div>
-                                {/* On mobile the green highlight is sufficient for current season; remove redundant 'Current' pill */}
+                                <div className="font-semibold text-sm truncate">
+                                  {onTeamNameClick ? (
+                                    <button onClick={() => onTeamNameClick(getTeamName(data.ownerId, data.year))} className="text-gray-800 hover:underline p-0 bg-transparent border-none truncate">
+                                      {getTeamName(data.ownerId, data.year)}
+                                    </button>
+                                  ) : (
+                                    <span className="truncate">{getTeamName(data.ownerId, data.year)}</span>
+                                  )}
+                                </div>
+                                {/* small star if made playoffs */}
+                                {didMakePlayoffs(data) && (
+                                  <span className="text-yellow-500 text-sm ml-1" title="Made Playoffs">⭐</span>
+                                )}
                               </div>
                               <div className="text-xs text-gray-500">Season: {data.year}</div>
                             </div>
@@ -493,6 +524,10 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
                           <div className="bg-gray-50 rounded px-2 py-1 text-center">
                             <div className="text-[10px] text-gray-500 mb-0.5">Win %</div>
                             <div className="font-semibold whitespace-nowrap">{formatPercentage(data.winPercentage)}</div>
+                          </div>
+                          <div className="bg-gray-50 rounded px-2 py-1 text-center">
+                            <div className="text-[10px] text-gray-500 mb-0.5">Playoffs</div>
+                            <div className="font-semibold whitespace-nowrap">{didMakePlayoffs(data) ? 'Yes' : 'No'}</div>
                           </div>
                           <div className="bg-gray-50 rounded px-2 py-1 text-center">
                             <div className="text-[10px] text-gray-500 mb-0.5">H / L</div>
@@ -568,6 +603,9 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
                                         ) : (
                                           getTeamName(data.ownerId, data.year)
                                         )}
+                                        {didMakePlayoffs(data) && (
+                                          <span className="text-yellow-500 ml-1" title="Made Playoffs">⭐</span>
+                                        )}
                                       </span>
                                     </div>
                                   </td>
@@ -575,6 +613,7 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
                                   <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold text-green-800">{formatDPR(data.dpr)}</td>
                                   <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold">{formatPercentage(data.winPercentage)}</td>
                                   <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold">{renderRecord(data.wins, data.losses, data.ties)}</td>
+                                  {/* Playoffs column removed; show star next to name instead */}
                                   <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold text-blue-700">{formatPointsAvg(data.pointsPerGame)}</td>
                                   <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold">{formatPointsAvg(data.highestPointsGame)}</td>
                                   <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold">{formatPointsAvg(data.lowestPointsGame)}</td>
