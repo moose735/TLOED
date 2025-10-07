@@ -1458,7 +1458,7 @@ const FinancialTracker = () => {
 			<div className="mb-10 bg-white rounded-lg shadow-md p-6 border border-gray-100">
 				<h3 className="text-xl font-semibold text-blue-800">League Members & Dues</h3>
 				<div className="overflow-x-auto">
-					<table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm text-sm">
+					<table className="min-w-full table-fixed bg-white border border-gray-200 rounded-lg shadow-sm text-sm">
 						<thead className="bg-blue-50">
 							<tr>
 								<th className="py-2 px-3 text-left">Member</th>
@@ -1590,7 +1590,7 @@ const FinancialTracker = () => {
 										checked={allTransactionsSelected}
 									/>
 								</th>}
-								<th className="py-2 px-3 text-left cursor-pointer hover:bg-blue-100" onClick={() => requestSort('date')}>
+								<th className="py-2 px-3 text-left cursor-pointer hover:bg-blue-100 w-44" onClick={() => requestSort('date')}>
 									<div className="flex items-center">
 										Date
 										{sortConfig.key === 'date' && (
@@ -1600,7 +1600,7 @@ const FinancialTracker = () => {
 										)}
 									</div>
 								</th>
-								<th className="py-2 px-3 text-left cursor-pointer hover:bg-blue-100" onClick={() => requestSort('team')}>
+								<th className="py-2 px-3 text-left cursor-pointer hover:bg-blue-100 w-36" onClick={() => requestSort('team')}>
 									<div className="flex items-center">
 										Team
 										{sortConfig.key === 'team' && (
@@ -1623,7 +1623,7 @@ const FinancialTracker = () => {
 								{/* NEW Qty Column */}
 								<th className="py-2 px-3 text-center">Qty</th>
 								{/* End NEW Qty Column */}
-								<th className="py-2 px-3 text-center cursor-pointer hover:bg-blue-100" onClick={() => requestSort('amount')}>
+								<th className="py-2 px-3 text-center cursor-pointer hover:bg-blue-100 w-28" onClick={() => requestSort('amount')}>
 									<div className="flex items-center justify-center">
 										Amount
 										{sortConfig.key === 'amount' && (
@@ -1643,7 +1643,7 @@ const FinancialTracker = () => {
 										)}
 									</div>
 								</th>
-								<th className="py-2 px-3 text-center cursor-pointer hover:bg-blue-100" onClick={() => requestSort('description')}>
+								<th className="py-2 px-3 text-center cursor-pointer hover:bg-blue-100 w-[260px]" onClick={() => requestSort('description')}>
 									<div className="flex items-center justify-center">
 										Description
 										{sortConfig.key === 'description' && (
@@ -1681,18 +1681,16 @@ const FinancialTracker = () => {
 												onChange={(e) => handleSelectTransaction(t, e.target.checked)}
 											/>
 										</td>}
-										<td className="py-2 px-3 whitespace-nowrap">{displayDate}</td>
-										<td className="py-2 px-3">
-											{renderTeams(t.id, t.team, allMembers, expandedTransactionId, setExpandedTransactionId)}
-										</td>
-										<td className="py-2 px-3 text-center">{t.type}</td>
+										<td className="py-2 px-3 whitespace-nowrap text-sm w-44">{displayDate}</td>
+										<td className="py-2 px-3 w-36 text-sm truncate">{renderTeams(t.id, t.team, allMembers, expandedTransactionId, setExpandedTransactionId)}</td>
+										<td className="py-2 px-3 text-center w-20">{t.type}</td>
 										{/* NEW Qty Cell */}
 										<td className="py-2 px-3 text-center">{(t.category === 'Waiver/FA Fee' || t.category === 'Trade Fee') ? (t.quantity || 1) : ''}</td>
 										{/* End NEW Qty Cell */}
-										<td className="py-2 px-3 text-center">${Number(t.amount || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
-										<td className="py-2 px-3 text-center">{t.category}</td>
-										<td className="py-2 px-3 text-center">{t.description}</td>
-										<td className="py-2 px-3 text-center">{t.week}</td>
+										<td className="py-2 px-3 text-center w-28 whitespace-nowrap">${Number(t.amount || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+										<td className="py-2 px-3 text-center w-32 truncate">{t.category}</td>
+										<td className="py-2 px-3 text-center w-[260px] truncate">{t.description}</td>
+										<td className="py-2 px-3 text-center w-20">{t.week}</td>
 										{isAdmin && (
 											<td className="py-2 px-3 text-center">
 												<div className="flex justify-center items-center gap-2">
@@ -1718,17 +1716,38 @@ const FinancialTracker = () => {
 						</tbody>
 					</table>
 				</div>
-				<div className="flex justify-center items-center gap-2 mt-4">
-					{Array.from({ length: totalPages }, (_, i) => (
-						<button
-							key={i}
-							className={`px-3 py-1 rounded-lg transition duration-200 ${currentPage === i + 1 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-							onClick={() => setCurrentPage(i + 1)}
-							disabled={currentPage === i + 1}
+				<div className="flex items-center justify-center gap-3 mt-4">
+					<button
+						className={`px-3 py-1 rounded-lg transition duration-200 ${currentPage === 1 ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+						onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+						disabled={currentPage === 1}
+						aria-label="Previous page"
+					>
+						Prev
+					</button>
+
+					<div>
+						<label htmlFor="transactions-page" className="sr-only">Select page</label>
+						<select
+							id="transactions-page"
+							className="border rounded-lg px-3 py-1 bg-white text-sm"
+							value={currentPage}
+							onChange={(e) => setCurrentPage(Number(e.target.value))}
 						>
-							{i + 1}
-						</button>
-					))}
+							{Array.from({ length: totalPages }, (_, i) => (
+								<option key={i} value={i + 1}>{`Page ${i + 1} of ${totalPages}`}</option>
+							))}
+						</select>
+					</div>
+
+					<button
+						className={`px-3 py-1 rounded-lg transition duration-200 ${currentPage === totalPages ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+						onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+						disabled={currentPage === totalPages}
+						aria-label="Next page"
+					>
+						Next
+					</button>
 				</div>
 			</div>
 
