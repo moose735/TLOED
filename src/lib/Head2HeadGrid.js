@@ -106,11 +106,11 @@ const computeCellColors = (wins = 0, losses = 0) => {
     // light green -> #319350
     // strong green -> #2c9c60
     const lowHex = hex.toLowerCase();
-    if (lowHex === '#f87171') text = '#b24040';
-    else if (lowHex === '#fecaca') text = '#d75e5e';
-    else if (lowHex === '#ffde57') text = '#b89523'; // tie yellow font
-    else if (lowHex === '#bbf7d0') text = '#319350';
-    else if (lowHex === '#4ade80') text = '#2c9c60';
+    if (lowHex === '#f87171') text = '#992f2f'; // strong red (slightly darker)
+    else if (lowHex === '#fecaca') text = '#b84b4b'; // light red (slightly darker)
+    else if (lowHex === '#ffde57') text = '#8A6F1A'; // tie yellow font (darker shade, same hue family)
+    else if (lowHex === '#bbf7d0') text = '#22804a'; // light green (slightly darker)
+    else if (lowHex === '#4ade80') text = '#1f6b46'; // strong green (slightly darker)
 
     return { background: bg, color: text, fontWeight: '700' };
 };
@@ -136,6 +136,7 @@ const Head2HeadGrid = () => {
     const [selectedRivalryOwners, setSelectedRivalryOwners] = useState(null);
     const [loading, setLoading] = useState(true); // Local loading state for calculations
     const [weeklyHighScoreCounts, setWeeklyHighScoreCounts] = useState({});
+    // (no filters for Best Records — show best records across all opponents)
 
     // Data processing for head-to-head records and weekly high score counts
     useEffect(() => {
@@ -414,6 +415,69 @@ const Head2HeadGrid = () => {
         // Sort by display name alphabetically
         return displayNamesWithOwners.sort((a, b) => a.displayName.localeCompare(b.displayName));
     }, [headToHeadRecords, getTeamName]);
+
+
+    // Precompute best records per owner (highest win% vs single opponent)
+    const bestRecordsByOwner = useMemo(() => {
+        const result = {};
+        Object.values(headToHeadRecords).forEach(r => {
+            const owners = r.owners || [];
+            if (owners.length < 2) return;
+            const ownerA = owners[0];
+            const ownerB = owners[1];
+            const recA = r[ownerA] || { wins: 0, losses: 0, ties: 0 };
+            const recB = r[ownerB] || { wins: 0, losses: 0, ties: 0 };
+            const totalA = (recA.wins || 0) + (recA.losses || 0) + (recA.ties || 0);
+            const totalB = (recB.wins || 0) + (recB.losses || 0) + (recB.ties || 0);
+            if (totalA > 0) {
+                const winPctA = (recA.wins + 0.5 * (recA.ties || 0)) / totalA;
+                const existingA = result[ownerA];
+                if (!existingA || winPctA > existingA.winPct) {
+                    result[ownerA] = { opponent: ownerB, wins: recA.wins || 0, losses: recA.losses || 0, ties: recA.ties || 0, winPct: winPctA, totalGames: totalA };
+                }
+            }
+            if (totalB > 0) {
+                const winPctB = (recB.wins + 0.5 * (recB.ties || 0)) / totalB;
+                const existingB = result[ownerB];
+                if (!existingB || winPctB > existingB.winPct) {
+                    result[ownerB] = { opponent: ownerA, wins: recB.wins || 0, losses: recB.losses || 0, ties: recB.ties || 0, winPct: winPctB, totalGames: totalB };
+                }
+            }
+        });
+        return result;
+    }, [headToHeadRecords]);
+
+    const bestRecordsRows = useMemo(() => {
+        const rows = Object.keys(bestRecordsByOwner).map(ownerId => {
+            const r = bestRecordsByOwner[ownerId];
+            const wins = r.wins || 0;
+            const losses = r.losses || 0;
+            const ties = r.ties || 0;
+            const totalGames = wins + losses + ties;
+            const winPctNum = (typeof r.winPct === 'number') ? r.winPct : -1;
+            return {
+                ownerId,
+                ownerName: getTeamName(ownerId, null),
+                opponentId: r.opponent,
+                opponentName: getTeamName(r.opponent, null),
+                record: `${wins}-${losses}${(ties && ties > 0) ? `-${ties}` : ''}`,
+                winPct: (winPctNum >= 0) ? winPctNum.toFixed(3) : 'N/A',
+                winPctNum,
+                totalGames,
+                wins
+            };
+        });
+
+        // Sort by winPct desc, then totalGames desc, then wins desc, then owner name
+        rows.sort((a, b) => {
+            if (b.winPctNum !== a.winPctNum) return (b.winPctNum || -1) - (a.winPctNum || -1);
+            if (b.totalGames !== a.totalGames) return b.totalGames - a.totalGames;
+            if (b.wins !== a.wins) return b.wins - a.wins;
+            return a.ownerName.localeCompare(b.ownerName);
+        });
+
+        return rows;
+    }, [bestRecordsByOwner, getTeamName]);
 
 
     // Component to render the detailed rivalry view
@@ -1069,7 +1133,7 @@ const Head2HeadGrid = () => {
                             <thead className="bg-blue-50">
                                 <tr>
                                     {/* Empty corner for team names - sticky */}
-                                    <th className="py-1 px-2 sm:py-2 sm:px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-300 sticky left-0 bg-blue-50 z-20 shadow-sm"></th>
+                                    <th className="py-1 px-2 sm:py-2 sm:px-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-300 sticky left-0 bg-blue-50 z-20 shadow-sm" style={{ borderRight: '1px solid rgba(209,213,219,1)' }}></th>
                                     {sortedDisplayNamesAndOwners.map(team => (
                                         <th key={team.ownerId} className="py-1 px-2 sm:py-2 sm:px-3 text-center text-[10px] sm:text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-300 min-w-[70px] sm:min-w-[90px] sticky top-0 bg-blue-50 z-10"> {/* Sticky top for horizontal scroll */}
                                             <div className="truncate max-w-[80px] sm:max-w-[120px]">{team.displayName}</div>
@@ -1086,7 +1150,7 @@ const Head2HeadGrid = () => {
                                         {sortedDisplayNamesAndOwners.map(colTeam => { // Iterate over sorted display names for columns
                                             if (rowTeam.ownerId === colTeam.ownerId) {
                                                 return (
-                                                    <td key={`${rowTeam.ownerId}-${colTeam.ownerId}`} className="py-2 px-3 text-center text-sm text-gray-400 bg-gray-100 border-b border-gray-300 transition duration-150 ease-in-out hover:opacity-75 hover:shadow-md">
+                                                    <td key={`${rowTeam.ownerId}-${colTeam.ownerId}`} className="py-2 px-3 text-center text-sm text-gray-400 bg-gray-100 border-b border-gray-300 border-r border-gray-300 transition duration-150 ease-in-out hover:opacity-75 hover:shadow-md">
                                                         ---
                                                     </td>
                                                 );
@@ -1097,7 +1161,7 @@ const Head2HeadGrid = () => {
 
                                             let recordForDisplay = '0-0';
                                             // Compact cell padding on small screens to make more columns fit
-                                            let cellClassName = 'py-1 px-2 sm:py-2 sm:px-3 text-center text-sm border-b border-gray-300 cursor-pointer transition duration-150 ease-in-out hover:opacity-75 hover:shadow-md ';
+                                            let cellClassName = 'py-1 px-2 sm:py-2 sm:px-3 text-center text-sm border-b border-gray-300 border-r border-gray-300 cursor-pointer transition duration-150 ease-in-out hover:opacity-75 hover:shadow-md ';
 
                                             let inlineStyle = {};
                                             if (rivalry) {
@@ -1153,6 +1217,35 @@ const Head2HeadGrid = () => {
                     <p className="mt-4 text-sm text-gray-500 text-center">
                         Click on any record in the grid for more detailed head-to-head statistics.
                     </p>
+                    {/* Best Records vs Teams Report */}
+                    {bestRecordsRows && bestRecordsRows.length > 0 && (
+                        <div className="mt-6 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                            <h4 className="text-lg font-bold text-gray-800 mb-3">Best Records vs Opponent</h4>
+                            
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full text-sm">
+                                    <thead>
+                                        <tr className="text-left text-xs text-gray-600 uppercase">
+                                            <th className="py-1 px-2 sm:py-2 sm:px-3">Team</th>
+                                            <th className="py-1 px-2 sm:py-2 sm:px-3">Opponent</th>
+                                            <th className="py-1 px-2 sm:py-2 sm:px-3">Record</th>
+                                            <th className="py-1 px-2 sm:py-2 sm:px-3">Win %</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {bestRecordsRows.map((r, idx) => (
+                                            <tr key={idx} className={"border-t border-gray-100 " + (idx % 2 === 0 ? 'bg-white' : 'bg-gray-50')}>
+                                                <td className="py-2 px-2 sm:py-2 sm:px-3 font-medium">{r.ownerName}</td>
+                                                <td className="py-2 px-2 sm:py-2 sm:px-3">{r.opponentName}</td>
+                                                <td className="py-2 px-2 sm:py-2 sm:px-3">{r.record}</td>
+                                                <td className="py-2 px-2 sm:py-2 sm:px-3">{r.winPct}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
                 </>
             )}
         </div>
