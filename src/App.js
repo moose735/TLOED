@@ -490,17 +490,17 @@ const AppContent = () => {
             case TABS.SPORTSBOOK:
                 return <Sportsbook />;
             case TABS.LEAGUE_HISTORY:
-                return <LeagueHistory onTeamNameClick={handleTeamNameClick} />;
+                return <LeagueHistory />;
             case TABS.HALL_OF_CHAMPIONS: // New case for Hall of Champions
-                return <HallOfChampions onTeamNameClick={handleTeamNameClick} />;
+                return <HallOfChampions />;
             case TABS.RECORD_BOOK:
-                return <RecordBook historicalMatchups={allMatchups} onTeamNameClick={handleTeamNameClick} />;
+                return <RecordBook historicalMatchups={allMatchups} />;
             case TABS.HEAD_TO_HEAD:
-                return <Head2HeadGrid historicalMatchups={allMatchups} getDisplayTeamName={getUserDisplayName} onTeamNameClick={handleTeamNameClick} />;
+                return <Head2HeadGrid historicalMatchups={allMatchups} getDisplayTeamName={getUserDisplayName} />;
             case TABS.DPR_ANALYSIS:
-                return <DPRAnalysis onTeamNameClick={handleTeamNameClick} />;
+                return <DPRAnalysis />;
             case TABS.LUCK_RATING:
-                return <LuckRatingAnalysis onTeamNameClick={handleTeamNameClick} />;
+                return <LuckRatingAnalysis />;
             case TABS.KEEPERS:
                 return <KeeperList />;
             case TABS.TEAMS_OVERVIEW:

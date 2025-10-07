@@ -4,7 +4,7 @@ import { calculateAllLeagueMetrics } from '../utils/calculations'; // Import the
 import { useSleeperData } from '../contexts/SleeperDataContext'; // Import the custom hook
 import logger from '../utils/logger';
 
-const LuckRatingAnalysis = ({ onTeamNameClick }) => {
+const LuckRatingAnalysis = () => {
   // Consume necessary data from context
   const {
     loading: contextLoading, // Rename to avoid conflict with local loading state
@@ -182,16 +182,12 @@ const LuckRatingAnalysis = ({ onTeamNameClick }) => {
                               onError={(e) => { e.target.src = `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`; }}
                             />
                             <div className="min-w-0 flex-1">
-                              <div className="font-semibold text-sm truncate">
-                                {onTeamNameClick ? (
-                                  <button onClick={() => onTeamNameClick(data.team)} className="text-gray-800 hover:underline p-0 bg-transparent border-none truncate">
-                                    {data.team}
-                                  </button>
-                                ) : (
+                              <div className="flex flex-col">
+                                <div className="font-semibold text-sm truncate">
                                   <span className="truncate">{data.team}</span>
-                                )}
+                                </div>
+                                {/* compact boxes are rendered below the header to match DPR mobile layout */}
                               </div>
-                              {/* compact boxes are rendered below the header to match DPR mobile layout */}
                             </div>
                           </div>
 
@@ -239,18 +235,7 @@ const LuckRatingAnalysis = ({ onTeamNameClick }) => {
                                 className="w-6 h-6 md:w-8 md:h-8 rounded-full border-2 border-blue-300 shadow-sm object-cover flex-shrink-0"
                                 onError={(e) => { e.target.src = `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`; }}
                               />
-                              <span className="truncate font-semibold text-xs md:text-sm">
-                                {onTeamNameClick ? (
-                                  <button
-                                    onClick={() => onTeamNameClick(data.team)}
-                                    className="text-gray-800 hover:text-gray-600 cursor-pointer bg-transparent border-none p-0 text-left"
-                                  >
-                                    {data.team}
-                                  </button>
-                                ) : (
-                                  data.team
-                                )}
-                              </span>
+                              <span className="truncate font-semibold text-xs md:text-sm">{data.team}</span>
                             </div>
                           </td>
                           <td className={`py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold ${data.luckRating > 0 ? 'text-green-600' : data.luckRating < 0 ? 'text-red-600' : 'text-gray-700'}`}>{formatLuckRating(data.luckRating)}</td>
@@ -276,7 +261,7 @@ const LuckRatingAnalysis = ({ onTeamNameClick }) => {
                 <div className="sm:hidden space-y-3">
                   {displayedSeasonalLuckData.map((data, idx) => (
                     <div key={`${data.team}-${data.year}`} className={`min-w-0 w-full overflow-hidden rounded-lg shadow p-2 ${Number(data.year) === Number(dataCurrentSeason) ? 'border-l-4 border-green-500 bg-green-50' : 'bg-white'}`}>
-                      <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center justify-between mb-1">
                         <div className="flex items-center space-x-1">
                           <div className="w-5 h-5 bg-green-600 text-white rounded-full flex items-center justify-center text-[11px] font-bold">{idx + 1}</div>
                           <img
@@ -285,21 +270,15 @@ const LuckRatingAnalysis = ({ onTeamNameClick }) => {
                             className="w-7 h-7 rounded-full border-2 border-green-300 shadow-sm object-cover flex-shrink-0"
                             onError={(e) => { e.target.src = `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`; }}
                           />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <div className="font-semibold text-sm truncate">
-                                {onTeamNameClick ? (
-                                  <button onClick={() => onTeamNameClick(data.team)} className="text-gray-800 hover:underline p-0 bg-transparent border-none">
-                                    {data.team}
-                                  </button>
-                                ) : (
-                                  data.team
-                                )}
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-col">
+                                <div className="flex items-center gap-2">
+                                  <div className="font-semibold text-sm truncate leading-tight">{data.team}</div>
+                                  {/* On mobile the green highlight is sufficient for current season; remove redundant 'Current' pill */}
+                                </div>
+                                <div className="text-xs text-gray-500 mt-0 leading-tight">Season: {data.year}</div>
                               </div>
-                              {/* On mobile the green highlight is sufficient for current season; remove redundant 'Current' pill */}
                             </div>
-                            <div className="text-xs text-gray-500">Season: {data.year}</div>
-                          </div>
                         </div>
 
                           <div className="text-right flex-shrink-0 w-20 ml-1 pr-2">
@@ -307,7 +286,7 @@ const LuckRatingAnalysis = ({ onTeamNameClick }) => {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2 text-xs mt-2">
+                      <div className="grid grid-cols-2 gap-2 text-xs mt-1">
                         <div className="bg-gray-50 rounded px-2 py-1 text-center">
                           <div className="text-[10px] text-gray-500 mb-0.5">Actual</div>
                           <div className="font-semibold whitespace-nowrap">{data.actualWins}</div>
@@ -355,18 +334,7 @@ const LuckRatingAnalysis = ({ onTeamNameClick }) => {
                                     className="w-6 h-6 md:w-8 md:h-8 rounded-full border-2 border-green-300 shadow-sm object-cover flex-shrink-0"
                                     onError={(e) => { e.target.src = `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`; }}
                                   />
-                                  <span className="truncate font-semibold text-xs md:text-sm">
-                                    {onTeamNameClick ? (
-                                      <button
-                                        onClick={() => onTeamNameClick(data.team)}
-                                        className="text-gray-800 hover:text-gray-600 cursor-pointer bg-transparent border-none p-0 text-left"
-                                      >
-                                        {data.team}
-                                      </button>
-                                    ) : (
-                                      data.team
-                                    )}
-                                  </span>
+                                  <span className="truncate font-semibold text-xs md:text-sm">{data.team}</span>
                                 </div>
                               </td>
                               <td className="py-2 md:py-3 px-3 md:px-4 text-sm text-gray-800 whitespace-nowrap border-b border-gray-200">{data.year}</td>

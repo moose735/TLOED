@@ -31,7 +31,7 @@ const getFinalSeedingGamePurpose = (value) => {
     return 'Final Seeding Game';
 };
 
-const LeagueHistory = ({ onTeamNameClick }) => {
+const LeagueHistory = () => {
     // Consume data from SleeperDataContext
     const {
         loading: contextLoading,

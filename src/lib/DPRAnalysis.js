@@ -11,7 +11,7 @@ let metricsResult = {};
 let seasonalMetrics = {};
 let calculatedCareerDPRs = [];
 
-const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
+const DPRAnalysis = () => {
   const {
     loading: contextLoading, // Rename to avoid conflict with local loading state
     error: contextError,      // Rename to avoid conflict with local error state
@@ -134,17 +134,36 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
 
     // Insert the "AVERAGE SEASON" row
     const averageDPRValue = 1.000;
+    // Compute average stats across seasonal rows (exclude any rows that might be special)
+    const statRows = allSeasonalDPRs.filter(r => r && r.wins != null && !r.isAverageRow);
+    const statCount = statRows.length;
+    let avgWins = null, avgLosses = null, avgWinPct = null, avgPPG = null, avgHigh = null, avgLow = null;
+    if (statCount > 0) {
+      const sumWins = statRows.reduce((s, r) => s + (r.wins || 0), 0);
+      const sumLosses = statRows.reduce((s, r) => s + (r.losses || 0), 0);
+      const sumWinPct = statRows.reduce((s, r) => s + (typeof r.winPercentage === 'number' ? r.winPercentage : 0), 0);
+      const sumPPG = statRows.reduce((s, r) => s + (typeof r.pointsPerGame === 'number' ? r.pointsPerGame : 0), 0);
+      const sumHigh = statRows.reduce((s, r) => s + (typeof r.highestPointsGame === 'number' ? r.highestPointsGame : 0), 0);
+      const sumLow = statRows.reduce((s, r) => s + (typeof r.lowestPointsGame === 'number' ? r.lowestPointsGame : 0), 0);
+      avgWins = Math.round(sumWins / statCount);
+      avgLosses = Math.round(sumLosses / statCount);
+      avgWinPct = sumWinPct / statCount;
+      avgPPG = sumPPG / statCount;
+      avgHigh = sumHigh / statCount;
+      avgLow  = sumLow / statCount;
+    }
+
     const averageSeasonRow = {
       year: null, // Set to null so formatters can ignore it
-      team: '----------------Average Season 1.000 DPR----------------',
+      team: 'Average Season',
       dpr: averageDPRValue, // Keep DPR for sorting purposes
-      wins: null,
-      losses: null,
-      ties: null,
-      winPercentage: null,
-      pointsPerGame: null,
-      highestPointsGame: null,
-      lowestPointsGame: null,
+      wins: avgWins,
+      losses: avgLosses,
+      ties: 0,
+      winPercentage: avgWinPct,
+      pointsPerGame: avgPPG,
+      highestPointsGame: avgHigh,
+      lowestPointsGame: avgLow,
       isAverageRow: true // A flag to identify this special row
     };
 
@@ -157,49 +176,52 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
       allSeasonalDPRs.splice(insertIndex, 0, averageSeasonRow);
     }
 
-    // --- Career DPR Calculation (unchanged, but could be updated to use new formula if needed) ---
-    const enhancedCareerDPRs = calculatedCareerDPRs.map(teamData => {
-        const totalGames = teamData.wins + teamData.losses + teamData.ties;
-        const winPercentage = totalGames > 0 ? ((teamData.wins + (0.5 * teamData.ties)) / totalGames) : 0;
-        const pointsPerGame = totalGames > 0 ? (teamData.pointsFor / totalGames) : 0;
+  // --- Career DPR Calculation (unchanged, but could be updated to use new formula if needed) ---
+  const enhancedCareerDPRs = calculatedCareerDPRs.map(teamData => {
+    let highestSeasonalPointsAvg = 0;
+    let lowestSeasonalPointsAvg = Infinity;
+    let seasonsPlayedCount = 0;
 
-        let highestSeasonalPointsAvg = 0;
-        let lowestSeasonalPointsAvg = Infinity;
-        let seasonsPlayedCount = 0;
+    Object.keys(seasonalMetrics).forEach(year => {
+      const teamSeasonalStats = Object.values(seasonalMetrics[year]).find(
+        (seasonalTeam) => seasonalTeam.ownerId === teamData.ownerId
+      );
 
-        Object.keys(seasonalMetrics).forEach(year => {
-            const teamSeasonalStats = Object.values(seasonalMetrics[year]).find(
-                (seasonalTeam) => seasonalTeam.ownerId === teamData.ownerId
-            );
+      if (teamSeasonalStats) {
+        const seasonalGames = teamSeasonalStats.totalGames;
 
-            if (teamSeasonalStats) {
-                const seasonalGames = teamSeasonalStats.totalGames;
-
-                if (seasonalGames > 0) {
-                    const seasonalAvg = teamSeasonalStats.pointsFor / seasonalGames;
-                    if (seasonalAvg > highestSeasonalPointsAvg) {
-                        highestSeasonalPointsAvg = seasonalAvg;
-                    }
-                    if (seasonalAvg < lowestSeasonalPointsAvg) {
-                        lowestSeasonalPointsAvg = seasonalAvg;
-                    }
-                    seasonsPlayedCount++;
-                }
-            }
-        });
-
-        if (seasonsPlayedCount === 0) {
-            lowestSeasonalPointsAvg = 0;
+        if (seasonalGames > 0) {
+          const seasonalAvg = teamSeasonalStats.pointsFor / seasonalGames;
+          if (seasonalAvg > highestSeasonalPointsAvg) {
+            highestSeasonalPointsAvg = seasonalAvg;
+          }
+          if (seasonalAvg < lowestSeasonalPointsAvg) {
+            lowestSeasonalPointsAvg = seasonalAvg;
+          }
+          seasonsPlayedCount++;
         }
-
-        return {
-            ...teamData,
-            winPercentage: winPercentage,
-            pointsPerGame: pointsPerGame,
-            highestSeasonalPointsAvg: highestSeasonalPointsAvg,
-            lowestSeasonalPointsAvg: lowestSeasonalPointsAvg
-        };
+      }
     });
+
+    if (seasonsPlayedCount === 0) {
+      lowestSeasonalPointsAvg = 0;
+    }
+
+    // Some upstream calculations provide `averageScore` for career rows; normalize to `pointsPerGame` here
+    const computedPPG = (typeof teamData.pointsPerGame === 'number' && !isNaN(teamData.pointsPerGame))
+      ? teamData.pointsPerGame
+      : (typeof teamData.averageScore === 'number' && !isNaN(teamData.averageScore))
+        ? teamData.averageScore
+        : (teamData.pointsFor && teamData.totalGames) ? (teamData.pointsFor / teamData.totalGames) : 0;
+
+    return {
+      ...teamData,
+      winPercentage: teamData.winPercentage,
+      pointsPerGame: computedPPG,
+      highestSeasonalPointsAvg: highestSeasonalPointsAvg,
+      lowestSeasonalPointsAvg: lowestSeasonalPointsAvg
+    };
+  });
 
     setCareerDPRData(enhancedCareerDPRs);
     setSeasonalDPRData(allSeasonalDPRs);
@@ -341,10 +363,10 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
   return (
     <div className="w-full">
       <h2 className="text-2xl font-bold text-gray-800 mb-4 border-b pb-2 text-center">
-        DPR Analysis (Career & Seasonal)
+        DPR Analysis
       </h2>
       <p className="text-sm text-gray-600 mb-6 text-center">
-        Detailed breakdown of team performance using the DPR (Dominance Performance Rating) metric.
+        Detailed breakdown of team performance using the DPR (Douchebag Power Rating) metric.
       </p>
 
       {loading ? (
@@ -363,7 +385,7 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
                     .sort((a, b) => (b.dpr || 0) - (a.dpr || 0))
                     .map((data, index) => (
                       <div key={data.ownerId} className="bg-white rounded-lg shadow-md mobile-card p-2 border-l-4 border-blue-500 min-w-0 w-full overflow-hidden">
-                        <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center justify-between mb-1">
                           <div className="flex items-center space-x-2 min-w-0">
                             <div className="flex-shrink-0 w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-[11px] font-bold">{index + 1}</div>
                             <img
@@ -373,16 +395,12 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
                               onError={(e) => { e.target.src = `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`; }}
                             />
                             <div className="min-w-0 flex-1">
-                              <div className="font-semibold text-sm truncate">
-                                {onTeamNameClick ? (
-                                  <button onClick={() => onTeamNameClick(getTeamName(data.ownerId, null))} className="text-gray-800 hover:underline p-0 bg-transparent border-none truncate">
-                                    {getTeamName(data.ownerId, null)}
-                                  </button>
-                                ) : (
+                              <div className="flex flex-col">
+                                <div className="font-semibold text-sm truncate leading-tight">
                                   <span className="truncate">{getTeamName(data.ownerId, null)}</span>
-                                )}
+                                </div>
+                                <div className="text-xs text-gray-500 mt-0 leading-tight">Record: {renderRecord(data.wins, data.losses, data.ties)}</div>
                               </div>
-                              <div className="text-xs text-gray-500 truncate">Record: {renderRecord(data.wins, data.losses, data.ties)}</div>
                             </div>
                           </div>
 
@@ -392,7 +410,7 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-2 text-xs mt-2">
+                        <div className="grid grid-cols-3 gap-2 text-xs mt-1">
                             <div className="bg-gray-50 rounded-lg px-2 py-1 text-center">
                               <div className="text-[10px] text-gray-500 mb-0.5">PPG</div>
                               <div className="font-semibold text-green-700 whitespace-nowrap">{formatPointsAvg(data.pointsPerGame)}</div>
@@ -420,7 +438,7 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
                         <th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Career DPR</th>
                         <th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Win %</th>
                         <th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record</th>
-                        <th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">PF</th>
+                        <th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">PPG</th>
                         <th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Highest Avg</th>
                         <th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Lowest Avg</th>
                       </tr>
@@ -438,16 +456,7 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
                                 onError={(e) => { e.target.src = `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`; }}
                               />
                               <span className="truncate font-semibold text-xs md:text-sm">
-                                {onTeamNameClick ? (
-                                  <button
-                                    onClick={() => onTeamNameClick(getTeamName(data.ownerId, null))}
-                                    className="text-gray-800 hover:text-gray-600 cursor-pointer bg-transparent border-none p-0 text-left"
-                                  >
-                                    {getTeamName(data.ownerId, null)}
-                                  </button>
-                                ) : (
-                                  getTeamName(data.ownerId, null)
-                                )}
+                                {getTeamName(data.ownerId, null)}
                               </span>
                             </div>
                           </td>
@@ -476,12 +485,40 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
                 {/* Mobile Cards View (PowerRankings-like) */}
                 <div className="sm:hidden space-y-3">
                   {displayedSeasonalDPRData.map((data, idx) => {
-                    // hide average-season row on mobile (noisy)
-                    if (data.isAverageRow) return null;
                     const isDataCurrent = data.year && Number(data.year) === Number(dataCurrentSeason);
+                    if (data.isAverageRow) {
+                      // Render the average DPR row inline at its sorted position on mobile with full stats
+                      return (
+                        <div key={`average-${idx}`} className="min-w-0 w-full overflow-hidden rounded-lg shadow p-2 bg-yellow-50">
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="min-w-0 flex-1">
+                              <div className="font-semibold text-sm text-center">Average Season</div>
+                              <div className="text-xs text-gray-500 text-center">Record: {renderRecord(data.wins, data.losses, data.ties)}</div>
+                            </div>
+                            <div className="text-right flex-shrink-0 w-20 ml-1 pr-2">
+                              <div className="text-lg font-bold text-gray-800 truncate">{formatDPR(data.dpr)}</div>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2 text-xs mt-1">
+                            <div className="bg-gray-50 rounded px-2 py-1 text-center">
+                              <div className="text-[10px] text-gray-500 mb-0.5">PPG</div>
+                              <div className="font-semibold text-green-700 whitespace-nowrap">{formatPointsAvg(data.pointsPerGame)}</div>
+                            </div>
+                            <div className="bg-gray-50 rounded px-2 py-1 text-center">
+                              <div className="text-[10px] text-gray-500 mb-0.5">Win %</div>
+                              <div className="font-semibold whitespace-nowrap">{formatPercentage(data.winPercentage)}</div>
+                            </div>
+                            <div className="bg-gray-50 rounded px-2 py-1 text-center">
+                              <div className="text-[10px] text-gray-500 mb-0.5">H / L</div>
+                              <div className="font-semibold whitespace-nowrap">{formatPointsAvg(data.highestPointsGame)} / {formatPointsAvg(data.lowestPointsGame)}</div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
                     return (
                       <div key={`${data.rosterId}-${data.year}`} className={`min-w-0 w-full overflow-hidden rounded-lg shadow p-2 ${isDataCurrent ? 'border-l-4 border-green-500 bg-green-50' : 'bg-white'}`}>
-                        <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center justify-between mb-1">
                           <div className="flex items-center space-x-2">
                             <div className="w-5 h-5 bg-green-600 text-white rounded-full flex items-center justify-center text-[11px] font-bold">{idx + 1}</div>
                             <img
@@ -491,43 +528,33 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
                               onError={(e) => { e.target.src = `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`; }}
                             />
                             <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <div className="font-semibold text-sm truncate">
-                                  {onTeamNameClick ? (
-                                    <button onClick={() => onTeamNameClick(getTeamName(data.ownerId, data.year))} className="text-gray-800 hover:underline p-0 bg-transparent border-none truncate">
-                                      {getTeamName(data.ownerId, data.year)}
-                                    </button>
-                                  ) : (
+                              <div className="flex flex-col">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <div className="font-semibold text-sm truncate leading-tight">
                                     <span className="truncate">{getTeamName(data.ownerId, data.year)}</span>
+                                  </div>
+                                  {/* small star if made playoffs */}
+                                  {didMakePlayoffs(data) && (
+                                    <span className="text-yellow-500 text-sm ml-1" title="Made Playoffs">⭐</span>
                                   )}
                                 </div>
-                                {/* small star if made playoffs */}
-                                {didMakePlayoffs(data) && (
-                                  <span className="text-yellow-500 text-sm ml-1" title="Made Playoffs">⭐</span>
-                                )}
+                                <div className="text-xs text-gray-500 mt-0 leading-tight">Season: {data.year} • Rec: {renderRecord(data.wins, data.losses, data.ties)}</div>
                               </div>
-                              <div className="text-xs text-gray-500">Season: {data.year}</div>
                             </div>
                           </div>
 
                           <div className="text-right flex-shrink-0 w-20 ml-1 pr-2">
                             <div className="text-lg font-bold text-green-800 truncate">{formatDPR(data.dpr)}</div>
-                              {/* Avoid showing raw DPR underneath adjusted DPR on mobile to reduce redundancy */}
-                              <div className="text-xs text-gray-500">PPG • {formatPointsAvg(data.pointsPerGame)}</div>
                           </div>
                         </div>
-                        <div className="grid grid-cols-3 gap-2 text-xs mt-3">
+                        <div className="grid grid-cols-3 gap-2 text-xs mt-1">
                           <div className="bg-gray-50 rounded px-2 py-1 text-center">
-                            <div className="text-[10px] text-gray-500 mb-0.5">Rec</div>
-                            <div className="font-semibold whitespace-nowrap">{renderRecord(data.wins, data.losses, data.ties)}</div>
+                            <div className="text-[10px] text-gray-500 mb-0.5">PPG</div>
+                            <div className="font-semibold whitespace-nowrap text-green-700">{formatPointsAvg(data.pointsPerGame)}</div>
                           </div>
                           <div className="bg-gray-50 rounded px-2 py-1 text-center">
                             <div className="text-[10px] text-gray-500 mb-0.5">Win %</div>
                             <div className="font-semibold whitespace-nowrap">{formatPercentage(data.winPercentage)}</div>
-                          </div>
-                          <div className="bg-gray-50 rounded px-2 py-1 text-center">
-                            <div className="text-[10px] text-gray-500 mb-0.5">Playoffs</div>
-                            <div className="font-semibold whitespace-nowrap">{didMakePlayoffs(data) ? 'Yes' : 'No'}</div>
                           </div>
                           <div className="bg-gray-50 rounded px-2 py-1 text-center">
                             <div className="text-[10px] text-gray-500 mb-0.5">H / L</div>
@@ -575,9 +602,21 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
                               className={rowClass}
                             >
                               {data.isAverageRow ? (
-                                <td colSpan={numberOfSeasonalColumns} className="py-2 md:py-3 px-3 md:px-4 text-sm text-gray-800 whitespace-nowrap text-center">
-                                  {data.team}
-                                </td>
+                                <>
+                                  <td className="py-2 md:py-3 px-3 md:px-4 text-sm text-gray-800 whitespace-nowrap border-b border-gray-200">&nbsp;</td>
+                                  <td className="py-2 md:py-3 px-3 md:px-4 text-sm text-gray-800 whitespace-nowrap border-b border-gray-200">
+                                    <div className="flex items-center gap-2 md:gap-3">
+                                      <span className="truncate font-semibold text-xs md:text-sm">{data.team}</span>
+                                    </div>
+                                  </td>
+                                  <td className="py-2 md:py-3 px-3 md:px-4 text-sm text-gray-800 whitespace-nowrap border-b border-gray-200">&nbsp;</td>
+                                  <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold text-green-800">{formatDPR(data.dpr)}</td>
+                                  <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold">{formatPercentage(data.winPercentage)}</td>
+                                  <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold">{renderRecord(data.wins, data.losses, data.ties)}</td>
+                                  <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold text-blue-700">{formatPointsAvg(data.pointsPerGame)}</td>
+                                  <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold">{formatPointsAvg(data.highestPointsGame)}</td>
+                                  <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold">{formatPointsAvg(data.lowestPointsGame)}</td>
+                                </>
                               ) : (
                                 <>
                                   <td className="py-2 md:py-3 px-3 md:px-4 text-sm text-gray-800 whitespace-nowrap border-b border-gray-200 relative pl-3">
@@ -593,16 +632,7 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
                                         onError={(e) => { e.target.src = `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`; }}
                                       />
                                       <span className="truncate font-semibold text-xs md:text-sm">
-                                        {onTeamNameClick ? (
-                                          <button
-                                            onClick={() => onTeamNameClick(getTeamName(data.ownerId, data.year))}
-                                            className="text-gray-800 hover:text-gray-600 cursor-pointer bg-transparent border-none p-0 text-left"
-                                          >
-                                            {getTeamName(data.ownerId, data.year)}
-                                          </button>
-                                        ) : (
-                                          getTeamName(data.ownerId, data.year)
-                                        )}
+                                        {getTeamName(data.ownerId, data.year)}
                                         {didMakePlayoffs(data) && (
                                           <span className="text-yellow-500 ml-1" title="Made Playoffs">⭐</span>
                                         )}
