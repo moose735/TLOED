@@ -940,7 +940,7 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
     }
 
     return (
-        <div className="w-full bg-white p-3 sm:p-6 md:p-8 mt-4 sm:mt-8 mx-0 sm:mx-auto max-w-full -mx-4 sm:mx-0 rounded-none sm:rounded-lg shadow-none sm:shadow-md">
+        <div className="relative left-1/2 -translate-x-1/2 w-screen px-4 sm:left-0 sm:translate-x-0 sm:w-full sm:px-0 bg-white p-3 sm:p-6 md:p-8 mt-4 sm:mt-8 rounded-none sm:rounded-lg shadow-none sm:shadow-md">
             <h2 className="text-2xl sm:text-3xl font-bold text-blue-700 mb-4 sm:mb-6 text-center border-b pb-2 sm:pb-3">
                 {teamName}
                 <span className="block text-base sm:text-lg font-medium text-gray-600 mt-1 sm:mt-2">
@@ -1240,6 +1240,11 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
                             minDPR = Math.max(0.5, minDPR);
                             maxDPR = Math.min(1.5, maxDPR);
                         }
+                        // Rank axis should always span 1..12. Use fewer ticks on mobile for clarity.
+                        const finishMid = 6; // mid-point for mobile ticks
+                        const finishTicksMobile = [1, finishMid, 12];
+                        const finishTicksDesktop = [1,2,3,4,5,6,7,8,9,10,11,12];
+
                         return (
                             <div className="w-full">
                                 {/* Mobile: Optimized layout with better spacing */}
@@ -1269,11 +1274,12 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
                                                     domain={[minDPR, maxDPR]} 
                                                     tickCount={6} 
                                                     tick={{ fontSize: 9 }} 
-                                                    width={28} 
+                                                    width={44} 
                                                     allowDecimals={true} 
                                                     allowDataOverflow={true}
                                                 >
-                                                    <Label value="DPR" angle={-90} position="insideLeft" style={{ textAnchor: 'middle', fontSize: 9 }} />
+                                                    {/* Place the label outside the tick numbers and nudge it left */}
+                                                    <Label value="DPR" angle={-90} position="left" dx={-8} style={{ textAnchor: 'middle', fontSize: 9 }} />
                                                 </YAxis>
                                                 <YAxis
                                                     yAxisId="right"
@@ -1284,10 +1290,8 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
                                                     width={25}
                                                     allowDecimals={false}
                                                     allowDataOverflow={true}
-                                                    ticks={[1,3,6,9,12]}
-                                                >
-                                                    <Label value="Rank" angle={90} position="insideRight" style={{ textAnchor: 'middle', fontSize: 9 }} />
-                                                </YAxis>
+                                                    ticks={finishTicksMobile}
+                                                />
                                                 <Tooltip 
                                                     wrapperStyle={{ fontSize: 11 }} 
                                                     formatter={(value, name, props) => {
@@ -1329,8 +1333,9 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
                                                 <XAxis dataKey="season" tick={{ fontSize: 10 }} padding={{ left: 8, right: 8 }}>
                                                     <Label value="Season" offset={-6} position="insideBottom" style={{ fontSize: 11 }} />
                                                 </XAxis>
-                                                <YAxis yAxisId="left" orientation="left" domain={[minDPR, maxDPR]} tickCount={8} tick={{ fontSize: 10 }} width={32} allowDecimals={true} allowDataOverflow={true}>
-                                                    <Label value="DPR" angle={-90} position="insideLeft" style={{ textAnchor: 'middle', fontSize: 11 }} />
+                                                <YAxis yAxisId="left" orientation="left" domain={[minDPR, maxDPR]} tickCount={8} tick={{ fontSize: 10 }} width={48} allowDecimals={true} allowDataOverflow={true}>
+                                                    {/* Move the DPR label outside the ticks to avoid overlap with numbers */}
+                                                    <Label value="DPR" angle={-90} position="left" dx={-10} style={{ textAnchor: 'middle', fontSize: 11 }} />
                                                 </YAxis>
                                                 <YAxis
                                                     yAxisId="right"
@@ -1341,10 +1346,8 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
                                                     width={32}
                                                     allowDecimals={false}
                                                     allowDataOverflow={true}
-                                                    ticks={[1,2,3,4,5,6,7,8,9,10,11,12]}
-                                                >
-                                                    <Label value="Finish" angle={90} position="insideRight" style={{ textAnchor: 'middle', fontSize: 11 }} />
-                                                </YAxis>
+                                                    ticks={finishTicksDesktop}
+                                                />
                                                 <Tooltip 
                                                     wrapperStyle={{ fontSize: 12 }} 
                                                     formatter={(value, name, props) => {
