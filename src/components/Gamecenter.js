@@ -15,6 +15,8 @@ const Gamecenter = () => {
     const [weeklyMatchups, setWeeklyMatchups] = useState([]);
     const [selectedMatchup, setSelectedMatchup] = useState(null); // For the detailed modal
     const [matchupRosterData, setMatchupRosterData] = useState(null); // For storing detailed roster data
+    const [weeklyRecap, setWeeklyRecap] = useState(null);
+    const [recapLoading, setRecapLoading] = useState(false);
 
     // Effect 1: Initialize state when context data is ready and not loading.
     useEffect(() => {
@@ -282,12 +284,31 @@ const Gamecenter = () => {
             const raw = localStorage.getItem('gameOfWeek:v1');
             const map = raw ? JSON.parse(raw) : {};
             if (!map[season]) map[season] = {};
+            
+            // Prevent overwriting existing values for completed weeks
+            if (map[season][week]) {
+                console.warn(`Attempted to overwrite existing Game of Week for ${season} Week ${week}: ${map[season][week]} -> ${matchupId}`);
+                return; // Don't overwrite
+            }
+            
             map[season][week] = matchupId;
             localStorage.setItem('gameOfWeek:v1', JSON.stringify(map));
+            console.log(`Saved Game of Week for ${season} Week ${week}: ${matchupId}`);
         } catch (e) {
             // ignore storage errors
         }
     };
+
+    // Clear any stored game selections on component mount
+    useEffect(() => {
+        try {
+            localStorage.removeItem('gameOfWeek:v1');
+            localStorage.removeItem('friskyGame:v1');
+            console.log('Cleared stored Game of Week and Frisky Game data');
+        } catch (e) {
+            // ignore storage errors
+        }
+    }, []); // Run once on mount
 
     // Helper: compute the best matchup id candidate based on the scoring logic
     const computeBestMatchupId = () => {
@@ -356,43 +377,16 @@ const Gamecenter = () => {
         const selectedSeasonInt = parseInt(selectedSeason);
         const selectedWeekInt = parseInt(selectedWeek);
 
-        // Determine if past / current / future
+        // Only show Game of the Week for the current NFL week
         const isCurrentWeek = (selectedSeasonInt === currentNFLSeason && selectedWeekInt === currentNFLWeek);
-        const isPastWeek = (selectedSeasonInt < currentNFLSeason) || (selectedSeasonInt === currentNFLSeason && selectedWeekInt < currentNFLWeek);
-        const isFutureWeek = (selectedSeasonInt > currentNFLSeason) || (selectedSeasonInt === currentNFLSeason && selectedWeekInt > currentNFLWeek);
+
+        if (!isCurrentWeek) return null; // only show for current week
+
+        // compute live candidate for the current week
+        return computeBestMatchupId();
+    }, [weeklyMatchups, selectedSeason, selectedWeek, nflState]);
 
 
-
-        if (isFutureWeek) return null; // don't crown future weeks
-
-        if (isCurrentWeek) {
-            // compute live candidate for the current week
-            return computeBestMatchupId();
-        }
-
-        // past week: return stored snapshot if present, otherwise null (we will persist when the week completes)
-        const stored = readStoredGameOfWeek(selectedSeason, selectedWeek);
-        return stored || null;
-    }, [weeklyMatchups, processedSeasonalRecords, selectedSeason, selectedWeek, nflState]);
-
-    // Persist snapshot for completed past weeks: if week is complete and no stored value exists, save the computed candidate
-    useEffect(() => {
-        if (!selectedSeason || !selectedWeek || !weeklyMatchups || weeklyMatchups.length === 0) return;
-
-        const currentNFLSeason = parseInt(nflState?.season || new Date().getFullYear());
-        const currentNFLWeek = parseInt(nflState?.week || 1);
-        const selectedSeasonInt = parseInt(selectedSeason);
-        const selectedWeekInt = parseInt(selectedWeek);
-
-        const isPastWeek = selectedSeasonInt < currentNFLSeason || (selectedSeasonInt === currentNFLSeason && selectedWeekInt < currentNFLWeek);
-        if (!isPastWeek) return; // only persist for past (completed) weeks
-
-        const stored = readStoredGameOfWeek(selectedSeason, selectedWeek);
-        if (stored) return; // already have a snapshot
-
-        const candidate = computeBestMatchupId();
-        if (candidate) saveStoredGameOfWeek(selectedSeason, selectedWeek, candidate);
-    }, [selectedSeason, selectedWeek, weeklyMatchups, nflState]);
 
     // --- Frisky Game of the Week selection (based on largest luck score difference) ---
     // Frisky Game represents the matchup between teams with the largest difference in Luck scores
@@ -479,8 +473,16 @@ const Gamecenter = () => {
             const raw = localStorage.getItem('friskyGame:v1');
             const map = raw ? JSON.parse(raw) : {};
             if (!map[season]) map[season] = {};
+            
+            // Prevent overwriting existing values for completed weeks
+            if (map[season][week]) {
+                console.warn(`Attempted to overwrite existing Frisky Game for ${season} Week ${week}: ${map[season][week]} -> ${matchupId}`);
+                return; // Don't overwrite
+            }
+            
             map[season][week] = matchupId;
             localStorage.setItem('friskyGame:v1', JSON.stringify(map));
+            console.log(`Saved Frisky Game for ${season} Week ${week}: ${matchupId}`);
         } catch (e) {
             // ignore storage errors
         }
@@ -497,44 +499,16 @@ const Gamecenter = () => {
         const selectedSeasonInt = parseInt(selectedSeason);
         const selectedWeekInt = parseInt(selectedWeek);
 
-        // Use the SAME logic as Game of the Week
+        // Only show Frisky Game for the current NFL week
         const isCurrentWeek = (selectedSeasonInt === currentNFLSeason && selectedWeekInt === currentNFLWeek);
-        const isPastWeek = (selectedSeasonInt < currentNFLSeason) || (selectedSeasonInt === currentNFLSeason && selectedWeekInt < currentNFLWeek);
-        const isFutureWeek = (selectedSeasonInt > currentNFLSeason) || (selectedSeasonInt === currentNFLSeason && selectedWeekInt > currentNFLWeek);
 
+        if (!isCurrentWeek) return null; // only show for current week
 
-
-        if (isFutureWeek) return null; // don't crown future weeks
-
-        if (isCurrentWeek) {
-            // compute live candidate for the current week
-            return computeFriskyGameId();
-        }
-
-        // past week: return stored snapshot if present, otherwise null
-        const stored = readStoredFriskyGame(selectedSeason, selectedWeek);
-        return stored || null;
+        // compute live candidate for the current week
+        return computeFriskyGameId();
     }, [weeklyMatchups, weeklyLuckData, selectedSeason, selectedWeek, nflState, gameOfWeekMatchupId]);
 
-    // Persist snapshot for completed past weeks: if week is complete and no stored value exists, save the computed candidate
-    useEffect(() => {
-        if (!selectedSeason || !selectedWeek || !weeklyMatchups || weeklyMatchups.length === 0 || !weeklyLuckData) return;
 
-        const currentNFLSeason = parseInt(nflState?.season || new Date().getFullYear());
-        const currentNFLWeek = parseInt(nflState?.week || 1);
-        const selectedSeasonInt = parseInt(selectedSeason);
-        const selectedWeekInt = parseInt(selectedWeek);
-
-        // Use the SAME logic as Game of the Week
-        const isPastWeek = selectedSeasonInt < currentNFLSeason || (selectedSeasonInt === currentNFLSeason && selectedWeekInt < currentNFLWeek);
-        if (!isPastWeek) return; // only persist for past (completed) weeks
-
-        const stored = readStoredFriskyGame(selectedSeason, selectedWeek);
-        if (stored) return; // already have a snapshot
-
-        const candidate = computeFriskyGameId();
-        if (candidate) saveStoredFriskyGame(selectedSeason, selectedWeek, candidate);
-    }, [selectedSeason, selectedWeek, weeklyMatchups, weeklyLuckData, nflState, gameOfWeekMatchupId]);
 
     // Function to fetch detailed roster data for a specific matchup
     const fetchMatchupRosterData = async (matchup, season, week) => {
@@ -709,6 +683,349 @@ const Gamecenter = () => {
         fetchMatchupRosterData(matchup, selectedSeason, selectedWeek);
     };
 
+    // Generate Weekly Recap: fetch roster-level matchup data once and compute recap metrics
+    const generateWeeklyRecap = async () => {
+        if (!selectedSeason || !selectedWeek || !historicalData) return;
+        setRecapLoading(true);
+        setWeeklyRecap(null);
+
+        try {
+            // Determine leagueId similar to fetchMatchupRosterData
+            let leagueId = null;
+            const currentSeason = leagueData && Array.isArray(leagueData) ? leagueData[0].season : leagueData?.season;
+            if (String(selectedSeason) === String(currentSeason)) {
+                leagueId = leagueData && Array.isArray(leagueData) ? leagueData[0].league_id : leagueData?.league_id;
+            } else {
+                const historicalLeagueData = historicalData?.leaguesMetadataBySeason?.[selectedSeason];
+                leagueId = historicalLeagueData?.league_id;
+            }
+
+            if (!leagueId) {
+                setWeeklyRecap({ error: `No league ID available for season ${selectedSeason}` });
+                setRecapLoading(false);
+                return;
+            }
+
+            const resp = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/matchups/${selectedWeek}`);
+            if (!resp.ok) throw new Error(`Roster API returned ${resp.status}`);
+            const rosterMatchups = await resp.json(); // array of rosters for each matchup
+
+            // Build maps: rosterId -> {score, starters[], players_points}
+            const rosterMap = {};
+            rosterMatchups.forEach(r => {
+                rosterMap[String(r.roster_id)] = r;
+            });
+
+            // Team-level metrics
+            const teamScores = [];
+            weeklyMatchups.forEach(m => {
+                const t1 = String(m.team1_roster_id);
+                const t2 = String(m.team2_roster_id);
+                const s1 = Number(m.team1_score || 0);
+                const s2 = Number(m.team2_score || 0);
+                const owner1 = historicalData.rostersBySeason?.[selectedSeason]?.find(r => String(r.roster_id) === t1)?.owner_id;
+                const owner2 = historicalData.rostersBySeason?.[selectedSeason]?.find(r => String(r.roster_id) === t2)?.owner_id;
+                teamScores.push({ rosterId: t1, ownerId: owner1, score: s1 });
+                teamScores.push({ rosterId: t2, ownerId: owner2, score: s2 });
+            });
+
+            if (teamScores.length === 0) {
+                setWeeklyRecap({ error: 'No completed scores for this week.' });
+                setRecapLoading(false);
+                return;
+            }
+
+            // Best/Worst team
+            const sortedByScore = [...teamScores].sort((a, b) => b.score - a.score);
+            const bestTeam = sortedByScore[0];
+            const worstTeam = sortedByScore[sortedByScore.length - 1];
+
+            // Blowout and slimmest win
+            let biggestBlowout = null;
+            let slimmestWin = null;
+            weeklyMatchups.forEach(m => {
+                const s1 = Number(m.team1_score || 0);
+                const s2 = Number(m.team2_score || 0);
+                const margin = Math.abs(s1 - s2);
+                if (margin === 0) return; // tie
+                if (!biggestBlowout || margin > biggestBlowout.margin) {
+                    biggestBlowout = { matchup: m, margin };
+                }
+                if ((!slimmestWin || margin < slimmestWin.margin) && margin > 0) {
+                    slimmestWin = { matchup: m, margin };
+                }
+            });
+
+            // Highest points in a loss and lowest points in a win
+            let highestPointsInLoss = null;
+            let lowestPointsInWin = null;
+            weeklyMatchups.forEach(m => {
+                const s1 = Number(m.team1_score || 0);
+                const s2 = Number(m.team2_score || 0);
+                
+                if (s1 === s2) return; // tie
+                
+                const team1RosterId = String(m.team1_roster_id);
+                const team2RosterId = String(m.team2_roster_id);
+                
+                // Determine winner and loser with opponent info
+                const winner = s1 > s2 ? 
+                    { rosterId: team1RosterId, score: s1, opponentRosterId: team2RosterId, opponentScore: s2 } : 
+                    { rosterId: team2RosterId, score: s2, opponentRosterId: team1RosterId, opponentScore: s1 };
+                const loser = s1 > s2 ? 
+                    { rosterId: team2RosterId, score: s2, opponentRosterId: team1RosterId, opponentScore: s1 } : 
+                    { rosterId: team1RosterId, score: s1, opponentRosterId: team2RosterId, opponentScore: s2 };
+                
+                // Track highest scoring loser
+                if (!highestPointsInLoss || loser.score > highestPointsInLoss.score) {
+                    highestPointsInLoss = loser;
+                }
+                
+                // Track lowest scoring winner
+                if (!lowestPointsInWin || winner.score < lowestPointsInWin.score) {
+                    lowestPointsInWin = winner;
+                }
+            });
+
+            // Coach Score efficiency: actual starter points / optimal possible points from full roster * 100
+            const efficiencyArr = [];
+            for (const ts of teamScores) {
+                const rosterData = rosterMap[ts.rosterId];
+                if (!rosterData) continue;
+                
+                // Process roster using the EXACT same logic as the modal
+                const playersPoints = rosterData.players_points || {};
+                const allPlayers = Array.isArray(rosterData.players) ? rosterData.players : [];
+                const startersArray = Array.isArray(rosterData.starters) ? rosterData.starters : [];
+                
+                // Standard lineup positions (same as modal)
+                const lineupPositions = ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'K', 'DEF'];
+                
+                const lineup = [];
+                const bench = [];
+                
+                // Process starters with lineup positions (exactly like modal)
+                startersArray.forEach((playerId, i) => {
+                    const player = nflPlayers?.[playerId];
+                    const hasPlayed = playersPoints && Object.prototype.hasOwnProperty.call(playersPoints, playerId);
+                    const points = hasPlayed ? Number(playersPoints[playerId] || 0) : 0;
+                    
+                    if (player) {
+                        lineup.push({
+                            playerId,
+                            name: player.full_name || `${player.first_name || ''} ${player.last_name || ''}`.trim(),
+                            position: player.position,
+                            team: player.team,
+                            points: points,
+                            hasPlayed: !!hasPlayed,
+                            isStarter: true,
+                            lineupPosition: lineupPositions[i] || 'FLEX'
+                        });
+                    }
+                });
+                
+                // Process bench players (exactly like modal)
+                allPlayers.forEach(playerId => {
+                    if (!startersArray.includes(playerId)) {
+                        const player = nflPlayers?.[playerId];
+                        const hasPlayed = playersPoints && Object.prototype.hasOwnProperty.call(playersPoints, playerId);
+                        const points = hasPlayed ? Number(playersPoints[playerId] || 0) : 0;
+                        
+                        if (player) {
+                            bench.push({
+                                playerId,
+                                name: player.full_name || `${player.first_name || ''} ${player.last_name || ''}`.trim(),
+                                position: player.position,
+                                team: player.team,
+                                points: points,
+                                hasPlayed: !!hasPlayed,
+                                isStarter: false
+                            });
+                        }
+                    }
+                });
+                
+                // Use EXACT same potential points calculation as modal
+                const computePotentialPoints = (team) => {
+                    if (!team) return 0;
+                    const starters = team.lineup || [];
+                    const bench = team.bench || [];
+                    const starterCountByPos = {};
+                    starters.forEach(s => {
+                        const pos = s.lineupPosition || s.position || 'FLEX';
+                        starterCountByPos[pos] = (starterCountByPos[pos] || 0) + 1;
+                    });
+
+                    let total = 0;
+                    Object.keys(starterCountByPos).forEach(pos => {
+                        const need = starterCountByPos[pos];
+                        if (!need) return;
+
+                        let startersPos = [];
+                        let benchPos = [];
+
+                        if (pos === 'FLEX') {
+                            startersPos = starters.filter(s => s.lineupPosition === 'FLEX');
+                            benchPos = bench.filter(b => ['RB', 'WR', 'TE'].includes(b.position));
+                            // Also include starters of eligible positions
+                            startersPos = startersPos.concat(starters.filter(s => ['RB', 'WR', 'TE'].includes(s.position)));
+                        } else {
+                            startersPos = starters.filter(s => (s.lineupPosition || s.position) === pos);
+                            benchPos = bench.filter(b => b.position === pos);
+                        }
+
+                        const combined = [...startersPos, ...benchPos].sort((a, b) => (b.points || 0) - (a.points || 0));
+                        const topN = combined.slice(0, need);
+                        topN.forEach(p => {
+                            total += (p.points || 0);
+                        });
+                    });
+
+                    return total;
+                };
+                
+                const optimal = computePotentialPoints({ lineup, bench });
+                const actual = ts.score;
+                const coachScore = optimal > 0 ? (actual / optimal) * 100 : 0;
+                
+                // Include if we have valid data (remove the <= 100% constraint for now to debug)
+                if (optimal > 0) {
+                    efficiencyArr.push({ ...ts, coachScore, optimal, actual });
+                }
+            }
+
+            const mostEfficient = efficiencyArr.sort((a,b) => b.coachScore - a.coachScore)[0] || null;
+            const leastEfficient = efficiencyArr.sort((a,b) => a.coachScore - b.coachScore)[0] || null;
+
+            // Map owner names helper function
+            const nameForRoster = (rid) => {
+                const roster = historicalData.rostersBySeason?.[selectedSeason]?.find(r => String(r.roster_id) === String(rid));
+                return roster ? getTeamDetails(roster.owner_id, selectedSeason).name : `Team ${rid}`;
+            };
+
+            // Player-level stats per position for starters and benchwarmers
+            const positionTop = {}; // pos -> { playerId, points, rosterId, ownerName }
+            const positionBottom = {}; // pos -> { playerId, points, rosterId, ownerName }
+            const benchWarmers = {}; // pos -> { playerId, points, rosterId, ownerName } - top bench players
+            
+            Object.values(rosterMap).forEach(r => {
+                const rosterId = String(r.roster_id);
+                const starters = Array.isArray(r.starters) ? r.starters : [];
+                const allPlayers = Array.isArray(r.players) ? r.players : [];
+                const playersPoints = r.players_points || {};
+                const ownerName = nameForRoster(rosterId);
+                
+                // Track starters
+                starters.forEach(pid => {
+                    const points = Number(playersPoints?.[pid] ?? 0);
+                    const meta = nflPlayers?.[pid] || {};
+                    const pos = meta?.position || meta?.pos || 'UNK';
+                    const playerData = { playerId: pid, points, rosterId, ownerName };
+                    
+                    // top starters
+                    if (!positionTop[pos] || points > positionTop[pos].points) {
+                        positionTop[pos] = playerData;
+                    }
+                    // bottom starters
+                    if (!positionBottom[pos] || points < positionBottom[pos].points) {
+                        positionBottom[pos] = playerData;
+                    }
+                });
+                
+                // Track bench players (benchwarmers)
+                const benchPlayers = allPlayers.filter(pid => !starters.includes(pid));
+                benchPlayers.forEach(pid => {
+                    const points = Number(playersPoints?.[pid] ?? 0);
+                    const meta = nflPlayers?.[pid] || {};
+                    const pos = meta?.position || meta?.pos || 'UNK';
+                    const playerData = { playerId: pid, points, rosterId, ownerName };
+                    
+                    // Track bench players with meaningful points (position-specific thresholds)
+                    const meaningfulPoints = (pos === 'K' || pos === 'DEF') ? points >= 0 : points > 5;
+                    if (meaningfulPoints) {
+                        if (!benchWarmers[pos] || points > benchWarmers[pos].points) {
+                            benchWarmers[pos] = playerData;
+                        }
+                    }
+                });
+            });
+
+
+
+            // Helper to get matchup display info
+            const getMatchupInfo = (matchup) => {
+                const t1RosterId = String(matchup.team1_roster_id);
+                const t2RosterId = String(matchup.team2_roster_id);
+                const t1Name = nameForRoster(t1RosterId);
+                const t2Name = nameForRoster(t2RosterId);
+                const t1Score = Number(matchup.team1_score || 0);
+                const t2Score = Number(matchup.team2_score || 0);
+                return {
+                    team1: { name: t1Name, score: t1Score },
+                    team2: { name: t2Name, score: t2Score },
+                    winner: t1Score > t2Score ? t1Name : t2Name,
+                    loser: t1Score > t2Score ? t2Name : t1Name
+                };
+            };
+
+            const recap = {
+                bestTeam: bestTeam ? { rosterId: bestTeam.rosterId, ownerId: bestTeam.ownerId, score: bestTeam.score, name: nameForRoster(bestTeam.rosterId) } : null,
+                worstTeam: worstTeam ? { rosterId: worstTeam.rosterId, ownerId: worstTeam.ownerId, score: worstTeam.score, name: nameForRoster(worstTeam.rosterId) } : null,
+                biggestBlowout: biggestBlowout ? { margin: biggestBlowout.margin, ...getMatchupInfo(biggestBlowout.matchup) } : null,
+                slimmestWin: slimmestWin ? { margin: slimmestWin.margin, ...getMatchupInfo(slimmestWin.matchup) } : null,
+                highestPointsInLoss: highestPointsInLoss ? { 
+                    rosterId: highestPointsInLoss.rosterId, 
+                    name: nameForRoster(highestPointsInLoss.rosterId), 
+                    score: highestPointsInLoss.score,
+                    opponentName: nameForRoster(highestPointsInLoss.opponentRosterId),
+                    opponentScore: highestPointsInLoss.opponentScore
+                } : null,
+                lowestPointsInWin: lowestPointsInWin ? { 
+                    rosterId: lowestPointsInWin.rosterId, 
+                    name: nameForRoster(lowestPointsInWin.rosterId), 
+                    score: lowestPointsInWin.score,
+                    opponentName: nameForRoster(lowestPointsInWin.opponentRosterId),
+                    opponentScore: lowestPointsInWin.opponentScore
+                } : null,
+                mostEfficient: mostEfficient ? { rosterId: mostEfficient.rosterId, name: nameForRoster(mostEfficient.rosterId), coachScore: mostEfficient.coachScore.toFixed(2) + '%', score: mostEfficient.score } : null,
+                leastEfficient: leastEfficient ? { rosterId: leastEfficient.rosterId, name: nameForRoster(leastEfficient.rosterId), coachScore: leastEfficient.coachScore.toFixed(2) + '%', score: leastEfficient.score } : null,
+                positionTop,
+                positionBottom,
+                benchWarmers
+            };
+
+            setWeeklyRecap(recap);
+        } catch (e) {
+            logger.error('Error generating weekly recap:', e);
+            setWeeklyRecap({ error: e.message });
+        } finally {
+            setRecapLoading(false);
+        }
+    };
+
+    // Auto-generate recap when week changes (only for completed weeks)
+    useEffect(() => {
+        if (!selectedWeek || !selectedSeason || !historicalData) return;
+        
+        // Check if this is a completed week
+        const currentNFLSeason = parseInt(nflState?.season || new Date().getFullYear());
+        const currentNFLWeek = parseInt(nflState?.week || 1);
+        const selectedSeasonInt = parseInt(selectedSeason);
+        const selectedWeekInt = parseInt(selectedWeek);
+        const isCompletedWeek = selectedSeasonInt < currentNFLSeason || 
+                               (selectedSeasonInt === currentNFLSeason && selectedWeekInt < currentNFLWeek);
+        
+        if (isCompletedWeek && weeklyMatchups && weeklyMatchups.length > 0) {
+            // Generate recap automatically for completed weeks only
+            generateWeeklyRecap();
+        } else {
+            // Clear recap for current/future weeks
+            setWeeklyRecap(null);
+        }
+
+    }, [selectedWeek, selectedSeason, weeklyMatchups, historicalData, nflState]);
+
+
     const closeMatchupModal = () => {
         setSelectedMatchup(null);
         setMatchupRosterData(null);
@@ -751,7 +1068,7 @@ const Gamecenter = () => {
         return `${num}${type}`;
     };
 
-    const getHeadToHeadRecord = (ownerId1, ownerId2) => {
+    const getHeadToHeadRecord = (ownerId1, ownerId2, upToSeason = null, upToWeek = null) => {
         const history1 = teamMatchupHistory[ownerId1];
         if (!history1 || !ownerId1 || !ownerId2) return "0-0";
     
@@ -761,14 +1078,32 @@ const Gamecenter = () => {
     
         history1.forEach(game => {
             if (game.opponent === ownerId2) {
-                if (game.result === 'W') wins++;
-                else if (game.result === 'L') losses++;
-                else if (game.result === 'T') ties++;
+                // If upToSeason/upToWeek are provided, only count games up to that point
+                if (upToSeason !== null && upToWeek !== null) {
+                    const gameSeason = parseInt(game.season);
+                    const gameWeek = parseInt(game.week);
+                    const targetSeason = parseInt(upToSeason);
+                    const targetWeek = parseInt(upToWeek);
+                    
+                    // Only count games that happened before the target week
+                    // (Don't include the current week we're viewing)
+                    if (gameSeason < targetSeason || 
+                        (gameSeason === targetSeason && gameWeek < targetWeek)) {
+                        if (game.result === 'W') wins++;
+                        else if (game.result === 'L') losses++;
+                        else if (game.result === 'T') ties++;
+                    }
+                } else {
+                    // Default behavior - count all games (for current usage)
+                    if (game.result === 'W') wins++;
+                    else if (game.result === 'L') losses++;
+                    else if (game.result === 'T') ties++;
+                }
             }
         });
     
-    // Only show ties if there are any and ties > 0
-    return ties > 0 ? `${wins}-${losses}-${ties}` : `${wins}-${losses}`;
+        // Only show ties if there are any and ties > 0
+        return ties > 0 ? `${wins}-${losses}-${ties}` : `${wins}-${losses}`;
     };
 
     // --- Render Logic ---
@@ -872,7 +1207,7 @@ const Gamecenter = () => {
                         const team1AvgPts = isCurrentSeason ? getCorrectAveragePoints(team1RosterId, selectedSeason) : getAverageAtWeek(team1RosterId, selectedSeason, selectedWeek);
                         const team2AvgPts = isCurrentSeason ? getCorrectAveragePoints(team2RosterId, selectedSeason) : getAverageAtWeek(team2RosterId, selectedSeason, selectedWeek);
 
-                        const h2h = getHeadToHeadRecord(team1OwnerId, team2OwnerId);
+                        const h2h = getHeadToHeadRecord(team1OwnerId, team2OwnerId, selectedSeason, selectedWeek);
                         const team1Streak = getWinLossStreak(team1OwnerId, selectedSeason);
                         const team2Streak = getWinLossStreak(team2OwnerId, selectedSeason);
 
@@ -945,7 +1280,7 @@ const Gamecenter = () => {
                                             <div className="text-center py-1">
                                                 <span className="text-xs text-gray-400 font-medium">VS</span>
                                                 {(() => {
-                                                    const h2h = getHeadToHeadRecord(team1OwnerId, team2OwnerId);
+                                                    const h2h = getHeadToHeadRecord(team1OwnerId, team2OwnerId, selectedSeason, selectedWeek);
                                                     return h2h !== "0-0" && (
                                                         <span className="ml-2 text-xs text-gray-500">H2H: {h2h}</span>
                                                     );
@@ -1030,7 +1365,7 @@ const Gamecenter = () => {
                                                 {/* Desktop Stats Layout */}
                                                 <div className="hidden sm:block">
                                                     <div className="text-center mb-2">
-                                                        <div className="text-xs text-gray-500 font-medium">H2H: {getHeadToHeadRecord(team1OwnerId, team2OwnerId)}</div>
+                                                        <div className="text-xs text-gray-500 font-medium">H2H: {getHeadToHeadRecord(team1OwnerId, team2OwnerId, selectedSeason, selectedWeek)}</div>
                                                     </div>
                                                     
                                                     <div className="grid grid-cols-3 gap-2 items-center">
@@ -1088,6 +1423,256 @@ const Gamecenter = () => {
                     })}
                 </div>
 
+                {/* Weekly Recap Section - Only for completed weeks */}
+                {(() => {
+                    // Only show recap for completed weeks
+                    const currentNFLSeason = parseInt(nflState?.season || new Date().getFullYear());
+                    const currentNFLWeek = parseInt(nflState?.week || 1);
+                    const selectedSeasonInt = parseInt(selectedSeason);
+                    const selectedWeekInt = parseInt(selectedWeek);
+                    const isCompletedWeek = selectedSeasonInt < currentNFLSeason || 
+                                           (selectedSeasonInt === currentNFLSeason && selectedWeekInt < currentNFLWeek);
+                    
+                    return isCompletedWeek && weeklyRecap;
+                })() && (
+                    <div className="mt-6 bg-white p-4 rounded-lg shadow mobile-card">
+                        <div className="mb-3">
+                            <h3 className="text-lg font-semibold text-gray-800">Weekly Recap</h3>
+                        </div>
+                        {recapLoading ? (
+                            <div className="text-sm text-gray-500">Generating recap…</div>
+                        ) : weeklyRecap?.error ? (
+                            <div className="text-sm text-red-600">{weeklyRecap.error}</div>
+                        ) : weeklyRecap ? (
+                            <div className="space-y-6">
+                                {/* Team Performance Section */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-4 rounded-lg border border-green-200">
+                                        <div className="flex items-center mb-2">
+                                            <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                                            <span className="text-sm font-semibold text-green-700">Best Performance</span>
+                                        </div>
+                                        <div className="font-bold text-gray-800 text-lg">{weeklyRecap.bestTeam?.name || '—'}</div>
+                                        <div className="text-2xl font-bold text-green-600">{formatScore(Number(weeklyRecap.bestTeam?.score ?? 0), 2)} pts</div>
+                                    </div>
+
+                                    <div className="bg-gradient-to-r from-red-50 to-rose-50 p-4 rounded-lg border border-red-200">
+                                        <div className="flex items-center mb-2">
+                                            <div className="w-2 h-2 bg-red-500 rounded-full mr-2"></div>
+                                            <span className="text-sm font-semibold text-red-700">Needs Improvement</span>
+                                        </div>
+                                        <div className="font-bold text-gray-800 text-lg">{weeklyRecap.worstTeam?.name || '—'}</div>
+                                        <div className="text-2xl font-bold text-red-600">{formatScore(Number(weeklyRecap.worstTeam?.score ?? 0), 2)} pts</div>
+                                    </div>
+                                </div>
+
+                                {/* Matchup Highlights */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    <div className="bg-gradient-to-r from-orange-50 to-amber-50 p-4 rounded-lg border border-orange-200">
+                                        <div className="flex items-center mb-2">
+                                            <div className="w-2 h-2 bg-orange-500 rounded-full mr-2"></div>
+                                            <span className="text-sm font-semibold text-orange-700">Biggest Blowout</span>
+                                        </div>
+                                        {weeklyRecap.biggestBlowout ? (
+                                            <div>
+                                                <div className="text-2xl font-bold text-orange-600 mb-1">{formatScore(weeklyRecap.biggestBlowout.margin, 2)} pts</div>
+                                                <div className="text-sm text-gray-700">
+                                                    <div className="font-semibold">{weeklyRecap.biggestBlowout.winner}</div>
+                                                    <div className="text-xs text-gray-500">defeated {weeklyRecap.biggestBlowout.loser}</div>
+                                                </div>
+                                            </div>
+                                        ) : <div className="text-gray-500">—</div>}
+                                    </div>
+
+                                    <div className="bg-gradient-to-r from-purple-50 to-violet-50 p-4 rounded-lg border border-purple-200">
+                                        <div className="flex items-center mb-2">
+                                            <div className="w-2 h-2 bg-purple-500 rounded-full mr-2"></div>
+                                            <span className="text-sm font-semibold text-purple-700">Nail Biter</span>
+                                        </div>
+                                        {weeklyRecap.slimmestWin ? (
+                                            <div>
+                                                <div className="text-2xl font-bold text-purple-600 mb-1">{formatScore(weeklyRecap.slimmestWin.margin, 2)} pts</div>
+                                                <div className="text-sm text-gray-700">
+                                                    <div className="font-semibold">{weeklyRecap.slimmestWin.winner}</div>
+                                                    <div className="text-xs text-gray-500">edged out {weeklyRecap.slimmestWin.loser}</div>
+                                                </div>
+                                            </div>
+                                        ) : <div className="text-gray-500">—</div>}
+                                    </div>
+
+                                    <div className="bg-gradient-to-r from-rose-50 to-pink-50 p-4 rounded-lg border border-rose-200">
+                                        <div className="flex items-center mb-2">
+                                            <div className="w-2 h-2 bg-rose-500 rounded-full mr-2"></div>
+                                            <span className="text-sm font-semibold text-rose-700">Tough Break</span>
+                                        </div>
+                                        {weeklyRecap.highestPointsInLoss ? (
+                                            <div>
+                                                <div className="text-2xl font-bold text-rose-600 mb-1">{formatScore(weeklyRecap.highestPointsInLoss.score, 2)} pts</div>
+                                                <div className="text-sm text-gray-700">
+                                                    <div className="font-semibold">{weeklyRecap.highestPointsInLoss.name}</div>
+                                                    <div className="text-xs text-gray-500">vs {weeklyRecap.highestPointsInLoss.opponentName} ({formatScore(weeklyRecap.highestPointsInLoss.opponentScore, 2)})</div>
+                                                </div>
+                                            </div>
+                                        ) : <div className="text-gray-500">—</div>}
+                                    </div>
+
+                                    <div className="bg-gradient-to-r from-emerald-50 to-teal-50 p-4 rounded-lg border border-emerald-200">
+                                        <div className="flex items-center mb-2">
+                                            <div className="w-2 h-2 bg-emerald-500 rounded-full mr-2"></div>
+                                            <span className="text-sm font-semibold text-emerald-700">Lucky Win</span>
+                                        </div>
+                                        {weeklyRecap.lowestPointsInWin ? (
+                                            <div>
+                                                <div className="text-2xl font-bold text-emerald-600 mb-1">{formatScore(weeklyRecap.lowestPointsInWin.score, 2)} pts</div>
+                                                <div className="text-sm text-gray-700">
+                                                    <div className="font-semibold">{weeklyRecap.lowestPointsInWin.name}</div>
+                                                    <div className="text-xs text-gray-500">vs {weeklyRecap.lowestPointsInWin.opponentName} ({formatScore(weeklyRecap.lowestPointsInWin.opponentScore, 2)})</div>
+                                                </div>
+                                            </div>
+                                        ) : <div className="text-gray-500">—</div>}
+                                    </div>
+                                </div>
+
+                                {/* Coach Scores */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-200">
+                                        <div className="flex items-center mb-2">
+                                            <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
+                                            <span className="text-sm font-semibold text-blue-700">Best Coach</span>
+                                        </div>
+                                        <div className="font-bold text-gray-800 text-lg">{weeklyRecap.mostEfficient?.name || '—'}</div>
+                                        <div className="text-2xl font-bold text-blue-600">{weeklyRecap.mostEfficient?.coachScore || '—'}</div>
+                                    </div>
+
+                                    <div className="bg-gradient-to-r from-gray-50 to-slate-50 p-4 rounded-lg border border-gray-200">
+                                        <div className="flex items-center mb-2">
+                                            <div className="w-2 h-2 bg-gray-500 rounded-full mr-2"></div>
+                                            <span className="text-sm font-semibold text-gray-700">Room for Growth</span>
+                                        </div>
+                                        <div className="font-bold text-gray-800 text-lg">{weeklyRecap.leastEfficient?.name || '—'}</div>
+                                        <div className="text-2xl font-bold text-gray-600">{weeklyRecap.leastEfficient?.coachScore || '—'}</div>
+                                    </div>
+                                </div>
+
+                                {/* Player Highlights */}
+                                <div className="bg-gradient-to-r from-slate-50 to-gray-50 p-4 rounded-lg border border-gray-200">
+                                    <h4 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
+                                        <span className="mr-2">🏆</span>
+                                        Player Spotlight
+                                    </h4>
+                                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                        {/* Top Performers */}
+                                        <div>
+                                            <div className="flex items-center mb-3">
+                                                <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
+                                                <h5 className="font-semibold text-green-700">Top Performers</h5>
+                                            </div>
+                                            <div className="space-y-2">
+                                                {Object.keys(weeklyRecap.positionTop).length === 0 ? (
+                                                    <div className="text-gray-500 text-sm">No data available</div>
+                                                ) : ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].filter(pos => weeklyRecap.positionTop[pos]).map(pos => {
+                                                    const info = weeklyRecap.positionTop[pos];
+                                                    return (
+                                                    <div key={`top-${pos}`} className="flex items-center justify-between p-2 bg-green-50 rounded-lg border border-green-200">
+                                                        <div className="flex items-center space-x-3">
+                                                            <div className="w-8 h-8 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                                                                {pos}
+                                                            </div>
+                                                            <div>
+                                                                <div className="font-semibold text-gray-800 text-sm">
+                                                                    {nflPlayers?.[info.playerId]?.full_name || info.playerId}
+                                                                </div>
+                                                                <div className="text-xs text-gray-500">
+                                                                    {nflPlayers?.[info.playerId]?.team || 'UNK'} • {info.ownerName}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-lg font-bold text-green-600">
+                                                            {formatScore(info.points, 2)}
+                                                        </div>
+                                                    </div>
+                                                )})}
+                                            </div>
+                                        </div>
+
+                                        {/* Bottom Performers */}
+                                        <div>
+                                            <div className="flex items-center mb-3">
+                                                <div className="w-3 h-3 bg-red-500 rounded-full mr-2"></div>
+                                                <h5 className="font-semibold text-red-700">Tough Week</h5>
+                                            </div>
+                                            <div className="space-y-2">
+                                                {Object.keys(weeklyRecap.positionBottom).length === 0 ? (
+                                                    <div className="text-gray-500 text-sm">No data available</div>
+                                                ) : ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].filter(pos => weeklyRecap.positionBottom[pos]).map(pos => {
+                                                    const info = weeklyRecap.positionBottom[pos];
+                                                    return (
+                                                    <div key={`bot-${pos}`} className="flex items-center justify-between p-2 bg-red-50 rounded-lg border border-red-200">
+                                                        <div className="flex items-center space-x-3">
+                                                            <div className="w-8 h-8 bg-gradient-to-br from-red-400 to-rose-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                                                                {pos}
+                                                            </div>
+                                                            <div>
+                                                                <div className="font-semibold text-gray-800 text-sm">
+                                                                    {nflPlayers?.[info.playerId]?.full_name || info.playerId}
+                                                                </div>
+                                                                <div className="text-xs text-gray-500">
+                                                                    {nflPlayers?.[info.playerId]?.team || 'UNK'} • {info.ownerName}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-lg font-bold text-red-600">
+                                                            {formatScore(info.points, 2)}
+                                                        </div>
+                                                    </div>
+                                                )})}
+                                            </div>
+                                        </div>
+
+                                        {/* Benchwarmers of the Week */}
+                                        <div>
+                                            <div className="flex items-center mb-3">
+                                                <div className="w-3 h-3 bg-yellow-500 rounded-full mr-2"></div>
+                                                <h5 className="font-semibold text-yellow-700">Benchwarmers</h5>
+                                            </div>
+                                            <div className="space-y-2">
+                                                {Object.keys(weeklyRecap.benchWarmers || {}).length === 0 ? (
+                                                    <div className="text-gray-500 text-sm">No standout bench players</div>
+                                                ) : ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].filter(pos => weeklyRecap.benchWarmers && weeklyRecap.benchWarmers[pos]).map(pos => {
+                                                    const info = weeklyRecap.benchWarmers[pos];
+                                                    return (
+                                                    <div key={`bench-${pos}`} className="flex items-center justify-between p-2 bg-yellow-50 rounded-lg border border-yellow-200">
+                                                        <div className="flex items-center space-x-3">
+                                                            <div className="w-8 h-8 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                                                                {pos}
+                                                            </div>
+                                                            <div>
+                                                                <div className="font-semibold text-gray-800 text-sm">
+                                                                    {nflPlayers?.[info.playerId]?.full_name || info.playerId}
+                                                                </div>
+                                                                <div className="text-xs text-gray-500">
+                                                                    {nflPlayers?.[info.playerId]?.team || 'UNK'} • {info.ownerName}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-lg font-bold text-yellow-600">
+                                                            {formatScore(info.points, 2)}
+                                                        </div>
+                                                    </div>
+                                                )})}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-sm text-gray-500">
+                                Weekly recap is being generated...
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* Detailed Matchup Modal - Mobile Optimized */}
                 {selectedMatchup && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
@@ -1143,7 +1728,7 @@ const Gamecenter = () => {
                                     const isWeekComplete = selectedSeasonInt < currentNFLSeason ||
                                                           (selectedSeasonInt === currentNFLSeason && selectedWeekInt < currentNFLWeek);
 
-                                    const h2h = getHeadToHeadRecord(team1OwnerId, team2OwnerId);
+                                    const h2h = getHeadToHeadRecord(team1OwnerId, team2OwnerId, selectedSeason, selectedWeek);
                                     const team1StreakAtWeek = (() => {
                                         // Build streak only up to the selectedWeek
                                         const history = teamMatchupHistory[team1OwnerId] || [];
