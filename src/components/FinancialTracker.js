@@ -857,7 +857,7 @@ const applyBulkDefaultsToAll = () => {
 			</div>
 			{/* Commish-only transaction entry section */}
 			{isAdmin && (
-				<div className="mb-8 bg-white rounded-lg shadow-md p-6 border border-blue-200">
+				<div className="mb-8 bg-white rounded-lg shadow-md p-4 md:p-6 border border-blue-200">
 					{/* Toggle between single and bulk entry */}
 					<div className="flex gap-2 mb-4">
 						<button
@@ -879,13 +879,13 @@ const applyBulkDefaultsToAll = () => {
 					{!showBulkEntry ? (
 						/* Single Transaction Form */
 						<form
-							className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end bg-blue-50 p-4 rounded-lg"
+							className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-4 items-end bg-blue-50 p-3 md:p-4 rounded-lg"
 							onSubmit={handleAddOrUpdateTransaction}
 						>
 						<div>
 							<label className="block text-xs font-semibold mb-1 text-gray-700">Type</label>
 							<select
-								className="w-full border rounded-lg px-2 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+								className="w-full border rounded-lg px-2 py-1 md:py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
 								value={transaction.type}
 								onChange={e => {
 									const newType = e.target.value;
@@ -909,7 +909,7 @@ const applyBulkDefaultsToAll = () => {
 								type="number"
 								min="0"
 								step="0.01"
-								className="w-full border rounded-lg px-2 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+								className="w-full border rounded-lg px-2 py-1 md:py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
 								value={transaction.amount}
 								onChange={e => setTransaction(t => ({ ...t, amount: e.target.value }))}
 								required
@@ -918,7 +918,7 @@ const applyBulkDefaultsToAll = () => {
 						<div>
 							<label className="block text-xs font-semibold mb-1 text-gray-700">Category</label>
 							<select
-								className="w-full border rounded-lg px-2 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+								className="w-full border rounded-lg px-2 py-1 md:py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
 								value={transaction.category}
 								onChange={e => {
 									const cat = e.target.value;
@@ -979,14 +979,14 @@ const applyBulkDefaultsToAll = () => {
 							<button
 								type="button"
 								onClick={() => setShowTeamDropdown(!showTeamDropdown)}
-								className="w-full border rounded-lg px-2 py-2 text-left bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+								className="w-full border rounded-lg px-2 py-1 md:py-2 text-left bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
 							>
                                 {transaction.team.length === allMembers.length ? 'All Teams' :
                                 transaction.team.length > 3 ? `${allMembers.find(m => m.userId === transaction.team[0])?.displayName || 'Team'}, ${allMembers.find(m => m.userId === transaction.team[1])?.displayName || 'Team'}, ${allMembers.find(m => m.userId === transaction.team[2])?.displayName || 'Team'}... (+${transaction.team.length - 3} more)` :
 								transaction.team.length > 0 ? transaction.team.map(id => allMembers.find(m => m.userId === id)?.displayName).join(', ') : 'Select Team(s)'}
 							</button>
 							{showTeamDropdown && (
-								<div className="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+								<div className="md:absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">
 									<label key="all" className="flex items-center gap-2 p-2 hover:bg-gray-100 cursor-pointer">
 										<input
 											type="checkbox"
@@ -1119,21 +1119,14 @@ const applyBulkDefaultsToAll = () => {
 					</form>
 					) : (
 						/* Bulk Transaction Form */
-						<div className="bg-green-50 p-4 rounded-lg">
+						<div className="bg-green-50 p-3 md:p-4 rounded-lg">
 							<div className="flex justify-between items-center mb-4">
 								<h4 className="text-lg font-semibold text-green-800">Bulk Transaction Entry</h4>
-								<button
-									type="button"
-									onClick={addBulkTransaction}
-									className="bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700"
-								>
-									+ Add Transaction
-								</button>
 							</div>
 							
 							<form onSubmit={submitBulkTransactions}>
 								{/* Bulk defaults: apply common settings to all rows (except teams) */}
-								<div className="bg-white p-3 rounded border mb-4">
+								<div className="bg-white p-2 md:p-3 rounded border mb-4">
 									<div className="grid grid-cols-1 md:grid-cols-6 gap-3">
 										<div>
 											<label className="block text-sm font-medium mb-1">Type</label>
@@ -1173,9 +1166,9 @@ const applyBulkDefaultsToAll = () => {
 									</div>
 								</div>
 
-								<div className="space-y-4 max-h-[600px] overflow-y-auto">
+								<div className="space-y-3 md:space-y-4 max-h-[420px] md:max-h-[600px] overflow-y-auto">
 									{bulkTransactions.map((txn, index) => (
-										<div key={txn.id} className="bg-white p-4 rounded-lg border shadow-sm">
+										<div key={txn.id} className="bg-white p-3 md:p-4 rounded-lg border shadow-sm">
 											<div className="flex justify-between items-center mb-3">
 												<h5 className="font-medium text-gray-800">Transaction #{index + 1}</h5>
 												{bulkTransactions.length > 1 && (
@@ -1189,11 +1182,11 @@ const applyBulkDefaultsToAll = () => {
 												)}
 											</div>
 											
-											<div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+											<div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4 mb-4">
 												<div>
 													<label className="block text-sm font-medium mb-1 text-gray-700">Type</label>
 													<select
-														className="w-full border rounded-lg px-3 py-2"
+														className="w-full border rounded-lg px-2 py-1 md:py-2"
 														value={txn.type}
 														onChange={e => updateBulkTransaction(txn.id, 'type', e.target.value)}
 													>
@@ -1207,7 +1200,7 @@ const applyBulkDefaultsToAll = () => {
 													<input
 														type="number"
 														step="0.01"
-														className="w-full border rounded-lg px-3 py-2"
+														className="w-full border rounded-lg px-2 py-1 md:py-2"
 														value={txn.amount}
 														onChange={e => updateBulkTransaction(txn.id, 'amount', e.target.value)}
 														placeholder="0.00"
@@ -1217,7 +1210,7 @@ const applyBulkDefaultsToAll = () => {
 												<div>
 													<label className="block text-sm font-medium mb-1 text-gray-700">Category</label>
 													<select
-														className="w-full border rounded-lg px-3 py-2"
+														className="w-full border rounded-lg px-2 py-1 md:py-2"
 														value={txn.category}
 														onChange={e => updateBulkTransaction(txn.id, 'category', e.target.value)}
 													>
@@ -1229,13 +1222,13 @@ const applyBulkDefaultsToAll = () => {
 												</div>
 											</div>
 											
-											<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+											<div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-4 mb-4">
 												<div>
 													<label className="block text-sm font-medium mb-1 text-gray-700">Week #</label>
 													<input
 														type="number"
 														min="0"
-														className="w-full border rounded-lg px-3 py-2"
+														className="w-full border rounded-lg px-2 py-1 md:py-2"
 														value={txn.week}
 														onChange={e => updateBulkTransaction(txn.id, 'week', e.target.value)}
 														placeholder="e.g. 1, 2, 3..."
@@ -1247,7 +1240,7 @@ const applyBulkDefaultsToAll = () => {
 													<input
 														type="number"
 														min="1"
-														className="w-full border rounded-lg px-3 py-2"
+														className="w-full border rounded-lg px-2 py-1 md:py-2"
 														value={txn.quantity}
 														onChange={e => updateBulkTransaction(txn.id, 'quantity', e.target.value)}
 														onFocus={e => e.target.select()}
@@ -1259,7 +1252,7 @@ const applyBulkDefaultsToAll = () => {
 												<label className="block text-sm font-medium mb-2 text-gray-700">
 													Teams ({txn.teams.length} selected)
 												</label>
-												<div className="border rounded-lg p-3 max-h-32 overflow-y-auto bg-gray-50">
+												<div className="border rounded-lg p-2 md:p-3 max-h-24 md:max-h-32 overflow-y-auto bg-gray-50">
 													<div className="space-y-1">
 														{allMembers.map(member => (
 															<label key={member.userId} className="flex items-center gap-2 cursor-pointer hover:bg-white p-1 rounded">
@@ -1303,7 +1296,7 @@ const applyBulkDefaultsToAll = () => {
 												<label className="block text-sm font-medium mb-1 text-gray-700">Description</label>
 												<input
 													type="text"
-													className="w-full border rounded-lg px-3 py-2"
+													className="w-full border rounded-lg px-2 py-1 md:py-2"
 													value={txn.description}
 													onChange={e => updateBulkTransaction(txn.id, 'description', e.target.value)}
 													placeholder="Transaction description..."
@@ -1317,13 +1310,22 @@ const applyBulkDefaultsToAll = () => {
 									<div className="text-sm text-gray-600">
 										{bulkTransactions.filter(t => t.amount && t.category && t.teams.length > 0).length} of {bulkTransactions.length} transactions ready to submit
 									</div>
-									<button 
-										type="submit" 
-										className="bg-green-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-green-700"
-										disabled={bulkTransactions.filter(t => t.amount && t.category && t.teams.length > 0).length === 0}
-									>
-										Submit All Transactions
-									</button>
+									<div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full">
+										<button
+											type="button"
+											onClick={addBulkTransaction}
+											className="bg-green-600 text-white px-3 py-2 rounded-lg font-medium hover:bg-green-700 w-full sm:w-auto text-sm"
+										>
+											+ Add Transaction
+										</button>
+										<button
+											type="submit"
+											className="bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 w-full sm:w-auto text-sm"
+											disabled={bulkTransactions.filter(t => t.amount && t.category && t.teams.length > 0).length === 0}
+										>
+											Submit All Transactions
+										</button>
+									</div>
 								</div>
 							</form>
 						</div>
