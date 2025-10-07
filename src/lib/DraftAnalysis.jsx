@@ -12,6 +12,7 @@ import { enrichPickForCalculations, calculatePlayerValue, calculatePickSlotValue
 // Import fetchPlayerStats, fetchLeagueScoringSettings, fetchLeagueRosterSettings, calculateFantasyPoints, and rankPlayersByFantasyPoints from sleeperPlayerStats
 import { fetchPlayerStats, fetchLeagueScoringSettings, fetchLeagueRosterSettings, calculateFantasyPoints, rankPlayersByFantasyPoints, calculateVORP } from '../utils/sleeperPlayerStats';
 import { formatScore } from '../utils/formatUtils';
+import OverallDraftPositionChart from '../components/OverallDraftPositionChart';
 
 // Removed: import YearlyDraftStats from './YearlyDraftStats';
 
@@ -778,14 +779,14 @@ const DraftAnalysis = () => {
 
 
     return (
-        <div className="container mx-auto p-4 bg-gray-900 text-white min-h-screen">
-            <h1 className="text-4xl font-bold mb-6 text-center text-blue-400">Draft Analysis</h1>
+        <div className="w-full max-w-7xl mx-auto px-0 sm:px-4 md:px-6 bg-gray-900 text-white min-h-screen py-6">
+            <h1 className="text-3xl sm:text-4xl font-bold mb-4 text-center text-blue-400">Draft Analysis</h1>
 
-            <div className="mb-6 flex flex-col sm:flex-row justify-center items-center sm:space-x-4 space-y-3 sm:space-y-0">
-                <label htmlFor="season-select" className="text-lg">Select Season:</label>
+            <div className="mb-4 flex flex-col sm:flex-row justify-center items-center sm:space-x-4 space-y-2 sm:space-y-0">
+                <label htmlFor="season-select" className="text-sm sm:text-lg">Select Season:</label>
                 <select
                     id="season-select"
-                    className="p-2 rounded-md bg-gray-700 text-white border border-gray-600 focus:ring-blue-500 focus:border-blue-500 w-44"
+                    className="p-2 rounded-md bg-gray-700 text-white border border-gray-600 focus:ring-blue-500 focus:border-blue-500 w-40 sm:w-44"
                     value={selectedSeason || ''}
                     onChange={handleSeasonChange}
                     disabled={seasons.length === 0}
@@ -805,7 +806,7 @@ const DraftAnalysis = () => {
 
             {/* All-Time Draft Overview - Show when Overview is selected */}
             {selectedSeason === "Overview" && (
-                <div className="p-6 mb-8">
+                <div className="px-0 sm:px-6 py-6 mb-8">
                     <h2 className="text-3xl font-semibold mb-6 text-center text-yellow-400">All-Time Draft Overview</h2>
                     
                     {overviewLoading ? (
@@ -813,57 +814,83 @@ const DraftAnalysis = () => {
                             <p className="text-gray-400">Computing all-time draft data with real Draft Value...</p>
                         </div>
                     ) : overviewData ? (
-                        <div className="space-y-8">
+                        <div className="space-y-6">
+                            {/* Overall position-by-round chart (all-time) */}
+                            <div>
+                                {/* Lazy import-like inclusion: use the same picks array from overviewData context */}
+                                {/* We'll render an all-time position chart here using a small component */}
+                                
+                                {/* Note: import added at top of file */}
+                                <OverallDraftPositionChart allDraftHistory={allDraftHistory || []} totalRounds={overviewData?.settings?.rounds || 12} totalTeams={overviewData?.settings?.teams || 12} />
+                            </div>
                             {/* Top Picks and Worst Picks Side by Side */}
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                 {/* Top Picks All-Time */}
-                                <div className="bg-gray-700 rounded-lg p-6 shadow-md">
-                                    <h3 className="text-2xl font-bold text-blue-300 mb-4">Top Picks All-Time</h3>
-                                    <p className="text-gray-300 mb-4">Top draft picks by value all-time.</p>
-                                    <div className="space-y-4">
-                                        {overviewData.topPicks.map((pick, idx) => (
-                                            <div key={idx} className="bg-gray-600 p-4 rounded-lg border-l-4 border-green-400">
-                                                <div className="flex flex-col space-y-2">
-                                                    <div className="text-lg font-semibold text-white">
-                                                        Pick {pick.pick_no} - {pick.player_name} · {pick.position} {pick.team_abbrev ? `(${pick.team_abbrev})` : ''}
+                                        <div className="bg-gray-700 rounded-lg p-4 sm:p-6 shadow-md">
+                                            <h3 className="text-xl sm:text-2xl font-semibold text-blue-300 mb-3">Top Picks All-Time</h3>
+                                            <p className="text-gray-300 mb-3 text-sm">Top draft picks by value all-time.</p>
+                                            <div className="space-y-3">
+                                                {overviewData.topPicks.map((pick, idx) => (
+                                                    <div key={idx} className="bg-gray-600 p-3 sm:p-4 rounded-lg border-l-4 border-green-400">
+                                                        <div className="flex flex-col space-y-1">
+                                                            <div className="text-base sm:text-lg font-semibold text-white truncate">
+                                                                Pick {pick.pick_no} - {pick.player_name} · {pick.position} {pick.team_abbrev ? `(${pick.team_abbrev})` : ''}
+                                                            </div>
+                                                            <div className="text-xs sm:text-sm text-gray-300">
+                                                                {(() => {
+                                                                    const teams = draftSummary?.settings?.teams || 12;
+                                                                    const origRound = Math.ceil((pick.pick_no || 0) / teams) || (pick.round || 1);
+                                                                    const origPickInRound = ((Number(pick.pick_no || 1) - 1) % teams) + 1;
+                                                                    const actualRound = pick.round || origRound;
+                                                                    const actualPickInRound = pick.pick_in_round || pick.draft_slot || origPickInRound;
+                                                                    return (
+                                                                        <>
+                                                                            {pick.season} · Round {origRound}, Pick {origPickInRound}
+                                                                        </>
+                                                                    );
+                                                                })()}
+                                                            </div>
+                                                            <div className="text-sm text-gray-200 flex items-center justify-between">
+                                                                <div className="text-xs">Draft Value</div>
+                                                                <div className="text-xl sm:text-2xl font-bold text-green-400">{formatScore(pick.scaled_vorp_delta, 2)}</div>
+                                                            </div>
+                                                            <div className="text-sm sm:text-base font-medium text-blue-300 truncate">{pick.team}</div>
+                                                        </div>
                                                     </div>
-                                                    <div className="text-sm text-gray-300">
-                                                        {pick.season} · Round {pick.round}, Pick {pick.pick_in_round}
-                                                    </div>
-                                                    <div className="text-sm text-gray-200">
-                                                        <div className="text-xs">Draft Value</div>
-                                                        <div className="text-2xl font-bold text-green-400">{formatScore(pick.scaled_vorp_delta, 2)}</div>
-                                                    </div>
-                                                    <div className="text-base font-medium text-blue-300">
-                                                        {pick.team}
-                                                    </div>
-                                                </div>
+                                                ))}
                                             </div>
-                                        ))}
-                                    </div>
-                                </div>
+                                        </div>
 
                                 {/* Worst Picks All-Time */}
-                                <div className="bg-gray-700 rounded-lg p-6 shadow-md">
-                                    <h3 className="text-2xl font-bold text-red-300 mb-4">Worst Picks All-Time</h3>
-                                    <p className="text-gray-300 mb-4">Worst draft picks by value all-time.</p>
-                                    <div className="space-y-4">
+                                <div className="bg-gray-700 rounded-lg p-4 sm:p-6 shadow-md">
+                                    <h3 className="text-xl sm:text-2xl font-semibold text-red-300 mb-3">Worst Picks All-Time</h3>
+                                    <p className="text-gray-300 mb-3 text-sm">Worst draft picks by value all-time.</p>
+                                    <div className="space-y-3">
                                         {overviewData.worstPicks.map((pick, idx) => (
-                                            <div key={idx} className="bg-gray-600 p-4 rounded-lg border-l-4 border-red-400">
-                                                <div className="flex flex-col space-y-2">
-                                                    <div className="text-lg font-semibold text-white">
+                                            <div key={idx} className="bg-gray-600 p-3 sm:p-4 rounded-lg border-l-4 border-red-400">
+                                                <div className="flex flex-col space-y-1">
+                                                    <div className="text-base sm:text-lg font-semibold text-white truncate">
                                                         Pick {pick.pick_no} - {pick.player_name} · {pick.position} {pick.team_abbrev ? `(${pick.team_abbrev})` : ''}
                                                     </div>
-                                                    <div className="text-sm text-gray-300">
-                                                        {pick.season} · Round {pick.round}, Pick {pick.pick_in_round}
-                                                    </div>
-                                                    <div className="text-sm text-gray-200">
+                                                        <div className="text-xs sm:text-sm text-gray-300">
+                                                            {(() => {
+                                                                const teams = draftSummary?.settings?.teams || 12;
+                                                                const origRound = Math.ceil((pick.pick_no || 0) / teams) || (pick.round || 1);
+                                                                const origPickInRound = ((Number(pick.pick_no || 1) - 1) % teams) + 1;
+                                                                const actualRound = pick.round || origRound;
+                                                                const actualPickInRound = pick.pick_in_round || pick.draft_slot || origPickInRound;
+                                                                return (
+                                                                    <>
+                                                                        {pick.season} · Round {origRound}, Pick {origPickInRound}
+                                                                    </>
+                                                                );
+                                                            })()}
+                                                        </div>
+                                                    <div className="text-sm text-gray-200 flex items-center justify-between">
                                                         <div className="text-xs">Draft Value</div>
-                                                        <div className="text-2xl font-bold text-red-400">{formatScore(pick.scaled_vorp_delta, 2)}</div>
+                                                        <div className="text-xl sm:text-2xl font-bold text-red-400">{formatScore(pick.scaled_vorp_delta, 2)}</div>
                                                     </div>
-                                                    <div className="text-base font-medium text-blue-300">
-                                                        {pick.team}
-                                                    </div>
+                                                    <div className="text-sm sm:text-base font-medium text-blue-300 truncate">{pick.team}</div>
                                                 </div>
                                             </div>
                                         ))}
@@ -874,17 +901,17 @@ const DraftAnalysis = () => {
                             {/* All-Time Draft Rankings and Best/Worst Drafts */}
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                                 {/* All-Time Draft Rankings */}
-                                <div className="bg-gray-700 rounded-lg p-6 shadow-md">
-                                    <h3 className="text-2xl font-bold text-purple-300 mb-4">All-Time Draft Rankings</h3>
-                                    <p className="text-gray-300 mb-4">Members ranked by all-time avg. draft pick value.</p>
-                                    <div className="space-y-2">
+                                <div className="bg-gray-700 rounded-lg p-4 sm:p-6 shadow-md">
+                                    <h3 className="text-xl sm:text-2xl font-semibold text-purple-300 mb-3">All-Time Draft Rankings</h3>
+                                    <p className="text-gray-300 mb-3 text-sm">Members ranked by all-time avg. draft pick value.</p>
+                                    <div className="space-y-1">
                                         {overviewData.teamRankings.map((team, idx) => (
-                                            <div key={idx} className="flex justify-between items-center bg-gray-600 p-3 rounded">
-                                                <div className="flex items-center space-x-3">
+                                            <div key={idx} className="flex justify-between items-center bg-gray-600 p-2 sm:p-3 rounded">
+                                                <div className="flex items-center space-x-2">
                                                     <span className="text-gray-400 font-medium">#{idx + 1}</span>
-                                                    <span className="text-white font-medium">{team.team}</span>
+                                                    <span className="text-white text-sm font-medium truncate max-w-[160px]">{team.team}</span>
                                                 </div>
-                                                    <span className={`font-bold ${team.value >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                                    <span className={`font-bold text-sm ${team.value >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                                                     {formatScore(team.value, 2)}
                                                 </span>
                                             </div>
@@ -893,30 +920,34 @@ const DraftAnalysis = () => {
                                 </div>
 
                                 {/* Best/Worst All-Time Drafts */}
-                                <div className="bg-gray-700 rounded-lg p-6 shadow-md">
-                                    <h3 className="text-2xl font-bold text-green-300 mb-4">Best & Worst All-Time Drafts</h3>
+                                <div className="bg-gray-700 rounded-lg p-4 sm:p-6 shadow-md">
+                                    <h3 className="text-xl sm:text-2xl font-semibold text-green-300 mb-3">Best & Worst All-Time Drafts</h3>
                                     
-                                    <div className="mb-6">
-                                        <h4 className="text-lg font-semibold text-blue-300 mb-3">Best All-Time Drafts</h4>
+                                    <div className="mb-4">
+                                        <h4 className="text-sm sm:text-lg font-semibold text-blue-300 mb-2">Best All-Time Drafts</h4>
                                         <div className="space-y-2">
                                             {overviewData.draftsSummaries.slice(0, 3).map((draft, i) => (
-                                                <div key={i} className="bg-gray-600 p-3 rounded border-l-2 border-green-400">
-                                                    <div className="text-white font-medium">{draft.team}</div>
-                                                    <div className="text-sm text-gray-300">{draft.season}</div>
-                                                    <div className="text-lg font-bold text-green-400">{formatScore(draft.totalScaledVorp, 2)}</div>
+                                                <div key={i} className="bg-gray-600 p-2 sm:p-3 rounded border-l-2 border-green-400 flex items-center justify-between">
+                                                    <div>
+                                                        <div className="text-white text-sm font-medium">{draft.team}</div>
+                                                        <div className="text-xs text-gray-300">{draft.season}</div>
+                                                    </div>
+                                                    <div className="text-sm font-bold text-green-400">{formatScore(draft.totalScaledVorp, 2)}</div>
                                                 </div>
                                             ))}
                                         </div>
                                     </div>
 
                                     <div>
-                                        <h4 className="text-lg font-semibold text-red-300 mb-3">Worst All-Time Drafts</h4>
+                                        <h4 className="text-sm sm:text-lg font-semibold text-red-300 mb-2">Worst All-Time Drafts</h4>
                                         <div className="space-y-2">
                                             {overviewData.draftsSummaries.slice(-3).reverse().map((draft, i) => (
-                                                <div key={i} className="bg-gray-600 p-3 rounded border-l-2 border-red-400">
-                                                    <div className="text-white font-medium">{draft.team}</div>
-                                                    <div className="text-sm text-gray-300">{draft.season}</div>
-                                                    <div className="text-lg font-bold text-red-400">{formatScore(draft.totalScaledVorp, 2)}</div>
+                                                <div key={i} className="bg-gray-600 p-2 sm:p-3 rounded border-l-2 border-red-400 flex items-center justify-between">
+                                                    <div>
+                                                        <div className="text-white text-sm font-medium">{draft.team}</div>
+                                                        <div className="text-xs text-gray-300">{draft.season}</div>
+                                                    </div>
+                                                    <div className="text-sm font-bold text-red-400">{formatScore(draft.totalScaledVorp, 2)}</div>
                                                 </div>
                                             ))}
                                         </div>
@@ -938,7 +969,7 @@ const DraftAnalysis = () => {
             )}
 
             {selectedSeason !== "Overview" && selectedSeason && draftSummary ? (
-                <div className="p-6 mb-8">
+                <div className="px-0 sm:px-6 py-6 mb-8">
                     <h2 className="text-3xl font-semibold mb-4 text-center text-green-400">{selectedSeason} Draft Summary</h2>
 
                     {/* Tab Navigation - Removed Overview tab */}
@@ -1126,7 +1157,6 @@ const DraftAnalysis = () => {
                                             <h4 className="text-xl font-bold text-blue-300 mb-2">Best Pick (Draft Value)</h4>
                                             <p className="text-lg">
                                                 {draftYearSummary.bestPick.player_name} ({draftYearSummary.bestPick.player_position})
-                                                <span className="ml-2 text-green-400 font-semibold">{formatScore(typeof draftYearSummary.bestPick.scaled_vorp_delta === 'number' ? draftYearSummary.bestPick.scaled_vorp_delta : draftYearSummary.bestPick.vorp_delta, 2)}</span>
                                                 <br />
                                                 <span className="text-sm text-gray-300">Team: {draftYearSummary.bestPick.picked_by_team_name} | Pick: {draftYearSummary.bestPick.pick_no}</span>
                                             </p>
