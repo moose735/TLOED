@@ -1457,7 +1457,46 @@ const FinancialTracker = () => {
 			
 			<div className="mb-10 bg-white rounded-lg shadow-md p-6 border border-gray-100">
 				<h3 className="text-xl font-semibold text-blue-800">League Members & Dues</h3>
-				<div className="overflow-x-auto">
+				{/* Mobile: stacked cards */}
+				<div className="sm:hidden mt-4 space-y-3">
+					{allMembers.map(member => {
+						const memberFees = currentYearData.transactions
+							.filter(t => t.type === 'Fee' && (Array.isArray(t.team) ? t.team.includes(member.userId) : t.team === member.userId))
+							.reduce((sum, t) => {
+								const teamCount = Array.isArray(t.team) ? t.team.length : 1;
+								return sum + (getTransactionTotal(t) / teamCount);
+							}, 0);
+
+						const memberTransactionFees = currentYearData.transactions
+							.filter(t => t.type === 'Fee' && (t.category === 'Trade Fee' || t.category === 'Waiver/FA Fee') && (Array.isArray(t.team) ? t.team.includes(member.userId) : t.team === member.userId))
+							.reduce((sum, t) => {
+								const teamCount = Array.isArray(t.team) ? t.team.length : 1;
+								return sum + (getTransactionTotal(t) / teamCount);
+							}, 0);
+
+						const memberPayouts = currentYearData.transactions.filter(t => t.type === 'Payout' && (Array.isArray(t.team) ? t.team.includes(member.userId) : t.team === member.userId)).reduce((sum, t) => sum + Number(t.amount || 0), 0);
+						const netTotal = memberPayouts - memberFees;
+						const netColor = netTotal < 0 ? 'text-red-600' : 'text-green-600';
+						const finalDues = memberPayouts - memberTransactionFees;
+						const finalDuesColor = finalDues < 0 ? 'text-red-600' : 'text-green-600';
+
+						return (
+							<div key={member.userId} className="bg-white rounded-lg p-3 border border-gray-100 shadow-sm">
+								<div className="flex items-center justify-between">
+									<div className="font-semibold text-gray-800">{member.displayName}</div>
+									<div className={`font-bold ${netColor}`}>${netTotal.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+								</div>
+								<div className="mt-2 text-sm text-gray-600 grid grid-cols-2 gap-2">
+									<div>Fees: ${memberFees.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+									<div>Txn Fees: ${memberTransactionFees.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+									<div>Payouts: ${memberPayouts.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+									<div className={`${finalDuesColor} font-medium`}>Dues: ${finalDues.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+								</div>
+							</div>
+						);
+					})}
+				</div>
+				<div className="hidden sm:block overflow-x-auto">
 					<table className="min-w-full table-fixed bg-white border border-gray-200 rounded-lg shadow-sm text-sm">
 						<thead className="bg-blue-50">
 							<tr>
@@ -1572,7 +1611,25 @@ const FinancialTracker = () => {
 					</div>
 				</div>
 
-				<div className="overflow-x-auto">
+				{/* Mobile: stacked transaction cards */}
+				<div className="sm:hidden mt-3 space-y-3">
+					{paginatedTransactions.map(t => (
+						<div key={t.id} className="bg-white rounded-lg p-3 border border-gray-100 shadow-sm">
+							<div className="flex items-start justify-between">
+								<div className="min-w-0">
+									<div className="text-sm font-semibold text-gray-800 truncate">{renderTeams(t.id, t.team, allMembers, expandedTransactionId, setExpandedTransactionId)}</div>
+									<div className="text-xs text-gray-500">{t.category} • {t.type}</div>
+								</div>
+								<div className="text-right">
+									<div className="text-sm font-semibold">${Number(t.amount || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+									<div className="text-xs text-gray-500">{t.week ? `W${t.week}` : ''}</div>
+								</div>
+							</div>
+							<div className="mt-2 text-xs text-gray-700 truncate">{t.description}</div>
+						</div>
+					))}
+				</div>
+				<div className="hidden sm:block overflow-x-auto">
 					<table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm text-sm">
 						<thead className="bg-blue-50">
 							<tr>
