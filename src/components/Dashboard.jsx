@@ -3,6 +3,7 @@ import React, { useCallback, useMemo } from 'react';
 import { useSleeperData } from '../contexts/SleeperDataContext';
 import PowerRankings from '../lib/PowerRankings';
 import ProjectedPlayoffBracket from './ProjectedPlayoffBracket';
+import CurrentSeasonFinancials from './CurrentSeasonFinancials';
 import { formatScore } from '../utils/formatUtils';
 
 const Dashboard = () => {
@@ -653,6 +654,9 @@ const Dashboard = () => {
             <div className="bg-white rounded-lg shadow-lg mobile-card">
                 <PowerRankings />
             </div>
+
+            {/* Current Season Financials */}
+            <CurrentSeasonFinancials />
 
             {/* Projected Playoff Bracket */}
             <ProjectedPlayoffBracket />
