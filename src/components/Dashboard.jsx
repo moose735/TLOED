@@ -5,6 +5,7 @@ import PowerRankings from '../lib/PowerRankings';
 import ProjectedPlayoffBracket from './ProjectedPlayoffBracket';
 import CurrentSeasonFinancials from './CurrentSeasonFinancials';
 import { formatScore } from '../utils/formatUtils';
+import DashboardContainer from './DashboardContainer';
 
 const Dashboard = () => {
     const {
@@ -352,7 +353,8 @@ const Dashboard = () => {
                     animation: scroll 90s linear infinite;
                 }
             `}</style>
-            <div className="w-full max-w-7xl mx-auto p-2 sm:p-4 md:p-8 font-inter space-y-4 sm:space-y-6 md:space-y-8">
+            <DashboardContainer className="space-y-4 sm:space-y-6 md:space-y-8">
+
             {/* Header */}
             <div className="text-center px-2">
                 <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-blue-800 mb-2">TLOED Dashboard</h1>
@@ -889,7 +891,7 @@ const Dashboard = () => {
                     )}
                 </div>
             </div>
-            </div>
+            </DashboardContainer>
         </>
     );
 };

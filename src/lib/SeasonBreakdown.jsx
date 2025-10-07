@@ -802,7 +802,7 @@ const SeasonBreakdown = () => {
                                                     <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold">{idx + 1}</div>
                                                     <div className="min-w-0">
                                                         <div className="font-semibold text-sm truncate">{t.teamName}</div>
-                                                        <div className="text-xs text-gray-500">W/L: {t.wins}/{t.losses}</div>
+                                                        <div className="text-xs text-gray-500">W/L: {t.wins}-{t.losses}</div>
                                                     </div>
                                                 </div>
                                                 <div className="text-sm text-gray-600">Pct: {formatDecimalFraction(t.pct)}</div>

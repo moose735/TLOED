@@ -600,18 +600,43 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
         };
 
         // Build entries across all matchups with owner ids for filtering
+    // Precompute max played week per season to avoid including unplayed/future weeks
+    const seasonMaxPlayedWeek = {};
+    Object.keys(historicalData.matchupsBySeason || {}).forEach(yearKey => {
+        const matchups = historicalData.matchupsBySeason[yearKey] || [];
+        const playedWeeks = matchups
+            .filter(mm => (Number(mm.team1_score) > 0 || Number(mm.team2_score) > 0))
+            .map(mm => parseInt(mm.week))
+            .filter(w => !isNaN(w));
+        seasonMaxPlayedWeek[parseInt(yearKey)] = playedWeeks.length > 0 ? Math.max(...playedWeeks) : 0;
+    });
+
+    // If nflState is available, avoid using weeks >= currentWeek for the current season
+    const _currentSeason = parseInt(nflState?.season) || null;
+    const _currentWeek = parseInt(nflState?.week) || null;
+    if (_currentSeason && _currentWeek) {
+        const clamped = Math.max(0, (_currentWeek - 1));
+        seasonMaxPlayedWeek[_currentSeason] = Math.min(seasonMaxPlayedWeek[_currentSeason] || 0, clamped);
+    }
+
     Object.keys(historicalData.matchupsBySeason || {}).forEach(yearStr => {
             const year = parseInt(yearStr);
             const seasonMatchups = historicalData.matchupsBySeason[yearStr];
             seasonMatchups.forEach(m => {
                 const week = parseInt(m.week);
-        const team1RosterId = String(m.team1_roster_id);
-        const team2RosterId = String(m.team2_roster_id);
-        // Skip byes or malformed matchups
-        if (isInvalidRosterId(team1RosterId) || isInvalidRosterId(team2RosterId)) return;
+                const team1RosterId = String(m.team1_roster_id);
+                const team2RosterId = String(m.team2_roster_id);
+                // Skip byes or malformed matchups
+                if (isInvalidRosterId(team1RosterId) || isInvalidRosterId(team2RosterId)) return;
                 const team1Score = Number(m.team1_score);
                 const team2Score = Number(m.team2_score);
+                // Basic validation
                 if ([team1Score, team2Score, week, year].some(v => typeof v !== 'number' || isNaN(v))) return;
+                // Skip unplayed matchups (0-0 are typically placeholders)
+                if (team1Score === 0 && team2Score === 0) return;
+                // Skip matchups beyond the last actually-played week for that season
+                const maxPlayedWeek = seasonMaxPlayedWeek[year] || 0;
+                if (week > maxPlayedWeek) return;
                 const team1OwnerId = historicalData.rostersBySeason?.[year]?.find(r => String(r.roster_id) === team1RosterId)?.owner_id;
                 const team2OwnerId = historicalData.rostersBySeason?.[year]?.find(r => String(r.roster_id) === team2RosterId)?.owner_id;
                 const team1Name = resolveTeamName(year, team1RosterId, team1OwnerId);
@@ -703,6 +728,17 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
                     const teamsText = item.team
                         ? `${item.team} vs ${item.opponent}`
                         : `${item.team1} vs ${item.team2}`;
+
+                    // Resolve a sensible record owner id for both single-team and two-team records
+                    let resolvedRecordOwnerId = item.ownerId || null;
+                    if (!resolvedRecordOwnerId) {
+                        // If record uses winner/loser fields (e.g. biggestBlowout, slimmestWin), map winner to owner1/owner2
+                        if (item.winner) {
+                            if (item.winner === item.team1 && item.owner1Id) resolvedRecordOwnerId = item.owner1Id;
+                            else if (item.winner === item.team2 && item.owner2Id) resolvedRecordOwnerId = item.owner2Id;
+                        }
+                    }
+
                     involvement.push({
                         recordKey: key,
                         label: recordLabels[key],
@@ -712,6 +748,13 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
                         week: item.week,
                         teamsText,
                         role,
+                        // split teams to separate fields for stacked display
+                        teamA: item.team || item.team1 || '',
+                        teamB: item.opponent || item.team2 || '',
+                        // owner ids to detect which team is the record owner
+                        recordOwnerId: resolvedRecordOwnerId,
+                        owner1Id: item.owner1Id || null,
+                        owner2Id: item.owner2Id || null,
                     });
                 }
             });
@@ -1054,32 +1097,60 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
             <section className="mb-6 sm:mb-8">
                 <h3 className="text-lg sm:text-xl font-bold text-gray-800 mb-3 sm:mb-4 border-b pb-2">Previous 5 Games</h3>
                 {lastFiveGames.length > 0 ? (
-                    <div className="overflow-x-auto rounded-lg border border-gray-200">
-                        <table className="min-w-full text-xs sm:text-sm bg-white">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-center">Season</th>
-                                    <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-left">Opponent</th>
-                                    <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-center">Result</th>
-                                    <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-right">Team</th>
-                                    <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-right">Opponent</th>
-                                    <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-center">Margin</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {lastFiveGames.map((g, idx) => (
-                                    <tr key={`${g.year}-${g.week}-${idx}`} className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                        <td className="py-2 px-3 text-sm text-gray-800 text-center">{g.year} • W{g.week}</td>
-                                        <td className="py-2 px-3 text-sm text-gray-800">{g.opponent}</td>
-                                        <td className={`py-2 px-3 text-sm text-center ${g.result === 'W' ? 'text-green-700' : g.result === 'L' ? 'text-red-700' : 'text-gray-700'}`}>{g.result}</td>
-                                        <td className="py-2 px-3 text-sm text-gray-800 text-right">{formatScore(g.myScore)}</td>
-                                        <td className="py-2 px-3 text-sm text-gray-800 text-right">{formatScore(g.oppScore)}</td>
-                                        <td className="py-2 px-3 text-sm text-gray-800 text-center">{formatScore(g.margin)}</td>
+                    <>
+                        {/* Mobile: Card list */}
+                        <div className="sm:hidden space-y-3">
+                            {lastFiveGames.map((g, idx) => (
+                                <div key={`${g.year}-${g.week}-${idx}`} className="bg-white rounded-lg shadow-md mobile-card p-3 border border-gray-100">
+                                    <div className="flex items-start justify-between">
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <div className="text-xs text-gray-500">{g.year} • W{g.week}</div>
+                                                <div className={`ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${g.result === 'W' ? 'bg-green-50 text-green-700' : g.result === 'L' ? 'bg-red-50 text-red-700' : 'bg-gray-50 text-gray-700'}`}>
+                                                    {g.result}
+                                                </div>
+                                            </div>
+                                            <div className="mt-2 flex items-center gap-3">
+                                                <div className="font-semibold text-sm text-gray-900 truncate">{g.opponent}</div>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <div className="text-sm font-semibold text-gray-900">{formatScore(g.myScore)} <span className="text-xs text-gray-500">vs</span> {formatScore(g.oppScore)}</div>
+                                            <div className="text-xs text-gray-500 mt-1">Margin: {formatScore(g.margin)}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Desktop: Table view */}
+                        <div className="hidden sm:block overflow-x-auto rounded-lg border border-gray-200">
+                            <table className="min-w-full text-xs sm:text-sm bg-white">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-center">Season</th>
+                                        <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-left">Opponent</th>
+                                        <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-center">Result</th>
+                                        <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-right">Team</th>
+                                        <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-right">Opponent</th>
+                                        <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-center">Margin</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                                </thead>
+                                <tbody>
+                                    {lastFiveGames.map((g, idx) => (
+                                        <tr key={`${g.year}-${g.week}-${idx}`} className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                                            <td className="py-2 px-3 text-sm text-gray-800 text-center">{g.year} • W{g.week}</td>
+                                            <td className="py-2 px-3 text-sm text-gray-800">{g.opponent}</td>
+                                            <td className={`py-2 px-3 text-sm text-center ${g.result === 'W' ? 'text-green-700' : g.result === 'L' ? 'text-red-700' : 'text-gray-700'}`}>{g.result}</td>
+                                            <td className="py-2 px-3 text-sm text-gray-800 text-right">{formatScore(g.myScore)}</td>
+                                            <td className="py-2 px-3 text-sm text-gray-800 text-right">{formatScore(g.oppScore)}</td>
+                                            <td className="py-2 px-3 text-sm text-gray-800 text-center">{formatScore(g.margin)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </>
                 ) : (
                     <p className="text-gray-600">No recent games available.</p>
                 )}
@@ -1304,38 +1375,89 @@ const TeamDetailPage = ({ teamName }) => { // Removed historicalMatchups and get
             {/* Game Records Only */}
             <section>
                 <h3 className="text-lg sm:text-xl font-bold text-gray-800 mb-3 sm:mb-4 border-b pb-2">Game Records</h3>
-                <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-x-auto">
+                <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
                     {recordInvolvements.length > 0 ? (
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
-                                <thead className="bg-gray-50">
-                                    <tr>
-                                        <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-center">Role</th>
-                                        <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-left">Record</th>
-                                        <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-center">Rank</th>
-                                        <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-right">Value</th>
-                                        <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-left">Game</th>
-                                        <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-center">Season</th>
-                                        <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-center">Week</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {recordInvolvements
-                                        .sort((a, b) => a.label.localeCompare(b.label) || a.rank - b.rank)
-                                        .map((r, idx) => (
-                                            <tr key={`${r.recordKey}-${r.year}-${r.week}-${idx}`} className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                                <td className="py-2 px-3 text-sm text-gray-800 text-center">{r.role}</td>
-                                                <td className="py-2 px-3 text-sm text-gray-800">{r.label}</td>
-                                                <td className="py-2 px-3 text-sm text-gray-800 text-center">#{r.rank}</td>
-                                                <td className="py-2 px-3 text-sm text-gray-800 text-right">{formatScore(r.value)}</td>
-                                                <td className="py-2 px-3 text-sm text-gray-800">{r.teamsText}</td>
-                                                <td className="py-2 px-3 text-sm text-gray-800 text-center">{r.year}</td>
-                                                <td className="py-2 px-3 text-sm text-gray-800 text-center">{r.week}</td>
-                                            </tr>
-                                        ))}
-                                </tbody>
-                            </table>
-                        </div>
+                        <>
+                            {/* Mobile: card list */}
+                            <div className="sm:hidden space-y-2 p-2">
+                                {recordInvolvements
+                                    .sort((a, b) => a.label.localeCompare(b.label) || a.rank - b.rank)
+                                    .map((r, idx) => {
+                                        // Determine which owner holds the record and map to teamA/teamB
+                                        const ownerAId = r.owner1Id || r.teamA?.ownerId || null;
+                                        const ownerBId = r.owner2Id || r.teamB?.ownerId || null;
+                                        const recordOwnerId = r.recordOwnerId || r.ownerId || null;
+                                        const ownerAMatches = recordOwnerId && ownerAId && recordOwnerId === ownerAId;
+                                        const ownerBMatches = recordOwnerId && ownerBId && recordOwnerId === ownerBId;
+
+                                        // Normalise team name values (item.team/team1 may be string or object)
+                                        const teamAName = typeof r.teamA === 'string' ? r.teamA : (r.teamA?.displayName || r.teamA?.name || '');
+                                        const teamBName = typeof r.teamB === 'string' ? r.teamB : (r.teamB?.displayName || r.teamB?.name || '');
+
+                                        return (
+                                            <div key={`${r.recordKey}-${r.year}-${r.week}-${idx}`} className="bg-white rounded-lg p-3 border border-gray-100 shadow-sm">
+                                                <div className="flex items-start gap-3">
+                                                    {/* Left: record name, role, stacked team names */}
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="text-sm font-semibold text-gray-900 leading-tight">{r.label}</div>
+                                                        <div className="text-xs text-gray-500 mt-1">{r.role}</div>
+                                                        <div className="mt-2 text-sm text-gray-700">
+                                                            {/* Stack team names: teamA on top, teamB below. Bold the team that matches recordOwnerId */}
+                                                            <div className="truncate">
+                                                                <span className={ownerAMatches ? 'font-semibold text-gray-900' : 'text-gray-800'}>{teamAName || r.teamsText}</span>
+                                                            </div>
+                                                            <div className="truncate text-gray-600">
+                                                                <span className={ownerBMatches ? 'font-semibold text-gray-900' : 'text-gray-700'}>{teamBName || r.teamsText}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Right: rank, value, season/week */}
+                                                    <div className="flex-shrink-0 flex flex-col items-end ml-3">
+                                                        <span className="inline-flex items-center justify-center text-xs font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded">#{r.rank}</span>
+                                                        <div className="text-lg font-extrabold text-gray-900 mt-1">{formatScore(r.value)}</div>
+                                                        <div className="text-xs text-gray-400 mt-1">{r.year} • W{r.week}</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                            </div>
+                                {/* add a bit of bottom spacing so the Draft Habits header doesn't crowd the cards */}
+                                <div className="h-3" />
+
+                            {/* Desktop: table view */}
+                            <div className="hidden sm:block overflow-x-auto">
+                                <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-center">Role</th>
+                                            <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-left">Record</th>
+                                            <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-center">Rank</th>
+                                            <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-right">Value</th>
+                                            <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-left">Game</th>
+                                            <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-center">Season</th>
+                                            <th className="py-2 px-3 text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200 text-center">Week</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {recordInvolvements
+                                            .sort((a, b) => a.label.localeCompare(b.label) || a.rank - b.rank)
+                                            .map((r, idx) => (
+                                                <tr key={`${r.recordKey}-${r.year}-${r.week}-${idx}`} className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                                                    <td className="py-2 px-3 text-sm text-gray-800 text-center">{r.role}</td>
+                                                    <td className="py-2 px-3 text-sm text-gray-800">{r.label}</td>
+                                                    <td className="py-2 px-3 text-sm text-gray-800 text-center">#{r.rank}</td>
+                                                    <td className="py-2 px-3 text-sm text-gray-800 text-right">{formatScore(r.value)}</td>
+                                                    <td className="py-2 px-3 text-sm text-gray-800">{r.teamsText}</td>
+                                                    <td className="py-2 px-3 text-sm text-gray-800 text-center">{r.year}</td>
+                                                    <td className="py-2 px-3 text-sm text-gray-800 text-center">{r.week}</td>
+                                                </tr>
+                                            ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </>
                     ) : (
                         <p className="text-gray-600 p-4">No record book involvements found for this team.</p>
                     )}

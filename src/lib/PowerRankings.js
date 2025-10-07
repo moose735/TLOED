@@ -572,7 +572,7 @@ const renderMovement = (movement) => {
 };
 
 		return (
-			<div className="w-full max-w-5xl mx-auto p-2 sm:p-4 md:p-8 font-inter">
+			<div className="w-full max-w-7xl mx-auto px-0 sm:px-4 md:px-6 lg:px-8 font-inter overflow-x-hidden">
 				<h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-800 mb-4 sm:mb-6 md:mb-8 text-center tracking-tight px-2">
 					{powerRankings.length > 0
 						? `Power Rankings (DPR) - ${powerRankings[0].year} Season (Week ${currentWeek})`
@@ -605,23 +605,23 @@ const renderMovement = (movement) => {
 												<div className="flex-1 h-px bg-blue-300"></div>
 											</div>
 										)}
-										<div className="bg-white rounded-lg shadow-md mobile-card p-4 border-l-4 border-blue-500">
-											<div className="flex items-center justify-between mb-3">
+										<div className="bg-white rounded-lg shadow-md mobile-card p-4 border-l-4 border-blue-500 min-w-0 w-full overflow-hidden">
+											<div className="flex items-center justify-between mb-3 flex-wrap min-w-0">
 												<div className="flex items-center space-x-3">
-													<div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
+													<div className="w-7 h-7 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold">
 														{row.rank}
 													</div>
 													<img
 														src={getTeamDetails(row.ownerId, row.year)?.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
 														alt={getTeamName(row.ownerId, row.year)}
-														className="w-10 h-10 rounded-full border-2 border-blue-300 shadow-sm object-cover flex-shrink-0"
+														className="w-8 h-8 rounded-full border-2 border-blue-300 shadow-sm object-cover flex-shrink-0"
 														onError={(e) => { 
 															e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`;
 														}}
 													/>
 													<div className="min-w-0 flex-1">
 														<div className="flex items-center">
-															<h3 className="font-semibold text-gray-800 text-sm truncate flex-1">{getTeamName(row.ownerId, row.year)}</h3>
+															<h3 className="font-semibold text-gray-800 text-xs md:text-sm truncate flex-1">{getTeamName(row.ownerId, row.year)}</h3>
 															<div className="flex-shrink-0 ml-2 flex items-center space-x-1">
 																{survivorMarkers?.[row.ownerId] && (
 																	<span title={survivorMarkers[row.ownerId] === '💀' ? 'Eliminated from Survivor' : 'Survivor Winner'}>{survivorMarkers[row.ownerId]}</span>
@@ -634,8 +634,8 @@ const renderMovement = (movement) => {
 													</div>
 												</div>
 
-												<div className="text-right">
-													<div className="text-lg font-bold text-blue-800">{formatDPR(row.dpr)}</div>
+												<div className="text-right ml-2 flex-shrink-0">
+													<div className="text-base sm:text-lg font-bold text-blue-800 truncate max-w-[6rem]">{formatDPR(row.dpr)}</div>
 													<div className="text-xs text-gray-500">DPR</div>
 												</div>
 											</div>
@@ -688,8 +688,8 @@ const renderMovement = (movement) => {
 						</div>
 
 						{/* Desktop Table View */}
-						<div className="hidden sm:block overflow-x-auto shadow-lg rounded-lg">
-							<table className="min-w-full bg-white border border-gray-200 rounded-lg">
+						<div className="hidden sm:block overflow-x-auto shadow-lg rounded-lg min-w-0">
+							<table className="min-w-full bg-white border border-gray-200 rounded-lg min-w-0">
 								<thead className="bg-blue-100 sticky top-0 z-10">
 									<tr>
 										<th className="py-3 md:py-4 px-3 md:px-4 text-left text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Rank</th>
