@@ -333,37 +333,37 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
                     .slice()
                     .sort((a, b) => (b.dpr || 0) - (a.dpr || 0))
                     .map((data, index) => (
-                      <div key={data.ownerId} className="bg-white rounded-lg shadow-md mobile-card p-4 border-l-4 border-blue-500">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">{index + 1}</div>
+                      <div key={data.ownerId} className="bg-white rounded-lg shadow-md mobile-card p-2 border-l-4 border-blue-500 min-w-0 w-full overflow-hidden">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-2 min-w-0">
+                            <div className="flex-shrink-0 w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-[11px] font-bold">{index + 1}</div>
                             <img
                               src={getTeamDetails ? (getTeamDetails(data.ownerId, null)?.avatar || `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`) : `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`}
                               alt={getTeamName(data.ownerId, null)}
-                              className="w-10 h-10 rounded-full border-2 border-blue-300 shadow-sm object-cover flex-shrink-0"
+                              className="flex-shrink-0 w-7 h-7 rounded-full border-2 border-blue-300 shadow-sm object-cover"
                               onError={(e) => { e.target.src = `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`; }}
                             />
                             <div className="min-w-0 flex-1">
                               <div className="font-semibold text-sm truncate">
                                 {onTeamNameClick ? (
-                                  <button onClick={() => onTeamNameClick(getTeamName(data.ownerId, null))} className="text-gray-800 hover:underline p-0 bg-transparent border-none">
+                                  <button onClick={() => onTeamNameClick(getTeamName(data.ownerId, null))} className="text-gray-800 hover:underline p-0 bg-transparent border-none truncate">
                                     {getTeamName(data.ownerId, null)}
                                   </button>
                                 ) : (
-                                  getTeamName(data.ownerId, null)
+                                  <span className="truncate">{getTeamName(data.ownerId, null)}</span>
                                 )}
                               </div>
-                              <div className="text-xs text-gray-500">Record: {renderRecord(data.wins, data.losses, data.ties)}</div>
+                              <div className="text-xs text-gray-500 truncate">Record: {renderRecord(data.wins, data.losses, data.ties)}</div>
                             </div>
                           </div>
 
-                            <div className="text-right">
-                              <div className="text-lg font-bold text-blue-800">{formatDPR(data.dpr)}</div>
-                              {/* removed duplicate PPG label (PPG is displayed in the compact stat boxes below) */}
-                            </div>
+                          {/* fixed-width right column for rating; increased width and add right padding to avoid clipping */}
+                          <div className="text-right flex-shrink-0 w-20 ml-1 pr-2">
+                            <div className="text-lg font-bold text-blue-800 truncate">{formatDPR(data.dpr)}</div>
                           </div>
+                        </div>
 
-                          <div className="grid grid-cols-3 gap-2 text-xs mt-2">
+                        <div className="grid grid-cols-3 gap-2 text-xs mt-2">
                             <div className="bg-gray-50 rounded-lg px-2 py-1 text-center">
                               <div className="text-[10px] text-gray-500 mb-0.5">PPG</div>
                               <div className="font-semibold text-green-700 whitespace-nowrap">{formatPointsAvg(data.pointsPerGame)}</div>
@@ -454,24 +454,24 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
                     }
                     const isDataCurrent = data.year && Number(data.year) === Number(dataCurrentSeason);
                     return (
-                      <div key={`${data.rosterId}-${data.year}`} className={`rounded-lg shadow p-4 ${isDataCurrent ? 'border-l-4 border-green-500 bg-green-50' : 'bg-white'}`}>
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center text-sm font-bold">{idx + 1}</div>
+                      <div key={`${data.rosterId}-${data.year}`} className={`min-w-0 w-full overflow-hidden rounded-lg shadow p-2 ${isDataCurrent ? 'border-l-4 border-green-500 bg-green-50' : 'bg-white'}`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-2">
+                            <div className="w-5 h-5 bg-green-600 text-white rounded-full flex items-center justify-center text-[11px] font-bold">{idx + 1}</div>
                             <img
                               src={getTeamDetails ? (getTeamDetails(data.ownerId, data.year)?.avatar || `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`) : `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`}
                               alt={getTeamName(data.ownerId, data.year)}
-                              className="w-10 h-10 rounded-full border-2 border-green-300 shadow-sm object-cover flex-shrink-0"
+                              className="w-7 h-7 rounded-full border-2 border-green-300 shadow-sm object-cover flex-shrink-0"
                               onError={(e) => { e.target.src = `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`; }}
                             />
                             <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 min-w-0">
                                 <div className="font-semibold text-sm truncate">{onTeamNameClick ? (
-                                  <button onClick={() => onTeamNameClick(getTeamName(data.ownerId, data.year))} className="text-gray-800 hover:underline p-0 bg-transparent border-none">
+                                  <button onClick={() => onTeamNameClick(getTeamName(data.ownerId, data.year))} className="text-gray-800 hover:underline p-0 bg-transparent border-none truncate">
                                     {getTeamName(data.ownerId, data.year)}
                                   </button>
                                 ) : (
-                                  getTeamName(data.ownerId, data.year)
+                                  <span className="truncate">{getTeamName(data.ownerId, data.year)}</span>
                                 )}</div>
                                 {/* On mobile the green highlight is sufficient for current season; remove redundant 'Current' pill */}
                               </div>
@@ -479,13 +479,12 @@ const DPRAnalysis = ({ onTeamNameClick }) => { // Accept onTeamNameClick prop
                             </div>
                           </div>
 
-                          <div className="text-right min-w-[88px]">
-                            <div className="text-lg font-bold text-green-800">{formatDPR(data.dpr)}</div>
+                          <div className="text-right flex-shrink-0 w-20 ml-1 pr-2">
+                            <div className="text-lg font-bold text-green-800 truncate">{formatDPR(data.dpr)}</div>
                               {/* Avoid showing raw DPR underneath adjusted DPR on mobile to reduce redundancy */}
                               <div className="text-xs text-gray-500">PPG • {formatPointsAvg(data.pointsPerGame)}</div>
                           </div>
                         </div>
-
                         <div className="grid grid-cols-3 gap-2 text-xs mt-3">
                           <div className="bg-gray-50 rounded px-2 py-1 text-center">
                             <div className="text-[10px] text-gray-500 mb-0.5">Rec</div>

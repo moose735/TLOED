@@ -171,32 +171,33 @@ const LuckRatingAnalysis = ({ onTeamNameClick }) => {
                     .slice()
                     .sort((a, b) => (b.luckRating || 0) - (a.luckRating || 0))
                     .map((data, index) => (
-                      <div key={data.team} className="bg-white rounded-lg shadow-md mobile-card p-4 border-l-4 border-blue-500">
-                          <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">{index + 1}</div>
+                      <div key={data.team} className="bg-white rounded-lg shadow-md mobile-card p-2 border-l-4 border-blue-500 min-w-0 w-full overflow-hidden">
+                          <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-1 min-w-0">
+                            <div className="flex-shrink-0 w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-[11px] font-bold">{index + 1}</div>
                             <img
                               src={getTeamDetails ? (getTeamDetails(data.ownerId, null)?.avatar || `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`) : `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`}
-                                alt={data.team}
-                              className="w-10 h-10 rounded-full border-2 border-blue-300 shadow-sm object-cover flex-shrink-0"
+                              alt={data.team}
+                              className="flex-shrink-0 w-7 h-7 rounded-full border-2 border-blue-300 shadow-sm object-cover"
                               onError={(e) => { e.target.src = `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`; }}
                             />
                             <div className="min-w-0 flex-1">
                               <div className="font-semibold text-sm truncate">
                                 {onTeamNameClick ? (
-                                  <button onClick={() => onTeamNameClick(data.team)} className="text-gray-800 hover:underline p-0 bg-transparent border-none">
+                                  <button onClick={() => onTeamNameClick(data.team)} className="text-gray-800 hover:underline p-0 bg-transparent border-none truncate">
                                     {data.team}
                                   </button>
                                 ) : (
-                                  data.team
+                                  <span className="truncate">{data.team}</span>
                                 )}
                               </div>
                               {/* compact boxes are rendered below the header to match DPR mobile layout */}
                             </div>
                           </div>
 
-                          <div className="text-right min-w-[96px]">
-                            <div className={`text-lg font-bold ${data.luckRating > 0 ? 'text-green-600' : data.luckRating < 0 ? 'text-red-600' : 'text-gray-700'}`}>{formatLuckRating(data.luckRating)}</div>
+                          {/* fixed-width rating to avoid clipping on narrow viewports */}
+                          <div className="text-right flex-shrink-0 w-20 ml-1 pr-2">
+                            <div className={`text-lg font-bold truncate ${data.luckRating > 0 ? 'text-green-600' : data.luckRating < 0 ? 'text-red-600' : 'text-gray-700'}`}>{formatLuckRating(data.luckRating)}</div>
                           </div>
                         </div>
 
@@ -274,14 +275,14 @@ const LuckRatingAnalysis = ({ onTeamNameClick }) => {
                 {/* Mobile Cards View */}
                 <div className="sm:hidden space-y-3">
                   {displayedSeasonalLuckData.map((data, idx) => (
-                    <div key={`${data.team}-${data.year}`} className={`rounded-lg shadow p-4 ${Number(data.year) === Number(dataCurrentSeason) ? 'border-l-4 border-green-500 bg-green-50' : 'bg-white'}`}>
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center text-sm font-bold">{idx + 1}</div>
+                    <div key={`${data.team}-${data.year}`} className={`min-w-0 w-full overflow-hidden rounded-lg shadow p-2 ${Number(data.year) === Number(dataCurrentSeason) ? 'border-l-4 border-green-500 bg-green-50' : 'bg-white'}`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center space-x-1">
+                          <div className="w-5 h-5 bg-green-600 text-white rounded-full flex items-center justify-center text-[11px] font-bold">{idx + 1}</div>
                           <img
                                   src={getTeamDetails ? (getTeamDetails(data.ownerId, data.year)?.avatar || `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`) : `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`}
                             alt={data.team}
-                            className="w-10 h-10 rounded-full border-2 border-green-300 shadow-sm object-cover flex-shrink-0"
+                            className="w-7 h-7 rounded-full border-2 border-green-300 shadow-sm object-cover flex-shrink-0"
                             onError={(e) => { e.target.src = `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`; }}
                           />
                           <div className="min-w-0 flex-1">
@@ -301,8 +302,8 @@ const LuckRatingAnalysis = ({ onTeamNameClick }) => {
                           </div>
                         </div>
 
-                        <div className="text-right min-w-[88px]">
-                          <div className={`text-lg font-bold ${data.luckRating > 0 ? 'text-green-600' : data.luckRating < 0 ? 'text-red-600' : 'text-gray-700'}`}>{formatLuckRating(data.luckRating)}</div>
+                          <div className="text-right flex-shrink-0 w-20 ml-1 pr-2">
+                          <div className={`text-lg font-bold truncate ${data.luckRating > 0 ? 'text-green-600' : data.luckRating < 0 ? 'text-red-600' : 'text-gray-700'}`}>{formatLuckRating(data.luckRating)}</div>
                         </div>
                       </div>
 
