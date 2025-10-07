@@ -179,6 +179,47 @@ const AppContent = () => {
     // loading saying selected from external data file
     const [loadingSaying, setLoadingSaying] = useState('');
 
+    // Update document title to reflect current page
+    const pageTitleForTab = (tab) => {
+        switch (tab) {
+            case TABS.HOME:
+                return 'Dashboard';
+            case TABS.GAMECENTER:
+                return 'Gamecenter';
+            case TABS.SPORTSBOOK:
+                return 'Sportsbook';
+            case TABS.LEAGUE_HISTORY:
+                return 'League History';
+            case TABS.HALL_OF_CHAMPIONS:
+                return 'Hall of Champions';
+            case TABS.RECORD_BOOK:
+                return 'Record Book';
+            case TABS.HEAD_TO_HEAD:
+                return 'Head-to-Head';
+            case TABS.DPR_ANALYSIS:
+                return 'DPR Analysis';
+            case TABS.LUCK_RATING:
+                return 'Luck Rating';
+            case TABS.TEAMS_OVERVIEW:
+                return selectedTeamName ? `${selectedTeamName}` : 'Teams';
+            case TABS.FINANCIALS:
+                return 'Financials';
+            case TABS.SEASON_BREAKDOWN:
+                return 'Season Breakdown';
+            case TABS.DRAFT_ANALYSIS:
+                return 'Draft Analysis';
+            case TABS.ACHIEVEMENTS:
+                return 'Achievements';
+            default:
+                return 'Dashboard';
+        }
+    };
+
+    useEffect(() => {
+        const pageName = pageTitleForTab(activeTab);
+        document.title = `TLOED - ${pageName}`;
+    }, [activeTab, selectedTeamName]);
+
     // Effect to determine the top 3 finishers once historicalData and usersData are loaded
     useEffect(() => {
         // Access rostersBySeason from historicalData
@@ -485,12 +526,30 @@ const AppContent = () => {
                 <div className="flex items-center justify-between px-4 py-1 md:px-6 md:py-2 max-w-6xl w-full mx-auto">
                     {/* Logo and Title */}
                     <div className="flex items-center flex-1 min-w-0">
-                        <img
-                            src={process.env.PUBLIC_URL + '/LeagueLogoNoBack.PNG'}
-                            alt="League Logo"
-                            className="h-16 w-16 md:h-24 md:w-24 mr-2 md:mr-4 object-contain flex-shrink-0 transition-all duration-200"
-                        />
-                        <div className="flex flex-col min-w-0">
+                        <button
+                            onClick={() => {
+                                // Navigate to dashboard and push state so back/forward works
+                                setActiveTab(TABS.HOME);
+                                setSelectedTeamName('');
+                                setNavigationHistory([]);
+                                const newState = { tab: TABS.HOME, selectedTeamName: '' };
+                                try {
+                                    window.history.pushState(newState, '', window.location.pathname);
+                                } catch (e) {
+                                    // ignore pushState failures in some environments
+                                }
+                            }}
+                            aria-label="Go to dashboard"
+                            title="Go to dashboard"
+                            className="p-0 mr-2 md:mr-4 bg-transparent border-0"
+                        >
+                            <img
+                                src={process.env.PUBLIC_URL + '/LeagueLogoNoBack.PNG'}
+                                alt="League Logo"
+                                className="h-16 w-16 md:h-24 md:w-24 object-contain flex-shrink-0 transition-all duration-200"
+                            />
+                        </button>
+                        <div className="flex flex-col min-w-0 ml-0">
                             <h1 className="text-sm sm:text-base md:text-2xl font-bold truncate">
                                 <span className="sm:hidden">TLOED</span>
                                 <span className="hidden sm:inline">The League of Extraordinary Douchebags</span>
