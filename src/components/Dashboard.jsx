@@ -6,6 +6,7 @@ import ProjectedPlayoffBracket from './ProjectedPlayoffBracket';
 import CurrentSeasonFinancials from './CurrentSeasonFinancials';
 import { formatScore } from '../utils/formatUtils';
 import DashboardContainer from './DashboardContainer';
+import { TRADE_DEADLINE_ISO, DRAFT_DATE_ISO } from '../config';
 
 const Dashboard = () => {
     const {
@@ -396,10 +397,11 @@ const Dashboard = () => {
         );
     };
 
-    // Hardcoded dates for the trade deadline and draft. Update these to match your league.
-    // Dates are interpreted as local time if no timezone provided; use ISO e.g. '2025-10-15T23:59:59Z' to be explicit.
-    const TRADE_DEADLINE = useMemo(() => new Date('2025-11-10T20:15:00Z'), []);
-    const DRAFT_DATE = useMemo(() => new Date('2026-09-05T18:00:00Z'), []);
+    // Dates for trade deadline and draft are stored in config as explicit ISO timestamps
+    // with an Eastern timezone offset (e.g. '2025-11-10T20:15:00-05:00'). This avoids
+    // DST ambiguity; parse them directly into Date objects here.
+    const TRADE_DEADLINE = useMemo(() => (TRADE_DEADLINE_ISO ? new Date(TRADE_DEADLINE_ISO) : null), [TRADE_DEADLINE_ISO]);
+    const DRAFT_DATE = useMemo(() => (DRAFT_DATE_ISO ? new Date(DRAFT_DATE_ISO) : null), [DRAFT_DATE_ISO]);
 
     return (
         <>

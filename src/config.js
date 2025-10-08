@@ -37,3 +37,9 @@ export const NICKNAME_TO_SLEEPER_USER = {
   // "LastnameA": "Team Rocket",
   // "LastnameB": "The Mavericks",
 };
+
+// Dashboard countdowns (use explicit ISO timestamps with Eastern offsets)
+// Trade deadline example: Nov 10 2025 20:15 Eastern -> After DST ends (EST, UTC-5)
+export const TRADE_DEADLINE_ISO = '2025-11-10T20:15:00-05:00';
+// Draft example: Sep 5 2026 18:00 Eastern -> During DST (EDT, UTC-4)
+export const DRAFT_DATE_ISO = '2026-09-05T18:00:00-04:00';

@@ -263,3 +263,65 @@ If something breaks:
 - [ ] App loads and displays current season data
 
 **🎉 You're all set for another great fantasy football season!**
+
+---
+
+### 🕒 Dashboard Countdowns (Trade Deadline & Draft)
+
+Preferred workflow — keep dates in `src/config.js` (DST-safe)
+
+The Dashboard now reads two canonical ISO timestamps from `src/config.js`:
+
+- `TRADE_DEADLINE_ISO`
+- `DRAFT_DATE_ISO`
+
+Why this approach:
+- Explicit ISO timestamps that include a timezone offset (for example `-05:00` or `-04:00`) remove DST ambiguity and guarantee the client will interpret the exact intended instant.
+- Centralizing the values in `src/config.js` makes yearly maintenance a single-file change.
+
+Add or update these exports in `src/config.js` (examples):
+
+```javascript
+// Trade deadline (example: Nov 10, 2025 at 8:15pm Eastern Standard Time)
+export const TRADE_DEADLINE_ISO = '2025-11-10T20:15:00-05:00'; // EST (UTC-5)
+
+// Draft date (example: Sep 5, 2026 at 6:00pm Eastern Daylight Time)
+export const DRAFT_DATE_ISO = '2026-09-05T18:00:00-04:00'; // EDT (UTC-4)
+```
+
+Notes on offsets:
+- Use `-05:00` for Eastern Standard Time (typically Nov through Mar).
+- Use `-04:00` for Eastern Daylight Time (typically Mar through Nov).
+- If you're unsure which offset applies for a specific date, look up the local offset for that date or use a trusted timezone-aware calendar to confirm. Explicit offsets are the simplest and most reliable option.
+
+What the Dashboard expects (current implementation):
+
+```js
+import { TRADE_DEADLINE_ISO, DRAFT_DATE_ISO } from '../config';
+
+const TRADE_DEADLINE = useMemo(() => (TRADE_DEADLINE_ISO ? new Date(TRADE_DEADLINE_ISO) : null), [TRADE_DEADLINE_ISO]);
+const DRAFT_DATE = useMemo(() => (DRAFT_DATE_ISO ? new Date(DRAFT_DATE_ISO) : null), [DRAFT_DATE_ISO]);
+```
+
+How to test after updating `src/config.js`:
+1. Restart the dev server if it's running (`npm start`) so the updated config is picked up.
+2. Open `http://localhost:3000/` and navigate to the Dashboard.
+3. Confirm the two countdown badges appear above the weekly matchup ticker and show the expected remaining time.
+4. Quick console sanity check in the browser console:
+
+```javascript
+// In the Dashboard page console
+console.log('Trade deadline (local):', new Date(TRADE_DEADLINE_ISO).toString());
+console.log('Draft date (local):', new Date(DRAFT_DATE_ISO).toString());
+```
+
+5. Verify behavior:
+   - If the date is in the past the badge will show `Passed`.
+   - Boxes should remain stable while ticking (tabular digits used).
+   - On narrow screens the badges wrap and do not overflow.
+
+Rollback (config edits):
+- `git checkout -- src/config.js`
+
+Optional automation ideas:
+- If you prefer to avoid yearly edits entirely, we can add an admin UI or source these dates from a small JSON file or an external admin service.
