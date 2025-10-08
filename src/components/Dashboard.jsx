@@ -22,6 +22,58 @@ const Dashboard = () => {
         processedSeasonalRecords
     } = useSleeperData();
 
+    // Trending players (added / dropped) from Sleeper API
+    const [trendingPlayers, setTrendingPlayers] = useState({ added: [], dropped: [], loading: true });
+
+    // Format large counts into compact form (e.g. 1200 -> 1.2K, 1500000 -> 1.5M)
+    const formatCount = (n) => {
+        if (n === null || n === undefined) return '';
+        const num = Number(n);
+        if (Number.isNaN(num)) return String(n);
+        const abs = Math.abs(num);
+        if (abs >= 1000000) return `${(num / 1000000).toFixed(1).replace(/\.0$/, '')}M`;
+        if (abs >= 1000) return `${(num / 1000).toFixed(1).replace(/\.0$/, '')}K`;
+        return String(num);
+    };
+
+    // make fetch function reusable so we can refresh on demand
+    const fetchTrending = async (lookbackHours = 24, limit = 40) => {
+        try {
+            const base = 'https://api.sleeper.app/v1/players/nfl/trending';
+            const [addedRes, droppedRes] = await Promise.all([
+                fetch(`${base}/add?lookback_hours=${lookbackHours}&limit=${limit}`),
+                fetch(`${base}/drop?lookback_hours=${lookbackHours}&limit=${limit}`)
+            ]);
+
+            const addedJson = addedRes.ok ? await addedRes.json() : [];
+            const droppedJson = droppedRes.ok ? await droppedRes.json() : [];
+
+            const normalize = (arr) => (Array.isArray(arr) ? arr.map(item => {
+                if (!item) return null;
+                if (item.player_id) return { id: item.player_id, raw: item };
+                if (item.player?.player_id) return { id: item.player.player_id, raw: item };
+                return { id: item.player_id || item.player?.player_id || item?.id || null, raw: item };
+            }).filter(x => x && x.id) : []);
+
+            return { added: normalize(addedJson), dropped: normalize(droppedJson) };
+        } catch (e) {
+            console.warn('Failed to fetch trending players', e);
+            return { added: [], dropped: [] };
+        }
+    };
+
+    useEffect(() => {
+        let mounted = true;
+        setTrendingPlayers(prev => ({ ...prev, loading: true }));
+        fetchTrending().then(res => { if (!mounted) return; setTrendingPlayers({ added: res.added, dropped: res.dropped, loading: false }); });
+        const t = setInterval(async () => {
+            const res = await fetchTrending();
+            if (!mounted) return;
+            setTrendingPlayers({ added: res.added, dropped: res.dropped, loading: false });
+        }, 1000 * 60 * 10);
+        return () => { mounted = false; clearInterval(t); };
+    }, []);
+
     // Get current week matchups
     const currentWeekMatchups = useMemo(() => {
         if (!historicalData || !currentSeason || !nflState) return [];
@@ -408,10 +460,29 @@ const Dashboard = () => {
             <style>{`
                 @keyframes scroll {
                     0% { transform: translateX(0%); }
-                    100% { transform: translateX(-100%); }
+                    100% { transform: translateX(-50%); }
                 }
+                /* baseline speed: slightly faster */
                 .animate-scroll {
+                    animation: scroll 28s linear infinite;
+                }
+                /* reverse direction for the second row */
+                .animate-scroll-reverse {
+                    animation: scroll 28s linear infinite reverse;
+                }
+                /* slower animation for matchups ticker */
+                .animate-scroll-slow {
                     animation: scroll 90s linear infinite;
+                }
+
+                /* Mobile: speed up trending tickers but keep matchups comfortable */
+                @media (max-width: 640px) {
+                    .animate-scroll, .animate-scroll-reverse {
+                        animation-duration: 18s;
+                    }
+                    .animate-scroll-slow {
+                        animation-duration: 40s;
+                    }
                 }
             `}</style>
             <DashboardContainer className="space-y-4 sm:space-y-6 md:space-y-8">
@@ -443,7 +514,7 @@ const Dashboard = () => {
                             <span className="text-sm font-semibold text-gray-700">Week {nflState?.week || 1} Matchups</span>
                         </div>
                         <div className="relative h-20 overflow-hidden">
-                            <div className="absolute whitespace-nowrap flex items-center h-full animate-scroll">
+                                    <div className="absolute whitespace-nowrap flex items-center h-full animate-scroll-slow">
                                 {currentWeekMatchups.length > 0 ? (
                                     <>
                                         {/* First set of matchups */}
@@ -732,6 +803,78 @@ const Dashboard = () => {
             <ProjectedPlayoffBracket />
 
             {/* Recent Transactions */}
+            {/* Trending players ticker (Added on top -> left, Dropped underneath -> right) */}
+            <div className="bg-white rounded-lg shadow-lg mobile-card p-3 sm:p-4 mb-4">
+                <h3 className="text-sm font-semibold text-gray-700 mb-2 px-1">Trending (last 24h)</h3>
+                <div className="space-y-2">
+                    {/* Added - scroll left */}
+                    <div className="relative overflow-hidden">
+                        {trendingPlayers.loading ? (
+                            <div className="p-2 text-sm text-gray-500">Loading adds…</div>
+                        ) : trendingPlayers.added.length === 0 ? (
+                            <div className="p-2 text-sm text-gray-500">No recent adds</div>
+                        ) : (
+                            (() => {
+                                const nodes = trendingPlayers.added.map((p, idx) => {
+                                    const player = nflPlayers?.[p.id];
+                                    const name = player ? `${player.first_name} ${player.last_name}` : p.id;
+                                    const count = p.raw?.count || null;
+                                    const head = player ? `https://sleepercdn.com/content/nfl/players/thumb/${p.id}.jpg` : null;
+                                    return (
+                                        <div key={`add-${p.id}-${idx}`} className="inline-flex items-center space-x-2 bg-green-50 border border-green-200 rounded-full px-2 py-1" style={{minWidth: head ? 160 : 120}}>
+                                            {head ? (
+                                                <img src={head} alt={name} className="w-6 h-6 rounded-full object-cover" onError={(e)=>{e.target.style.display='none'}} />
+                                            ) : (
+                                                <div className="w-6 h-6 rounded-full bg-green-200 flex items-center justify-center text-xs font-medium text-green-800">{(player && player.first_name ? player.first_name[0] : '?')}</div>
+                                            )}
+                                            <div className="flex flex-col items-start min-w-0 max-w-[180px] whitespace-normal break-words">
+                                                <div className="text-xs text-gray-800 font-medium">{name}</div>
+                                                <div className="text-[11px] text-green-700 font-semibold mt-0.5">{count ? `+${formatCount(count)}` : ''}</div>
+                                            </div>
+                                        </div>
+                                    );
+                                });
+                                const doubled = [...nodes, ...nodes];
+                                return <div className="whitespace-nowrap flex items-center gap-3 animate-scroll" style={{padding: '6px 8px'}}>{doubled}</div>;
+                            })()
+                        )}
+                    </div>
+
+                    {/* Dropped - scroll right (reverse) */}
+                    <div className="relative overflow-hidden">
+                        {trendingPlayers.loading ? (
+                            <div className="p-2 text-sm text-gray-500">Loading drops…</div>
+                        ) : trendingPlayers.dropped.length === 0 ? (
+                            <div className="p-2 text-sm text-gray-500">No recent drops</div>
+                        ) : (
+                            (() => {
+                                const nodes = trendingPlayers.dropped.slice().reverse().map((p, idx) => {
+                                    const player = nflPlayers?.[p.id];
+                                    const name = player ? `${player.first_name} ${player.last_name}` : p.id;
+                                    const count = p.raw?.count || null;
+                                    const head = player ? `https://sleepercdn.com/content/nfl/players/thumb/${p.id}.jpg` : null;
+                                    return (
+                                        <div key={`drop-${p.id}-${idx}`} className="inline-flex items-center space-x-2 bg-red-50 border border-red-200 rounded-full px-2 py-1" style={{minWidth: head ? 160 : 120}}>
+                                            {head ? (
+                                                <img src={head} alt={name} className="w-6 h-6 rounded-full object-cover" onError={(e)=>{e.target.style.display='none'}} />
+                                            ) : (
+                                                <div className="w-6 h-6 rounded-full bg-red-200 flex items-center justify-center text-xs font-medium text-red-800">{(player && player.first_name ? player.first_name[0] : '?')}</div>
+                                            )}
+                                            <div className="flex flex-col items-start min-w-0 max-w-[180px] whitespace-normal break-words">
+                                                <div className="text-xs text-gray-800 font-medium">{name}</div>
+                                                <div className="text-[11px] text-red-700 font-semibold mt-0.5">{count ? `-${formatCount(count)}` : ''}</div>
+                                            </div>
+                                        </div>
+                                    );
+                                });
+                                const doubled = [...nodes, ...nodes];
+                                return <div className="whitespace-nowrap flex items-center gap-3 animate-scroll-reverse" style={{padding: '6px 8px'}}>{doubled}</div>;
+                            })()
+                        )}
+                    </div>
+                </div>
+            </div>
+
             <div className="bg-white rounded-lg shadow-lg mobile-card p-4 sm:p-6">
                 <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-blue-800 mb-4 sm:mb-6 flex items-center">
                     <svg className="w-5 h-5 sm:w-6 sm:h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
