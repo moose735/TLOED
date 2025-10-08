@@ -1,5 +1,5 @@
 
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState, useEffect } from 'react';
 import { useSleeperData } from '../contexts/SleeperDataContext';
 import PowerRankings from '../lib/PowerRankings';
 import ProjectedPlayoffBracket from './ProjectedPlayoffBracket';
@@ -342,6 +342,65 @@ const Dashboard = () => {
         );
     }
 
+    // Small reusable countdown component (styled to match dashboard cards)
+    const Countdown = ({ targetDate, label }) => {
+        const [now, setNow] = useState(() => new Date());
+
+        useEffect(() => {
+            const t = setInterval(() => setNow(new Date()), 1000);
+            return () => clearInterval(t);
+        }, []);
+
+            const diff = targetDate ? targetDate.getTime() - now.getTime() : 0;
+        const isPassed = diff <= 0;
+        const isSoon = diff > 0 && diff < (1000 * 60 * 60 * 24); // <24h
+
+        if (!targetDate) return (
+            <div className="flex items-center justify-center bg-white border border-gray-200 rounded-lg shadow-sm px-3 py-2 w-full sm:w-40">
+                <div className="flex flex-col items-center max-w-full">
+                    <div className="text-xs text-blue-800 font-medium truncate">{label}</div>
+                    <div className="text-sm font-semibold text-gray-700" style={{fontVariantNumeric: 'tabular-nums'}}>N/A</div>
+                </div>
+            </div>
+        );
+
+        if (isPassed) {
+            return (
+                <div className="flex items-center justify-center bg-white border border-gray-200 rounded-lg shadow-sm px-3 py-2 w-full sm:w-40">
+                    <div className="flex flex-col items-center max-w-full">
+                        <div className="text-xs text-blue-800 font-medium truncate">{label}</div>
+                        <div className="text-sm font-semibold text-gray-500" style={{fontVariantNumeric: 'tabular-nums'}}>Passed</div>
+                    </div>
+                </div>
+            );
+        }
+
+        const seconds = Math.floor(diff / 1000) % 60;
+        const minutes = Math.floor(diff / (1000 * 60)) % 60;
+        const hours = Math.floor(diff / (1000 * 60 * 60)) % 24;
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+        const parts = [];
+        if (days > 0) parts.push(`${days}d`);
+        if (hours > 0 || days > 0) parts.push(`${hours}h`);
+        parts.push(`${String(minutes).padStart(2, '0')}m`);
+        parts.push(`${String(seconds).padStart(2, '0')}s`);
+
+        return (
+            <div className={`flex items-center justify-center bg-white border border-gray-200 rounded-lg shadow-sm px-4 py-2 w-full sm:w-40 ${isSoon ? 'ring-1 ring-yellow-200' : ''}`}>
+                <div className="flex flex-col items-center max-w-full">
+                    <div className="text-xs text-blue-800 font-medium truncate">{label}</div>
+                    <div className={`text-sm font-semibold ${isSoon ? 'text-yellow-700' : 'text-gray-800'}`} style={{fontVariantNumeric: 'tabular-nums'}}>{parts.join(' ')}</div>
+                </div>
+            </div>
+        );
+    };
+
+    // Hardcoded dates for the trade deadline and draft. Update these to match your league.
+    // Dates are interpreted as local time if no timezone provided; use ISO e.g. '2025-10-15T23:59:59Z' to be explicit.
+    const TRADE_DEADLINE = useMemo(() => new Date('2025-11-10T20:15:00Z'), []);
+    const DRAFT_DATE = useMemo(() => new Date('2026-09-05T18:00:00Z'), []);
+
     return (
         <>
             <style>{`
@@ -365,6 +424,13 @@ const Dashboard = () => {
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
+                {/* Small countdowns row: Trade deadline and Draft date */}
+                <div className="xl:col-span-3">
+                    <div className="flex flex-wrap items-center justify-center gap-3 mb-2 px-2">
+                        <Countdown targetDate={TRADE_DEADLINE} label="Trade Deadline" />
+                        <Countdown targetDate={DRAFT_DATE} label="Draft" />
+                    </div>
+                </div>
                 {/* Current Week Matchups - Ticker Style */}
                 <div className="xl:col-span-3">
                     <div className="bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
