@@ -8,6 +8,7 @@ import { getFirestore, doc, getDoc, setDoc, onSnapshot } from 'firebase/firestor
 import { getTransactionTotal } from '../utils/financialCalculations';
 import { formatScore } from '../utils/formatUtils';
 import { generateTransactionCountsFromSleeper, createTransactionCountSummary, createWeeklyTransactionReport } from '../utils/transactionIntegration';
+import { fetchLeagueData, fetchRostersWithDetails } from '../utils/sleeperApi';
 import { CURRENT_LEAGUE_ID } from '../config';
 
 // Your Firebase Config (should be replaced by env vars in a real app)
@@ -270,19 +271,36 @@ amount: ''
 		if (!selectedYear || !db) return; // Add a check for db to prevent the error
 
 		setFirestoreLoading(true);
-		const docRef = doc(db, 'league_finances', selectedYear);
+		const yearKey = String(selectedYear);
+		const docRef = doc(db, 'league_finances', yearKey);
+
+		// Fetch once immediately in case onSnapshot lags or there's a race
+		(async () => {
+			try {
+				const snap = await getDoc(docRef);
+				if (snap && snap.exists()) {
+					const data = snap.data();
+					setCurrentYearData(data && data.transactions ? data : { transactions: [], potentialFees: [], potentialPayouts: [] });
+				} else {
+					setCurrentYearData({ transactions: [], potentialFees: [], potentialPayouts: [] });
+				}
+			} catch (e) {
+				logger.error('Error doing initial getDoc for league_finances:', e);
+			}
+		})();
+
 		const unsub = onSnapshot(docRef, (docSnap) => {
 			if (docSnap.exists()) {
 				const data = docSnap.data();
 				setCurrentYearData(data && data.transactions ? data : { transactions: [], potentialFees: [], potentialPayouts: [] });
 			} else {
-                setCurrentYearData({ transactions: [], potentialFees: [], potentialPayouts: [] });
+				setCurrentYearData({ transactions: [], potentialFees: [], potentialPayouts: [] });
 			}
 			setFirestoreLoading(false);
 		}, (error) => {
 			logger.error("Error fetching Firestore data:", error);
-            setFirestoreLoading(false);
-        });
+			setFirestoreLoading(false);
+		});
 
 		return () => unsub();
 	}, [selectedYear, db]);
@@ -415,7 +433,7 @@ amount: ''
 		}
 	
 		try {
-			const docRef = doc(db, 'league_finances', selectedYear);
+			const docRef = doc(db, 'league_finances', String(selectedYear));
 			await setDoc(docRef, { ...currentYearData, transactions: newTransactions }, { merge: true });
 			setTransactionMessage({ text: messageText, type: 'success' });
 		} catch (e) {
@@ -449,7 +467,7 @@ amount: ''
 		const newTransactions = currentYearData.transactions.filter(t => !transactionIdsToDelete.has(t.id));
 
 		try {
-			const docRef = doc(db, 'league_finances', selectedYear);
+			const docRef = doc(db, 'league_finances', String(selectedYear));
 			await setDoc(docRef, { ...currentYearData, transactions: newTransactions }, { merge: true });
 			setTransactionMessage({ text: 'Transaction(s) deleted successfully!', type: 'success' });
 		} catch (e) {
@@ -493,7 +511,7 @@ amount: ''
 		}
 
 		try {
-			const docRef = doc(db, 'league_finances', selectedYear);
+			const docRef = doc(db, 'league_finances', String(selectedYear));
 			await setDoc(docRef, {
 				...currentYearData,
 				[type === 'fees' ? 'potentialFees' : 'potentialPayouts']: newPotentialArray
@@ -514,7 +532,7 @@ amount: ''
 		const newPotentialArray = currentYearData[type === 'fees' ? 'potentialFees' : 'potentialPayouts'].filter(t => t.id !== id);
 
 		try {
-			const docRef = doc(db, 'league_finances', selectedYear);
+			const docRef = doc(db, 'league_finances', String(selectedYear));
 			await setDoc(docRef, {
 				...currentYearData,
 				[type === 'fees' ? 'potentialFees' : 'potentialPayouts']: newPotentialArray
@@ -536,17 +554,44 @@ amount: ''
 		setImportStatus({ loading: true, message: 'Analyzing Sleeper transactions...', type: 'info' });
 
 		try {
-			// Get current league ID and roster data
-			const currentLeagueId = CURRENT_LEAGUE_ID;
-			const currentYear = parseInt(selectedYear);
-			const rostersData = historicalData?.rostersBySeason?.[currentYear];
+			const yearKey = String(selectedYear);
 
-			if (!rostersData) {
-				throw new Error(`No roster data found for ${currentYear}`);
+			// Prefer season-specific league ID from historical metadata
+			let leagueIdToUse = historicalData?.leaguesMetadataBySeason?.[yearKey]?.league_id || historicalData?.leaguesMetadataBySeason?.[yearKey]?.leagueId || historicalData?.leaguesMetadataBySeason?.[yearKey]?.id || null;
+
+			// If we don't have a league ID for that season, attempt to walk the league chain from CURRENT_LEAGUE_ID
+			if (!leagueIdToUse) {
+				try {
+					const chain = await fetchLeagueData(CURRENT_LEAGUE_ID);
+					if (Array.isArray(chain) && chain.length > 0) {
+						const matched = chain.find(l => String(l.season || l.settings?.season || l.year) === yearKey || String(l.league_id || l.id || l.leagueId) === yearKey);
+						if (matched) leagueIdToUse = matched.league_id || matched.id || matched.leagueId || null;
+					}
+				} catch (e) {
+					logger.error('Error fetching league chain for historical seasons:', e);
+				}
+			}
+
+			if (!leagueIdToUse) {
+				setImportStatus({ message: 'You need previous league IDs (historical league metadata) to analyze that season. Please add league IDs to historical data.', type: 'error' });
+				setImportStatus(prev => ({ ...prev, loading: false }));
+				return;
+			}
+
+			// Get roster data for that league/season; prefer historicalData but fall back to fetching
+			let rostersData = historicalData?.rostersBySeason?.[yearKey];
+			if (!rostersData || !Array.isArray(rostersData) || rostersData.length === 0) {
+				try {
+					rostersData = await fetchRostersWithDetails(leagueIdToUse);
+				} catch (e) {
+					logger.error('Error fetching rosters for historical league:', e);
+					setImportStatus({ message: `Failed to fetch roster data for ${selectedYear}`, type: 'error' });
+					return;
+				}
 			}
 
 			// Generate transaction counts from Sleeper
-			const result = await generateTransactionCountsFromSleeper(currentLeagueId, rostersData);
+			const result = await generateTransactionCountsFromSleeper(leagueIdToUse, rostersData);
 			
 			// Create summary for preview
 			const summary = createTransactionCountSummary(result.counts, usersData);
@@ -690,7 +735,7 @@ const applyBulkDefaultsToAll = () => {
 		}
 
 		try {
-			const docRef = doc(db, 'league_finances', selectedYear);
+			const docRef = doc(db, 'league_finances', String(selectedYear));
 			const newTransactions = validTransactions.map(bulkTxn => ({
 				id: `${Date.now()}_${Math.random()}`,
 				type: bulkTxn.type,
