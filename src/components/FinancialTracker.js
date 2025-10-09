@@ -58,6 +58,9 @@ const FinancialTracker = () => {
     const [importStatus, setImportStatus] = useState({ loading: false, message: '', type: '' });
     const [showImportPreview, setShowImportPreview] = useState(false);
     const [previewData, setPreviewData] = useState(null);
+
+    // request id to avoid stale async updates when switching years
+    const importRequestId = useRef(0);
     
     // Bulk transaction entry state
     const [showBulkEntry, setShowBulkEntry] = useState(false);
@@ -305,6 +308,15 @@ amount: ''
 		return () => unsub();
 	}, [selectedYear, db]);
 
+	// Clear any import preview/state when user switches selectedYear to avoid stale views
+	useEffect(() => {
+		// Increment request id to invalidate in-flight imports
+		importRequestId.current += 1;
+		setPreviewData(null);
+		setShowImportPreview(false);
+		setImportStatus({ loading: false, message: '', type: '' });
+	}, [selectedYear]);
+
 	// --- UPDATED HELPER FUNCTION TO GET TRANSACTION TOTAL ---
 	// This function is now imported from utils/financialCalculations.js
 	// --------------------------------------------------
@@ -551,6 +563,8 @@ amount: ''
 			return;
 		}
 
+		// mark this import attempt
+		const myRequestId = ++importRequestId.current;
 		setImportStatus({ loading: true, message: 'Analyzing Sleeper transactions...', type: 'info' });
 
 		try {
@@ -592,6 +606,12 @@ amount: ''
 
 			// Generate transaction counts from Sleeper
 			const result = await generateTransactionCountsFromSleeper(leagueIdToUse, rostersData);
+
+			// ignore result if another import started or year changed
+			if (myRequestId !== importRequestId.current) {
+				logger.debug('Stale import response ignored for year', selectedYear);
+				return;
+			}
 			
 			// Create summary for preview
 			const summary = createTransactionCountSummary(result.counts, usersData);
