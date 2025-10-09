@@ -36,6 +36,48 @@ const Dashboard = () => {
         return String(num);
     };
 
+    // Format currency for FAAB display
+    const formatCurrency = (v) => {
+        const num = Number(v || 0);
+        if (Number.isNaN(num)) return '$0.00';
+        return num.toLocaleString(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
+    };
+
+    // Normalize waiver_budget into a predictable array of entries:
+    // Supports shapes like:
+    //  - [{ sender: 2, receiver: 3, amount: 55 }, ...]
+    //  - [{ roster_id: '3', amount: 10 }, ...]
+    //  - [{ user_id: 'u', bid: 5 }, ...]
+    //  - [55, ...]
+    const normalizeWaiverBudget = (wb) => {
+        if (!wb) return [];
+        try {
+            if (!Array.isArray(wb)) return [];
+            return wb.map(item => {
+                if (item && typeof item === 'object') {
+                    // sender/receiver style
+                    if ('sender' in item || 'receiver' in item) {
+                        return {
+                            sender: item.sender ?? item.from ?? item.roster_id ?? null,
+                            receiver: item.receiver ?? item.to ?? item.roster_id ?? null,
+                            amount: Number(item.amount ?? item.bid ?? item.faab ?? item.wbid ?? 0)
+                        };
+                    }
+
+                    // roster_id / amount style
+                    return {
+                        roster_id: item.roster_id ?? item.rosterId ?? item.user_id ?? item.owner_id ?? item.ownerId ?? null,
+                        amount: Number(item.amount ?? item.bid ?? item.faab ?? item.wbid ?? 0)
+                    };
+                }
+                // primitive number case
+                return { roster_id: null, amount: Number(item) || 0 };
+            });
+        } catch (e) {
+            return [];
+        }
+    };
+
     // make fetch function reusable so we can refresh on demand
     const fetchTrending = async (lookbackHours = 24, limit = 40) => {
         try {
@@ -1020,6 +1062,25 @@ const Dashboard = () => {
                                             </div>
                                         </div>
                                     ))}
+                                    {/* FAAB / Waiver budget for trades (if present) */}
+                                    {(() => {
+                                        const normalized = normalizeWaiverBudget(transaction.waiver_budget || transaction.metadata?.waiver_budget || []);
+                                        if (!normalized || normalized.length === 0) return null;
+                                        const hasTransfers = normalized.some(e => 'sender' in e || 'receiver' in e);
+                                        const total = normalized.reduce((s, it) => s + (Number(it.amount) || 0), 0);
+                                        return (
+                                            <div className="mt-3 text-xs text-gray-600">
+                                                <div className="font-medium text-gray-800">FAAB Transferred: <span className="text-sm text-gray-700">{formatCurrency(total)}</span></div>
+                                                <div className="mt-1 grid grid-cols-1 gap-1 text-xs text-gray-600">
+                                                    {hasTransfers ? normalized.map((n, i) => (
+                                                        <div key={i}>{n.sender ? `Roster ${n.sender}` : 'Sender'} → {n.receiver ? `Roster ${n.receiver}` : 'Receiver'}: {formatCurrency(n.amount)}</div>
+                                                    )) : normalized.map((n, i) => (
+                                                        <div key={i}>{n.roster_id ? `Roster ${n.roster_id}` : 'Bid'}: {formatCurrency(n.amount)}</div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             ) : (
                                 /* Compact Non-Trade Layout (Waiver/Free Agent) */
@@ -1094,6 +1155,28 @@ const Dashboard = () => {
                                             </div>
                                         )}
                                     </div>
+                                    {/* FAAB / Waiver bid details (if available) */}
+                                    {(() => {
+                                        const normalized = normalizeWaiverBudget(transaction.waiver_budget || transaction.metadata?.waiver_budget || []);
+                                        if (!normalized || normalized.length === 0) return null;
+                                        const total = normalized.reduce((s, it) => s + (Number(it.amount) || 0), 0);
+                                        return (
+                                            <div className="mt-3 text-xs text-gray-600">
+                                                <div className="font-medium text-gray-800">FAAB Spent: <span className="text-sm text-gray-700">{formatCurrency(total)}</span></div>
+                                                <div className="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-1">
+                                                    {normalized.map((n, i) => (
+                                                        <div key={i} className="text-xs text-gray-600">
+                                                            {n.sender || n.receiver ? (
+                                                                `${n.sender ? `Roster ${n.sender}` : 'Sender'} → ${n.receiver ? `Roster ${n.receiver}` : 'Receiver'}: ${formatCurrency(n.amount)}`
+                                                            ) : (
+                                                                `${n.roster_id ? `Roster ${n.roster_id}` : 'Bid'}: ${formatCurrency(n.amount)}`
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             )}
                         </div>

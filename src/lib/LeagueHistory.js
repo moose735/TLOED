@@ -3,6 +3,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { calculateAllLeagueMetrics } from '../utils/calculations'; // For career DPR
 import { useSleeperData } from '../contexts/SleeperDataContext'; // Import the custom hook
 import logger from '../utils/logger';
+import { fetchTransactionsForWeek } from '../utils/sleeperApi';
+import { fetchFinancialDataForYears } from '../services/financialService';
 import { calculatePlayoffFinishes } from '../utils/playoffRankings'; // Import the playoff calculation function
 
 // Recharts for charting
@@ -36,11 +38,12 @@ const LeagueHistory = () => {
     const {
         loading: contextLoading,
         error: contextError,
-        historicalData, // Contains matchupsBySeason, winnersBracketBySeason, losersBracketBySeason, rostersBySeason, leaguesMetadataBySeason, usersBySeason
-        allDraftHistory, // Added allDraftHistory from context
-        nflState, // NEW: Import nflState from context
-        getTeamName: getDisplayTeamNameFromContext, // Renamed to avoid conflict with prop name
-        getTeamDetails
+        historicalData,
+        allDraftHistory,
+        nflState,
+        getTeamName: getDisplayTeamNameFromContext,
+        getTeamDetails,
+        transactions
     } = useSleeperData();
 
     const [allTimeStandings, setAllTimeStandings] = useState([]);
@@ -52,11 +55,15 @@ const LeagueHistory = () => {
     const [sortedYearsForAwards, setSortedYearsForAwards] = useState([]);
     const [showAllSeasons, setShowAllSeasons] = useState(false);
     const [averageScoreChartData, setAverageScoreChartData] = useState([]);
+    const [tradePairCounts, setTradePairCounts] = useState([]); // [{teamA, teamB, ownerA, ownerB, count}]
     
     // Season range filtering for charts
     const [availableYears, setAvailableYears] = useState([]);
     const [selectedStartYear, setSelectedStartYear] = useState('');
     const [selectedEndYear, setSelectedEndYear] = useState('');
+    // Module-level in-memory cache for aggregated league transactions to reduce repeated full-season fetches
+    // Structure: { [leagueId]: { timestamp: number, transactions: Array } }
+    const leagueTxCache = React.useRef(new Map());
 
     // A color palette for the teams in the chart
     const teamColors = [
@@ -81,29 +88,7 @@ const LeagueHistory = () => {
         return null;
     };
 
-
-
     useEffect(() => {
-        if (contextLoading || contextError || !historicalData || !historicalData.matchupsBySeason || Object.keys(historicalData.matchupsBySeason).length === 0) {
-            setAllTimeStandings([]);
-            setSeasonalDPRChartData([]);
-            setUniqueTeamsForChart([]);
-            setSeasonAwardsSummary({});
-            setSortedYearsForAwards([]);
-            setAverageScoreChartData([]);
-            return;
-        }
-
-        // Ensure getDisplayTeamNameFromContext is a function
-        if (typeof getDisplayTeamNameFromContext !== 'function') {
-            logger.error("LeagueHistory: getDisplayTeamNameFromContext is not a function. Cannot process data.");
-            setAllTimeStandings([]);
-            setSeasonalDPRChartData([]);
-            setUniqueTeamsForChart([]);
-            setSeasonAwardsSummary({});
-            setSortedYearsForAwards([]);
-            return;
-        }
 
         // Use calculateAllLeagueMetrics directly with historicalData
         // NEW: Pass nflState to calculateAllLeagueMetrics
@@ -540,7 +525,151 @@ const LeagueHistory = () => {
         // Set the season awards summary and sorted years
         setSeasonAwardsSummary(newSeasonAwardsSummary);
         setSortedYearsForAwards(Object.keys(newSeasonAwardsSummary).map(Number).sort((a, b) => b - a)); // Sort descending
-    }, [historicalData, allDraftHistory, nflState, getDisplayTeamNameFromContext, contextLoading, contextError]); // Dependencies updated with nflState
+
+        // --- Compute pairwise trade counts across all available years (financial records + context.transactions) ---
+        (async () => {
+            try {
+                const pairCounts = {}; // key: smallerOwner|largerOwner -> count
+
+            // Helper: get ownerId for a roster_id in a given year
+            const getOwnerIdForRoster = (rosterId, year) => {
+                if (!historicalData || !historicalData.rostersBySeason) return null;
+                // Prefer exact year lookup, but fall back to scanning all years if not found
+                const tryYears = [];
+                if (year) tryYears.push(String(year));
+                // also try the transaction's rosterId->year map if present
+                tryYears.push(...Object.keys(historicalData.rostersBySeason));
+                for (const y of tryYears) {
+                    const rostersForYear = historicalData.rostersBySeason[y] || [];
+                    const found = rostersForYear.find(r => String(r.roster_id) === String(rosterId));
+                    if (found) return String(found.owner_id);
+                }
+                return null;
+            };
+
+            // Gather all years present in historicalData.rostersBySeason
+            const allYears = Object.keys(historicalData.rostersBySeason || {}).sort();
+
+            // Fetch financial data for all years (if any) and collect transactions
+            let financialTransactions = [];
+            if (allYears.length > 0) {
+                try {
+                    const financialDataByYear = await fetchFinancialDataForYears(allYears);
+                    financialTransactions = Object.values(financialDataByYear).flatMap(y => (y && y.transactions) ? y.transactions : []);
+                } catch (err) {
+                    logger.warn('LeagueHistory: could not fetch financial data for all years:', err);
+                    financialTransactions = [];
+                }
+            }
+
+            // Additionally fetch transactions directly from historical league IDs so we include transactions saved by Sleeper per league/season
+            let leagueFetchedTransactions = [];
+            try {
+                // Determine which seasons to fetch leagues for
+                const seasonsToFetch = Object.keys(historicalData.leaguesMetadataBySeason || {});
+                const CACHE_EXPIRY_MS = 6 * 60 * 60 * 1000; // 6 hours
+                for (const season of seasonsToFetch) {
+                    const leagueMeta = historicalData.leaguesMetadataBySeason?.[String(season)];
+                    const leagueId = leagueMeta?.league_id || leagueMeta?.leagueId || leagueMeta?.id || null;
+                    if (!leagueId) continue;
+
+                    // Check module-level cache first
+                    const cached = leagueTxCache.current.get(leagueId);
+                    if (cached && (Date.now() - cached.timestamp < CACHE_EXPIRY_MS)) {
+                        leagueFetchedTransactions.push(...cached.transactions);
+                        continue;
+                    }
+
+                    // Conservative max weeks to fetch - use nflState.week for current season if available, otherwise 18
+                    const maxWeeks = (String(season) === String(nflState?.season) && nflState?.week) ? Math.max(1, nflState.week) : 18;
+                    const weekPromises = [];
+                    for (let w = 1; w <= maxWeeks; w++) {
+                        weekPromises.push(fetchTransactionsForWeek(leagueId, w).catch(err => { logger.debug(`LeagueHistory: fetchTransactionsForWeek failed for ${leagueId} week ${w}: ${err}`); return []; }));
+                    }
+                    const results = await Promise.all(weekPromises);
+                    const seasonTx = results.flat().map(tx => { if (tx && !tx.season) tx.season = season; return tx; }).filter(Boolean);
+                    // store in module-level cache
+                    leagueTxCache.current.set(leagueId, { timestamp: Date.now(), transactions: seasonTx });
+                    leagueFetchedTransactions.push(...seasonTx);
+                }
+            } catch (err) {
+                logger.warn('LeagueHistory: error fetching league transactions for historical leagues', err);
+            }
+
+            // Combine financial transactions (all years) with context transactions (likely current-season/week-by-week fetches)
+            const contextTx = Array.isArray(transactions) ? transactions : [];
+            const allTx = [...financialTransactions, ...leagueFetchedTransactions, ...contextTx];
+
+            // Use all transactions (financial, league-fetched, and context) for all-time aggregation
+            const filteredTx = allTx;
+
+            filteredTx.forEach(tx => {
+                try {
+                    if (!tx) return;
+                    // Only consider completed trades (financial transactions may use slightly different shapes)
+                    if (String(tx.type).toLowerCase() !== 'trade') return;
+                    if (tx.status && String(tx.status).toLowerCase() === 'failed') return;
+
+                    // roster_ids is an array of roster ids participating in the trade
+                    const rosterIds = Array.isArray(tx.roster_ids) ? tx.roster_ids.map(r => String(r)) : [];
+                    // If roster_ids not present, try to infer from adds/drops or metadata
+                    if (rosterIds.length === 0) {
+                        const inferred = new Set();
+                        if (tx.adds) Object.values(tx.adds).forEach(v => { if (v?.roster_id) inferred.add(String(v.roster_id)); });
+                        if (tx.drops) Object.values(tx.drops).forEach(v => { if (v?.roster_id) inferred.add(String(v.roster_id)); });
+                        // Some financial transactions store roster mappings in metadata or team fields
+                        if (tx.team && Array.isArray(tx.team)) tx.team.forEach(t => inferred.add(String(t)));
+                        rosterIds.push(...Array.from(inferred));
+                    }
+
+                    // Determine year for this transaction: prefer tx.season or tx.year or metadata.season or created timestamp
+                    let txYear = tx.season || tx.year || tx.metadata?.season || null;
+                    if (!txYear && tx.created) {
+                        try { txYear = new Date(tx.created).getFullYear(); } catch (e) { txYear = null; }
+                    }
+                    // Default to most recent year in historicalData if still missing
+                    if (!txYear) txYear = allYears.length ? allYears[allYears.length - 1] : null;
+
+                    // Map roster ids to owner ids for the transaction year
+                    const ownerIds = rosterIds.map(rid => getOwnerIdForRoster(rid, txYear)).filter(Boolean);
+
+                    // If we have at least two distinct owners, count each unique unordered pair once
+                    const uniqueOwners = Array.from(new Set(ownerIds.map(o => String(o))));
+                    if (uniqueOwners.length < 2) return;
+
+                    for (let i = 0; i < uniqueOwners.length; i++) {
+                        for (let j = i + 1; j < uniqueOwners.length; j++) {
+                            const a = uniqueOwners[i];
+                            const b = uniqueOwners[j];
+                            const [s, l] = a < b ? [a, b] : [b, a];
+                            const key = `${s}|${l}`;
+                            pairCounts[key] = (pairCounts[key] || 0) + 1;
+                        }
+                    }
+                } catch (e) {
+                    // ignore malformed tx
+                }
+            });
+
+                // Convert to array with team display names
+            const pairsArray = Object.keys(pairCounts).map(k => {
+                const [a, b] = k.split('|');
+                return {
+                    ownerA: a,
+                    ownerB: b,
+                    teamA: getDisplayTeamNameFromContext(a, null),
+                    teamB: getDisplayTeamNameFromContext(b, null),
+                    count: pairCounts[k]
+                };
+            }).sort((x, y) => y.count - x.count);
+
+                setTradePairCounts(pairsArray);
+            } catch (e) {
+                // fail silently
+                setTradePairCounts([]);
+            }
+        })();
+    }, [historicalData, allDraftHistory, nflState, getDisplayTeamNameFromContext, contextLoading, contextError, transactions]); // Dependencies updated with nflState, transactions
 
 
     // Formatter
@@ -721,7 +850,7 @@ const LeagueHistory = () => {
     };
 
     return (
-        <div className="w-full max-w-5xl mx-auto p-2 sm:p-4 md:p-8 font-inter">
+    <div className="w-full max-w-5xl mx-auto p-2 sm:p-4 md:p-8 font-inter">
             <h2 className="text-2xl font-bold text-blue-700 mb-4 text-center">League History & Awards</h2>
             {contextLoading ? (
                 <p className="text-center text-gray-600">Loading league history data...</p>
@@ -736,15 +865,15 @@ const LeagueHistory = () => {
                         {getSortedStandings().map((team, idx) => {
                             const teamDetails = getTeamDetails ? getTeamDetails(team.ownerId, null) : { name: team.team, avatar: undefined };
                             return (
-                                <div key={team.team} className="bg-white rounded-lg shadow-md mobile-card p-4 border-l-4 border-blue-500">
+                                <div key={team.team} className="bg-white rounded-lg shadow-md mobile-card p-3 sm:p-4 border-l-4 border-blue-500">
                                     <div className="flex items-center justify-between mb-3">
                                         <div className="flex items-center space-x-3">
-                                            <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">{idx + 1}</div>
+                                            <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold">{idx + 1}</div>
                                             {teamDetails.avatar && (
                                                 <img
                                                     src={teamDetails.avatar}
                                                     alt={teamDetails.name + ' logo'}
-                                                    className="w-10 h-10 rounded-full border-2 border-blue-300 shadow-sm object-cover flex-shrink-0"
+                                                    className="w-8 h-8 rounded-full border-2 border-blue-300 shadow-sm object-cover flex-shrink-0"
                                                     onError={e => { e.target.onerror = null; e.target.src = '/LeagueLogo.PNG'; }}
                                                 />
                                             )}
@@ -812,6 +941,9 @@ const LeagueHistory = () => {
                             );
                         })}
                     </div>
+
+                    
+
                     {/* Desktop Table View */}
                     <div className="hidden sm:block overflow-x-auto shadow-lg rounded-lg mb-8">
                         <table className="min-w-full bg-white border border-gray-200 rounded-lg">
@@ -899,6 +1031,96 @@ const LeagueHistory = () => {
                             </tbody>
                         </table>
                     </div>
+                    {/* Trade partner grid/matrix (moved below standings) */}
+                    <div className="bg-white rounded-lg shadow-md p-4 border border-gray-100 mb-6 mt-4">
+                        <div className="mb-3">
+                            {/* Match Season-by-Season heading style */}
+                            <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Trade Partner Matrix (All time)</h3>
+                        </div>
+                        {(!tradePairCounts || tradePairCounts.length === 0) && (!allTimeStandings || allTimeStandings.length === 0) ? (
+                            <div className="text-sm text-gray-500">No trade or team data available.</div>
+                        ) : (
+                            (() => {
+                                // Build owner list (include owners from standings and pairs). Use all-time owner list.
+                                const ownersFromPairs = new Set();
+                                tradePairCounts.forEach(p => { ownersFromPairs.add(String(p.ownerA)); ownersFromPairs.add(String(p.ownerB)); });
+                                const ownersFromStandings = (allTimeStandings || []).map(t => String(t.ownerId));
+                                const combinedOwners = Array.from(new Set([...ownersFromStandings, ...Array.from(ownersFromPairs)])).filter(Boolean);
+
+                                // Map ownerId -> display name
+                                const ownerIdToName = {};
+                                combinedOwners.forEach(id => { ownerIdToName[id] = getDisplayTeamNameFromContext(id, null); });
+
+                                // Build counts map, symmetric
+                                const counts = {};
+                                combinedOwners.forEach(a => { counts[a] = {}; combinedOwners.forEach(b => { counts[a][b] = 0; }); });
+                                tradePairCounts.forEach(p => {
+                                    const a = String(p.ownerA);
+                                    const b = String(p.ownerB);
+                                    if (!counts[a]) counts[a] = {};
+                                    if (!counts[b]) counts[b] = {};
+                                    counts[a][b] = p.count || 0;
+                                    counts[b][a] = p.count || 0;
+                                });
+
+                                // Find max count for heat scaling
+                                const maxCount = tradePairCounts.reduce((m, p) => Math.max(m, p.count || 0), 0) || 1;
+
+                                const heatColor = (n) => {
+                                    if (!n || n === 0) return '';
+                                    const ratio = Math.min(1, n / maxCount);
+                                    const start = [235, 248, 255];
+                                    const end = [14, 165, 233];
+                                    const r = Math.round(start[0] + (end[0] - start[0]) * ratio);
+                                    const g = Math.round(start[1] + (end[1] - start[1]) * ratio);
+                                    const b = Math.round(start[2] + (end[2] - start[2]) * ratio);
+                                    return `rgb(${r}, ${g}, ${b})`;
+                                };
+
+                                return (
+                                    <div className="overflow-auto border rounded-md" style={{ maxHeight: '420px' }}>
+                                        <table className="min-w-full text-xs table-fixed border-collapse">
+                                            <thead>
+                                                <tr>
+                                                    {/* Header placeholder for left sticky column - shrink further for mobile */}
+                                                    <th className="sticky left-0 top-0 bg-white z-30 border-b border-r px-2 py-2" style={{ minWidth: '56px', maxWidth: '160px' }}></th>
+                                                    {combinedOwners.map((ownerId) => (
+                                                                        <th key={`col-${ownerId}`} className="py-1 px-1 text-center text-xs font-medium text-gray-800 border-b border-gray-200 bg-white sticky top-0" style={{ minWidth: '72px', maxWidth: '140px' }}>
+                                                                            <div className="whitespace-normal break-words text-xs font-medium text-gray-800 text-center" title={ownerIdToName[ownerId]} style={{ lineHeight: '1.05' }}>
+                                                                                {ownerIdToName[ownerId]}
+                                                                            </div>
+                                                                        </th>
+                                                                    ))}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {combinedOwners.map((rowOwner, rowIdx) => (
+                                                    <tr key={`row-${rowOwner}`} className={rowIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50 hover:bg-gray-100'}>
+                                                        <td className="sticky left-0 bg-white z-20 border-r px-2 py-1 font-medium text-xs text-gray-800 text-center" style={{ minWidth: '80px', maxWidth: '220px' }}>
+                                                                    <div className="text-xs font-medium whitespace-normal break-words text-center" style={{ lineHeight: '1.05', wordBreak: 'break-word', overflowWrap: 'anywhere' }} title={ownerIdToName[rowOwner]}>
+                                                                        {ownerIdToName[rowOwner]}
+                                                                    </div>
+                                                                </td>
+                                                        {combinedOwners.map((colOwner) => {
+                                                            const val = rowOwner === colOwner ? null : (counts[rowOwner] && counts[rowOwner][colOwner] ? counts[rowOwner][colOwner] : 0);
+                                                            const bg = val ? heatColor(val) : undefined;
+                                                            return (
+                                                                <td key={`${rowOwner}-${colOwner}`} className="px-1 py-1 text-center border-b align-middle text-xs" style={{ background: bg }}>
+                                                                    {rowOwner === colOwner ? (<span className="text-gray-400">—</span>) : (
+                                                                        <span className="font-semibold text-xs" style={{ color: val ? '#0b5f92' : '#6b7280' }}>{val}</span>
+                                                                    )}
+                                                                </td>
+                                                            );
+                                                        })}
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                );
+                            })()
+                        )}
+                    </div>
                     {/* ...existing code for season-by-season and chart... */}
 
                     {/* Season-by-Season Champions & Awards */}
@@ -982,44 +1204,80 @@ const LeagueHistory = () => {
                                     )}
                                 </div>
 
-                                {/* Desktop compact table */}
-                                <div className="hidden sm:block overflow-x-auto">
-                                    <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
-                                        <thead className="bg-blue-50">
-                                            <tr>
-                                                <th className="py-2 px-2 text-center text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Year</th>
-                                                <th className="py-2 px-2 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Champion</th>
-                                                <th className="py-2 px-2 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">2nd</th>
-                                                <th className="py-2 px-2 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">3rd</th>
-                                                <th className="py-2 px-2 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Points Champ</th>
-                                                <th className="py-2 px-2 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Points 2nd</th>
-                                                <th className="py-2 px-2 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider border-b border-gray-200">Points 3rd</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {(showAllSeasons ? sortedYearsForAwards : sortedYearsForAwards.slice(0, 8)).map((year, index) => {
-                                                const awards = seasonAwardsSummary[year];
-                                                return (
-                                                    <tr key={`desktop-awards-${year}`} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                                        <td className="py-2 px-2 text-sm text-gray-800 font-semibold text-center whitespace-nowrap">{year}</td>
-                                                        <td className="py-2 px-2 text-sm text-gray-700 font-medium truncate" title={awards.champion}>{awards.champion}</td>
-                                                        <td className="py-2 px-2 text-sm text-gray-700 truncate" title={awards.secondPlace}>{awards.secondPlace}</td>
-                                                        <td className="py-2 px-2 text-sm text-gray-700 truncate" title={awards.thirdPlace}>{awards.thirdPlace}</td>
-                                                        <td className="py-2 px-2 text-sm text-gray-700 truncate" title={awards.pointsChamp}>{awards.pointsChamp}</td>
-                                                        <td className="py-2 px-2 text-sm text-gray-700 truncate" title={awards.pointsSecond}>{awards.pointsSecond}</td>
-                                                        <td className="py-2 px-2 text-sm text-gray-700 truncate" title={awards.pointsThird}>{awards.pointsThird}</td>
-                                                    </tr>
-                                                );
-                                            })}
-                                            {(!showAllSeasons && sortedYearsForAwards.length > 8) && (
-                                                <tr>
-                                                    <td colSpan={7} className="py-2 px-2 text-center">
-                                                        <button className="text-blue-600 text-sm font-medium" onClick={() => setShowAllSeasons(true)}>{`Show all ${sortedYearsForAwards.length}`}</button>
-                                                    </td>
-                                                </tr>
-                                            )}
-                                        </tbody>
-                                    </table>
+                                {/* Desktop: reuse mobile card layout so desktop matches mobile exactly */}
+                                <div className="hidden sm:block space-y-3 mb-4">
+                                    {(showAllSeasons ? sortedYearsForAwards : sortedYearsForAwards.slice(0, 8)).map((year) => {
+                                        const awards = seasonAwardsSummary[year];
+                                        return (
+                                            <div key={`desktop-awards-${year}`} className="bg-white rounded-lg shadow-sm p-3 border-l-4 border-blue-500">
+                                                <div className="flex items-start gap-4">
+                                                    {/* Year column */}
+                                                    <div className="w-20 flex-shrink-0 text-sm font-semibold text-gray-800 mt-1">{year}</div>
+
+                                                    {/* Awards area: two horizontal rows, aligned columns */}
+                                                    <div className="flex-1">
+                                                        <div className="grid grid-cols-3 gap-6 mb-2">
+                                                            <div className="flex items-center gap-2">
+                                                                <i className="fas fa-trophy text-yellow-500 text-sm"></i>
+                                                                <div className="min-w-0">
+                                                                    <div className="text-xs text-gray-500">Champion</div>
+                                                                    <div className="text-sm font-medium truncate" title={awards.champion}>{awards.champion}</div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <i className="fas fa-trophy text-gray-400 text-sm"></i>
+                                                                <div className="min-w-0">
+                                                                    <div className="text-xs text-gray-500">2nd Place</div>
+                                                                    <div className="text-sm font-medium truncate" title={awards.secondPlace}>{awards.secondPlace}</div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <i className="fas fa-trophy text-amber-800 text-sm"></i>
+                                                                <div className="min-w-0">
+                                                                    <div className="text-xs text-gray-500">3rd Place</div>
+                                                                    <div className="text-sm font-medium truncate" title={awards.thirdPlace}>{awards.thirdPlace}</div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-3 gap-6">
+                                                            <div className="flex items-center gap-2">
+                                                                <i className="fas fa-medal text-yellow-500 text-sm"></i>
+                                                                <div className="min-w-0">
+                                                                    <div className="text-xs text-gray-500">Points Champ</div>
+                                                                    <div className="text-sm font-medium truncate" title={awards.pointsChamp}>{awards.pointsChamp}</div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <i className="fas fa-medal text-gray-400 text-sm"></i>
+                                                                <div className="min-w-0">
+                                                                    <div className="text-xs text-gray-500">Points 2nd</div>
+                                                                    <div className="text-sm font-medium truncate" title={awards.pointsSecond}>{awards.pointsSecond}</div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <i className="fas fa-medal text-amber-800 text-sm"></i>
+                                                                <div className="min-w-0">
+                                                                    <div className="text-xs text-gray-500">Points 3rd</div>
+                                                                    <div className="text-sm font-medium truncate" title={awards.pointsThird}>{awards.pointsThird}</div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    {sortedYearsForAwards.length > 8 && (
+                                        <div className="flex justify-center mt-2">
+                                            <button
+                                                className="text-blue-600 text-sm font-medium"
+                                                onClick={() => setShowAllSeasons(!showAllSeasons)}
+                                            >
+                                                {showAllSeasons ? 'Show less' : `Show all ${sortedYearsForAwards.length}`}
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             </>
                         ) : (
