@@ -3,6 +3,8 @@ import { useSleeperData } from '../contexts/SleeperDataContext';
 import { calculateAllLeagueMetrics } from '../utils/calculations';
 import { fetchFinancialDataForYears } from '../services/financialService';
 import { calculateCareerTransactionCountsByOwnerId } from '../utils/financialCalculations';
+import { useEffect as useEffectHistory, useState as useStateHistory } from 'react';
+import LeagueHistory from './LeagueHistory';
 import logger from '../utils/logger';
 
 const LeagueRecords = () => {
@@ -14,6 +16,35 @@ const LeagueRecords = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [financialDataByYear, setFinancialDataByYear] = useState({});
     const [loadingFinancial, setLoadingFinancial] = useState(false);
+    // For syncing with LeagueHistory transaction totals
+    const [transactionTotals, setTransactionTotals] = useStateHistory([]);
+    // Get transaction totals from LeagueHistory (waivers and trades)
+    useEffectHistory(() => {
+        // Try to get the totals from localStorage (if LeagueHistory has set them)
+        const storedTotals = window.localStorage.getItem('teamTransactionTotals');
+        if (storedTotals) {
+            try {
+                setTransactionTotals(JSON.parse(storedTotals));
+            } catch (e) {
+                setTransactionTotals([]);
+            }
+        }
+        // Listen for updates from LeagueHistory so we can update reactively
+        const handler = (e) => {
+            try {
+                if (e && e.detail) setTransactionTotals(e.detail);
+            } catch (err) {
+                // ignore
+            }
+        };
+        window.addEventListener('teamTransactionTotalsUpdated', handler);
+        return () => window.removeEventListener('teamTransactionTotalsUpdated', handler);
+    }, []);
+
+    // Persist computed metrics so we can re-run calculations when transactionTotals updates
+    const [computedCareerDPRs, setComputedCareerDPRs] = useState(null);
+    const [computedSeasonalMetrics, setComputedSeasonalMetrics] = useState(null);
+    const [computedFinancialData, setComputedFinancialData] = useState({});
     const formatConfig = {
         highestDPR: { decimals: 3, type: 'decimal' },
         lowestDPR: { decimals: 3, type: 'decimal' },
@@ -232,16 +263,26 @@ const LeagueRecords = () => {
             .sort((a, b) => b.value - a.value)
             .slice(0, 5);
 
-        // Add transaction count rankings
-        rankings.mostTrades = calculatedCareerDPRs
-            .map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.careerTradeFees }))
-            .sort((a, b) => b.value - a.value)
-            .slice(0, 5);
-            
-        rankings.mostWaivers = calculatedCareerDPRs
-            .map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.careerWaiverFees }))
-            .sort((a, b) => b.value - a.value)
-            .slice(0, 5);
+        // Use LeagueHistory's transaction totals if available
+        if (transactionTotals && transactionTotals.length > 0) {
+            rankings.mostTrades = [...transactionTotals]
+                .map(t => ({ name: t.teamName, ownerId: t.ownerId, value: t.trades }))
+                .sort((a, b) => b.value - a.value)
+                .slice(0, 5);
+            rankings.mostWaivers = [...transactionTotals]
+                .map(t => ({ name: t.teamName, ownerId: t.ownerId, value: t.pickups }))
+                .sort((a, b) => b.value - a.value)
+                .slice(0, 5);
+        } else {
+            rankings.mostTrades = calculatedCareerDPRs
+                .map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.careerTradeFees }))
+                .sort((a, b) => b.value - a.value)
+                .slice(0, 5);
+            rankings.mostWaivers = calculatedCareerDPRs
+                .map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.careerWaiverFees }))
+                .sort((a, b) => b.value - a.value)
+                .slice(0, 5);
+        }
 
         // Add points share rankings
         rankings.highestPointsShare = calculatedCareerDPRs
@@ -277,8 +318,9 @@ const LeagueRecords = () => {
         let mostPointsAgainst = { value: -Infinity, teams: [], key: 'mostPointsAgainst' };
         let bestLuck = { value: -Infinity, teams: [], key: 'bestLuck' };
         let worstLuck = { value: Infinity, teams: [], key: 'worstLuck' };
-        let mostTrades = { value: -Infinity, teams: [], key: 'mostTrades' };
-        let mostWaivers = { value: -Infinity, teams: [], key: 'mostWaivers' };
+    // Use transactionTotals for trades/waivers records
+    let mostTrades = { value: -Infinity, teams: [], key: 'mostTrades' };
+    let mostWaivers = { value: -Infinity, teams: [], key: 'mostWaivers' };
         let highestPointsShare = { value: -Infinity, teams: [], key: 'highestPointsShare' };
         let lowestPointsShare = { value: Infinity, teams: [], key: 'lowestPointsShare' };
         let mostPointsChampionships = { value: -Infinity, teams: [], key: 'mostPointsChampionships' };
@@ -320,10 +362,6 @@ const LeagueRecords = () => {
                 updateRecord(bestAllPlayWinPct, careerStats.allPlayWinPercentage, { name: teamName, value: careerStats.allPlayWinPercentage, ownerId: ownerId });
             }
 
-            // Calculate transaction counts
-            updateRecord(mostTrades, careerStats.careerTradeFees, { name: teamName, value: careerStats.careerTradeFees, ownerId: ownerId });
-            updateRecord(mostWaivers, careerStats.careerWaiverFees, { name: teamName, value: careerStats.careerWaiverFees, ownerId: ownerId });
-            
             // Calculate points share records
             if (careerStats.highestPointsShare !== undefined && careerStats.highestPointsShare > 0) {
                 updateRecord(highestPointsShare, careerStats.highestPointsShare, { name: teamName, value: careerStats.highestPointsShare, ownerId: ownerId });
@@ -353,6 +391,24 @@ const LeagueRecords = () => {
             updateRecord(mostWinningSeasons, winningSeasonsCount, { name: teamName, value: winningSeasonsCount, ownerId: ownerId });
             updateRecord(mostLosingSeasons, losingSeasonsCount, { name: teamName, value: losingSeasonsCount, ownerId: ownerId });
         });
+
+        // Use transactionTotals for trades/waivers records when available; otherwise fall back to careerDPR data
+        if (transactionTotals && transactionTotals.length > 0) {
+            const sortedTrades = [...transactionTotals].sort((a, b) => b.trades - a.trades);
+            const sortedWaivers = [...transactionTotals].sort((a, b) => b.pickups - a.pickups);
+            mostTrades.value = sortedTrades[0]?.trades || 0;
+            mostTrades.teams = sortedTrades.filter(t => t.trades === mostTrades.value).map(t => ({ name: t.teamName, value: t.trades, ownerId: t.ownerId }));
+            mostWaivers.value = sortedWaivers[0]?.pickups || 0;
+            mostWaivers.teams = sortedWaivers.filter(t => t.pickups === mostWaivers.value).map(t => ({ name: t.teamName, value: t.pickups, ownerId: t.ownerId }));
+        } else {
+            // Fallback: compute from calculatedCareerDPRs careerTradeFees/careerWaiverFees
+            calculatedCareerDPRs.forEach(careerStats => {
+                const teamName = careerStats.teamName;
+                const ownerId = careerStats.ownerId;
+                updateRecord(mostTrades, careerStats.careerTradeFees || 0, { name: teamName, value: careerStats.careerTradeFees || 0, ownerId });
+                updateRecord(mostWaivers, careerStats.careerWaiverFees || 0, { name: teamName, value: careerStats.careerWaiverFees || 0, ownerId });
+            });
+        }
 
         setAllTimeRecords({
             highestDPR,
@@ -409,7 +465,11 @@ const LeagueRecords = () => {
                 setLoadingFinancial(false);
                 
                 // Now do all calculations that need both league and financial data
-                doAllCalculations(calculatedCareerDPRs, seasonalMetrics, financialData);
+                    // store computed metrics so we can re-run if transactionTotals updates later
+                    setComputedCareerDPRs(calculatedCareerDPRs);
+                    setComputedSeasonalMetrics(seasonalMetrics);
+                    setComputedFinancialData(financialData);
+                    doAllCalculations(calculatedCareerDPRs, seasonalMetrics, financialData);
                 setIsLoading(false);
             };
             
@@ -431,6 +491,13 @@ const LeagueRecords = () => {
             setIsLoading(false);
         }
     }, [historicalData, allDraftHistory, getTeamName, loading, error, nflState]);
+
+    // Re-run calculations when transactionTotals updates so records/top-5 reflect the latest totals
+    useEffect(() => {
+        if (computedCareerDPRs && computedSeasonalMetrics) {
+            doAllCalculations(computedCareerDPRs, computedSeasonalMetrics, computedFinancialData || {});
+        }
+    }, [transactionTotals]);
 
     if (isLoading) {
         return <div className="text-center py-8">Loading all-time league records...</div>;

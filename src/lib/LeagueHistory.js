@@ -133,6 +133,15 @@ const LeagueHistory = () => {
                 ownerId: ownerId // Keep ownerId for awards lookup
             };
         });
+
+        // Store teamTransactionTotals in localStorage for LeagueRecords to use
+        if (teamTransactionTotals && teamTransactionTotals.length > 0) {
+            try {
+                window.localStorage.setItem('teamTransactionTotals', JSON.stringify(teamTransactionTotals));
+            } catch (e) {
+                // ignore
+            }
+        }
     logger.debug("LeagueHistory: teamOverallStats after population:", teamOverallStats); // NEW LOG
 
 
@@ -788,6 +797,18 @@ const LeagueHistory = () => {
             setTradePairCounts(pairsArray);
             setTeamTransactionTotals(totalsArray);
             setDraftPickTrades(draftPickTradesData);
+            // Persist and broadcast so other components (eg. LeagueRecords) can consume the computed totals
+            try {
+                window.localStorage.setItem('teamTransactionTotals', JSON.stringify(totalsArray));
+            } catch (e) {
+                // ignore storage errors
+            }
+            try {
+                const ev = new CustomEvent('teamTransactionTotalsUpdated', { detail: totalsArray });
+                window.dispatchEvent(ev);
+            } catch (e) {
+                // ignore dispatch errors
+            }
             } catch (e) {
                 // fail silently
                 setTradePairCounts([]);
