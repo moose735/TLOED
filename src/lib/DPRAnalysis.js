@@ -26,6 +26,7 @@ const DPRAnalysis = () => {
   const [seasonalDPRData, setSeasonalDPRData] = useState([]);
   const [loading, setLoading] = useState(true); // Local loading state for calculations
   const [showAllSeasonal, setShowAllSeasonal] = useState(false); // New state for "Show More"
+  const [showEmpirical, setShowEmpirical] = useState(false); // Collapsible empirical DPR section (collapsed by default)
 
   useEffect(() => {
     // Always define metrics before any other logic
@@ -543,54 +544,73 @@ const DPRAnalysis = () => {
             <h3 className="text-xl font-bold text-green-800 mb-4 border-b pb-2">Best Seasons by DPR</h3>
             {/* Playoff probability summary based on historical DPR buckets */}
             <div className="mb-4">
-              <h4 className="text-sm font-semibold text-gray-700 mb-2">Empirical Playoff Probability by DPR</h4>
-              <div className="overflow-x-auto bg-white rounded shadow-sm">
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-xs text-gray-600 uppercase">
-                      <th className="px-3 py-2">DPR Range</th>
-                      <th className="px-3 py-2 text-right">Samples</th>
-                      <th className="px-3 py-2 text-right">Made Playoffs</th>
-                      <th className="px-3 py-2 text-right">Empirical %</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dprBucketStats.map((b) => (
-                      <tr key={b.label} className="border-t">
-                        <td className="px-3 py-2 text-gray-800">{b.label}</td>
-                        <td className="px-3 py-2 text-right text-gray-700">{b.count}</td>
-                        <td className="px-3 py-2 text-right text-gray-700">{b.made}</td>
-                        <td className="px-3 py-2 text-right font-semibold text-gray-800">{b.rate === null ? 'N/A' : `${Math.round(b.rate * 100)}%`}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-semibold text-gray-700">Empirical Playoff Probability by DPR</h4>
+                <button
+                  type="button"
+                  className="text-sm text-blue-600 hover:underline"
+                  onClick={() => setShowEmpirical(s => !s)}
+                  aria-expanded={showEmpirical}
+                  aria-controls="empirical-dpr-section"
+                >
+                  {showEmpirical ? 'Hide' : 'Show'}
+                </button>
               </div>
 
-              {currentSeasonTeams.length > 0 && (
-                <div className="mt-3">
-                  <h4 className="text-sm font-semibold text-gray-700 mb-2">Current Season - Empirical Playoff Chance</h4>
-                  <div className="overflow-x-auto bg-white rounded shadow-sm">
+              {showEmpirical ? (
+                <>
+                  <div id="empirical-dpr-section" className="overflow-x-auto bg-white rounded shadow-sm">
                     <table className="min-w-full text-sm">
                       <thead>
                         <tr className="text-left text-xs text-gray-600 uppercase">
-                          <th className="px-3 py-2">Team</th>
-                          <th className="px-3 py-2 text-right">DPR</th>
+                          <th className="px-3 py-2">DPR Range</th>
+                          <th className="px-3 py-2 text-right">Samples</th>
+                          <th className="px-3 py-2 text-right">Made Playoffs</th>
                           <th className="px-3 py-2 text-right">Empirical %</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {currentSeasonTeams.map(t => (
-                          <tr key={`${t.rosterId}-${t.year}`} className="border-t">
-                            <td className="px-3 py-2 text-gray-800">{t.team}</td>
-                            <td className="px-3 py-2 text-right text-gray-700">{formatDPR(t.dpr)}</td>
-                            <td className="px-3 py-2 text-right font-semibold">{t.playoffProb === null ? 'N/A' : `${Math.round(t.playoffProb * 100)}%`}</td>
+                        {dprBucketStats.map((b) => (
+                          <tr key={b.label} className="border-t">
+                            <td className="px-3 py-2 text-gray-800">{b.label}</td>
+                            <td className="px-3 py-2 text-right text-gray-700">{b.count}</td>
+                            <td className="px-3 py-2 text-right text-gray-700">{b.made}</td>
+                            <td className="px-3 py-2 text-right font-semibold text-gray-800">{b.rate === null ? 'N/A' : `${Math.round(b.rate * 100)}%`}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-                </div>
+
+                  {currentSeasonTeams.length > 0 && (
+                    <div className="mt-3">
+                      <h4 className="text-sm font-semibold text-gray-700 mb-1">Current Season — Empirical Playoff Probability</h4>
+                      <p className="text-xs text-gray-500 mb-2">This shows each team's empirical playoff probability for the current season based on historical DPR buckets.</p>
+                      <div className="overflow-x-auto bg-white rounded shadow-sm">
+                        <table className="min-w-full text-sm">
+                          <thead>
+                            <tr className="text-left text-xs text-gray-600 uppercase">
+                              <th className="px-3 py-2">Team</th>
+                              <th className="px-3 py-2 text-right">DPR</th>
+                              <th className="px-3 py-2 text-right">Empirical %</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {currentSeasonTeams.map(t => (
+                              <tr key={`${t.rosterId}-${t.year}`} className="border-t">
+                                <td className="px-3 py-2 text-gray-800">{t.team}</td>
+                                <td className="px-3 py-2 text-right text-gray-700">{formatDPR(t.dpr)}</td>
+                                <td className="px-3 py-2 text-right font-semibold">{t.playoffProb === null ? 'N/A' : `${Math.round(t.playoffProb * 100)}%`}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-gray-500">Section collapsed. Click "Show" to view empirical playoff probabilities.</p>
               )}
             </div>
             {seasonalDPRData.length > 0 ? (

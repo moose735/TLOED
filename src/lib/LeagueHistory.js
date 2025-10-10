@@ -55,6 +55,7 @@ const LeagueHistory = () => {
     const [sortedYearsForAwards, setSortedYearsForAwards] = useState([]);
     const [showAllSeasons, setShowAllSeasons] = useState(false);
     const [averageScoreChartData, setAverageScoreChartData] = useState([]);
+    const [empiricalOpen, setEmpiricalOpen] = useState(false);
     const [tradePairCounts, setTradePairCounts] = useState([]); // [{teamA, teamB, ownerA, ownerB, count}]
     const [teamTransactionTotals, setTeamTransactionTotals] = useState([]); // [{ ownerId, teamName, pickups, trades }]
     const [draftPickTrades, setDraftPickTrades] = useState({}); // { [ownerId]: { given: [], received: [] } }
@@ -429,16 +430,14 @@ const LeagueHistory = () => {
                 return;
             }
             
-            // Calculate total points and games for each team
+            // Calculate total points and games for each team, only using fully completed weeks
             const teamPointsData = {};
-            
             // Initialize team data - use roster_id as key since matchups use roster_id
             const rosterIdToOwnerMap = {};
             rostersForYear.forEach(roster => {
                 const ownerId = roster.owner_id;
                 const rosterId = roster.roster_id;
                 const teamName = getDisplayTeamNameFromContext(ownerId, year);
-                
                 rosterIdToOwnerMap[rosterId] = ownerId;
                 teamPointsData[rosterId] = {
                     ownerId: ownerId,
@@ -447,35 +446,40 @@ const LeagueHistory = () => {
                     games: 0
                 };
             });
-            
-            // Sum up points from matchups to calculate team season averages
-            matchupsForYear.forEach((matchup, index) => {
-                // Handle different matchup data structures
-                const team1Id = matchup.team1_roster_id || matchup.t1;
-                const team2Id = matchup.team2_roster_id || matchup.t2;
-                const team1Score = matchup.team1_score || matchup.t1_score || 0;
-                const team2Score = matchup.team2_score || matchup.t2_score || 0;
-                
-                if (index === 0) {
-                    logger.debug(`LeagueHistory: Sample matchup for ${year}:`, {
-                        team1Id, team2Id, team1Score, team2Score,
-                        keys: Object.keys(matchup)
-                    });
-                }
-                
-                if (team1Id && teamPointsData[team1Id]) {
-                    if (team1Score > 0) {
+
+            // Group matchups by week
+            const matchupsByWeek = {};
+            matchupsForYear.forEach(m => {
+                const week = m.week || m.matchup_period || m.matchupWeek || 1;
+                if (!matchupsByWeek[week]) matchupsByWeek[week] = [];
+                matchupsByWeek[week].push(m);
+            });
+
+            // Find the last fully completed week (all matchups have non-null, non-zero scores for both teams)
+            const completedWeeks = Object.keys(matchupsByWeek).filter(week => {
+                const weekMatchups = matchupsByWeek[week];
+                return weekMatchups.every(mu => {
+                    const t1s = mu.team1_score || mu.t1_score;
+                    const t2s = mu.team2_score || mu.t2_score;
+                    return t1s !== null && t2s !== null && t1s !== undefined && t2s !== undefined && t1s > 0 && t2s > 0;
+                });
+            });
+            // Only include matchups from completed weeks
+            completedWeeks.forEach(week => {
+                matchupsByWeek[week].forEach((matchup, index) => {
+                    const team1Id = matchup.team1_roster_id || matchup.t1;
+                    const team2Id = matchup.team2_roster_id || matchup.t2;
+                    const team1Score = matchup.team1_score || matchup.t1_score || 0;
+                    const team2Score = matchup.team2_score || matchup.t2_score || 0;
+                    if (team1Id && teamPointsData[team1Id]) {
                         teamPointsData[team1Id].totalPoints += team1Score;
                         teamPointsData[team1Id].games += 1;
                     }
-                }
-                
-                if (team2Id && teamPointsData[team2Id]) {
-                    if (team2Score > 0) {
+                    if (team2Id && teamPointsData[team2Id]) {
                         teamPointsData[team2Id].totalPoints += team2Score;
                         teamPointsData[team2Id].games += 1;
                     }
-                }
+                });
             });
             
             // Calculate each team's season average
@@ -1274,21 +1278,21 @@ const LeagueHistory = () => {
                     ) : (
                         <>
                         <div className="overflow-x-auto">
-                            <table className="min-w-full text-sm table-auto border-collapse">
+                            <table className="min-w-full text-xs md:text-sm table-auto border-collapse">
                                 <thead>
                                     <tr>
-                                        <th className="text-left px-2 py-2 border-b">Team</th>
-                                        <th className="text-center px-2 py-2 border-b">Waiver/FA</th>
-                                        <th className="text-center px-2 py-2 border-b">Trades</th>
+                                        <th className="text-left px-2 py-2 border-b text-xs md:text-sm">Team</th>
+                                        <th className="text-center px-2 py-2 border-b text-xs md:text-sm">Waiver/FA</th>
+                                        <th className="text-center px-2 py-2 border-b text-xs md:text-sm">Trades</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {teamTransactionTotals.map(t => (
                                         <tr key={`tx-${t.ownerId}`} className="odd:bg-white even:bg-gray-50 hover:bg-gray-100">
-                                            <td className="px-2 py-2 border-b text-sm font-medium">{t.teamName}</td>
-                                            <td className="px-2 py-2 border-b text-center font-semibold text-blue-700">{t.pickups}</td>
+                                            <td className="px-2 py-2 border-b text-xs md:text-sm font-medium">{t.teamName}</td>
+                                            <td className="px-2 py-2 border-b text-center text-xs md:text-sm font-semibold text-blue-700">{t.pickups}</td>
                                             <td 
-                                                className="px-2 py-2 border-b text-center font-semibold text-blue-700 cursor-pointer hover:bg-blue-50 transition-colors"
+                                                className="px-2 py-2 border-b text-center text-xs md:text-sm font-semibold text-blue-700 cursor-pointer hover:bg-blue-50 transition-colors"
                                                 onClick={(e) => {
                                                     e.preventDefault();
                                                     e.stopPropagation();
@@ -1479,6 +1483,8 @@ const LeagueHistory = () => {
                             <p className="text-center text-gray-600">No season-by-season award data available.</p>
                         )}
                     </section>
+
+                    
 
                     {/* Chart Controls */}
                     {(averageScoreChartData.length > 0 || seasonalDPRChartData.length > 0) && availableYears.length > 5 && (

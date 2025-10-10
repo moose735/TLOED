@@ -834,7 +834,7 @@ const Dashboard = () => {
             </div>
 
             {/* Power Rankings Section */}
-            <div className="bg-white rounded-lg shadow-lg mobile-card">
+            <div className="bg-white rounded-lg shadow-lg mobile-card p-3 sm:p-4">
                 <PowerRankings />
             </div>
 
