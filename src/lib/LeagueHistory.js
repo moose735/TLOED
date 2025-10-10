@@ -56,6 +56,10 @@ const LeagueHistory = () => {
     const [showAllSeasons, setShowAllSeasons] = useState(false);
     const [averageScoreChartData, setAverageScoreChartData] = useState([]);
     const [tradePairCounts, setTradePairCounts] = useState([]); // [{teamA, teamB, ownerA, ownerB, count}]
+    const [teamTransactionTotals, setTeamTransactionTotals] = useState([]); // [{ ownerId, teamName, pickups, trades }]
+    const [draftPickTrades, setDraftPickTrades] = useState({}); // { [ownerId]: { given: [], received: [] } }
+    const [selectedTeamTrades, setSelectedTeamTrades] = useState(null);
+    const [showTradeModal, setShowTradeModal] = useState(false);
     
     // Season range filtering for charts
     const [availableYears, setAvailableYears] = useState([]);
@@ -602,12 +606,47 @@ const LeagueHistory = () => {
 
             // Use all transactions (financial, league-fetched, and context) for all-time aggregation
             const filteredTx = allTx;
+            
+
+
+            // Prepare counters per owner for pickups (adds) and trades participation
+            const pickupsByOwner = {}; // ownerId -> count
+            const tradesByOwner = {}; // ownerId -> count (number of trade events they participated in)
 
             filteredTx.forEach(tx => {
                 try {
                     if (!tx) return;
-                    // Only consider completed trades (financial transactions may use slightly different shapes)
-                    if (String(tx.type).toLowerCase() !== 'trade') return;
+                    // Decide by transaction type
+                    const txType = String(tx.type || '').toLowerCase();
+
+                    // Count pickups/adds for waiver/free_agent/add type transactions
+                    if (txType === 'waiver' || txType === 'free_agent' || txType === 'add') {
+                        const pickupCount = tx.adds ? Object.keys(tx.adds).length : 0;
+                        let owner = null;
+                        // Prefer roster_ids[0] as the acting roster (common Sleeper shape)
+                        if (tx.roster_ids && Array.isArray(tx.roster_ids) && tx.roster_ids.length > 0) {
+                            owner = getOwnerIdForRoster(tx.roster_ids[0], tx.season || tx.year || null);
+                        }
+
+                        if (owner && pickupCount > 0) {
+                            pickupsByOwner[owner] = (pickupsByOwner[owner] || 0) + pickupCount;
+                        } else if (tx.adds && typeof tx.adds === 'object') {
+                            // Fallback: try to infer owner from each add entry having a roster_id field
+                            Object.values(tx.adds).forEach(add => {
+                                const rid = add?.roster_id || add?.rosterId || null;
+                                if (rid) {
+                                    const inferredOwner = getOwnerIdForRoster(rid, tx.season || tx.year || null);
+                                    if (inferredOwner) pickupsByOwner[inferredOwner] = (pickupsByOwner[inferredOwner] || 0) + 1;
+                                }
+                            });
+                        }
+
+                        // Not a trade — skip trade-specific processing for this tx
+                        return;
+                    }
+
+                    // Only consider completed trades for trade pair counting
+                    if (txType !== 'trade') return;
                     if (tx.status && String(tx.status).toLowerCase() === 'failed') return;
 
                     // roster_ids is an array of roster ids participating in the trade
@@ -637,6 +676,9 @@ const LeagueHistory = () => {
                     const uniqueOwners = Array.from(new Set(ownerIds.map(o => String(o))));
                     if (uniqueOwners.length < 2) return;
 
+                    // Increment trades participation for each owner involved in this trade event
+                    uniqueOwners.forEach(o => { tradesByOwner[o] = (tradesByOwner[o] || 0) + 1; });
+
                     for (let i = 0; i < uniqueOwners.length; i++) {
                         for (let j = i + 1; j < uniqueOwners.length; j++) {
                             const a = uniqueOwners[i];
@@ -663,7 +705,89 @@ const LeagueHistory = () => {
                 };
             }).sort((x, y) => y.count - x.count);
 
-                setTradePairCounts(pairsArray);
+            // Build team transaction totals (pickups and trades) and ensure we include owners with zeroes
+            const ownerSet = new Set();
+            pairsArray.forEach(p => { ownerSet.add(String(p.ownerA)); ownerSet.add(String(p.ownerB)); });
+            Object.keys(pickupsByOwner || {}).forEach(o => ownerSet.add(String(o)));
+            Object.keys(tradesByOwner || {}).forEach(o => ownerSet.add(String(o)));
+
+            const totalsArray = Array.from(ownerSet).map(ownerId => ({
+                ownerId: ownerId,
+                teamName: getDisplayTeamNameFromContext(ownerId, null),
+                pickups: pickupsByOwner[ownerId] || 0,
+                trades: tradesByOwner[ownerId] || 0
+            })).sort((a, b) => (b.pickups + b.trades) - (a.pickups + a.trades));
+
+            // Analyze draft pick trades from transaction history (since draft picks are traded via transactions)
+            const draftPickTradesData = {};
+            
+            // Process transactions to find draft pick trades
+            let draftPickTradeCount = 0;
+            filteredTx.forEach(tx => {
+                try {
+                    if (!tx || String(tx.type || '').toLowerCase() !== 'trade') return;
+                    
+                    // Look for draft picks in the transaction
+                    const draftPicks = tx.draft_picks || tx.metadata?.traded_picks || [];
+                    
+                    if (Array.isArray(draftPicks) && draftPicks.length > 0) {
+                        draftPickTradeCount++;
+                        const txYear = tx.season || tx.year || tx.metadata?.season || 
+                            (tx.created ? new Date(tx.created).getFullYear() : null) || 
+                            (allYears.length ? allYears[allYears.length - 1] : null);
+                            
+                        draftPicks.forEach(pick => {
+                            const currentOwner = pick.owner_id || pick.roster_id;
+                            const previousOwner = pick.previous_owner_id || pick.original_owner;
+                            const season = pick.season || txYear;
+                            const round = pick.round;
+                            
+                            if (currentOwner && previousOwner && String(currentOwner) !== String(previousOwner)) {
+                                const currentOwnerId = getOwnerIdForRoster(currentOwner, season);
+                                const previousOwnerId = getOwnerIdForRoster(previousOwner, season);
+                                
+                                if (currentOwnerId && previousOwnerId) {
+                                    // Initialize if needed
+                                    if (!draftPickTradesData[currentOwnerId]) {
+                                        draftPickTradesData[currentOwnerId] = { given: [], received: [] };
+                                    }
+                                    if (!draftPickTradesData[previousOwnerId]) {
+                                        draftPickTradesData[previousOwnerId] = { given: [], received: [] };
+                                    }
+                                    
+                                    // Current owner received this pick
+                                    draftPickTradesData[currentOwnerId].received.push({
+                                        year: season,
+                                        round,
+                                        pickNumber: pick.pick || pick.pick_no || `R${round}`,
+                                        fromTeam: getDisplayTeamNameFromContext(previousOwnerId, null),
+                                        fromOwnerId: previousOwnerId,
+                                        player: pick.player_name || 'Draft Pick'
+                                    });
+                                    
+                                    // Previous owner gave away this pick
+                                    draftPickTradesData[previousOwnerId].given.push({
+                                        year: season,
+                                        round,
+                                        pickNumber: pick.pick || pick.pick_no || `R${round}`,
+                                        toTeam: getDisplayTeamNameFromContext(currentOwnerId, null),
+                                        toOwnerId: currentOwnerId,
+                                        player: pick.player_name || 'Draft Pick'
+                                    });
+                                }
+                            }
+                        });
+                    }
+                } catch (e) {
+                    // ignore malformed transactions
+                }
+            });
+
+
+            
+            setTradePairCounts(pairsArray);
+            setTeamTransactionTotals(totalsArray);
+            setDraftPickTrades(draftPickTradesData);
             } catch (e) {
                 // fail silently
                 setTradePairCounts([]);
@@ -941,9 +1065,6 @@ const LeagueHistory = () => {
                             );
                         })}
                     </div>
-
-                    
-
                     {/* Desktop Table View */}
                     <div className="hidden sm:block overflow-x-auto shadow-lg rounded-lg mb-8">
                         <table className="min-w-full bg-white border border-gray-200 rounded-lg">
@@ -1032,95 +1153,141 @@ const LeagueHistory = () => {
                         </table>
                     </div>
                     {/* Trade partner grid/matrix (moved below standings) */}
-                    <div className="bg-white rounded-lg shadow-md p-4 border border-gray-100 mb-6 mt-4">
-                        <div className="mb-3">
-                            {/* Match Season-by-Season heading style */}
-                            <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Trade Partner Matrix (All time)</h3>
-                        </div>
-                        {(!tradePairCounts || tradePairCounts.length === 0) && (!allTimeStandings || allTimeStandings.length === 0) ? (
-                            <div className="text-sm text-gray-500">No trade or team data available.</div>
-                        ) : (
-                            (() => {
-                                // Build owner list (include owners from standings and pairs). Use all-time owner list.
-                                const ownersFromPairs = new Set();
-                                tradePairCounts.forEach(p => { ownersFromPairs.add(String(p.ownerA)); ownersFromPairs.add(String(p.ownerB)); });
-                                const ownersFromStandings = (allTimeStandings || []).map(t => String(t.ownerId));
-                                const combinedOwners = Array.from(new Set([...ownersFromStandings, ...Array.from(ownersFromPairs)])).filter(Boolean);
-
-                                // Map ownerId -> display name
-                                const ownerIdToName = {};
-                                combinedOwners.forEach(id => { ownerIdToName[id] = getDisplayTeamNameFromContext(id, null); });
-
-                                // Build counts map, symmetric
-                                const counts = {};
-                                combinedOwners.forEach(a => { counts[a] = {}; combinedOwners.forEach(b => { counts[a][b] = 0; }); });
-                                tradePairCounts.forEach(p => {
-                                    const a = String(p.ownerA);
-                                    const b = String(p.ownerB);
-                                    if (!counts[a]) counts[a] = {};
-                                    if (!counts[b]) counts[b] = {};
-                                    counts[a][b] = p.count || 0;
-                                    counts[b][a] = p.count || 0;
-                                });
-
-                                // Find max count for heat scaling
-                                const maxCount = tradePairCounts.reduce((m, p) => Math.max(m, p.count || 0), 0) || 1;
-
-                                const heatColor = (n) => {
-                                    if (!n || n === 0) return '';
-                                    const ratio = Math.min(1, n / maxCount);
-                                    const start = [235, 248, 255];
-                                    const end = [14, 165, 233];
-                                    const r = Math.round(start[0] + (end[0] - start[0]) * ratio);
-                                    const g = Math.round(start[1] + (end[1] - start[1]) * ratio);
-                                    const b = Math.round(start[2] + (end[2] - start[2]) * ratio);
-                                    return `rgb(${r}, ${g}, ${b})`;
-                                };
-
-                                return (
-                                    <div className="overflow-auto border rounded-md" style={{ maxHeight: '420px' }}>
-                                        <table className="min-w-full text-xs table-fixed border-collapse">
-                                            <thead>
-                                                <tr>
-                                                    {/* Header placeholder for left sticky column - shrink further for mobile */}
-                                                    <th className="sticky left-0 top-0 bg-white z-30 border-b border-r px-2 py-2" style={{ minWidth: '56px', maxWidth: '160px' }}></th>
-                                                    {combinedOwners.map((ownerId) => (
-                                                                        <th key={`col-${ownerId}`} className="py-1 px-1 text-center text-xs font-medium text-gray-800 border-b border-gray-200 bg-white sticky top-0" style={{ minWidth: '72px', maxWidth: '140px' }}>
-                                                                            <div className="whitespace-normal break-words text-xs font-medium text-gray-800 text-center" title={ownerIdToName[ownerId]} style={{ lineHeight: '1.05' }}>
-                                                                                {ownerIdToName[ownerId]}
-                                                                            </div>
-                                                                        </th>
-                                                                    ))}
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {combinedOwners.map((rowOwner, rowIdx) => (
-                                                    <tr key={`row-${rowOwner}`} className={rowIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50 hover:bg-gray-100'}>
-                                                        <td className="sticky left-0 bg-white z-20 border-r px-2 py-1 font-medium text-xs text-gray-800 text-center" style={{ minWidth: '80px', maxWidth: '220px' }}>
-                                                                    <div className="text-xs font-medium whitespace-normal break-words text-center" style={{ lineHeight: '1.05', wordBreak: 'break-word', overflowWrap: 'anywhere' }} title={ownerIdToName[rowOwner]}>
-                                                                        {ownerIdToName[rowOwner]}
-                                                                    </div>
-                                                                </td>
-                                                        {combinedOwners.map((colOwner) => {
-                                                            const val = rowOwner === colOwner ? null : (counts[rowOwner] && counts[rowOwner][colOwner] ? counts[rowOwner][colOwner] : 0);
-                                                            const bg = val ? heatColor(val) : undefined;
-                                                            return (
-                                                                <td key={`${rowOwner}-${colOwner}`} className="px-1 py-1 text-center border-b align-middle text-xs" style={{ background: bg }}>
-                                                                    {rowOwner === colOwner ? (<span className="text-gray-400">—</span>) : (
-                                                                        <span className="font-semibold text-xs" style={{ color: val ? '#0b5f92' : '#6b7280' }}>{val}</span>
-                                                                    )}
-                                                                </td>
-                                                            );
-                                                        })}
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                );
-                            })()
-                        )}
+                <div className="bg-white rounded-lg shadow-md p-4 border border-gray-100 mb-6 mt-4">
+                    <div className="mb-3">
+                        {/* Match Season-by-Season heading style */}
+                        <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Trade Partner Matrix (All time)</h3>
                     </div>
+                    {(!tradePairCounts || tradePairCounts.length === 0) && (!allTimeStandings || allTimeStandings.length === 0) ? (
+                        <div className="text-sm text-gray-500">No trade or team data available.</div>
+                    ) : (
+                        (() => {
+                            // Build owner list (include owners from standings and pairs). Use all-time owner list.
+                            const ownersFromPairs = new Set();
+                            tradePairCounts.forEach(p => { ownersFromPairs.add(String(p.ownerA)); ownersFromPairs.add(String(p.ownerB)); });
+                            const ownersFromStandings = (allTimeStandings || []).map(t => String(t.ownerId));
+                            const combinedOwners = Array.from(new Set([...ownersFromStandings, ...Array.from(ownersFromPairs)])).filter(Boolean);
+
+                            // Map ownerId -> display name
+                            const ownerIdToName = {};
+                            combinedOwners.forEach(id => { ownerIdToName[id] = getDisplayTeamNameFromContext(id, null); });
+
+                            // Build counts map, symmetric
+                            const counts = {};
+                            combinedOwners.forEach(a => { counts[a] = {}; combinedOwners.forEach(b => { counts[a][b] = 0; }); });
+                            tradePairCounts.forEach(p => {
+                                const a = String(p.ownerA);
+                                const b = String(p.ownerB);
+                                if (!counts[a]) counts[a] = {};
+                                if (!counts[b]) counts[b] = {};
+                                counts[a][b] = p.count || 0;
+                                counts[b][a] = p.count || 0;
+                            });
+
+                            // Find max count for heat scaling
+                            const maxCount = tradePairCounts.reduce((m, p) => Math.max(m, p.count || 0), 0) || 1;
+
+                            const heatColor = (n) => {
+                                if (!n || n === 0) return '';
+                                const ratio = Math.min(1, n / maxCount);
+                                const start = [235, 248, 255];
+                                const end = [14, 165, 233];
+                                const r = Math.round(start[0] + (end[0] - start[0]) * ratio);
+                                const g = Math.round(start[1] + (end[1] - start[1]) * ratio);
+                                const b = Math.round(start[2] + (end[2] - start[2]) * ratio);
+                                return `rgb(${r}, ${g}, ${b})`;
+                            };
+
+                            return (
+                                <div className="overflow-auto border rounded-md" style={{ maxHeight: '420px' }}>
+                                    <table className="min-w-full text-xs table-fixed border-collapse">
+                                        <thead>
+                                            <tr>
+                                                {/* Header placeholder for left sticky column - shrink further for mobile */}
+                                                <th className="sticky left-0 top-0 bg-white z-30 border-b border-r px-2 py-2" style={{ minWidth: '56px', maxWidth: '160px' }}></th>
+                                                {combinedOwners.map((ownerId) => (
+                                                    <th key={`col-${ownerId}`} className="py-1 px-1 text-center text-xs font-medium text-gray-800 border-b border-gray-200 bg-white sticky top-0" style={{ minWidth: '72px', maxWidth: '140px' }}>
+                                                        <div className="whitespace-normal break-words text-xs font-medium text-gray-800 text-center" title={ownerIdToName[ownerId]} style={{ lineHeight: '1.05' }}>
+                                                            {ownerIdToName[ownerId]}
+                                                        </div>
+                                                    </th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {combinedOwners.map((rowOwner, rowIdx) => (
+                                                <tr key={`row-${rowOwner}`} className={rowIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50 hover:bg-gray-100'}>
+                                                    <td className="sticky left-0 bg-white z-20 border-r px-2 py-1 font-medium text-xs text-gray-800 text-center" style={{ minWidth: '80px', maxWidth: '220px' }}>
+                                                        <div className="text-xs font-medium whitespace-normal break-words text-center" style={{ lineHeight: '1.05', wordBreak: 'break-word', overflowWrap: 'anywhere' }} title={ownerIdToName[rowOwner]}>
+                                                            {ownerIdToName[rowOwner]}
+                                                        </div>
+                                                    </td>
+                                                    {combinedOwners.map((colOwner) => {
+                                                        const val = rowOwner === colOwner ? null : (counts[rowOwner] && counts[rowOwner][colOwner] ? counts[rowOwner][colOwner] : 0);
+                                                        const bg = val ? heatColor(val) : undefined;
+                                                        return (
+                                                            <td key={`${rowOwner}-${colOwner}`} className="px-1 py-1 text-center border-b align-middle text-xs" style={{ background: bg }}>
+                                                                {rowOwner === colOwner ? (<span className="text-gray-400">—</span>) : (
+                                                                    <span className="font-semibold text-xs" style={{ color: val ? '#0b5f92' : '#6b7280' }}>{val}</span>
+                                                                )}
+                                                            </td>
+                                                        );
+                                                    })}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            );
+                        })()
+                    )}
+                </div>
+                {/* Waiver/Pickup and Trade totals table (moved below trade matrix) */}
+                <div className="bg-white rounded-lg shadow-md p-4 border border-gray-100 mb-6 mt-2">
+                    <h3 className="text-lg font-bold text-gray-800 mb-3">Waiver/Pickup & Trade Totals (All time)</h3>
+                    {(!teamTransactionTotals || teamTransactionTotals.length === 0) ? (
+                        <div className="text-sm text-gray-500">No transaction summary data available.</div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full text-sm table-auto border-collapse">
+                                <thead>
+                                    <tr>
+                                        <th className="text-left px-2 py-2 border-b">Team</th>
+                                        <th className="text-center px-2 py-2 border-b">Pickups</th>
+                                        <th className="text-center px-2 py-2 border-b">Trades</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {teamTransactionTotals.map(t => (
+                                        <tr key={`tx-${t.ownerId}`} className="odd:bg-white even:bg-gray-50 hover:bg-gray-100">
+                                            <td className="px-2 py-2 border-b text-sm font-medium">{t.teamName}</td>
+                                            <td className="px-2 py-2 border-b text-center font-semibold text-blue-700">{t.pickups}</td>
+                                            <td 
+                                                className="px-2 py-2 border-b text-center font-semibold text-blue-700 cursor-pointer hover:bg-blue-50 transition-colors"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    setSelectedTeamTrades({
+                                                        ownerId: t.ownerId,
+                                                        teamName: t.teamName,
+                                                        draftPicks: draftPickTrades[t.ownerId] || { given: [], received: [] }
+                                                    });
+                                                    setShowTradeModal(true);
+                                                }}
+                                                title="Click to view draft pick trade details"
+                                            >
+                                                <span className="flex items-center justify-center gap-1">
+                                                    {t.trades}
+                                                    <i className="fas fa-info-circle text-xs opacity-60 pointer-events-none"></i>
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
                     {/* ...existing code for season-by-season and chart... */}
 
                     {/* Season-by-Season Champions & Awards */}
@@ -1566,6 +1733,140 @@ const LeagueHistory = () => {
                         )}
                     </section>
                 </>
+            )}
+            
+            {/* Draft Pick Trade Details Modal */}
+            {showTradeModal && selectedTeamTrades && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+                        <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
+                            <h3 className="text-xl font-bold text-gray-800">
+                                Draft Pick Trades - {selectedTeamTrades.teamName}
+                            </h3>
+                            <button
+                                onClick={() => setShowTradeModal(false)}
+                                className="text-gray-500 hover:text-gray-700 text-xl font-bold"
+                            >
+                                ×
+                            </button>
+                        </div>
+                        
+                        <div className="flex flex-col" style={{ maxHeight: 'calc(90vh - 160px)' }}>
+                            {/* Scrollable content area */}
+                            <div className="flex-1 overflow-y-auto min-h-0" style={{ maxHeight: 'calc(90vh - 240px)' }}>
+                                <div className="p-6">
+                                    {(() => {
+                                        // Group picks by round for summary display
+                                        const givenByRound = {};
+                                        const receivedByRound = {};
+                                        
+                                        selectedTeamTrades.draftPicks.given.forEach(pick => {
+                                            const round = pick.round || 'Unknown';
+                                            if (!givenByRound[round]) givenByRound[round] = 0;
+                                            givenByRound[round]++;
+                                        });
+                                        
+                                        selectedTeamTrades.draftPicks.received.forEach(pick => {
+                                            const round = pick.round || 'Unknown';
+                                            if (!receivedByRound[round]) receivedByRound[round] = 0;
+                                            receivedByRound[round]++;
+                                        });
+                                        
+                                        const allRounds = new Set([...Object.keys(givenByRound), ...Object.keys(receivedByRound)]);
+                                        const sortedRounds = Array.from(allRounds).sort((a, b) => {
+                                            if (a === 'Unknown') return 1;
+                                            if (b === 'Unknown') return -1;
+                                            return parseInt(a) - parseInt(b);
+                                        });
+                                        
+                                        return (
+                                            <div>
+                                                <h4 className="text-lg font-semibold text-gray-800 mb-4">
+                                                    Draft Pick Trades by Round
+                                                </h4>
+                                                <div className="border border-gray-200 rounded-lg">
+                                                    <table className="min-w-full bg-white rounded-lg">
+                                                        <thead className="bg-gray-50">
+                                                            <tr>
+                                                                <th className="px-4 py-3 text-left text-sm font-medium text-gray-600 border-b">Round</th>
+                                                                <th className="px-4 py-3 text-center text-sm font-medium text-red-600 border-b">Picks Given Away</th>
+                                                                <th className="px-4 py-3 text-center text-sm font-medium text-green-600 border-b">Picks Received</th>
+                                                                <th className="px-4 py-3 text-center text-sm font-medium text-gray-600 border-b">Net</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {sortedRounds.map((round, idx) => {
+                                                                const given = givenByRound[round] || 0;
+                                                                const received = receivedByRound[round] || 0;
+                                                                const net = received - given;
+                                                                
+                                                                return (
+                                                                    <tr key={round} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                                                        <td className="px-4 py-3 text-sm font-medium text-gray-800 border-b">
+                                                                            Round {round}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 text-center text-sm font-semibold text-red-600 border-b">
+                                                                            {given > 0 ? given : '-'}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 text-center text-sm font-semibold text-green-600 border-b">
+                                                                            {received > 0 ? received : '-'}
+                                                                        </td>
+                                                                        <td className={`px-4 py-3 text-center text-sm font-semibold border-b ${
+                                                                            net > 0 ? 'text-green-600' : net < 0 ? 'text-red-600' : 'text-gray-500'
+                                                                        }`}>
+                                                                            {net > 0 ? '+' : ''}{net !== 0 ? net : '0'}
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                            {sortedRounds.length === 0 && (
+                                                                <tr>
+                                                                    <td colSpan="4" className="px-4 py-6 text-center text-gray-500 italic">
+                                                                        No draft pick trades found for this team
+                                                                    </td>
+                                                                </tr>
+                                                            )}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                                {/* Add some bottom padding to ensure all content is scrollable */}
+                                                <div className="h-4"></div>
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
+                            </div>
+                            
+                            {/* Fixed Summary at bottom */}
+                            <div className="flex-shrink-0 px-6 py-4 bg-blue-50 border-t border-blue-200" style={{ minHeight: '120px' }}>
+                                <h5 className="font-semibold text-blue-800 mb-2">Overall Summary</h5>
+                                <div className="grid grid-cols-3 gap-4 text-sm">
+                                    <div className="text-center">
+                                        <div className="text-red-600 font-medium text-xs mb-1">Total Given</div>
+                                        <div className="text-xl font-bold text-red-600">{selectedTeamTrades.draftPicks.given.length}</div>
+                                    </div>
+                                    <div className="text-center">
+                                        <div className="text-green-600 font-medium text-xs mb-1">Total Received</div>
+                                        <div className="text-xl font-bold text-green-600">{selectedTeamTrades.draftPicks.received.length}</div>
+                                    </div>
+                                    <div className="text-center">
+                                        <div className="font-medium text-gray-700 text-xs mb-1">Net Balance</div>
+                                        <div className={`text-xl font-bold ${
+                                            selectedTeamTrades.draftPicks.received.length - selectedTeamTrades.draftPicks.given.length > 0 
+                                                ? 'text-green-600' 
+                                                : selectedTeamTrades.draftPicks.received.length - selectedTeamTrades.draftPicks.given.length < 0 
+                                                ? 'text-red-600' 
+                                                : 'text-gray-600'
+                                        }`}>
+                                            {selectedTeamTrades.draftPicks.received.length - selectedTeamTrades.draftPicks.given.length > 0 ? '+' : ''}
+                                            {selectedTeamTrades.draftPicks.received.length - selectedTeamTrades.draftPicks.given.length}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
