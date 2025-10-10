@@ -5,6 +5,7 @@ import { useSleeperData } from '../contexts/SleeperDataContext'; // Import the c
 import logger from '../utils/logger';
 import { fetchTransactionsForWeek } from '../utils/sleeperApi';
 import { fetchFinancialDataForYears } from '../services/financialService';
+import { calculateAllTeamFinancialTotals, calculateTeamFinancialTotalsByOwnerId, formatCurrency } from '../utils/financialCalculations';
 import { calculatePlayoffFinishes } from '../utils/playoffRankings'; // Import the playoff calculation function
 
 // Recharts for charting
@@ -41,7 +42,8 @@ const LeagueHistory = () => {
         historicalData,
         allDraftHistory,
         nflState,
-        getTeamName: getDisplayTeamNameFromContext,
+    getTeamName: getDisplayTeamNameFromContext,
+    usersData,
         getTeamDetails,
         transactions
     } = useSleeperData();
@@ -58,6 +60,7 @@ const LeagueHistory = () => {
     const [empiricalOpen, setEmpiricalOpen] = useState(false);
     const [tradePairCounts, setTradePairCounts] = useState([]); // [{teamA, teamB, ownerA, ownerB, count}]
     const [teamTransactionTotals, setTeamTransactionTotals] = useState([]); // [{ ownerId, teamName, pickups, trades }]
+    const [allTimeFinancials, setAllTimeFinancials] = useState([]); // [{ teamName, netTotal, totalFees, totalPayouts }]
     const [draftPickTrades, setDraftPickTrades] = useState({}); // { [ownerId]: { given: [], received: [] } }
     const [selectedTeamTrades, setSelectedTeamTrades] = useState(null);
     const [showTradeModal, setShowTradeModal] = useState(false);
@@ -143,6 +146,7 @@ const LeagueHistory = () => {
                 // ignore
             }
         }
+            
     logger.debug("LeagueHistory: teamOverallStats after population:", teamOverallStats); // NEW LOG
 
 
@@ -619,6 +623,72 @@ const LeagueHistory = () => {
 
             // Use all transactions (financial, league-fetched, and context) for all-time aggregation
             const filteredTx = allTx;
+
+                // --- Compute All-Time Financial Totals per team ---
+                try {
+                    let totals = [];
+                    // If we fetched financial exports per year, prefer to use them
+                    if (typeof calculateAllTeamFinancialTotals === 'function' && typeof usersData !== 'undefined' && usersData) {
+                        try {
+                            const financialByTeamAndYear = calculateAllTeamFinancialTotals(financialDataByYear || {}, usersData);
+                            if (financialByTeamAndYear && Object.keys(financialByTeamAndYear).length > 0) {
+                                totals = Object.keys(financialByTeamAndYear).map(teamName => {
+                                    const perYear = financialByTeamAndYear[teamName] || {};
+                                    const combined = Object.values(perYear).reduce((acc, fy) => ({
+                                        totalFees: acc.totalFees + (fy.totalFees || 0),
+                                        totalPayouts: acc.totalPayouts + (fy.totalPayouts || 0),
+                                        netTotal: acc.netTotal + (fy.netTotal || 0)
+                                    }), { totalFees: 0, totalPayouts: 0, netTotal: 0 });
+                                    return { teamName, ...combined };
+                                }).sort((a, b) => b.netTotal - a.netTotal);
+                            }
+                        } catch (e) {
+                            logger.debug('LeagueHistory: calculateAllTeamFinancialTotals failed or returned no data', e);
+                        }
+                    }
+
+                    // Fallback: if no financial export data produced results, aggregate from combined transactions using usersData or roster owner IDs
+                    if ((!totals || totals.length === 0) && filteredTx && filteredTx.length > 0) {
+                        const ownerTotals = [];
+                        if (usersData && Array.isArray(usersData) && usersData.length > 0) {
+                            usersData.forEach(u => {
+                                const oid = String(u.user_id || u.userId || u.id || '');
+                                if (!oid) return;
+                                try {
+                                    const fin = calculateTeamFinancialTotalsByOwnerId(filteredTx, oid);
+                                    const teamName = u.display_name || u.username || oid;
+                                    ownerTotals.push({ teamName, totalFees: fin.totalFees || 0, totalPayouts: fin.totalPayouts || 0, netTotal: fin.netTotal || 0 });
+                                } catch (e) {}
+                            });
+                        } else if (historicalData && historicalData.rostersBySeason) {
+                            // collect owner ids from rosters
+                            const ownerIds = [];
+                            Object.keys(historicalData.rostersBySeason).forEach(y => {
+                                (historicalData.rostersBySeason[y] || []).forEach(r => { if (r && r.owner_id) ownerIds.push(String(r.owner_id)); });
+                            });
+                            const uniqueOwnerIds = Array.from(new Set(ownerIds));
+                            uniqueOwnerIds.forEach(oid => {
+                                try {
+                                    const fin = calculateTeamFinancialTotalsByOwnerId(filteredTx, oid);
+                                    const teamName = getDisplayTeamNameFromContext(oid, null) || oid;
+                                    ownerTotals.push({ teamName, totalFees: fin.totalFees || 0, totalPayouts: fin.totalPayouts || 0, netTotal: fin.netTotal || 0 });
+                                } catch (e) {}
+                            });
+                        }
+                        if (ownerTotals && ownerTotals.length > 0) totals = ownerTotals.sort((a, b) => b.netTotal - a.netTotal);
+                    }
+
+                    if (totals && totals.length > 0) {
+                        logger.debug('LeagueHistory: computed all-time financial totals count:', totals.length);
+                        try { if (typeof window !== 'undefined') window.__allTimeFinancials = totals; } catch(e){}
+                        setAllTimeFinancials(totals);
+                    } else {
+                        logger.debug('LeagueHistory: no all-time financial totals found; usersData length:', usersData ? usersData.length : 'null', 'filteredTx length:', filteredTx ? filteredTx.length : 'null');
+                        try { if (typeof window !== 'undefined') window.__allTimeFinancials = totals || []; } catch(e){}
+                    }
+                } catch (e) {
+                    logger.warn('LeagueHistory: error while computing all-time financial totals', e);
+                }
             
 
 
@@ -1320,6 +1390,37 @@ const LeagueHistory = () => {
                     )}
                 </div>
                 <p className="text-xs text-gray-500 mt-2">Note: 2021 Yahoo league financial exports are not included.</p>
+                {/* All-Time Net Financials Table */}
+                <div className="bg-white rounded-lg shadow-md p-4 border border-gray-100 mb-6 mt-4">
+                    <h3 className="text-lg font-bold text-gray-800 mb-3">All-Time Net Financials</h3>
+                    {(!allTimeFinancials || allTimeFinancials.length === 0) ? (
+                        <div className="text-sm text-gray-500">No financial export data available to compute all-time totals.</div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full text-xs md:text-sm table-auto border-collapse">
+                                <thead>
+                                    <tr>
+                                        <th className="text-left px-2 py-2 border-b text-xs md:text-sm">Team</th>
+                                        <th className="text-right px-2 py-2 border-b text-xs md:text-sm">Net Total</th>
+                                        <th className="text-right px-2 py-2 border-b text-xs md:text-sm">Total Payouts</th>
+                                        <th className="text-right px-2 py-2 border-b text-xs md:text-sm">Total Fees</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {allTimeFinancials.map(f => (
+                                        <tr key={`fin-${f.teamName}`} className="odd:bg-white even:bg-gray-50 hover:bg-gray-100">
+                                            <td className="px-2 py-2 border-b text-xs md:text-sm font-medium">{f.teamName}</td>
+                                            <td className={"px-2 py-2 border-b text-right text-xs md:text-sm font-semibold " + (f.netTotal >= 0 ? 'text-green-700' : 'text-red-600')}>{formatCurrency(f.netTotal)}</td>
+                                            <td className="px-2 py-2 border-b text-right text-xs md:text-sm">{formatCurrency(f.totalPayouts)}</td>
+                                            <td className="px-2 py-2 border-b text-right text-xs md:text-sm">{formatCurrency(f.totalFees)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                    
+                </div>
                     {/* ...existing code for season-by-season and chart... */}
 
                     {/* Season-by-Season Champions & Awards */}
