@@ -1264,7 +1264,7 @@ const LeagueHistory = () => {
                                         </tbody>
                                     </table>
                                 </div>
-                                <p className="text-xs text-gray-500 mt-2">Note: 2021 Yahoo league data not included</p>
+                                <p className="text-xs text-gray-500 mt-2">Note: 2021 Yahoo league data not included. Vetoed trades included in count.</p>
                                 </>
                             );
                         })()
@@ -1315,7 +1315,7 @@ const LeagueHistory = () => {
                                 </tbody>
                             </table>
                         </div>
-                        <p className="text-xs text-gray-500 mt-2">Note: 2021 Yahoo league data not included</p>
+                        <p className="text-xs text-gray-500 mt-2">Note: 2021 Yahoo league data not included. Vetoed trades included in count.</p>
                         </>
                     )}
                 </div>
