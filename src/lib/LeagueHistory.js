@@ -1220,6 +1220,7 @@ const LeagueHistory = () => {
                             };
 
                             return (
+                                <>
                                 <div className="overflow-auto border rounded-md" style={{ maxHeight: '420px' }}>
                                     <table className="min-w-full text-xs table-fixed border-collapse">
                                         <thead>
@@ -1259,22 +1260,25 @@ const LeagueHistory = () => {
                                         </tbody>
                                     </table>
                                 </div>
+                                <p className="text-xs text-gray-500 mt-2">Note: 2021 Yahoo league data not included</p>
+                                </>
                             );
                         })()
                     )}
                 </div>
-                {/* Waiver/Pickup and Trade totals table (moved below trade matrix) */}
+                {/* Waiver/FA and Trade totals table (moved below trade matrix) */}
                 <div className="bg-white rounded-lg shadow-md p-4 border border-gray-100 mb-6 mt-2">
-                    <h3 className="text-lg font-bold text-gray-800 mb-3">Waiver/Pickup & Trade Totals (All time)</h3>
+                    <h3 className="text-lg font-bold text-gray-800 mb-3">Waiver/FA & Trade Totals (All time)</h3>
                     {(!teamTransactionTotals || teamTransactionTotals.length === 0) ? (
                         <div className="text-sm text-gray-500">No transaction summary data available.</div>
                     ) : (
+                        <>
                         <div className="overflow-x-auto">
                             <table className="min-w-full text-sm table-auto border-collapse">
                                 <thead>
                                     <tr>
                                         <th className="text-left px-2 py-2 border-b">Team</th>
-                                        <th className="text-center px-2 py-2 border-b">Pickups</th>
+                                        <th className="text-center px-2 py-2 border-b">Waiver/FA</th>
                                         <th className="text-center px-2 py-2 border-b">Trades</th>
                                     </tr>
                                 </thead>
@@ -1307,8 +1311,11 @@ const LeagueHistory = () => {
                                 </tbody>
                             </table>
                         </div>
+                        <p className="text-xs text-gray-500 mt-2">Note: 2021 Yahoo league data not included</p>
+                        </>
                     )}
                 </div>
+                <p className="text-xs text-gray-500 mt-2">Note: 2021 Yahoo league financial exports are not included.</p>
                     {/* ...existing code for season-by-season and chart... */}
 
                     {/* Season-by-Season Champions & Awards */}
