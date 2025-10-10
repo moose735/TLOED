@@ -1389,7 +1389,6 @@ const LeagueHistory = () => {
                         </>
                     )}
                 </div>
-                <p className="text-xs text-gray-500 mt-2">Note: 2021 Yahoo league financial exports are not included.</p>
                 {/* All-Time Net Financials Table */}
                 <div className="bg-white rounded-lg shadow-md p-4 border border-gray-100 mb-6 mt-4">
                     <h3 className="text-lg font-bold text-gray-800 mb-3">All-Time Net Financials</h3>
