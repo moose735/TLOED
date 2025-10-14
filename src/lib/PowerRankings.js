@@ -166,6 +166,7 @@ const CustomDPRRankTooltip = ({ active, payload, label }) => {
 };
 
 const PowerRankings = () => {
+	// ...state declarations...
 	const {
 		historicalData,
 		getTeamName,
@@ -194,29 +195,64 @@ const PowerRankings = () => {
 		'bg-red-200',   // Tier 7
 		'bg-red-400'    // Tier 8 (bottom)
 	];
+	// Helper to get a color class for a given tier (1-based).
+	// Use an explicit gradient palette from green (top) to red (bottom).
+	const TIER_CIRCLE_CLASSES = [
+		'bg-green-600',  // Tier 1 - best
+		'bg-emerald-600', // Tier 2
+		'bg-lime-600',   // Tier 3
+		'bg-yellow-500', // Tier 4
+		'bg-amber-500',  // Tier 5
+		'bg-orange-500', // Tier 6
+		'bg-red-500',    // Tier 7
+		'bg-red-600'     // Tier 8 - worst
+	];
+	// ...other helpers...
 
-	// Determine team count dynamically from historical data when available
-	const teamCount = (historicalData && historicalData.rostersBySeason && historicalData.rostersBySeason[currentSeason])
-		? historicalData.rostersBySeason[currentSeason].length
-		: (powerRankings && powerRankings.length) ? powerRankings.length : 12;
+	// Dynamic color interpolation helpers (hex <-> rgb and linear interpolation)
+	const hexToRgb = (hex) => {
+		const h = hex.replace('#', '');
+		const bigint = parseInt(h, 16);
+		return { r: (bigint >> 16) & 255, g: (bigint >> 8) & 255, b: bigint & 255 };
+	};
+
+	const rgbToHex = (r, g, b) => {
+		const toHex = (n) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0');
+		return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+	};
+
+	const interpolateColor = (startHex, endHex, t) => {
+		const s = hexToRgb(startHex);
+		const e = hexToRgb(endHex);
+		const r = s.r + (e.r - s.r) * t;
+		const g = s.g + (e.g - s.g) * t;
+		const b = s.b + (e.b - s.b) * t;
+		return rgbToHex(r, g, b);
+	};
+
+	const TIER_START_COLOR = '#16a34a'; // green-600
+	const TIER_END_COLOR = '#dc2626'; // red-600
+
+	const getTierColor = (tier, maxTier) => {
+		if (!tier || !maxTier || maxTier <= 1) return TIER_START_COLOR;
+		const clamped = Math.max(1, Math.min(maxTier, tier));
+		const t = (clamped - 1) / (maxTier - 1);
+		return interpolateColor(TIER_START_COLOR, TIER_END_COLOR, t);
+	};
+
+	const getTierCircleStyle = (tier, maxTier) => ({ backgroundColor: getTierColor(tier, maxTier) });
 
 	useEffect(() => {
-		if (contextLoading || !historicalData || !historicalData.matchupsBySeason) {
-			setLoading(true);
-			setError(contextError || null);
-			return;
-		}
-
-		// Determine the current season and completed week
+		// determine season to use (prefer currentSeason, fallback to latest in historicalData)
 		let season = currentSeason;
-		if (!season) {
-			const years = Object.keys(historicalData.matchupsBySeason);
+		if (!season && historicalData && historicalData.matchupsBySeason) {
+			const years = Object.keys(historicalData.matchupsBySeason || {});
 			if (years.length > 0) {
 				season = Math.max(...years.map(Number)).toString();
 			}
 		}
 
-		const matchups = historicalData.matchupsBySeason[season];
+		const matchups = (historicalData && historicalData.matchupsBySeason && historicalData.matchupsBySeason[season]) ? historicalData.matchupsBySeason[season] : [];
 		if (!matchups || matchups.length === 0) {
 			setPowerRankings([]);
 			setLoading(false);
@@ -542,9 +578,9 @@ const PowerRankings = () => {
 				} catch (err) {
 					setPowerRankings([]);
 					setLoading(false);
-					setError("Failed to calculate power rankings: " + err.message);
-				}
-	}, [contextLoading, contextError, historicalData, getTeamName, currentSeason, nflState]);
+				setError("Failed to calculate power rankings: " + err.message);
+			}
+	  }, [contextLoading, contextError, historicalData, getTeamName, currentSeason, nflState]);
 // ...existing code...
 
 const renderMovement = (movement) => {
@@ -569,10 +605,13 @@ const renderMovement = (movement) => {
 			</span>
 		);
 	}
-};
+}
+
+	// number of teams (used for SOS color interpolation)
+	const teamCount = powerRankings.length || 12;
 
 		return (
-			<div className="w-full max-w-7xl mx-auto px-0 sm:px-4 md:px-6 lg:px-8 font-inter overflow-x-hidden">
+			<div className="w-full max-w-full px-0 font-inter overflow-x-hidden">
 				<h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-800 mb-4 sm:mb-6 md:mb-8 text-center tracking-tight px-2">Power Rankings</h2>
 
 				{loading ? (
@@ -601,24 +640,24 @@ const renderMovement = (movement) => {
 												<div className="flex-1 h-px bg-blue-300"></div>
 											</div>
 										)}
-										<div className="bg-white rounded-lg shadow-md mobile-card p-4 border-l-4 border-blue-500 min-w-0 w-full overflow-hidden">
-											<div className="flex items-center justify-between mb-3 flex-wrap min-w-0">
-												<div className="flex items-center space-x-3">
-													<div className="w-7 h-7 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold">
+										<div className="bg-white rounded-md shadow-md mobile-card p-3 border border-gray-100 border-l-4 border-blue-500 ring-1 ring-blue-50 min-w-0 w-full overflow-hidden">
+											<div className="flex items-center justify-between mb-2 flex-wrap min-w-0">
+												<div className="flex items-center space-x-2">
+													<div className={`w-6 h-6 text-white rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0`} style={getTierCircleStyle(row.tier, Math.max(1, ...powerRankings.map(p => p.tier || 1)))}>
 														{row.rank}
 													</div>
 													<img
 														src={getTeamDetails(row.ownerId, row.year)?.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
 														alt={getTeamName(row.ownerId, row.year)}
-														className="w-8 h-8 rounded-full border-2 border-blue-300 shadow-sm object-cover flex-shrink-0"
+														className="w-7 h-7 rounded-full border-2 border-blue-300 shadow-sm object-cover flex-shrink-0"
 														onError={(e) => { 
 															e.target.src = `https://sleepercdn.com/avatars/default_avatar.png`;
 														}}
 													/>
 													<div className="min-w-0 flex-1">
 														<div className="flex items-center">
-															<h3 className="font-semibold text-gray-800 text-xs md:text-sm truncate flex-1">{getTeamName(row.ownerId, row.year)}</h3>
-															<div className="flex-shrink-0 ml-2 flex items-center space-x-1">
+															<h3 className="font-semibold text-gray-800 text-sm truncate flex-1">{getTeamName(row.ownerId, row.year)}</h3>
+															<div className="flex-shrink-0 ml-1 flex items-center space-x-1 text-xs">
 																{survivorMarkers?.[row.ownerId] && (
 																	<span title={survivorMarkers[row.ownerId] === '💀' ? 'Eliminated from Survivor' : 'Survivor Winner'}>{survivorMarkers[row.ownerId]}</span>
 																)}
@@ -626,13 +665,13 @@ const renderMovement = (movement) => {
 																{row.trendMovement <= -2 && <span title="Cold team (multi-week)">❄️</span>}
 															</div>
 														</div>
-														<p className="text-xs text-gray-500">Tier {row.tier}</p>
+														{/* Tier label removed on mobile for a cleaner, denser layout */}
 													</div>
 												</div>
 
 												<div className="text-right ml-2 flex-shrink-0">
-													<div className="text-base sm:text-lg font-bold text-blue-800 truncate max-w-[6rem]">{formatDPR(row.dpr)}</div>
-													<div className="text-xs text-gray-500">DPR</div>
+													<div className="text-sm font-bold text-blue-800 truncate max-w-[5.5rem]">{formatDPR(row.dpr)}</div>
+													<div className="text-[11px] text-gray-500">DPR</div>
 												</div>
 											</div>
 
@@ -802,6 +841,7 @@ const renderMovement = (movement) => {
 				</div>
 			</div>
 		);
-};
+	// End of PowerRankings component
+	};
 
 export default PowerRankings;

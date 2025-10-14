@@ -527,7 +527,7 @@ const Dashboard = () => {
                     }
                 }
             `}</style>
-            <DashboardContainer className="space-y-4 sm:space-y-6 md:space-y-8">
+            <DashboardContainer className="max-w-full px-4 sm:px-6 lg:px-8 space-y-4 sm:space-y-6 md:space-y-8">
 
             {/* Header */}
             <div className="text-center px-2">
@@ -834,7 +834,7 @@ const Dashboard = () => {
             </div>
 
             {/* Power Rankings Section */}
-            <div className="bg-white rounded-lg shadow-lg mobile-card p-3 sm:p-4">
+            <div className="bg-white rounded-none sm:rounded-lg shadow-lg mobile-card p-3 sm:p-6 lg:col-span-3 xl:col-span-3 -mx-4 sm:mx-0">
                 <PowerRankings />
             </div>
 

@@ -340,21 +340,39 @@ const DPRAnalysis = () => {
       const rosterId = row.rosterId;
       if (year && rosterId && seasonalMetrics && seasonalMetrics[year] && seasonalMetrics[year][rosterId]) {
         const meta = seasonalMetrics[year][rosterId];
-        // if any of these flags are true, they participated in playoff bracket
-        if (meta.isChampion || meta.isRunnerUp || meta.isThirdPlace || meta.isPointsChampion || meta.playoffAppearancesCount > 0) return true;
-        // Some data sets use 'rank' to identify playoff teams (e.g., top 6)
-        if (typeof meta.rank === 'number' && meta.rank > 0) {
-          // assume top 6 qualify by default unless league settings available; this is a reasonable heuristic
+        // if any of these explicit flags are present, they participated in playoff bracket
+        // include several possible flag names to be defensive about data shape
+        const explicitPlayoff = Boolean(
+          meta.isChampion ||
+          meta.isRunnerUp ||
+          meta.isThirdPlace ||
+          meta.isPointsChampion ||
+          (typeof meta.playoffAppearancesCount === 'number' && meta.playoffAppearancesCount > 0) ||
+          meta.playoffs ||
+          meta.playoff ||
+          meta.inPlayoffs ||
+          meta.clinched ||
+          meta.clinchedPlayoff
+        );
+        if (explicitPlayoff) return true;
+
+        // Some data sets use 'rank' to identify playoff teams (e.g., top 6).
+        // Only use a rank-based heuristic for PAST seasons — do NOT assume current-season ranks imply playoff status.
+        if (!row.isCurrentSeason && typeof meta.rank === 'number' && meta.rank > 0) {
+          // assume top 6 qualify by default unless league settings available; this is a reasonable heuristic for past seasons
           return meta.rank <= 6;
         }
       }
-      // Fallback: if we have wins and losses and league size, approximate by top-half finishing
-      if (typeof row.wins === 'number' && typeof row.losses === 'number') {
+
+      // Fallback heuristic (based on .500 record) should only apply to past seasons.
+      if (!row.isCurrentSeason && typeof row.wins === 'number' && typeof row.losses === 'number') {
         const games = (row.wins || 0) + (row.losses || 0) + (row.ties || 0);
-        // if they have a winning record, more likely they made playoffs; conservative: require >= .500
+        // conservative: require >= .500 to count as making playoffs in fallback
         const pct = games > 0 ? ((row.wins || 0) + 0.5 * (row.ties || 0)) / games : 0;
         return pct >= 0.5;
       }
+
+      // For current season rows without explicit playoff/clinch flags, do not claim they made the playoffs.
       return false;
     } catch (e) {
       return false;
