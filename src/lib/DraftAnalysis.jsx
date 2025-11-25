@@ -273,26 +273,50 @@ const DraftAnalysis = () => {
                 averageVorpDeltaForThisSeason = seasonNonKeeperCount > 0 ? totalSeasonVorpDelta / seasonNonKeeperCount : 0;
             }
 
-            // Now, iterate through ALL processedPicks (including keepers) again to add VORP delta and scaled_vorp_delta
-            let finalProcessedPicks = processedPicks.map(pick => {
+            // Apply position weighting (QB < 1) to per-pick VORP delta for draft board and summary
+            const positionWeights = { QB: 0.6, RB: 1.0, WR: 1.0, TE: 0.9, K: 0.6, DEF: 0.6 };
+            // Calculate weighted deltas first to compute mean
+            const weightedDeltas = processedPicks.map(pick => {
                 let playerActualVORP = 0;
                 let draftPickAssignedVORP = 0;
                 let vorpDelta = 0;
-                let scaledVorpDelta = 0;
-
+                let weightedDelta = 0;
+                let position = (pick.player_position || (pick.metadata && pick.metadata.position) || '').toString().toUpperCase();
                 if (!pick.is_keeper) {
                     const playerActualVORPData = playersWithVORP.find(p => p.player_id === pick.player_id);
                     playerActualVORP = playerActualVORPData ? playerActualVORPData.vorp : 0;
                     draftPickAssignedVORP = draftPickExpectedVORPs.get(pick.pick_no) || 0;
                     vorpDelta = calculateVORPDelta(playerActualVORP, draftPickAssignedVORP);
-                    scaledVorpDelta = (vorpDelta - averageVorpDeltaForThisSeason) / 10;
+                    const weight = typeof positionWeights[position] === 'number' ? positionWeights[position] : 1;
+                    weightedDelta = vorpDelta * weight;
                 }
+                return weightedDelta;
+            });
+            const meanWeightedDelta = weightedDeltas.reduce((a, b) => a + b, 0) / (weightedDeltas.length || 1);
 
+            let finalProcessedPicks = processedPicks.map((pick, idx) => {
+                let playerActualVORP = 0;
+                let draftPickAssignedVORP = 0;
+                let vorpDelta = 0;
+                let weightedDelta = weightedDeltas[idx] || 0;
+                let centeredDelta = 0;
+                let scaledVorpDelta = 0;
+                let position = (pick.player_position || (pick.metadata && pick.metadata.position) || '').toString().toUpperCase();
+                if (!pick.is_keeper) {
+                    const playerActualVORPData = playersWithVORP.find(p => p.player_id === pick.player_id);
+                    playerActualVORP = playerActualVORPData ? playerActualVORPData.vorp : 0;
+                    draftPickAssignedVORP = draftPickExpectedVORPs.get(pick.pick_no) || 0;
+                    vorpDelta = calculateVORPDelta(playerActualVORP, draftPickAssignedVORP);
+                    // weightedDelta already calculated
+                    centeredDelta = weightedDelta - meanWeightedDelta;
+                    scaledVorpDelta = centeredDelta / 10;
+                }
                 return {
                     ...pick,
                     player_actual_vorp: playerActualVORP,
                     draft_pick_assigned_vorp: draftPickAssignedVORP,
                     vorp_delta: vorpDelta,
+                    weighted_vorp_delta: weightedDelta,
                     scaled_vorp_delta: scaledVorpDelta
                 };
             });
@@ -556,26 +580,50 @@ const DraftAnalysis = () => {
                             averageVorpDeltaForThisSeason = seasonNonKeeperCount > 0 ? totalSeasonVorpDelta / seasonNonKeeperCount : 0;
                         }
 
-                        // Add VORP calculations to all picks
-                        const finalProcessedPicks = processedPicks.map(pick => {
+                        // Apply position weighting (QB < 1) to per-pick VORP delta for overview
+                        const positionWeights = { QB: 0.6, RB: 1.0, WR: 1.0, TE: 0.9, K: 0.6, DEF: 0.6 };
+                        // Calculate weighted deltas first to compute mean for overview
+                        const weightedDeltas = processedPicks.map(pick => {
                             let playerActualVORP = 0;
                             let draftPickAssignedVORP = 0;
                             let vorpDelta = 0;
-                            let scaledVorpDelta = 0;
-
+                            let weightedDelta = 0;
+                            let position = (pick.player_position || (pick.metadata && pick.metadata.position) || '').toString().toUpperCase();
                             if (!pick.is_keeper) {
                                 const playerActualVORPData = playersWithVORP.find(p => p.player_id === pick.player_id);
                                 playerActualVORP = playerActualVORPData ? playerActualVORPData.vorp : 0;
                                 draftPickAssignedVORP = draftPickExpectedVORPs.get(pick.pick_no) || 0;
                                 vorpDelta = calculateVORPDelta(playerActualVORP, draftPickAssignedVORP);
-                                scaledVorpDelta = (vorpDelta - averageVorpDeltaForThisSeason) / 10;
+                                const weight = typeof positionWeights[position] === 'number' ? positionWeights[position] : 1;
+                                weightedDelta = vorpDelta * weight;
                             }
+                            return weightedDelta;
+                        });
+                        const meanWeightedDelta = weightedDeltas.reduce((a, b) => a + b, 0) / (weightedDeltas.length || 1);
 
+                        const finalProcessedPicks = processedPicks.map((pick, idx) => {
+                            let playerActualVORP = 0;
+                            let draftPickAssignedVORP = 0;
+                            let vorpDelta = 0;
+                            let weightedDelta = weightedDeltas[idx] || 0;
+                            let centeredDelta = 0;
+                            let scaledVorpDelta = 0;
+                            let position = (pick.player_position || (pick.metadata && pick.metadata.position) || '').toString().toUpperCase();
+                            if (!pick.is_keeper) {
+                                const playerActualVORPData = playersWithVORP.find(p => p.player_id === pick.player_id);
+                                playerActualVORP = playerActualVORPData ? playerActualVORPData.vorp : 0;
+                                draftPickAssignedVORP = draftPickExpectedVORPs.get(pick.pick_no) || 0;
+                                vorpDelta = calculateVORPDelta(playerActualVORP, draftPickAssignedVORP);
+                                // weightedDelta already calculated
+                                centeredDelta = weightedDelta - meanWeightedDelta;
+                                scaledVorpDelta = centeredDelta / 10;
+                            }
                             return {
                                 ...pick,
                                 player_actual_vorp: playerActualVORP,
                                 draft_pick_assigned_vorp: draftPickAssignedVORP,
                                 vorp_delta: vorpDelta,
+                                weighted_vorp_delta: weightedDelta,
                                 scaled_vorp_delta: scaledVorpDelta,
                                 season: seasonNumber
                             };
@@ -1160,6 +1208,7 @@ const DraftAnalysis = () => {
                                             <h4 className="text-xl font-bold text-blue-300 mb-2">Best Pick (Draft Value)</h4>
                                             <p className="text-lg">
                                                 {draftYearSummary.bestPick.player_name} ({draftYearSummary.bestPick.player_position})
+                                                <span className="ml-2 text-green-400 font-semibold">{formatScore(typeof draftYearSummary.bestPick.scaled_vorp_delta === 'number' ? draftYearSummary.bestPick.scaled_vorp_delta : draftYearSummary.bestPick.vorp_delta, 2)}</span>
                                                 <br />
                                                 <span className="text-sm text-gray-300">Team: {draftYearSummary.bestPick.picked_by_team_name} | Pick: {draftYearSummary.bestPick.pick_no}</span>
                                             </p>
