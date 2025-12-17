@@ -20,6 +20,7 @@ const navGroups = [
       { label: 'Record Book', link: '/record-book' },
       { label: 'Season Breakdown', link: '/season-breakdown' },
       { label: 'Finances', link: '/finances' },
+      { label: 'Memes & Memories', link: '/memes-and-memories' },
     ],
   },
   { label: 'Teams', link: '/teams', emoji: '👥' },
