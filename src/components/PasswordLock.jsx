@@ -1,27 +1,19 @@
 import React, { useState, useEffect } from 'react';
+import { AuthProvider, useAuth } from '../contexts/AuthContext';
 
-export default function PasswordLock({ children }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+function PasswordLockContent({ children }) {
+  const { isAuthenticated } = useAuth();
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [mounted, setMounted] = useState(false);
+  const { logout } = useAuth();
 
   const CORRECT_PASSWORD = 'gobonas';
-
-  useEffect(() => {
-    // Check if user is already authenticated
-    const stored = localStorage.getItem('tloed_authenticated');
-    if (stored === 'true') {
-      setIsAuthenticated(true);
-    }
-    setMounted(true);
-  }, []);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (password === CORRECT_PASSWORD) {
-      setIsAuthenticated(true);
       localStorage.setItem('tloed_authenticated', 'true');
+      window.location.reload();
       setPassword('');
       setError('');
     } else {
@@ -29,15 +21,6 @@ export default function PasswordLock({ children }) {
       setPassword('');
     }
   };
-
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    localStorage.removeItem('tloed_authenticated');
-  };
-
-  if (!mounted) {
-    return null;
-  }
 
   if (!isAuthenticated) {
     return (
@@ -84,17 +67,13 @@ export default function PasswordLock({ children }) {
     );
   }
 
+  return children;
+}
+
+export default function PasswordLock({ children }) {
   return (
-    <>
-      {/* Logout button in corner */}
-      <button
-        onClick={handleLogout}
-        className="fixed top-4 right-4 z-40 bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition-colors"
-        title="Logout"
-      >
-        Logout
-      </button>
-      {children}
-    </>
+    <AuthProvider>
+      <PasswordLockContent>{children}</PasswordLockContent>
+    </AuthProvider>
   );
 }

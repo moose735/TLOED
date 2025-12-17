@@ -21,6 +21,7 @@ const MemesAndMemories = lazy(() => import('./lib/MemesAndMemories'));
 // import MobileSidebarNav from './components/MobileSidebarNav';
 import DesktopNav from './components/DesktopNav';
 import PasswordLock from './components/PasswordLock';
+import { useAuth } from './contexts/AuthContext';
 
 // Import the custom hook from your SleeperDataContext
 import { SleeperDataProvider, useSleeperData } from './contexts/SleeperDataContext';
@@ -79,6 +80,8 @@ const TABS = {
 };
 
 const AppContent = () => {
+    const { logout } = useAuth();
+    
     // Consume data from SleeperDataContext
     const {
         loading,
@@ -534,9 +537,9 @@ const AppContent = () => {
         <div className="min-h-screen bg-gray-100 flex flex-col font-inter overflow-x-hidden">
             {/* Header - Mobile Optimized */}
             <header className="bg-gray-800 text-white shadow-md safe-area-top relative">
-                <div className="flex items-center justify-between px-4 py-1 md:px-6 md:py-2 max-w-6xl w-full mx-auto">
-                    {/* Logo and Title */}
-                    <div className="flex items-center flex-1 min-w-0">
+                <div className="flex items-center justify-between px-4 py-1 md:px-6 md:py-2 max-w-6xl w-full mx-auto gap-2">
+                    {/* Logo and Title Section */}
+                    <div className="flex items-center flex-1 min-w-0 gap-2">
                         <button
                             onClick={() => {
                                 // Navigate to dashboard and push state so back/forward works
@@ -552,7 +555,7 @@ const AppContent = () => {
                             }}
                             aria-label="Go to dashboard"
                             title="Go to dashboard"
-                            className="p-0 mr-2 md:mr-4 bg-transparent border-0"
+                            className="p-0 bg-transparent border-0 flex-shrink-0"
                         >
                             <img
                                 src={process.env.PUBLIC_URL + '/LeagueLogoNoBack.PNG'}
@@ -560,29 +563,40 @@ const AppContent = () => {
                                 className="h-16 w-16 md:h-24 md:w-24 object-contain flex-shrink-0 transition-all duration-200"
                             />
                         </button>
-                        <div className="flex flex-col min-w-0 ml-0">
-                            <h1 className="text-sm sm:text-base md:text-2xl font-bold truncate">
+                        <div className="flex flex-col min-w-0 flex-1">
+                            <h1 className="text-sm sm:text-lg md:text-2xl font-bold truncate">
                                 <span className="sm:hidden">TLOED</span>
                                 <span className="hidden sm:inline">The League of Extraordinary Douchebags</span>
                             </h1>
-                            {/* Top 3 Finishers */}
+                            {/* Champion - Show only on mobile, all finishers on desktop */}
                             {topFinishers.length > 0 && (
-                                <div className="flex items-center gap-1 sm:gap-2 mt-1">
-                                    {topFinishers.map((finisher, index) => (
-                                        <div key={index} className="flex items-center gap-1" title={`${finisher.place === 1 ? 'Champion' : finisher.place === 2 ? 'Runner-up' : '3rd Place'}`}>
-                                            <span className="text-xs sm:text-sm md:text-base">{finisher.emoji}</span>
-                                            <span className="font-medium text-white text-xs sm:text-sm md:text-base max-w-16 sm:max-w-24 md:max-w-none truncate">
-                                                {finisher.name}
-                                            </span>
-                                        </div>
-                                    ))}
+                                <div className="flex items-center gap-0.5 sm:gap-2 mt-0.5">
+                                    {/* Mobile: Show only 1st place */}
+                                    <div className="sm:hidden flex items-center gap-0.5 whitespace-nowrap" title="Champion">
+                                        <span className="text-xs">{topFinishers[0].emoji}</span>
+                                        <span className="font-medium text-white text-xs truncate max-w-20">
+                                            {topFinishers[0].name}
+                                        </span>
+                                    </div>
+                                    
+                                    {/* Desktop: Show all finishers */}
+                                    <div className="hidden sm:flex items-center gap-0.5 sm:gap-2 overflow-x-auto">
+                                        {topFinishers.map((finisher, index) => (
+                                            <div key={index} className="flex items-center gap-0.5 whitespace-nowrap" title={`${finisher.place === 1 ? 'Champion' : finisher.place === 2 ? 'Runner-up' : '3rd Place'}`}>
+                                                <span className="text-xs sm:text-sm md:text-base">{finisher.emoji}</span>
+                                                <span className="font-medium text-white text-xs sm:text-sm md:text-base max-w-16 sm:max-w-24 md:max-w-none truncate">
+                                                    {finisher.name}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             )}
                         </div>
                     </div>
 
-                    {/* Back Button and Mobile Menu Button */}
-                    <div className="flex items-center gap-2">
+                    {/* Right Controls Section - Back, Menu, Logout */}
+                    <div className="flex items-center gap-1 flex-shrink-0">
                         {/* Back Button */}
                         {navigationHistory.length > 0 && (
                             <button 
@@ -597,12 +611,24 @@ const AppContent = () => {
                         
                         {/* Mobile Menu Button */}
                         <button 
-                            className="md:hidden text-white text-2xl touch-friendly flex items-center justify-center" 
+                            className="md:hidden text-white text-xl touch-friendly flex items-center justify-center p-1" 
                             onClick={toggleMobileMenu} 
                             aria-label={isMobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
                         >
                             {isMobileMenuOpen ? '✕' : '☰'}
                         </button>
+                        
+                        {/* Logout Button */}
+                        {logout && (
+                            <button 
+                                onClick={logout}
+                                className="px-2 md:px-3 py-1 bg-red-600 text-white rounded text-[10px] md:text-sm hover:bg-red-700 active:bg-red-800 transition-colors touch-friendly flex-shrink-0"
+                                title="Logout"
+                            >
+                                <span className="hidden md:inline">Logout</span>
+                                <span className="md:hidden">⎋</span>
+                            </button>
+                        )}
                     </div>
                 </div>
             </header>
