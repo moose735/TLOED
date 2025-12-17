@@ -715,6 +715,14 @@ const AppContent = () => {
                                             Finances
                                         </button>
                                     </li>
+                                    <li>
+                                        <button 
+                                            className="w-full px-8 py-3 text-left hover:bg-gray-500 active:bg-gray-400 touch-friendly text-sm border-b border-gray-500 last:border-b-0"
+                                            onClick={(e) => { e.stopPropagation(); handleTabClick('memesAndMemories'); }}
+                                        >
+                                            Memes & Memories
+                                        </button>
+                                    </li>
                                 </ul>
                             )}
                         </li>

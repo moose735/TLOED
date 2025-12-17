@@ -42,14 +42,14 @@ export default function MemesAndMemories() {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-gray-800 mb-2">Memes & Memories</h1>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
             <p className="text-gray-600 text-lg">A collection of memes and memories over the years</p>
             <button
-              className="ml-2 px-3 py-1 bg-blue-600 text-white rounded shadow hover:bg-blue-700 text-sm"
+              className="w-fit md:ml-2 px-3 py-1 bg-blue-600 text-white rounded shadow hover:bg-blue-700 text-sm active:bg-blue-800 transition-colors"
               onClick={() => shuffleMemories()}
               title="Shuffle gallery"
             >
-              Shuffle
+              🔀 Shuffle
             </button>
           </div>
         </div>
