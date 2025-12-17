@@ -8,9 +8,7 @@ export default function MemesAndMemories() {
     { media: 'ChuckAndFlacco.jpg', type: 'image' },
     { media: 'JoeSpongebob.mp4', type: 'video' },
     { media: 'ShotSki.mp4', type: 'video' },
-    { media: 'IMG_0024.jpeg', type: 'image' },
     { media: 'IMG_0838.jpeg', type: 'image' },
-    { media: 'IMG_0852.jpeg', type: 'image' },
     { media: 'IMG_6065.jpeg', type: 'image' },
     // Example:
     // { media: '2023-upset.jpg', type: 'image' },
