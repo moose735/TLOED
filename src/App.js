@@ -17,6 +17,7 @@ import HallOfChampions from './lib/HallOfChampions';
 import Gamecenter from './components/Gamecenter';
 import Sportsbook from './components/Sportsbook';
 import KeeperList from './lib/KeeperList';
+import MemesAndMemories from './lib/MemesAndMemories';
 // import MobileSidebarNav from './components/MobileSidebarNav';
 import DesktopNav from './components/DesktopNav';
 
@@ -71,6 +72,7 @@ const TABS = {
     SEASON_BREAKDOWN: 'seasonBreakdown',
     DRAFT_ANALYSIS: 'draftAnalysis',
     KEEPERS: 'keepers',
+    MEMES_AND_MEMORIES: 'memesAndMemories',
     // TRADE_CALCULATOR removed
     ACHIEVEMENTS: 'achievements',
 };
@@ -208,6 +210,8 @@ const AppContent = () => {
                 return 'Season Breakdown';
             case TABS.DRAFT_ANALYSIS:
                 return 'Draft Analysis';
+            case TABS.MEMES_AND_MEMORIES:
+                return 'Memes & Memories';
             case TABS.ACHIEVEMENTS:
                 return 'Achievements';
             default:
@@ -511,6 +515,8 @@ const AppContent = () => {
                 return <SeasonBreakdown />;
             case TABS.DRAFT_ANALYSIS: // New case for Draft Analysis
                 return <DraftAnalysis />;
+            case TABS.MEMES_AND_MEMORIES:
+                return <MemesAndMemories />;
             case TABS.ACHIEVEMENTS:
                 // Achievements UI removed; redirect to dashboard
                 return <Dashboard />;
