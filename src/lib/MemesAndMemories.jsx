@@ -8,6 +8,10 @@ export default function MemesAndMemories() {
     { media: 'ChuckAndFlacco.jpg', type: 'image' },
     { media: 'JoeSpongebob.mp4', type: 'video' },
     { media: 'ShotSki.mp4', type: 'video' },
+    { media: 'IMG_0024.jpeg', type: 'image' },
+    { media: 'IMG_0838.jpeg', type: 'image' },
+    { media: 'IMG_0852.jpeg', type: 'image' },
+    { media: 'IMG_6065.jpeg', type: 'image' },
     // Example:
     // { media: '2023-upset.jpg', type: 'image' },
     // { media: 'highlight.mp4', type: 'video' },
@@ -16,10 +20,20 @@ export default function MemesAndMemories() {
   const [randomizedMemories, setRandomizedMemories] = useState([]);
   const [selectedMedia, setSelectedMedia] = useState(null);
 
-  // Randomize memories on mount
+  // Fisher-Yates shuffle (stable and unbiased)
+  const shuffleArray = (arr) => {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  };
+
+  const shuffleMemories = () => setRandomizedMemories(shuffleArray(memories));
+
   useEffect(() => {
-    const shuffled = [...memories].sort(() => Math.random() - 0.5);
-    setRandomizedMemories(shuffled);
+    shuffleMemories();
   }, [memories]);
 
   return (
@@ -28,7 +42,16 @@ export default function MemesAndMemories() {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-gray-800 mb-2">Memes & Memories</h1>
-          <p className="text-gray-600 text-lg">A collection of memes and memories over the years</p>
+          <div className="flex items-center gap-4">
+            <p className="text-gray-600 text-lg">A collection of memes and memories over the years</p>
+            <button
+              className="ml-2 px-3 py-1 bg-blue-600 text-white rounded shadow hover:bg-blue-700 text-sm"
+              onClick={() => shuffleMemories()}
+              title="Shuffle gallery"
+            >
+              Shuffle
+            </button>
+          </div>
         </div>
 
         {/* Gallery Grid */}
