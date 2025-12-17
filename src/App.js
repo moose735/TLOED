@@ -20,6 +20,7 @@ import KeeperList from './lib/KeeperList';
 const MemesAndMemories = lazy(() => import('./lib/MemesAndMemories'));
 // import MobileSidebarNav from './components/MobileSidebarNav';
 import DesktopNav from './components/DesktopNav';
+import PasswordLock from './components/PasswordLock';
 
 // Import the custom hook from your SleeperDataContext
 import { SleeperDataProvider, useSleeperData } from './contexts/SleeperDataContext';
@@ -806,9 +807,11 @@ const AppContent = () => {
 // This is the outer App component that provides the Sleeper Context
 const App = () => {
     return (
-        <SleeperDataProvider>
-            <AppContent />
-        </SleeperDataProvider>
+        <PasswordLock>
+            <SleeperDataProvider>
+                <AppContent />
+            </SleeperDataProvider>
+        </PasswordLock>
     );
 };
 
