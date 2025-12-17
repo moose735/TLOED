@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import LOADING_SAYINGS from './data/loadingSayings';
 
 // Import all your components
@@ -17,7 +17,7 @@ import HallOfChampions from './lib/HallOfChampions';
 import Gamecenter from './components/Gamecenter';
 import Sportsbook from './components/Sportsbook';
 import KeeperList from './lib/KeeperList';
-import MemesAndMemories from './lib/MemesAndMemories';
+const MemesAndMemories = lazy(() => import('./lib/MemesAndMemories'));
 // import MobileSidebarNav from './components/MobileSidebarNav';
 import DesktopNav from './components/DesktopNav';
 
@@ -516,7 +516,11 @@ const AppContent = () => {
             case TABS.DRAFT_ANALYSIS: // New case for Draft Analysis
                 return <DraftAnalysis />;
             case TABS.MEMES_AND_MEMORIES:
-                return <MemesAndMemories />;
+                return (
+                    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><p>Loading gallery...</p></div>}>
+                        <MemesAndMemories />
+                    </Suspense>
+                );
             case TABS.ACHIEVEMENTS:
                 // Achievements UI removed; redirect to dashboard
                 return <Dashboard />;
