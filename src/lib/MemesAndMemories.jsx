@@ -10,6 +10,11 @@ export default function MemesAndMemories() {
     { media: 'ShotSki.mp4', type: 'video' },
     { media: 'IMG_0838.jpeg', type: 'image' },
     { media: 'IMG_6065.jpeg', type: 'image' },
+    { media: 'IMG_0828.jpeg', type: 'image' },
+    { media: 'IMG_0843.jpeg', type: 'image' },
+    { media: 'IMG_9141.jpeg', type: 'image' },
+    { media: 'IMG_9201.jpeg', type: 'image' },
+    { media: 'IMG_9534.jpeg', type: 'image' },
     // Example:
     // { media: '2023-upset.jpg', type: 'image' },
     // { media: 'highlight.mp4', type: 'video' },
