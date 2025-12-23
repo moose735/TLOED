@@ -79,8 +79,11 @@ const SeasonRecords = () => {
         if (recordKey === 'bestLuckRating' || recordKey === 'worstLuckRating') {
             return recordInstance.value > 0 ? 'Best Luck Rating' : 'Worst Luck Rating';
         }
-        if (recordKey === 'mostPointsFor' || recordKey === 'fewestPointsFor') {
-            return recordInstance.value > 0 ? 'Most Points For' : 'Fewest Points For';
+        if (recordKey === 'mostPointsFor') {
+            return 'Most Points For';
+        }
+        if (recordKey === 'fewestPointsFor') {
+            return 'Least Points For';
         }
         if (recordKey === 'highestDPR') {
             return 'Highest Season DPR';
@@ -519,7 +522,7 @@ const SeasonRecords = () => {
 
                                     {/* Expandable Top5 for mobile */}
                                     {expandedSections[record.key] && (() => {
-                                        const keyMapping = {
+                                            const keyMapping = {
                                             'wins': 'mostWinsSeason',
                                             'losses': 'mostLossesSeason', 
                                             'winPercentage': 'bestWinPctSeason',
@@ -530,8 +533,10 @@ const SeasonRecords = () => {
                                             'blowoutLosses': 'mostBlowoutLossesSeason',
                                             'slimWins': 'mostSlimWinsSeason',
                                             'slimLosses': 'mostSlimLossesSeason',
-                                            'pointsFor': record.value > 0 ? 'mostPointsSeason' : 'fewestPointsSeason',
-                                            'luckRating': record.value > 0 ? 'bestLuckRatingSeason' : 'worstLuckRatingSeason',
+                                            'mostPointsFor': 'mostPointsSeason',
+                                            'fewestPointsFor': 'fewestPointsSeason',
+                                            'bestLuckRating': 'bestLuckRatingSeason',
+                                            'worstLuckRating': 'worstLuckRatingSeason',
                                             'highestDPR': 'highestDPRSeason',
                                             'lowestDPR': 'lowestDPRSeason',
                                             'tradeCount': 'mostTradesSeason',
@@ -555,8 +560,10 @@ const SeasonRecords = () => {
                                                     'blowoutLosses': 'mostBlowoutLossesSeason',
                                                     'slimWins': 'mostSlimWinsSeason',
                                                     'slimLosses': 'mostSlimLossesSeason',
-                                                    'pointsFor': record.value > 0 ? 'mostPointsSeason' : 'fewestPointsSeason',
-                                                    'luckRating': record.value > 0 ? 'bestLuckRatingSeason' : 'worstLuckRatingSeason',
+                                                    'mostPointsFor': 'mostPointsSeason',
+                                                    'fewestPointsFor': 'fewestPointsSeason',
+                                                    'bestLuckRating': 'bestLuckRatingSeason',
+                                                    'worstLuckRating': 'worstLuckRatingSeason',
                                                     'highestDPR': 'highestDPRSeason',
                                                     'lowestDPR': 'lowestDPRSeason',
                                                     'tradeCount': 'mostTradesSeason',
@@ -736,8 +743,10 @@ const SeasonRecords = () => {
                                                 'blowoutLosses': 'mostBlowoutLossesSeason',
                                                 'slimWins': 'mostSlimWinsSeason',
                                                 'slimLosses': 'mostSlimLossesSeason',
-                                                'pointsFor': record.value > 0 ? 'mostPointsSeason' : 'fewestPointsSeason',
-                                                'luckRating': record.value > 0 ? 'bestLuckRatingSeason' : 'worstLuckRatingSeason',
+                                                'mostPointsFor': 'mostPointsSeason',
+                                                'fewestPointsFor': 'fewestPointsSeason',
+                                                'bestLuckRating': 'bestLuckRatingSeason',
+                                                'worstLuckRating': 'worstLuckRatingSeason',
                                                 'highestDPR': 'highestDPRSeason',
                                                 'lowestDPR': 'lowestDPRSeason',
                                                 'tradeCount': 'mostTradesSeason',
@@ -768,8 +777,10 @@ const SeasonRecords = () => {
                                                                     'blowoutLosses': 'mostBlowoutLossesSeason',
                                                                     'slimWins': 'mostSlimWinsSeason',
                                                                     'slimLosses': 'mostSlimLossesSeason',
-                                                                    'pointsFor': record.value > 0 ? 'mostPointsSeason' : 'fewestPointsSeason',
-                                                                    'luckRating': record.value > 0 ? 'bestLuckRatingSeason' : 'worstLuckRatingSeason',
+                                                                    'mostPointsFor': 'mostPointsSeason',
+                                                                    'fewestPointsFor': 'fewestPointsSeason',
+                                                                    'bestLuckRating': 'bestLuckRatingSeason',
+                                                                    'worstLuckRating': 'worstLuckRatingSeason',
                                                                     'highestDPR': 'highestDPRSeason',
                                                                     'lowestDPR': 'lowestDPRSeason',
                                                                     'tradeCount': 'mostTradesSeason',

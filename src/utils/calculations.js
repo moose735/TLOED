@@ -397,13 +397,18 @@ export const calculateAllLeagueMetrics = (historicalData, draftHistory, getTeamN
 
                             // Blowout/Slim logic
                             if (opponentScore > 0) {
-                                if (currentTeamScoreInWeek > (opponentScore * 1.40)) {
+                                const BLOWOUT_FACTOR = 1.40; // Symmetric blowout factor (team > opponent * factor => blowout win)
+                                const SLIM_MARGIN = 0.025; // Small margin for slim wins/losses
+
+                                if (currentTeamScoreInWeek > (opponentScore * BLOWOUT_FACTOR)) {
+                                    // Team dominated the opponent
                                     currentTeamStats.blowoutWins++;
-                                } else if (currentTeamScoreInWeek < (opponentScore * 0.60)) {
+                                } else if (opponentScore > (currentTeamScoreInWeek * BLOWOUT_FACTOR)) {
+                                    // Opponent dominated the team (symmetric opposite)
                                     currentTeamStats.blowoutLosses++;
-                                } else if (currentTeamScoreInWeek > opponentScore && (currentTeamScoreInWeek - opponentScore) < (opponentScore * 0.025)) {
+                                } else if (currentTeamScoreInWeek > opponentScore && (currentTeamScoreInWeek - opponentScore) < (opponentScore * SLIM_MARGIN)) {
                                     currentTeamStats.slimWins++;
-                                } else if (currentTeamScoreInWeek < opponentScore && (opponentScore - currentTeamScoreInWeek) < (opponentScore * 0.025)) {
+                                } else if (currentTeamScoreInWeek < opponentScore && (opponentScore - currentTeamScoreInWeek) < (opponentScore * SLIM_MARGIN)) {
                                     currentTeamStats.slimLosses++;
                                 }
                             }
