@@ -9,6 +9,9 @@ export const HISTORICAL_MATCHUPS_API_URL = 'https://script.google.com/macros/s/A
 
 export const CURRENT_LEAGUE_ID = '1181984921049018368';
 
+// Default sportsbook vig applied across odds calculations (5.5% overround by default)
+export const SPORTSBOOK_VIG = 0.055; // 5.5%
+
 export const TEAM_NAME_TO_SLEEPER_ID_MAP = {
   'Ainsworth': '783790952367169536',
   'Bjarnar': '783761299275382784',

@@ -6,6 +6,8 @@
 
 import { calculateAllLeagueMetrics } from './calculations';
 import logger from './logger';
+import { SPORTSBOOK_VIG } from '../config';
+import { seededRandomFromString } from './seededRandom';
 
 // Cache for DPR calculations to prevent expensive recalculation
 let dprCache = {
@@ -800,31 +802,69 @@ export const calculatePlayoffProbabilityMonteCarlo = (
  * @param {Number} vig - Sportsbook vig/juice (default 10%)
  * @returns {Object} American odds and implied probability
  */
-export const calculateBookmakerOdds = (probability, vig = 0.10) => {
-    // Adjust probability for vig
-    const adjustedProb = probability * (1 + vig);
-    const clampedProb = Math.max(0.01, Math.min(0.99, adjustedProb));
-    
+/**
+ * Apply marketplace vig additively: favorite gets +vig/2, underdog gets -vig/2
+ * This ensures one side remains >0.5 and the other <0.5 in two-way markets,
+ * which prevents both sides from appearing as favorites (negative moneyline) after vig.
+ */
+export const applyMarketVig = (probA, probB, vig = SPORTSBOOK_VIG) => {
+    let a = probA;
+    let b = probB;
+
+    // Determine favorite and underdog
+    if (a >= b) {
+        a = a + (vig / 2);
+        b = b - (vig / 2);
+    } else {
+        b = b + (vig / 2);
+        a = a - (vig / 2);
+    }
+
+    // Clamp to safe bounds
+    a = Math.max(0.01, Math.min(0.99, a));
+    b = Math.max(0.01, Math.min(0.99, b));
+
+    return {
+        probA: a,
+        probB: b
+    };
+};
+
+/**
+ * Convert individual probability to American odds. Optionally skip applying any vig (probability should already be adjusted).
+ * @param {Number} probability - Probability (0-1)
+ * @param {Boolean} applyInternalVig - If true, apply multiplicative vig to this single-side probability (legacy). Default: false
+ * @param {Number} vig - vig to use if applyInternalVig is true
+ */
+export const calculateBookmakerOdds = (probability, applyInternalVig = false, vig = SPORTSBOOK_VIG) => {
+    let prob = probability;
+
+    if (applyInternalVig) {
+        prob = prob * (1 + vig);
+    }
+
+    const clampedProb = Math.max(0.01, Math.min(0.99, prob));
+
     let americanOdds;
     if (clampedProb >= 0.5) {
         americanOdds = Math.round(-100 * clampedProb / (1 - clampedProb));
     } else {
         americanOdds = Math.round(100 * (1 - clampedProb) / clampedProb);
     }
-    
-    // Calculate implied probability from the odds
+
+    // Calculate implied probability from the odds (should be close to clampedProb)
     let impliedProbability;
     if (americanOdds < 0) {
         impliedProbability = (-americanOdds) / ((-americanOdds) + 100);
     } else {
         impliedProbability = 100 / (americanOdds + 100);
     }
-    
+
     return {
         americanOdds,
         impliedProbability,
         originalProbability: probability,
-        edge: impliedProbability - probability // House edge
+        edge: impliedProbability - probability // House edge (positive if market favors house)
     };
 };
 
@@ -1059,8 +1099,9 @@ export const generateKeeperBettingMarkets = (matchup, teamStats, eloRatings = {}
         const favoriteTeam = isFavoriteTeam1 ? matchup.team1 : matchup.team2;
         
         // Calculate moneylines that match the spread with proper sportsbook edge
-        const favoriteML = convertSpreadToMoneyline(pointSpread, true);
-        const underdogML = convertSpreadToMoneyline(pointSpread, false);
+        const seedKey = matchup?.matchup_id ? `matchup-${matchup.matchup_id}` : `${matchup?.team1RosterId||matchup?.team1?.rosterId||'t1'}-${matchup?.team2RosterId||matchup?.team2?.rosterId||'t2'}-${matchup?.week||''}`;
+        const favoriteML = convertSpreadToMoneyline(pointSpread, true, SPORTSBOOK_VIG, `${seedKey}-point`);
+        const underdogML = convertSpreadToMoneyline(pointSpread, false, SPORTSBOOK_VIG, `${seedKey}-point`);
         
         // Validate consistency and ensure proper edge
         const validatedOdds = validateOddsConsistency(pointSpread, favoriteML, underdogML);
@@ -1406,8 +1447,9 @@ export const generateBettingMarkets = (matchup, teamStats, eloRatings = {}, hist
     if (hasSpread && pointSpread > 0) {
         // Standard spread game
         const isFavoriteTeam1 = rawSpread > 0;
-        finalTeam1Odds = convertSpreadToMoneyline(pointSpread, isFavoriteTeam1);
-        finalTeam2Odds = convertSpreadToMoneyline(pointSpread, !isFavoriteTeam1);
+        const localSeedKey = matchup?.matchup_id ? `matchup-${matchup.matchup_id}` : `${matchup?.team1RosterId||matchup?.team1?.rosterId||'t1'}-${matchup?.team2RosterId||matchup?.team2?.rosterId||'t2'}-${matchup?.week||''}`;
+        finalTeam1Odds = convertSpreadToMoneyline(pointSpread, isFavoriteTeam1, SPORTSBOOK_VIG, `${localSeedKey}-pt2`);
+        finalTeam2Odds = convertSpreadToMoneyline(pointSpread, !isFavoriteTeam1, SPORTSBOOK_VIG, `${localSeedKey}-pt2`);
     } else {
         // Pick'em game - use standard pick'em odds
         if (team1WinProb > team2WinProb) {
@@ -1911,7 +1953,10 @@ export const generateLegacyBettingMarkets = (matchup, teamStats) => {
  * @param {Number} juicePercent - Sportsbook edge percentage (default 10%)
  * @returns {Number} American odds
  */
-export const convertSpreadToMoneyline = (spread, isFavorite, juicePercent = 0.10) => {
+export const convertSpreadToMoneyline = (spread, isFavorite, juicePercent = SPORTSBOOK_VIG, seedKey = 'spread-default') => {
+    // Deterministic behavior by seeding a local RNG based on seedKey
+    const rng = seededRandomFromString(seedKey);
+
     // Standard NFL spread-to-moneyline conversion table (fair odds)
     let fairProbability;
     
@@ -1949,10 +1994,10 @@ export const convertSpreadToMoneyline = (spread, isFavorite, juicePercent = 0.10
     
     if (isFavorite) {
         // Make favorite's implied probability higher (worse odds for bettor)
-        adjustedProbability = Math.min(0.95, fairProbability + edgeAdjustment);
+        adjustedProbability = Math.min(0.95, fairProbability + edgeAdjustment + (rng()-0.5)*0.01);
     } else {
         // Make underdog's implied probability lower (worse odds for bettor)
-        adjustedProbability = Math.max(0.05, fairProbability - edgeAdjustment);
+        adjustedProbability = Math.max(0.05, fairProbability - edgeAdjustment + (rng()-0.5)*0.01);
     }
     
     // Convert to American odds
@@ -1972,7 +2017,7 @@ export const convertSpreadToMoneyline = (spread, isFavorite, juicePercent = 0.10
  * @param {Number} baseJuice - Base juice percentage
  * @returns {Number} Spread odds (typically around -110)
  */
-export const calculateSpreadOdds = (spread, confidence = 0.5, baseJuice = 0.10) => {
+export const calculateSpreadOdds = (spread, confidence = 0.5, baseJuice = SPORTSBOOK_VIG) => {
     // Base spread odds start at -122 (10% vig split = 5% each side)
     let impliedProb = 0.55; // -122 = 55% implied probability
     
@@ -1998,8 +2043,9 @@ export const calculateSpreadOdds = (spread, confidence = 0.5, baseJuice = 0.10) 
  */
 export const validateOddsConsistency = (spread, favoriteML, underdogML) => {
     // Calculate expected moneyline from spread
-    const expectedFavoriteML = convertSpreadToMoneyline(spread, true);
-    const expectedUnderdogML = convertSpreadToMoneyline(spread, false);
+    const expectedSeed = `spread-${spread}-${currentSeason || ''}`;
+    const expectedFavoriteML = convertSpreadToMoneyline(spread, true, SPORTSBOOK_VIG, `${expectedSeed}-exp`);
+    const expectedUnderdogML = convertSpreadToMoneyline(spread, false, SPORTSBOOK_VIG, `${expectedSeed}-exp`);
     
     // Check if provided odds are reasonably close to expected
     const favoriteDiff = Math.abs(favoriteML - expectedFavoriteML);
@@ -2014,9 +2060,9 @@ export const validateOddsConsistency = (spread, favoriteML, underdogML) => {
     const underdogImplied = 100 / (finalUnderdogML + 100);
     const totalImplied = favoriteImplied + underdogImplied;
     
-    // Total should be > 1.0 for sportsbook edge (typically 1.10 for 10% edge)
+    // Total should be > 1.0 for sportsbook edge (typically 1 + SPORTSBOOK_VIG)
     const edge = totalImplied - 1.0;
-    const minEdge = 0.10; // 10% minimum edge
+    const minEdge = SPORTSBOOK_VIG; // minimum edge defined by config
     
     if (edge < minEdge) {
         // Adjust odds to ensure minimum edge
@@ -2123,6 +2169,10 @@ export const calculateHybridPlayoffProbability = (
         return playoffTeams.some(team => team.rosterId === rosterId) ? 1.0 : 0.0;
     }
 
+    // Seed RNG deterministically from team list + remainingGames so runs are repeatable
+    const teamKey = Object.keys(teamPowerRankings).sort().join(',') + '|' + remainingGames + '|hybrid-playoff-v1';
+    const rng = seededRandomFromString(teamKey);
+
     let playoffAppearances = 0;
     const totalTeams = Object.keys(teamPowerRankings).length;
     const teamIds = Object.keys(teamPowerRankings);
@@ -2171,29 +2221,29 @@ export const calculateHybridPlayoffProbability = (
                 baseStrength = (earlySeasonWeight * powerStrength) + (lateSeasonWeight * winRate);
             }
             
-            // Add significant random variance for unpredictability 
-            const randomVariance = (Math.random() - 0.5) * 0.3; // ±15% variance
+            // Add significant deterministic variance for unpredictability 
+            const randomVariance = (rng() - 0.5) * 0.3; // ±15% deterministic
             
             teamStrengths[id] = Math.max(0.25, Math.min(0.75, baseStrength + randomVariance));
         });
 
         // Simulate remaining weeks of head-to-head matchups
         for (let week = 0; week < remainingGames; week++) {
-            // Create random matchups for this week (each team plays once)
+            // Create deterministic "random" matchups for this week (each team plays once)
             const availableTeams = [...teamIds];
             const weekMatchups = [];
             
-            // Pair up teams randomly
+            // Pair up teams pseudo-randomly
             while (availableTeams.length >= 2) {
-                const team1Index = Math.floor(Math.random() * availableTeams.length);
+                const team1Index = Math.floor(rng() * availableTeams.length);
                 const team1 = availableTeams.splice(team1Index, 1)[0];
                 
-                const team2Index = Math.floor(Math.random() * availableTeams.length);
+                const team2Index = Math.floor(rng() * availableTeams.length);
                 const team2 = availableTeams.splice(team2Index, 1)[0];
                 
                 weekMatchups.push([team1, team2]);
             }
-            
+
             // If odd number of teams, one team gets a bye
             if (availableTeams.length === 1) {
                 // Team with bye gets an average result
@@ -2202,17 +2252,17 @@ export const calculateHybridPlayoffProbability = (
                 const avgScore = team.averageScore || 100;
                 
                 // Bye weeks typically result in league-average performance
-                if (Math.random() < 0.5) {
+                if (rng() < 0.5) {
                     team.wins++;
-                    team.pointsFor += avgScore + (Math.random() - 0.5) * 20;
+                    team.pointsFor += avgScore + (rng() - 0.5) * 20;
                 } else {
                     team.losses++;
-                    team.pointsFor += avgScore * 0.9 + (Math.random() - 0.5) * 20;
+                    team.pointsFor += avgScore * 0.9 + (rng() - 0.5) * 20;
                 }
                 team.gamesPlayed++;
                 team.averageScore = team.pointsFor / team.gamesPlayed;
             }
-            
+
             // Simulate each matchup
             weekMatchups.forEach(([team1Id, team2Id]) => {
                 const team1 = simStandings[team1Id];
@@ -2224,35 +2274,32 @@ export const calculateHybridPlayoffProbability = (
                 const strengthDiff = strength1 - strength2;
                 const baseProbability = 0.5 + (strengthDiff * 0.4); // Max 90% for huge strength diff
                 
-                // Add weekly variance (any given Sunday effect)
-                const variance = (Math.random() - 0.5) * 0.2; // ±10% weekly variance
+                // Add weekly deterministic variance (any given Sunday effect)
+                const variance = (rng() - 0.5) * 0.2; // ±10% deterministic
                 const winProb1 = Math.max(0.15, Math.min(0.85, baseProbability + variance));
                 
                 // Simulate the game
-                const team1Wins = Math.random() < winProb1;
+                const team1Wins = rng() < winProb1;
                 
-                // Generate realistic scores based on team averages with variance
+                // Generate realistic scores based on team averages with deterministic variance
                 const baseScore1 = team1.averageScore + (strength1 - 0.5) * 30;
                 const baseScore2 = team2.averageScore + (strength2 - 0.5) * 30;
                 
-                const score1 = Math.max(40, baseScore1 + (Math.random() - 0.5) * 50);
-                const score2 = Math.max(40, baseScore2 + (Math.random() - 0.5) * 50);
-                
-                // Update records
+                const score1 = Math.max(40, baseScore1 + (rng() - 0.5) * 50);
+                const score2 = Math.max(40, baseScore2 + (rng() - 0.5) * 50);
+
                 if (team1Wins) {
                     team1.wins++;
                     team2.losses++;
-                    // Winner typically scores more
                     team1.pointsFor += Math.max(score1, score2 + 5);
                     team2.pointsFor += Math.min(score1 - 5, score2);
                 } else {
                     team2.wins++;
                     team1.losses++;
-                    // Winner typically scores more
-                    team2.pointsFor += Math.max(score1, score2 + 5);
-                    team1.pointsFor += Math.min(score1, score2 - 5);
+                    team2.pointsFor += Math.max(score2, score1 + 5);
+                    team1.pointsFor += Math.min(score2 - 5, score1);
                 }
-                
+
                 team1.gamesPlayed++;
                 team2.gamesPlayed++;
                 team1.averageScore = team1.pointsFor / team1.gamesPlayed;
@@ -2573,7 +2620,7 @@ export const calculateChampionshipOdds = (
         Object.keys(seedCounts).reduce((sum, seed) => sum + (parseInt(seed) * seedCounts[seed]), 0) / totalPlayoffAppearances : 
         null;
 
-    // Convert to betting odds with 10% house edge
+    // Convert to betting odds with configured house edge
     let odds = { american: null, decimal: null, implied: championshipProbability };
     
     // For early season or teams with decent playoff chances, ensure they get reasonable championship odds
@@ -2592,8 +2639,8 @@ export const calculateChampionshipOdds = (
     
     // Always give teams odds unless they're mathematically eliminated
     if (finalProbability > 0) {
-        // Apply 10% house edge consistently with other odds
-        const vigAdjustedProb = Math.min(0.95, finalProbability * 1.10);
+        // Apply configured house edge (multiplicative overround)
+        const vigAdjustedProb = Math.min(0.99, finalProbability * (1 + SPORTSBOOK_VIG));
         
         if (vigAdjustedProb >= 0.5) {
             odds.american = Math.round(-100 * vigAdjustedProb / (1 - vigAdjustedProb));

@@ -6,20 +6,22 @@ import { calculateTeamStats, calculateVarianceBasedSpread, getHeadToHeadRecord }
 import { calculateEnhancedSpread } from './currentSeasonStats.js';
 import { calculateDynamicEnhancedSpread } from './dynamicSeasonStats.js';
 import { calculateWinProbability } from './winProbabilityCalculator.js';
+import { seededRandomFromString } from './seededRandom';
 
 /**
  * Convert point spread to moneyline odds with realistic sportsbook relationships
  * Based on REAL NFL sportsbook data patterns
  */
-export const convertSpreadToMoneyline = (spread, isFavorite = true, vig = 0.055) => {
+export const convertSpreadToMoneyline = (spread, isFavorite = true, vig = SPORTSBOOK_VIG, seedKey = 'default') => {
     const absSpread = Math.abs(spread);
-    
+    const rng = seededRandomFromString(seedKey);
+
     // Handle true pick'em games (spread = 0)
     if (absSpread === 0) {
-        // True pick'em should have very close moneylines
-        const baseOdds = -110;
-        const variance = Math.round((Math.random() - 0.5) * 10); // -5 to +5 variance
-        return baseOdds + variance; // Range: -115 to -105
+        // True pick'em: use slightly wider juice to reflect sportsbook vig
+        const baseOdds = -120; // Favor -120 for pick'em lines to reflect juice
+        const variance = Math.round((rng() - 0.5) * 6); // -3 to +3 deterministic
+        return baseOdds + variance; // Range: -123 to -117
     }
     
     // For very large spreads, continue with the piecewise extrapolation below
@@ -139,7 +141,8 @@ export const calculateTotal = (team1AvgScore, team2AvgScore, matchupContext = {}
     // Add small variance for realism (±5%)
     const {
         variance = 0.03,      // Smaller, more predictable variance
-        weekNumber = 3        // Current week
+        weekNumber = 3,       // Current week
+        seedKey = 'total-default'
     } = matchupContext;
     
     // Early season adjustment is minimal
@@ -147,8 +150,9 @@ export const calculateTotal = (team1AvgScore, team2AvgScore, matchupContext = {}
         baseTotal *= 1.02; // Just 2% boost early season
     }
     
-    // Add small realistic variance (±3%)
-    const randomFactor = 1 + ((Math.random() - 0.5) * variance * 2);
+    // Deterministic small realistic variance (±3%) based on seedKey
+    const rng = seededRandomFromString(seedKey);
+    const randomFactor = 1 + ((rng() - 0.5) * variance * 2);
     let finalTotal = baseTotal * randomFactor;
     
     // Keep totals in reasonable fantasy range but closer to team averages
@@ -169,18 +173,19 @@ export const generateSpreadJuice = (spread, marketConfidence = 0.5) => {
     let baseJuice = -110;
     
     // Adjust based on spread size and confidence
+    const rng = seededRandomFromString(seedKey);
     if (absSpread <= 1.5) {
-        // Close games often have asymmetric juice
-        const favoriteJuice = -115 - Math.round(Math.random() * 10); // -115 to -125
-        const underdogJuice = -105 - Math.round(Math.random() * 10);  // -105 to -115
+        // Close games often have asymmetric juice (deterministic)
+        const favoriteJuice = -115 - Math.round(rng() * 10); // -115 to -125 deterministic
+        const underdogJuice = -105 - Math.round(rng() * 10);  // -105 to -115 deterministic
         return { favoriteJuice, underdogJuice };
     } else if (absSpread >= 10) {
         // Large spreads often have more symmetric juice
-        const juice = -108 - Math.round(Math.random() * 8); // -108 to -116
+        const juice = -108 - Math.round(rng() * 8); // -108 to -116 deterministic
         return { favoriteJuice: juice, underdogJuice: juice };
     } else {
-        // Normal spreads with some variance
-        const variance = Math.round((Math.random() - 0.5) * 16); // -8 to +8
+        // Normal spreads with some deterministic variance
+        const variance = Math.round((rng() - 0.5) * 16); // -8 to +8
         const favoriteJuice = baseJuice + variance;
         const underdogJuice = baseJuice - variance; // Opposite direction
         
@@ -194,10 +199,11 @@ export const generateSpreadJuice = (spread, marketConfidence = 0.5) => {
 /**
  * Generate realistic total juice based on market factors
  */
-export const generateTotalJuice = (total, marketVolume = 0.5) => {
-    // Most totals are symmetric but with slight variance
+export const generateTotalJuice = (total, marketVolume = 0.5, seedKey = 'total-default') => {
+    // Most totals are symmetric but with slight deterministic variance
     const baseJuice = -110;
-    const variance = Math.round((Math.random() - 0.5) * 12); // -6 to +6
+    const rng = seededRandomFromString(seedKey);
+    const variance = Math.round((rng() - 0.5) * 12); // -6 to +6 deterministic
     
     const overJuice = baseJuice + variance;
     const underJuice = baseJuice - variance;
@@ -603,16 +609,19 @@ export const generateCleanBettingMarkets = (matchup, teamStats, options = {}) =>
         console.log(`[Spread Debug] ${team1Name} vs ${team2Name}: scoringDiff=${scoringDiff.toFixed(1)}, powerDiff=${absPowerDiff.toFixed(2)}, finalSpread=${spread}, isPick=${isPick}`);
     }
     
+    // Deterministic seed key per matchup for stable markets
+    const seedKey = `${team1RosterId || team1Name}-${team2RosterId || team2Name}-${weekNumber}`;
+
     // Calculate moneylines for pick'em vs regular spreads
     let team1ML, team2ML;
     if (isPick) {
-        // Pick'em games get close moneylines
-        team1ML = convertSpreadToMoneyline(0, true, vig);
-        team2ML = convertSpreadToMoneyline(0, false, vig);
+        // Pick'em games get close moneylines (deterministic)
+        team1ML = convertSpreadToMoneyline(0, true, vig, `${seedKey}-pick`);
+        team2ML = convertSpreadToMoneyline(0, false, vig, `${seedKey}-pick`);
     } else {
         // Regular spreads
-        team1ML = convertSpreadToMoneyline(absSpread, isTeam1Favorite, vig);
-        team2ML = convertSpreadToMoneyline(absSpread, !isTeam1Favorite, vig);
+        team1ML = convertSpreadToMoneyline(absSpread, isTeam1Favorite, vig, `${seedKey}-spread`);
+        team2ML = convertSpreadToMoneyline(absSpread, !isTeam1Favorite, vig, `${seedKey}-spread`);
     }
     
     // Calculate total with fantasy football context, using actual scoring data
@@ -622,14 +631,15 @@ export const generateCleanBettingMarkets = (matchup, teamStats, options = {}) =>
         { 
             weekNumber, 
             variance: 0.06,
+            seedKey: `${seedKey}-total`,
             pace: 1.0 + (powerAnalysis.powerDiff * 0.01), // Higher power teams score more
             defensive: 1.0 // Could add defensive factors later
         }
     );
     
-    // Generate realistic juice patterns
-    const spreadJuice = generateSpreadJuice(spread, 0.6);
-    const totalJuice = generateTotalJuice(total, 0.5);
+    // Generate realistic juice patterns (deterministic)
+    const spreadJuice = generateSpreadJuice(spread, 0.6, `${seedKey}-juice`);
+    const totalJuice = generateTotalJuice(total, 0.5, `${seedKey}-total`);
     
     // Format spread lines for display
     const formatSpreadLine = (spread, isTeam1) => {
@@ -734,8 +744,9 @@ export const generatePropBets = (team1Stats, team2Stats, team1Name, team2Name) =
  */
 export const validateOddsConsistency = (spread, team1ML, team2ML) => {
     const absSpread = Math.abs(spread);
-    const expectedTeam1ML = convertSpreadToMoneyline(absSpread, spread < 0);
-    const expectedTeam2ML = convertSpreadToMoneyline(absSpread, spread > 0);
+    const expectedSeedKey = `validate-${spread}`;
+    const expectedTeam1ML = convertSpreadToMoneyline(absSpread, spread < 0, SPORTSBOOK_VIG, `${expectedSeedKey}-1`);
+    const expectedTeam2ML = convertSpreadToMoneyline(absSpread, spread > 0, SPORTSBOOK_VIG, `${expectedSeedKey}-2`);
     
     const team1Diff = Math.abs(team1ML - expectedTeam1ML);
     const team2Diff = Math.abs(team2ML - expectedTeam2ML);
@@ -767,17 +778,18 @@ export const oddsToImpliedProbability = (americanOdds) => {
 /**
  * Convert implied probability to American odds
  */
-export const probabilityToAmericanOdds = (probability, addVig = true, vigAmount = 0.055) => {
+import { SPORTSBOOK_VIG } from '../config';
+
+export const probabilityToAmericanOdds = (probability, addVig = true, vigAmount = SPORTSBOOK_VIG) => {
     let adjustedProb = probability;
-    
+
     if (addVig) {
-        adjustedProb = probability >= 0.5 ? 
-            probability + vigAmount : 
-            probability - vigAmount;
+        // Apply vig multiplicatively so the market overround equals (1 + vig)
+        adjustedProb = probability * (1 + vigAmount);
     }
-    
+
     adjustedProb = Math.max(0.01, Math.min(0.99, adjustedProb));
-    
+
     if (adjustedProb >= 0.5) {
         return Math.round(-(adjustedProb / (1 - adjustedProb)) * 100);
     } else {

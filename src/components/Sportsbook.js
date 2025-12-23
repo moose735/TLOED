@@ -10,8 +10,10 @@ import {
     classifyKeeperLeagueTeam,
     calculateTeamConsistency,
     calculateTeamDPRValues,
-    calculateWinProbability
+    calculateWinProbability,
+    applyMarketVig
 } from '../utils/sportsbookCalculations';
+import { SPORTSBOOK_VIG } from '../config';
 import { generateCleanBettingMarkets } from '../utils/cleanOddsCalculator';
 import { 
     calculateRecentForm, 
@@ -80,6 +82,12 @@ const Sportsbook = () => {
         }
     }, [processedSeasonalRecords, currentSeason, historicalData, getTeamDetails, rostersWithDetails]);
 
+    // Helper function to check if playoffs have been set (after week 14)
+    const playoffsAreSet = useMemo(() => {
+        const currentWeek = nflState?.week ? parseInt(nflState.week) : 0;
+        return currentWeek > 14;
+    }, [nflState]);
+
     // Initialize current week and Elo ratings
     useEffect(() => {
         if (nflState?.week && !selectedWeek) {
@@ -91,6 +99,13 @@ const Sportsbook = () => {
             setEloRatings(ratings);
         }
     }, [nflState, selectedWeek, currentSeason, historicalData]);
+
+    // Auto-switch to championship tab when playoffs are active
+    useEffect(() => {
+        if (selectedBetType === 'futures' && playoffsAreSet && selectedFuturesTab === 'playoffs') {
+            setSelectedFuturesTab('championship');
+        }
+    }, [playoffsAreSet, selectedBetType, selectedFuturesTab]);
 
     // Helper function to get abbreviated team name for mobile
     const getAbbreviatedTeamName = (teamName) => {
@@ -360,6 +375,85 @@ const Sportsbook = () => {
         return rankings;
     }, [processedSeasonalRecords, currentSeason, eloRatings, historicalData]);
 
+    // Helper function to get eliminated teams (teams not in playoff bracket)
+    const getEliminatedTeams = useMemo(() => {
+        if (!playoffsAreSet || !historicalData?.winnersBracketBySeason) {
+            return new Set();
+        }
+
+        const seasonBracket = historicalData.winnersBracketBySeason[currentSeason];
+        if (!seasonBracket) return new Set();
+
+        // Get all roster IDs that are in the playoff bracket
+        const playoffTeamIds = new Set();
+        const addTeamsFromBracket = (bracket) => {
+            if (!bracket) return;
+            if (Array.isArray(bracket)) {
+                bracket.forEach(team => {
+                    if (team && team.roster_id) playoffTeamIds.add(String(team.roster_id));
+                });
+            } else if (typeof bracket === 'object') {
+                Object.values(bracket).forEach(team => {
+                    if (team && team.roster_id) playoffTeamIds.add(String(team.roster_id));
+                });
+            }
+        };
+
+        addTeamsFromBracket(seasonBracket);
+
+        // All teams not in the bracket are eliminated
+        const eliminated = new Set();
+        if (teamPowerRankings) {
+            Object.keys(teamPowerRankings).forEach(rosterId => {
+                if (!playoffTeamIds.has(rosterId)) {
+                    eliminated.add(rosterId);
+                }
+            });
+        }
+
+        return eliminated;
+    }, [playoffsAreSet, currentSeason, historicalData, teamPowerRankings]);
+
+    // Helper function to get active playoff teams (teams still in the winners bracket)
+    const getPlayoffTeams = useMemo(() => {
+        if (!historicalData?.winnersBracketBySeason) {
+            return new Set();
+        }
+
+        const seasonBracket = historicalData.winnersBracketBySeason[currentSeason];
+        if (!Array.isArray(seasonBracket)) return new Set();
+
+        // Collect all teams that appear in the bracket and all losers
+        const allBracketTeams = new Set();
+        const eliminatedTeams = new Set();
+
+        seasonBracket.forEach(match => {
+            const team1 = match.t1 ? String(match.t1) : null;
+            const team2 = match.t2 ? String(match.t2) : null;
+            const winner = match.w ? String(match.w) : null;
+            const loser = match.l ? String(match.l) : null;
+
+            // Add all teams that appear in any bracket match
+            if (team1) allBracketTeams.add(team1);
+            if (team2) allBracketTeams.add(team2);
+
+            // Track losers (eliminated teams)
+            if (loser) {
+                eliminatedTeams.add(loser);
+            }
+        });
+
+        // Active teams = all bracket teams minus eliminated teams
+        const activeTeams = new Set();
+        allBracketTeams.forEach(team => {
+            if (!eliminatedTeams.has(team)) {
+                activeTeams.add(team);
+            }
+        });
+
+        return activeTeams;
+    }, [currentSeason, historicalData]);
+
     // Helper: Calculate recent average for a team (last N weeks)
     const getRecentAverage = (rosterId, season, N = 2) => {
         if (!historicalData?.matchupsBySeason?.[season]) return 0;
@@ -514,9 +608,10 @@ const Sportsbook = () => {
                 
                 const team2WinProb = 1 - team1WinProb;
                 
-                // Use enhanced odds calculation with vig
-                const team1OddsData = calculateBookmakerOdds(team1WinProb);
-                const team2OddsData = calculateBookmakerOdds(team2WinProb);
+                // Apply additive market vig so favorite/underdog signs behave correctly and markets are stable
+                const { probA: team1AdjProb, probB: team2AdjProb } = applyMarketVig(team1WinProb, team2WinProb, SPORTSBOOK_VIG);
+                const team1OddsData = calculateBookmakerOdds(team1AdjProb, false);
+                const team2OddsData = calculateBookmakerOdds(team2AdjProb, false);
 
                 // Determine if any STARTING players have recorded points for either team in this matchup
                 // We look for the matchup.teamX_players candidate which should include a `starters` array and a `players_points` map
@@ -645,7 +740,7 @@ const Sportsbook = () => {
                     },
                     statsToUse,
                     {
-                        vig: 0.055,
+                        vig: SPORTSBOOK_VIG,
                         includePropBets: true,
                         weekNumber: week
                     }
@@ -765,56 +860,97 @@ const Sportsbook = () => {
 
     // Generate championship odds using enhanced hybrid playoff system
     const generateChampionshipOdds = () => {
-        if (!teamPowerRankings) return [];
+        if (!teamPowerRankings || Object.keys(teamPowerRankings).length === 0) {
+            console.log('[Sportsbook] generateChampionshipOdds: No teamPowerRankings', teamPowerRankings);
+            return [];
+        }
 
         const currentGamesPlayed = Math.max(...Object.values(teamPowerRankings).map(t => t.gamesPlayed || 0));
         const remainingGames = Math.max(0, 14 - currentGamesPlayed); // Assume 14-game season
 
-        return Object.keys(teamPowerRankings).map(rosterId => {
-            const team = teamPowerRankings[rosterId];
-            
-            // Get team details using the same pattern as Gamecenter
-            const seasonRosters = getSeasonData(historicalData.rostersBySeason, currentSeason);
-            const rosterForTeam = seasonRosters?.find(r => String(r.roster_id) === rosterId);
-            const ownerId = rosterForTeam?.owner_id;
-            const teamDetails = getTeamDetails(ownerId, currentSeason);
-            
-            
-            // Create getTeamName function for DPR calculation
-            const getTeamName = (ownerId, season) => {
-                const details = getTeamDetails(ownerId, season);
-                return details?.name || `Team ${ownerId}`;
-            };
-            
-            // Use new DPR-enhanced championship odds calculation
-            const championshipData = calculateChampionshipOdds(
-                rosterId,
-                teamPowerRankings,
-                remainingGames,
-                250, // Reduced from 1000 to 250 for much faster UI response
-                historicalData, // Add historical data for SOS and momentum
-                currentSeason, // Add current season for trend analysis
-                getTeamName, // Add getTeamName function for DPR calculation
-                nflState // Add NFL state for DPR calculation
-            );
+        const odds = Object.keys(teamPowerRankings).map(rosterId => {
+            try {
+                const team = teamPowerRankings[rosterId];
+                
+                // Get team details using the same pattern as Gamecenter
+                const seasonRosters = getSeasonData(historicalData.rostersBySeason, currentSeason);
+                const rosterForTeam = seasonRosters?.find(r => String(r.roster_id) === rosterId);
+                const ownerId = rosterForTeam?.owner_id;
+                const teamDetails = getTeamDetails(ownerId, currentSeason);
+                
+                if (!teamDetails) {
+                    console.warn(`[Sportsbook] Missing team details for rosterId ${rosterId}, ownerId ${ownerId}`);
+                    return null;
+                }
+                
+                // Create getTeamName function for DPR calculation
+                const getTeamName = (ownerId, season) => {
+                    const details = getTeamDetails(ownerId, season);
+                    return details?.name || `Team ${ownerId}`;
+                };
+                
+                // Use new DPR-enhanced championship odds calculation (increase sims for stable odds)
+                const championshipData = calculateChampionshipOdds(
+                    rosterId,
+                    teamPowerRankings,
+                    remainingGames,
+                    1000, // Increased to 1000 simulations for more stable, deterministic odds
+                    historicalData, // Add historical data for SOS and momentum
+                    currentSeason, // Add current season for trend analysis
+                    getTeamName, // Add getTeamName function for DPR calculation
+                    nflState // Add NFL state for DPR calculation
+                );
 
-            return {
-                rosterId,
-                name: teamDetails.name,
-                avatar: teamDetails.avatar,
-                record: `${team.wins || 0}-${team.losses || 0}`,
-                powerScore: team.powerScore,
-                rank: team.rank,
-                probability: championshipData.championshipProbability,
-                odds: championshipData.odds.american, // Use the odds from the enhanced calculation
-                playoffProb: championshipData.playoffProbability,
-                expectedSeed: championshipData.expectedSeed,
-                strengthOfSchedule: championshipData.strengthOfSchedule,
-                momentum: championshipData.momentum,
-                isWildcardContender: isWildcardContender(team, rosterId),
-                gamesPlayed: team.gamesPlayed || 0
-            };
-        }).sort((a, b) => b.probability - a.probability);
+                return {
+                    rosterId,
+                    name: teamDetails.name,
+                    avatar: teamDetails.avatar,
+                    record: `${team.wins || 0}-${team.losses || 0}`,
+                    powerScore: team.powerScore,
+                    rank: team.rank,
+                    probability: championshipData.championshipProbability,
+                    odds: championshipData.odds.american, // Use the odds from the enhanced calculation
+                    playoffProb: championshipData.playoffProbability,
+                    expectedSeed: championshipData.expectedSeed,
+                    strengthOfSchedule: championshipData.strengthOfSchedule,
+                    momentum: championshipData.momentum,
+                    isWildcardContender: isWildcardContender(team, rosterId),
+                    gamesPlayed: team.gamesPlayed || 0
+                };
+            } catch (error) {
+                console.error(`[Sportsbook] Error generating championship odds for rosterId ${rosterId}:`, error);
+                return null;
+            }
+        }).filter(team => team !== null).sort((a, b) => b.probability - a.probability);
+        
+        // Normalize odds based on active playoff teams only
+        let normalizedOdds = odds;
+        if (playoffsAreSet && getPlayoffTeams && getPlayoffTeams.size > 0) {
+            const activeProbabilitySum = odds
+                .filter(team => getPlayoffTeams.has(team.rosterId))
+                .reduce((sum, team) => sum + team.probability, 0);
+            
+            if (activeProbabilitySum > 0) {
+                normalizedOdds = odds.map(team => {
+                    if (getPlayoffTeams.has(team.rosterId)) {
+                        const normalizedProb = team.probability / activeProbabilitySum;
+                        // Recalculate American odds based on normalized probability
+                        const americanOdds = normalizedProb > 0.5 
+                            ? Math.round(-100 * normalizedProb / (1 - normalizedProb))
+                            : Math.round(100 * (1 - normalizedProb) / normalizedProb);
+                        return {
+                            ...team,
+                            probability: normalizedProb,
+                            odds: americanOdds
+                        };
+                    }
+                    return team;
+                });
+            }
+        }
+        
+        console.log('[Sportsbook] generateChampionshipOdds result:', normalizedOdds);
+        return normalizedOdds;
     };
 
     // Helper function to identify teams that might make playoffs via wildcard (high points, bad record)
@@ -1392,16 +1528,19 @@ const Sportsbook = () => {
                     <div className="space-y-4">
                         {/* Futures sub-tabs */}
                         <div className="flex border-b mb-4">
-                            <button
-                                className={`flex-1 py-2 px-4 text-center font-medium ${
-                                    selectedFuturesTab === 'playoffs'
-                                        ? 'bg-gray-900 text-white border-b-2 border-yellow-400'
-                                        : 'text-gray-600 hover:text-gray-800'
-                                }`}
-                                onClick={() => setSelectedFuturesTab('playoffs')}
-                            >
-                                Playoff Appearance
-                            </button>
+                            {/* Playoff Appearance tab - only show if playoffs haven't been set yet */}
+                            {!playoffsAreSet && (
+                                <button
+                                    className={`flex-1 py-2 px-4 text-center font-medium ${
+                                        selectedFuturesTab === 'playoffs'
+                                            ? 'bg-gray-900 text-white border-b-2 border-yellow-400'
+                                            : 'text-gray-600 hover:text-gray-800'
+                                    }`}
+                                    onClick={() => setSelectedFuturesTab('playoffs')}
+                                >
+                                    Playoff Appearance
+                                </button>
+                            )}
                             <button
                                 className={`flex-1 py-2 px-4 text-center font-medium ${
                                     selectedFuturesTab === 'championship'
@@ -1415,7 +1554,7 @@ const Sportsbook = () => {
                         </div>
 
                         {/* Futures content */}
-                        {selectedFuturesTab === 'playoffs' && (
+                        {selectedFuturesTab === 'playoffs' && !playoffsAreSet && (
                             <div className="space-y-4">
                                 <h2 className="text-2xl font-bold text-gray-800 mb-4">Playoff Appearance Odds</h2>
                                 <div className="grid gap-4">
@@ -1468,8 +1607,16 @@ const Sportsbook = () => {
                         {selectedFuturesTab === 'championship' && (
                             <div className="space-y-4">
                                 <h2 className="text-2xl font-bold text-gray-800 mb-4">Championship Odds</h2>
+                                {getPlayoffTeams && getPlayoffTeams.size === 1 ? (
+                                    <div className="bg-yellow-50 border-l-4 border-yellow-600 p-4 rounded text-sm text-yellow-800">
+                                        <strong>Championship Over:</strong> No additional odds available. The championship game has concluded.
+                                    </div>
+                                ) : (
                                 <div className="grid gap-4">
-                                    {championshipOdds.map((team, index) => (
+                                    {championshipOdds && championshipOdds.length > 0 ? (
+                                        championshipOdds
+                                            .filter(team => !playoffsAreSet || getPlayoffTeams.has(team.rosterId))
+                                            .map((team, index) => (
                                         <div key={team.rosterId} className="bg-white rounded-lg shadow-md p-4">
                                             <div className="flex items-center justify-between">
                                                 {/* Team Info */}
@@ -1513,8 +1660,15 @@ const Sportsbook = () => {
                                                 </div>
                                             </div>
                                         </div>
-                                    ))}
+                                        ))
+                                    ) : (
+                                        <div className="bg-gray-50 p-8 rounded-lg text-center text-gray-600">
+                                            <p className="text-lg">No championship odds available yet.</p>
+                                            <p className="text-sm mt-2">Championship odds will be calculated once team data is loaded.</p>
+                                        </div>
+                                    )}
                                 </div>
+                                )}
                             </div>
                         )}
                     </div>

@@ -1,6 +1,7 @@
 {
   "files": {
-    "main.js": "./static/js/main.23259ab0.js",
+    "main.js": "./static/js/main.6a558243.js",
+    "static/js/289.98f35307.chunk.js": "./static/js/289.98f35307.chunk.js",
     "static/media/2022-champion.jpg": "./static/media/2022-champion.89c19b30c0f504290fe9.jpg",
     "static/media/2024-saquon-barkley-phi.png": "./static/media/2024-saquon-barkley-phi.4091e65b4d1651d4be87.png",
     "static/media/2021-champion.jpg": "./static/media/2021-champion.34e6429006ec20666e61.jpg",
@@ -10,9 +11,10 @@
     "static/media/2023-joe-flacco-cle.png": "./static/media/2023-joe-flacco-cle.61f98e59d32097bda184.png",
     "static/media/2021-josh-allen-buf.png": "./static/media/2021-josh-allen-buf.e91ae76c1d093a79d34c.png",
     "index.html": "./index.html",
-    "main.23259ab0.js.map": "./static/js/main.23259ab0.js.map"
+    "main.6a558243.js.map": "./static/js/main.6a558243.js.map",
+    "289.98f35307.chunk.js.map": "./static/js/289.98f35307.chunk.js.map"
   },
   "entrypoints": [
-    "static/js/main.23259ab0.js"
+    "static/js/main.6a558243.js"
   ]
 }
