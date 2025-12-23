@@ -685,8 +685,12 @@ const MatchupRecords = () => {
                                                                     .map((matchupData, index) => {
                                                                         let displayText = '';
                                                                         
-                                                                        if (sortKey === 'mostPointsScored' || sortKey === 'fewestPointsScored' || sortKey === 'mostPointsInLoss' || sortKey === 'fewestPointsInWin') {
-                                                                            displayText = `${matchupData.team}: ${matchupData.value.toFixed(2)} pts`;
+                                                                        if (sortKey === 'mostPointsScored' || sortKey === 'fewestPointsScored') {
+                                                                            // Show just the team name; the points are displayed on the right
+                                                                            displayText = `${matchupData.team}`;
+                                                                        } else if (sortKey === 'mostPointsInLoss' || sortKey === 'fewestPointsInWin') {
+                                                                            // Show team vs opponent for loss/win records
+                                                                            displayText = matchupData.opponent ? `${matchupData.team} vs ${matchupData.opponent}` : `${matchupData.team}`;
                                                                         } else if (sortKey === 'biggestBlowout' || sortKey === 'slimmestWin') {
                                                                             displayText = `${matchupData.winner} beat ${matchupData.loser} by ${matchupData.value.toFixed(2)} pts`;
                                                                         } else {
