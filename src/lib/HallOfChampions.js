@@ -47,7 +47,14 @@ const HallOfChampions = () => {
         
         // ===== ADD YOUR MVP PICKS HERE =====
         // Uncomment and fill in the years and players you want:
-
+        2025: { 
+            playerId: '4034', 
+            name: 'Christian McCaffrey', 
+            position: 'RB', 
+            team: 'SF', 
+            reasonTitle: 'Dominant Season',
+            staticHeadshot: require('../assets/images/mvp-headshots/2025-christian-mccaffrey-sf.png')
+        },
         2024: { 
             playerId: '4866', 
             name: 'Saquon Barkley', 
