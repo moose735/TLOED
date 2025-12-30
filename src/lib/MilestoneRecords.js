@@ -61,7 +61,7 @@ const MilestoneRecords = () => {
         },
         highScores: {
             title: 'High Scores',
-            description: 'Milestones for achieving the most high-scoring weeks (top 3 performances each week). Recognition for explosive offensive performances.',
+            description: 'Milestones for achieving the most high-scoring weeks (top 3 performances each week).',
             icon: '🚀',
             thresholds: [5, 10, 25, 50, 75],
             color: 'orange'
