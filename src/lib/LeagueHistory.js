@@ -4,6 +4,7 @@ import { calculateAllLeagueMetrics } from '../utils/calculations'; // For career
 import { useSleeperData } from '../contexts/SleeperDataContext'; // Import the custom hook
 import logger from '../utils/logger';
 import { fetchTransactionsForWeek } from '../utils/sleeperApi';
+
 import { fetchFinancialDataForYears } from '../services/financialService';
 import { calculateAllTeamFinancialTotals, calculateTeamFinancialTotalsByOwnerId, formatCurrency } from '../utils/financialCalculations';
 import { calculatePlayoffFinishes } from '../utils/playoffRankings'; // Import the playoff calculation function
@@ -38,6 +39,7 @@ const LeagueHistory = () => {
     // Consume data from SleeperDataContext
     const {
         loading: contextLoading,
+
         error: contextError,
         historicalData,
         allDraftHistory,
@@ -1251,7 +1253,10 @@ const LeagueHistory = () => {
                 <div className="bg-white rounded-lg shadow-md p-4 border border-gray-100 mb-6 mt-4">
                     <div className="mb-3">
                         {/* Match Season-by-Season heading style */}
-                        <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Trade Partner Matrix (All time)</h3>
+                        <div className="flex items-center justify-between mb-4 border-b pb-2">
+                            <h3 className="text-xl font-bold text-gray-800">Trade Partner Matrix (All time)</h3>
+    
+                        </div>
                     </div>
                     {(!tradePairCounts || tradePairCounts.length === 0) && (!allTimeStandings || allTimeStandings.length === 0) ? (
                         <div className="text-sm text-gray-500">No trade or team data available.</div>
@@ -2002,6 +2007,8 @@ const LeagueHistory = () => {
                     </div>
                 </div>
             )}
+
+
         </div>
     );
 };

@@ -7,7 +7,7 @@ export const GOOGLE_SHEET_POWER_RANKINGS_API_URL = 'https://script.google.com/ma
 // Google Apps Script URL for All Historical Matchups (used by MatchupHistory, RecordBook, DPRAnalysis, LuckRatingAnalysis, TeamDetailPage)
 export const HISTORICAL_MATCHUPS_API_URL = 'https://script.google.com/macros/s/AKfycbxpo21zzZgNamYShESfqe-SX09miJz2LK7SpdlYrtHXQplneB3bF2xu2byy0HhjM8e-/exec';
 
-export const CURRENT_LEAGUE_ID = '1181984921049018368';
+export const CURRENT_LEAGUE_ID = '1312104042406612992';
 
 // Default sportsbook vig applied across odds calculations (5.5% overround by default)
 export const SPORTSBOOK_VIG = 0.055; // 5.5%
