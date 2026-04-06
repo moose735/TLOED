@@ -9,6 +9,24 @@ export const HISTORICAL_MATCHUPS_API_URL = 'https://script.google.com/macros/s/A
 
 export const CURRENT_LEAGUE_ID = '1312104042406612992';
 
+// Optional: provide an explicit, ordered list of historical league IDs to "freeze" the
+// historical league chain. If this array is non-empty, the app will use these IDs
+// (in the order provided) instead of walking `previous_league_id` from
+// `CURRENT_LEAGUE_ID`. Useful when you want historical seasons to be immutable.
+// Example: ['1312104042406612992', '1074092015093413888', '...']
+export const HISTORICAL_LEAGUE_CHAIN = [
+  // Current / 2026 (current league in config)
+  '1312104042406612992',
+  // 2025
+  '1181984921049018368',
+  // 2024
+  '1048371694643060736',
+  // 2023
+  '918543989421416448',
+  // 2022
+  '784200735733784576'
+];
+
 // Default sportsbook vig applied across odds calculations (5.5% overround by default)
 export const SPORTSBOOK_VIG = 0.055; // 5.5%
 

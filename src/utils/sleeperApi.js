@@ -43,7 +43,7 @@ export async function fetchAllTradedPicksMerged(leagueId, totalWeeks = 18) {
     return [...endpointTradedPicks, ...allTransactionTradedPicks];
 }
 // src/utils/sleeperApi.js
-import { CURRENT_LEAGUE_ID } from '../config'; // Ensure this path is correct
+import { CURRENT_LEAGUE_ID, HISTORICAL_LEAGUE_CHAIN } from '../config'; // Ensure these paths are correct
 import logger from './logger';
 
 const BASE_URL = 'https://api.sleeper.app/v1';
@@ -178,6 +178,25 @@ export async function fetchLeagueData(currentLeagueId) {
     if (cachedEntry && (now - cachedEntry.timestamp < expiryMs)) {
         logger.debug(`[Cache Hit] Returning cached league chain for ${CACHE_KEY}`);
         return cachedEntry.data;
+    }
+
+    // If a historical league chain is explicitly provided in config, use that
+    // instead of walking `previous_league_id`. This lets the app "freeze"
+    // historical seasons when you update `CURRENT_LEAGUE_ID` for a new year.
+    if (Array.isArray(HISTORICAL_LEAGUE_CHAIN) && HISTORICAL_LEAGUE_CHAIN.length > 0) {
+        logger.info('[fetchLeagueData] Using HISTORICAL_LEAGUE_CHAIN from config');
+        try {
+            const details = [];
+            for (const id of HISTORICAL_LEAGUE_CHAIN) {
+                const d = await fetchLeagueDetails(id);
+                if (d) details.push(d);
+            }
+            inMemoryCache.set(CACHE_KEY, { data: details, timestamp: now, expirationHours: 24 });
+            return details;
+        } catch (err) {
+            logger.error('[fetchLeagueData] Error fetching configured historical league details:', err);
+            // Fall through to normal behavior as a fallback
+        }
     }
 
     try {
@@ -703,6 +722,25 @@ export async function fetchAllHistoricalMatchups() {
                 logger.debug(`[fetchAllHistoricalMatchups] Fetching regular season matchups for ${season}, weeks: ${weeksToFetchRegular.join(', ')}`);
                 const regularMatchupsByWeek = await fetchMatchupsForLeague(leagueId, weeksToFetchRegular, season);
                 Object.assign(seasonMatchupsData, regularMatchupsByWeek);
+                    // If the league's reported playoff_start_week is unexpectedly small (resulting in
+                    // only 1-2 weeks fetched), attempt a fallback fetch of the full 14-week regular
+                    // season. This handles cases where the stored league settings are incorrect or
+                    // incomplete for historical seasons (observed when switching CURRENT_LEAGUE_ID).
+                    try {
+                        const fetchedWeeksCount = Object.keys(regularMatchupsByWeek || {}).length;
+                        if (fetchedWeeksCount <= 2) {
+                            logger.warn(`[fetchAllHistoricalMatchups] Only fetched ${fetchedWeeksCount} regular weeks for season ${season}. Retrying full 14-week fetch as a fallback.`);
+                            const fallbackWeeks = Array.from({ length: 14 }, (_, i) => i + 1);
+                            const fallbackMatchups = await fetchMatchupsForLeague(leagueId, fallbackWeeks, season);
+                            // Use fallback data if it returns more weeks than the original fetch
+                            if (Object.keys(fallbackMatchups || {}).length > fetchedWeeksCount) {
+                                seasonMatchupsData = { ...seasonMatchupsData, ...fallbackMatchups };
+                                logger.debug(`[fetchAllHistoricalMatchups] Fallback fetch returned ${Object.keys(fallbackMatchups).length} weeks for season ${season}.`);
+                            }
+                        }
+                    } catch (fallbackErr) {
+                        logger.warn(`[fetchAllHistoricalMatchups] Fallback full-season fetch failed for season ${season}:`, fallbackErr);
+                    }
 
                 if (Object.keys(regularMatchupsByWeek).length === 0 && parseInt(season) === parseInt(currentNFLSeason)) {
                     logger.warn(`[fetchAllHistoricalMatchups] No regular season matchups found for current season ${season}.`);

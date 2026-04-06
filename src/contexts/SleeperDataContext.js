@@ -8,7 +8,7 @@ import {
     fetchAllHistoricalMatchups,
     fetchAllDraftHistory, // Import the comprehensive draft history function
 } from '../utils/sleeperApi';
-import { CURRENT_LEAGUE_ID } from '../config'; // Importing CURRENT_LEAGUE_ID from config.js
+import { CURRENT_LEAGUE_ID, HISTORICAL_LEAGUE_CHAIN } from '../config'; // Importing league chain from config.js
 
 // IMPORT THE CALCULATION FUNCTION HERE
 import { calculateAllLeagueMetrics } from '../utils/calculations';
@@ -490,21 +490,37 @@ export const SleeperDataProvider = ({ children }) => {
                 setNflState(state);
 
                 // --- NEW: FETCH TRANSACTIONS ---
+                // Fetch transactions for the configured league chain (historical seasons)
+                // so the UI can show trade history across all configured leagues.
                 let allTransactions = [];
-                // Only fetch transactions if nflState and its week property are available
-                if (state && state.week) {
-                    const weeks = Array.from({ length: state.week }, (_, i) => i + 1);
-                    // Fetch up to 4 weeks concurrently to avoid hammering the API while reducing total time
-                    const txResults = await pMapLimit(weeks, 4, async (weekNum) => {
-                        try {
-                            return await fetchTransactions(leagueIdToFetch, weekNum);
-                        } catch (err) {
-                            return [];
-                        }
-                    });
-                    // Flatten results
-                    allTransactions = txResults.flat().filter(Boolean);
+                const maxWeeksToFetch = 18;
+                const weeksForFetch = (state && state.week && Number(state.week) > 0)
+                    ? Array.from({ length: Number(state.week) }, (_, i) => i + 1)
+                    : Array.from({ length: maxWeeksToFetch }, (_, i) => i + 1);
+
+                const leaguesToFetch = (Array.isArray(HISTORICAL_LEAGUE_CHAIN) && HISTORICAL_LEAGUE_CHAIN.length > 0)
+                    ? HISTORICAL_LEAGUE_CHAIN
+                    : [leagueIdToFetch];
+
+                for (const lid of leaguesToFetch) {
+                    try {
+                        const txResults = await pMapLimit(weeksForFetch, 4, async (weekNum) => {
+                            try {
+                                const t = await fetchTransactions(lid, weekNum);
+                                // attach league id to tx objects where missing (for downstream tracing)
+                                if (Array.isArray(t)) return t.map(tx => ({ ...tx, league_id: tx.league_id || lid }));
+                                return [];
+                            } catch (err) {
+                                return [];
+                            }
+                        });
+                        allTransactions = allTransactions.concat(txResults.flat().filter(Boolean));
+                    } catch (err) {
+                        // continue to next league on error
+                        logger.warn(`Failed to fetch transactions for league ${lid}:`, err);
+                    }
                 }
+
                 setTransactions(allTransactions);
                 logger.debug("SleeperDataContext: Fetched transactions (count):", allTransactions.length);
                 // --- END: FETCH TRANSACTIONS ---

@@ -3,6 +3,55 @@ import { useSleeperData } from '../contexts/SleeperDataContext';
 import { calculateAllLeagueMetrics } from '../utils/calculations';
 import { formatScore } from '../utils/formatUtils';
 
+// ─── Small reusable UI pieces ────────────────────────────────────────────────
+
+const SectionHeading = ({ children }) => (
+    <h3 className="text-lg font-bold text-white mb-3 tracking-tight">{children}</h3>
+);
+
+const StatCard = ({ color, label, children }) => {
+    const colorMap = {
+        blue:    'bg-blue-500/10 border-blue-400/20 text-blue-300',
+        emerald: 'bg-emerald-500/10 border-emerald-400/20 text-emerald-300',
+        green:   'bg-green-500/10 border-green-400/20 text-green-300',
+        yellow:  'bg-yellow-500/10 border-yellow-400/20 text-yellow-300',
+        red:     'bg-red-500/10 border-red-400/20 text-red-300',
+        purple:  'bg-purple-500/10 border-purple-400/20 text-purple-300',
+        pink:    'bg-pink-500/10 border-pink-400/20 text-pink-300',
+        orange:  'bg-orange-500/10 border-orange-400/20 text-orange-300',
+        indigo:  'bg-indigo-500/10 border-indigo-400/20 text-indigo-300',
+        teal:    'bg-teal-500/10 border-teal-400/20 text-teal-300',
+        gray:    'bg-white/5 border-white/10 text-gray-300',
+        white:   'bg-white/5 border-white/10 text-green-300',
+    };
+    return (
+        <div className={`rounded-xl border p-4 ${colorMap[color] || colorMap.gray}`}>
+            <p className="text-[10px] font-bold uppercase tracking-widest opacity-60 mb-1">{label}</p>
+            <div className="text-sm font-medium text-white/90">{children}</div>
+        </div>
+    );
+};
+
+const TableWrapper = ({ children }) => (
+    <div className="overflow-x-auto rounded-xl border border-white/10 shadow-sm bg-white/5">
+        {children}
+    </div>
+);
+
+const Th = ({ children, align = 'left' }) => (
+    <th className={`py-2.5 px-4 text-[11px] font-bold uppercase tracking-widest text-gray-400 border-b border-white/10 text-${align} bg-white/5 whitespace-nowrap`}>
+        {children}
+    </th>
+);
+
+const Td = ({ children, align = 'left', bold }) => (
+    <td className={`py-2.5 px-4 text-sm text-gray-200 text-${align}${bold ? ' font-semibold text-white' : ''}`}>
+        {children}
+    </td>
+);
+
+// ─── SeasonBreakdown ─────────────────────────────────────────────────────────
+
 const SeasonBreakdown = () => {
     const {
         loading,
@@ -24,80 +73,51 @@ const SeasonBreakdown = () => {
     const [hypoSubject, setHypoSubject] = useState('');
     const [mockResults, setMockResults] = useState([]);
 
-    // Memoize the result of calculateAllLeagueMetrics
     const { seasonalMetrics, careerDPRData } = useMemo(() => {
         if (!historicalData || !nflState || loading || error) {
             return { seasonalMetrics: {}, careerDPRData: [] };
         }
-
         return calculateAllLeagueMetrics(historicalData, null, getTeamName, nflState);
     }, [historicalData, nflState, loading, error, getTeamName]);
 
-
-    // Effect to populate seasons dropdown and set default selected season
     useEffect(() => {
         if (!loading && !error && historicalData) {
             const allYears = new Set();
-            
-            // Use seasonalMetrics keys as the primary source for available years
             if (seasonalMetrics && Object.keys(seasonalMetrics).length > 0) {
                 Object.keys(seasonalMetrics).forEach(year => allYears.add(Number(year)));
             } else {
-                // Fallback to historicalData.matchupsBySeason as primary source
-                if (historicalData.matchupsBySeason) {
-                    Object.keys(historicalData.matchupsBySeason).forEach(year => allYears.add(Number(year)));
-                }
-                if (historicalData.seasonAwardsSummary) {
-                    Object.keys(historicalData.seasonAwardsSummary).forEach(year => allYears.add(Number(year)));
-                }
-                if (historicalData.winnersBracketBySeason) {
-                    Object.keys(historicalData.winnersBracketBySeason).forEach(year => allYears.add(Number(year)));
-                }
+                if (historicalData.matchupsBySeason) Object.keys(historicalData.matchupsBySeason).forEach(y => allYears.add(Number(y)));
+                if (historicalData.seasonAwardsSummary) Object.keys(historicalData.seasonAwardsSummary).forEach(y => allYears.add(Number(y)));
+                if (historicalData.winnersBracketBySeason) Object.keys(historicalData.winnersBracketBySeason).forEach(y => allYears.add(Number(y)));
             }
-
             const sortedYears = Array.from(allYears).sort((a, b) => b - a);
             setSeasons(sortedYears);
-
-            // Set the most recent year or currentSeason as default
             if (sortedYears.length > 0) {
-                const defaultSeason = currentSeason && sortedYears.includes(Number(currentSeason)) 
-                    ? Number(currentSeason) 
+                const defaultSeason = currentSeason && sortedYears.includes(Number(currentSeason))
+                    ? Number(currentSeason)
                     : sortedYears[0];
                 setSelectedSeason(defaultSeason);
             }
         }
     }, [loading, error, historicalData, seasonalMetrics, currentSeason]);
 
-    // Effect to calculate standings and champion for the selected season
     useEffect(() => {
         if (selectedSeason && historicalData && seasonalMetrics[selectedSeason]) {
             const currentSeasonMetrics = seasonalMetrics[selectedSeason];
-            const currentSeasonRosters = historicalData.rostersBySeason[selectedSeason]; // Still need rosters for owner_id mapping
+            const currentSeasonRosters = historicalData.rostersBySeason[selectedSeason];
 
             if (!currentSeasonMetrics || !currentSeasonRosters) {
-                setSeasonStandings([]);
-                setSeasonChampion('N/A');
-                setSeasonRunnerUp('N/A');
-                setSeasonThirdPlace('N/A');
+                setSeasonStandings([]); setSeasonChampion('N/A');
+                setSeasonRunnerUp('N/A'); setSeasonThirdPlace('N/A');
                 return;
             }
 
-            // --- Calculate Standings using seasonalMetrics ---
-            const standingsArray = Object.values(currentSeasonMetrics).map(teamData => {
-                // Use the teamName already resolved by calculateAllLeagueMetrics
-                return {
-                    teamName: teamData.teamName,
-                    wins: teamData.wins,
-                    losses: teamData.losses,
-                    ties: teamData.ties,
-                    pointsFor: teamData.pointsFor,
-                    pointsAgainst: teamData.pointsAgainst,
-                    rosterId: teamData.rosterId,
-                    ownerId: teamData.ownerId,
-                };
-            });
-
-            // Sort standings
+            const standingsArray = Object.values(currentSeasonMetrics).map(teamData => ({
+                teamName: teamData.teamName,
+                wins: teamData.wins, losses: teamData.losses, ties: teamData.ties,
+                pointsFor: teamData.pointsFor, pointsAgainst: teamData.pointsAgainst,
+                rosterId: teamData.rosterId, ownerId: teamData.ownerId,
+            }));
             const sortedStandings = standingsArray.sort((a, b) => {
                 if (b.wins !== a.wins) return b.wins - a.wins;
                 if (a.losses !== b.losses) return a.losses - b.losses;
@@ -105,87 +125,54 @@ const SeasonBreakdown = () => {
             });
             setSeasonStandings(sortedStandings);
 
-            // --- Determine Champion, Runner-Up, and Third Place for the selected season ---
-            let champion = 'N/A';
-            let runnerUp = 'N/A';
-            let thirdPlace = 'N/A';
-
-            if (historicalData.winnersBracketBySeason && historicalData.winnersBracketBySeason[selectedSeason]) {
-                const winnersBracket = historicalData.winnersBracketBySeason[selectedSeason];
-
-                // Find Championship Game (p: 1)
-                const championshipGame = winnersBracket.find(matchup => matchup.p === 1 && matchup.w && matchup.l);
-                if (championshipGame) {
-                    const championRosterId = String(championshipGame.w).trim();
-                    const runnerUpRosterId = String(championshipGame.l).trim();
-
-                    const winningRoster = currentSeasonRosters.find(r => String(r.roster_id) === championRosterId);
-                    const runnerUpRoster = currentSeasonRosters.find(r => String(r.roster_id) === runnerUpRosterId);
-
-                    if (winningRoster && winningRoster.owner_id) {
-                        champion = getTeamName(winningRoster.owner_id, selectedSeason);
-                    }
-                    if (runnerUpRoster && runnerUpRoster.owner_id) {
-                        runnerUp = getTeamName(runnerUpRoster.owner_id, selectedSeason);
-                    }
+            let champion = 'N/A', runnerUp = 'N/A', thirdPlace = 'N/A';
+            if (historicalData.winnersBracketBySeason?.[selectedSeason]) {
+                const bracket = historicalData.winnersBracketBySeason[selectedSeason];
+                const champ = bracket.find(m => m.p === 1 && m.w && m.l);
+                if (champ) {
+                    const wRoster = currentSeasonRosters.find(r => String(r.roster_id) === String(champ.w).trim());
+                    const lRoster = currentSeasonRosters.find(r => String(r.roster_id) === String(champ.l).trim());
+                    if (wRoster?.owner_id) champion = getTeamName(wRoster.owner_id, selectedSeason);
+                    if (lRoster?.owner_id) runnerUp = getTeamName(lRoster.owner_id, selectedSeason);
                 }
-
-                // Find 3rd Place Game (p: 3)
-                const thirdPlaceGame = winnersBracket.find(matchup => matchup.p === 3 && matchup.w);
-                if (thirdPlaceGame) {
-                    const thirdPlaceRosterId = String(thirdPlaceGame.w).trim();
-                    const thirdPlaceRoster = currentSeasonRosters.find(r => String(r.roster_id) === thirdPlaceRosterId);
-
-                    if (thirdPlaceRoster && thirdPlaceRoster.owner_id) {
-                        thirdPlace = getTeamName(thirdPlaceRoster.owner_id, selectedSeason);
-                    }
+                const third = bracket.find(m => m.p === 3 && m.w);
+                if (third) {
+                    const r = currentSeasonRosters.find(r => String(r.roster_id) === String(third.w).trim());
+                    if (r?.owner_id) thirdPlace = getTeamName(r.owner_id, selectedSeason);
                 }
             }
-
-            // Fallback to seasonAwardsSummary/awardsSummary for champion if playoff data is missing
-            if (champion === 'N/A' && historicalData.seasonAwardsSummary && historicalData.seasonAwardsSummary[selectedSeason]) {
-                const summary = historicalData.seasonAwardsSummary[selectedSeason];
-                if (summary.champion && summary.champion !== 'N/A' && summary.champion.trim() !== '') {
-                    const potentialChampionValue = summary.champion.trim();
-                    const resolvedName = getTeamName(potentialChampionValue, selectedSeason);
-                    if (resolvedName !== 'Unknown Team') {
-                        champion = resolvedName;
-                    } else {
-                        champion = potentialChampionValue;
-                    }
+            if (champion === 'N/A' && historicalData.seasonAwardsSummary?.[selectedSeason]) {
+                const s = historicalData.seasonAwardsSummary[selectedSeason];
+                if (s.champion && s.champion !== 'N/A' && s.champion.trim()) {
+                    const v = s.champion.trim();
+                    const r = getTeamName(v, selectedSeason);
+                    champion = r !== 'Unknown Team' ? r : v;
                 }
             }
-            if (champion === 'N/A' && historicalData.awardsSummary && historicalData.awardsSummary[selectedSeason]) {
-                const summary = historicalData.awardsSummary[selectedSeason];
-                const champKey = summary.champion || summary["Champion"];
-                if (champKey && champKey !== 'N/A' && String(champKey).trim() !== '') {
-                    const potentialChampionValue = String(champKey).trim();
-                    const resolvedName = getTeamName(potentialChampionValue, selectedSeason);
-                    if (resolvedName !== 'Unknown Team') {
-                        champion = resolvedName;
-                    } else {
-                        champion = potentialChampionValue;
-                    }
+            if (champion === 'N/A' && historicalData.awardsSummary?.[selectedSeason]) {
+                const s = historicalData.awardsSummary[selectedSeason];
+                const k = s.champion || s["Champion"];
+                if (k && k !== 'N/A' && String(k).trim()) {
+                    const v = String(k).trim();
+                    const r = getTeamName(v, selectedSeason);
+                    champion = r !== 'Unknown Team' ? r : v;
                 }
             }
             setSeasonChampion(champion);
             setSeasonRunnerUp(runnerUp);
             setSeasonThirdPlace(thirdPlace);
-
         } else if (!selectedSeason) {
-            setSeasonStandings([]);
-            setSeasonChampion('N/A');
-            setSeasonRunnerUp('N/A');
-            setSeasonThirdPlace('N/A');
+            setSeasonStandings([]); setSeasonChampion('N/A');
+            setSeasonRunnerUp('N/A'); setSeasonThirdPlace('N/A');
         }
     }, [selectedSeason, historicalData, seasonalMetrics, getTeamName]);
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center min-h-screen">
-                <div className="text-center p-6 bg-white rounded-lg shadow-md">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4"></div>
-                    <p className="text-lg font-semibold text-gray-700">Loading season data...</p>
+            <div className="flex items-center justify-center min-h-64">
+                <div className="text-center p-8">
+                    <div className="animate-spin rounded-full h-10 w-10 border-2 border-gray-200 border-t-blue-500 mx-auto mb-4" />
+                    <p className="text-gray-500 text-sm">Loading season data…</p>
                 </div>
             </div>
         );
@@ -193,114 +180,69 @@ const SeasonBreakdown = () => {
 
     if (error) {
         return (
-            <div className="flex items-center justify-center min-h-screen">
-                <div className="text-center p-6 bg-red-100 border border-red-400 text-red-700 rounded-lg shadow-md">
-                    <p className="font-bold text-xl mb-2">Error Loading Data</p>
-                    <p className="text-base">Failed to load season data: {error.message || String(error)}</p>
-                </div>
+            <div className="p-6 bg-red-50 border border-red-200 text-red-700 rounded-xl">
+                <p className="font-bold mb-1">Error Loading Data</p>
+                <p className="text-sm">{error.message || String(error)}</p>
             </div>
         );
     }
 
-    // Helper to get team name by rosterId
     const getTeamNameByRosterId = (rosterId) => {
         const team = seasonStandings.find(t => String(t.rosterId) === String(rosterId));
         return team ? team.teamName : 'Unknown';
     };
 
-    const formatPct = (v) => {
-        if (typeof v === 'number' && !isNaN(v)) return `${(v * 100).toFixed(2)}%`;
-        return 'N/A';
-    };
+    const formatPct = (v) => typeof v === 'number' && !isNaN(v) ? `${(v * 100).toFixed(2)}%` : 'N/A';
 
-    // Format fraction as three decimals, remove leading zero for values < 1 (e.g. ".903"), show "1.000" when exactly 1
     const formatDecimalFraction = (v) => {
         if (typeof v === 'number' && !isNaN(v)) {
             const s = v.toFixed(3);
-            if (v < 1) return s.replace(/^0/, '');
-            return s;
+            return v < 1 ? s.replace(/^0/, '') : s;
         }
         return 'N/A';
     };
 
-    // Compute season stats summary
     let seasonStats = null;
     if (selectedSeason && seasonalMetrics[selectedSeason]) {
         const teams = Object.values(seasonalMetrics[selectedSeason]);
-        // Points Champion
         const pointsChampion = teams.reduce((a, b) => (a.pointsFor > b.pointsFor ? a : b), {});
-        // Regular Season Champion (team with isRegularSeasonChampion flag)
-        const regularSeasonChampion = teams.find(team => team.isRegularSeasonChampion) || teams.reduce((a, b) => (a.wins > b.wins ? a : b), {});
-        // Best Record
+        const regularSeasonChampion = teams.find(t => t.isRegularSeasonChampion) || teams.reduce((a, b) => (a.wins > b.wins ? a : b), {});
         const bestRecord = teams.reduce((a, b) => (a.wins > b.wins ? a : b), {});
-        // Luckiest/Unluckiest
         const luckiest = teams.reduce((a, b) => (a.luckRating > b.luckRating ? a : b), {});
         const unluckiest = teams.reduce((a, b) => (a.luckRating < b.luckRating ? a : b), {});
-        // All-Play Champ
         const allPlayChamp = teams.reduce((a, b) => (a.allPlayWinPercentage > b.allPlayWinPercentage ? a : b), {});
-        // Blowout King
         const blowoutKing = teams.reduce((a, b) => (a.blowoutWins > b.blowoutWins ? a : b), {});
-        // Slim Margin Master
         const slimMaster = teams.reduce((a, b) => (a.slimWins > b.slimWins ? a : b), {});
-        // Weekly Top Scorer
         const topScorer = teams.reduce((a, b) => (a.topScoreWeeksCount > b.topScoreWeeksCount ? a : b), {});
 
-
-        // Highest/Lowest Single-Week Score (ignore undefined/null/zero/negative/empty scores for lowest)
         let highestWeek = { score: -Infinity, team: null, week: null };
         let lowestWeek = { score: Infinity, team: null, week: null };
-        if (historicalData.matchupsBySeason && historicalData.matchupsBySeason[selectedSeason]) {
+        if (historicalData.matchupsBySeason?.[selectedSeason]) {
             historicalData.matchupsBySeason[selectedSeason].forEach(m => {
-                // Highest
-                if (typeof m.team1_score === 'number' && m.team1_score > highestWeek.score) {
+                if (typeof m.team1_score === 'number' && m.team1_score > highestWeek.score)
                     highestWeek = { score: m.team1_score, team: getTeamNameByRosterId(m.team1_roster_id), week: m.week };
-                }
-                if (typeof m.team2_score === 'number' && m.team2_score > highestWeek.score) {
+                if (typeof m.team2_score === 'number' && m.team2_score > highestWeek.score)
                     highestWeek = { score: m.team2_score, team: getTeamNameByRosterId(m.team2_roster_id), week: m.week };
-                }
-                // Lowest (must be > 0 and not null/undefined)
-                if (typeof m.team1_score === 'number' && m.team1_score > 0 && m.team1_score < lowestWeek.score) {
+                if (typeof m.team1_score === 'number' && m.team1_score > 0 && m.team1_score < lowestWeek.score)
                     lowestWeek = { score: m.team1_score, team: getTeamNameByRosterId(m.team1_roster_id), week: m.week };
-                }
-                if (typeof m.team2_score === 'number' && m.team2_score > 0 && m.team2_score < lowestWeek.score) {
+                if (typeof m.team2_score === 'number' && m.team2_score > 0 && m.team2_score < lowestWeek.score)
                     lowestWeek = { score: m.team2_score, team: getTeamNameByRosterId(m.team2_roster_id), week: m.week };
-                }
             });
         }
-        // If no valid lowest score found, set to N/A
-        if (lowestWeek.score === Infinity) {
-            lowestWeek = { score: 'N/A', team: 'N/A', week: 'N/A' };
-        }
+        if (lowestWeek.score === Infinity) lowestWeek = { score: 'N/A', team: 'N/A', week: 'N/A' };
 
-        seasonStats = {
-            pointsChampion,
-            regularSeasonChampion,
-            bestRecord,
-            luckiest,
-            unluckiest,
-            allPlayChamp,
-            blowoutKing,
-            slimMaster,
-            topScorer,
-            highestWeek,
-            lowestWeek,
-        };
+        seasonStats = { pointsChampion, regularSeasonChampion, bestRecord, luckiest, unluckiest, allPlayChamp, blowoutKing, slimMaster, topScorer, highestWeek, lowestWeek };
     }
 
-    // --- All-Play and Mock Schedule computations ---
     const { allPlayStandings, weeklyPointsMap, scheduleMap } = useMemo(() => {
         const result = { allPlayStandings: [], weeklyPointsMap: {}, scheduleMap: {} };
-        if (!selectedSeason || !historicalData || !historicalData.matchupsBySeason || !historicalData.matchupsBySeason[selectedSeason]) return result;
+        if (!selectedSeason || !historicalData?.matchupsBySeason?.[selectedSeason]) return result;
 
         const matchupsRaw = historicalData.matchupsBySeason[selectedSeason] || [];
-        // Deduplicate matchups by week and roster pair (sort pair so order doesn't matter)
         const uniqueMatchups = [];
         const seenMatchupKeys = new Set();
         matchupsRaw.forEach(m => {
-            const wk = String(m.week);
-            const a = String(m.team1_roster_id);
-            const b = String(m.team2_roster_id);
-            // skip self-matchups (data errors where a team is listed against itself)
+            const wk = String(m.week), a = String(m.team1_roster_id), b = String(m.team2_roster_id);
             if (a === b) return;
             const key = `${wk}:${[a,b].sort().join('-')}`;
             if (seenMatchupKeys.has(key)) return;
@@ -308,52 +250,30 @@ const SeasonBreakdown = () => {
             uniqueMatchups.push(m);
         });
 
-        // Use the season's rosters as the canonical roster set (prevents stray roster ids)
         const currentSeasonRosters = historicalData.rostersBySeason?.[selectedSeason] || [];
         const rosterIds = currentSeasonRosters.map(r => String(r.roster_id));
         const rosterIdSet = new Set(rosterIds);
-
-        // Build rosterId -> ownerId/name maps for correct historical team naming
-        const rosterIdToOwner = {};
-        const rosterIdToName = {};
+        const rosterIdToOwner = {}, rosterIdToName = {};
         currentSeasonRosters.forEach(r => {
             const rid = String(r.roster_id);
             rosterIdToOwner[rid] = r.owner_id;
             rosterIdToName[rid] = getTeamName ? getTeamName(r.owner_id, selectedSeason) : (r.team_name || `Roster ${rid}`);
         });
 
-    // Build weekly points map: rosterId -> { week: points }
-        const weeklyPoints = {};
-        // Build schedule map: rosterId -> { week: { opponentId, opponentPoints } }
-        const schedule = {};
-        // Track head-to-head ties (real matchup ties) separately from pairwise all-play ties
-    const headToHeadTies = {};
-    const tieMatchups = [];
+        const weeklyPoints = {}, schedule = {}, headToHeadTies = {};
+        const tieMatchups = [];
+        rosterIds.forEach(rid => { weeklyPoints[rid] = {}; schedule[rid] = {}; headToHeadTies[rid] = 0; });
 
-    // initialize weeklyPoints, schedule and tie counter for only canonical roster ids
-    rosterIds.forEach(rid => { weeklyPoints[rid] = {}; schedule[rid] = {}; headToHeadTies[rid] = 0; });
-
-    // Only include regular-season (weeks 1-14) completed matchups: both sides have numeric scores
-    uniqueMatchups.forEach(m => {
+        uniqueMatchups.forEach(m => {
             const weekNum = Number(m.week);
-            if (isNaN(weekNum) || weekNum < 1 || weekNum > 14) return; // skip playoffs or invalid weeks
+            if (isNaN(weekNum) || weekNum < 1 || weekNum > 14) return;
             const hasP1 = typeof m.team1_score === 'number' && !isNaN(m.team1_score);
             const hasP2 = typeof m.team2_score === 'number' && !isNaN(m.team2_score);
-            if (!hasP1 || !hasP2) return; // skip incomplete games
-
-            const w = String(weekNum);
-            const r1 = String(m.team1_roster_id);
-            const r2 = String(m.team2_roster_id);
-            const p1 = Number(m.team1_score);
-            const p2 = Number(m.team2_score);
-
-            // only include points/schedule for rosterIds that exist in this season
-            if (rosterIdSet.has(r1)) weeklyPoints[r1][w] = p1;
-            if (rosterIdSet.has(r2)) weeklyPoints[r2][w] = p2;
-            if (rosterIdSet.has(r1)) schedule[r1][w] = { opponentId: r2, opponentPoints: p2 };
-            if (rosterIdSet.has(r2)) schedule[r2][w] = { opponentId: r1, opponentPoints: p1 };
-
-            // track head-to-head tie (the actual matchup was a tie)
+            if (!hasP1 || !hasP2) return;
+            const w = String(weekNum), r1 = String(m.team1_roster_id), r2 = String(m.team2_roster_id);
+            const p1 = Number(m.team1_score), p2 = Number(m.team2_score);
+            if (rosterIdSet.has(r1)) { weeklyPoints[r1][w] = p1; schedule[r1][w] = { opponentId: r2, opponentPoints: p2 }; }
+            if (rosterIdSet.has(r2)) { weeklyPoints[r2][w] = p2; schedule[r2][w] = { opponentId: r1, opponentPoints: p1 }; }
             if (rosterIdSet.has(r1) && rosterIdSet.has(r2) && p1 === p2) {
                 headToHeadTies[r1] = (headToHeadTies[r1] || 0) + 1;
                 headToHeadTies[r2] = (headToHeadTies[r2] || 0) + 1;
@@ -361,55 +281,31 @@ const SeasonBreakdown = () => {
             }
         });
 
-        // Compute all-play standings: for each week, compare each team's points to all other canonical teams
         const allPlay = {};
         rosterIds.forEach(rid => { allPlay[rid] = { wins: 0, losses: 0, ties: 0, pointsFor: 0 }; });
-
-        // Collect only the regular-season weeks present in weeklyPoints (1-14)
         const weeksSet = new Set();
-        rosterIds.forEach(rid => {
-            Object.keys(weeklyPoints[rid] || {}).forEach(w => {
-                const wn = Number(w);
-                if (!isNaN(wn) && wn >= 1 && wn <= 14) weeksSet.add(String(wn));
-            });
-        });
+        rosterIds.forEach(rid => Object.keys(weeklyPoints[rid] || {}).forEach(w => { const wn = Number(w); if (!isNaN(wn) && wn >= 1 && wn <= 14) weeksSet.add(String(wn)); }));
         const weeks = Array.from(weeksSet).sort((a,b) => Number(a) - Number(b));
-
-        // Keep only weeks that are fully completed for all canonical roster ids
-        const fullyCompletedWeeks = weeks.filter(w => rosterIds.every(rid => {
-            return weeklyPoints[rid] && Object.prototype.hasOwnProperty.call(weeklyPoints[rid], w);
-        }));
+        const fullyCompletedWeeks = weeks.filter(w => rosterIds.every(rid => weeklyPoints[rid] && Object.prototype.hasOwnProperty.call(weeklyPoints[rid], w)));
 
         let weeksToUse = fullyCompletedWeeks;
-        // If nflState.week is available, exclude the current NFL week (in-progress)
-        // But only exclude when viewing the currentSeason; for past seasons we want all completed weeks
-        const currentNFLWeek = nflState && nflState.week ? Number(nflState.week) : null;
-        const isCurrentSeason = Number(selectedSeason) === Number(currentSeason);
-        if (isCurrentSeason && currentNFLWeek && !isNaN(currentNFLWeek)) {
-            weeksToUse = weeksToUse.filter(w => Number(w) < currentNFLWeek);
-        }
+        const currentNFLWeek = nflState?.week ? Number(nflState.week) : null;
+        const nflSeason = nflState?.season ? Number(nflState.season) : null;
+        const isCurrentSeason = Number(selectedSeason) === Number(currentSeason) && nflSeason === Number(selectedSeason);
+        if (isCurrentSeason && currentNFLWeek && !isNaN(currentNFLWeek)) weeksToUse = weeksToUse.filter(w => Number(w) < currentNFLWeek);
 
         weeksToUse.forEach(week => {
-            // Build array of [rid, pts] for this week
             const scores = rosterIds.map(rid => ({ rid, pts: weeklyPoints[rid][week] ?? 0 }));
-            // Compare pairwise: for each team, count how many they'd beat/tie/lose
             scores.forEach(s => {
-                const my = s.pts;
                 let w = 0, l = 0, t = 0;
                 scores.forEach(o => {
                     if (o.rid === s.rid) return;
-                    if (my > o.pts) w++;
-                    else if (my < o.pts) l++;
-                    else t++;
+                    if (s.pts > o.pts) w++; else if (s.pts < o.pts) l++; else t++;
                 });
-                allPlay[s.rid].wins += w;
-                allPlay[s.rid].losses += l;
-                allPlay[s.rid].ties += t;
-                allPlay[s.rid].pointsFor += my;
+                allPlay[s.rid].wins += w; allPlay[s.rid].losses += l; allPlay[s.rid].ties += t; allPlay[s.rid].pointsFor += s.pts;
             });
-            });
+        });
 
-        // Filter tieMatchups to only include those in weeksToUse, then recompute head-to-head tie counts
         const filteredTieMatchups = tieMatchups.filter(tm => weeksToUse.includes(String(tm.week)));
         const headToHeadCounts = {};
         rosterIds.forEach(rid => { headToHeadCounts[rid] = 0; });
@@ -418,72 +314,41 @@ const SeasonBreakdown = () => {
             if (rosterIdSet.has(tm.roster2)) headToHeadCounts[tm.roster2] = (headToHeadCounts[tm.roster2] || 0) + 1;
         });
 
-        // Convert to standings array (use rosterIdToName for historical accuracy)
-    const standingsArr = rosterIds.map(rid => {
+        const standingsArr = rosterIds.map(rid => {
             const name = rosterIdToName[rid] || getTeamNameByRosterId(rid) || rid;
             const rec = allPlay[rid];
             const totalMatches = rec.wins + rec.losses + rec.ties;
             const pct = totalMatches > 0 ? (rec.wins + 0.5 * rec.ties) / totalMatches : 0;
-            // Use head-to-head ties for display (smaller, more intuitive number)
-            // Clamp ties to the number of regular-season weeks captured to avoid anomalous values
             const maxRegularWeeks = weeksToUse.length || 14;
-            const rawH2h = headToHeadCounts[rid] || 0;
-            const h2hTies = Math.max(0, Math.min(rawH2h, maxRegularWeeks));
-            return {
-                rosterId: rid,
-                teamName: name,
-                wins: rec.wins,
-                losses: rec.losses,
-                ties: h2hTies,
-                pointsFor: rec.pointsFor,
-                pct
-            };
+            const h2hTies = Math.max(0, Math.min(headToHeadCounts[rid] || 0, maxRegularWeeks));
+            return { rosterId: rid, teamName: name, wins: rec.wins, losses: rec.losses, ties: h2hTies, pointsFor: rec.pointsFor, pct };
         }).sort((a, b) => b.pct - a.pct || b.pointsFor - a.pointsFor);
 
         result.allPlayStandings = standingsArr;
         result.weeklyPointsMap = weeklyPoints;
         result.scheduleMap = schedule;
-    result.headToHeadTies = headToHeadCounts;
-    result.weeksUsed = weeksToUse;
-    result.tieMatchups = filteredTieMatchups;
+        result.headToHeadTies = headToHeadCounts;
+        result.weeksUsed = weeksToUse;
+        result.tieMatchups = filteredTieMatchups;
         return result;
     }, [selectedSeason, historicalData, nflState, getTeamName, seasonStandings, currentSeason]);
 
-    // Compute survivor winner for the selected season using weeklyPointsMap and rosters
     useEffect(() => {
-        // Do not declare a survivor winner for the current season (not crowned yet)
-        if (!selectedSeason || !historicalData) {
-            setSeasonSurvivorWinner('N/A');
-            return;
-        }
-        if (String(selectedSeason) === String(currentSeason)) {
-            setSeasonSurvivorWinner('N/A');
-            return;
+        if (!selectedSeason || !historicalData || String(selectedSeason) === String(currentSeason)) {
+            setSeasonSurvivorWinner('N/A'); return;
         }
         const rosters = historicalData.rostersBySeason?.[selectedSeason] || [];
-        if (!rosters || rosters.length === 0) {
-            setSeasonSurvivorWinner('N/A');
-            return;
-        }
+        if (!rosters.length) { setSeasonSurvivorWinner('N/A'); return; }
 
-        // Build rosterId -> ownerId
         const rosterIdToOwner = {};
         rosters.forEach(r => { rosterIdToOwner[String(r.roster_id)] = r.owner_id; });
-
-        // Build owner set
         const aliveSet = new Set(Object.values(rosterIdToOwner));
         const eliminatedSet = new Set();
-
-        // Build weeks list from weeklyPointsMap (only canonical rosterIds)
         const rosterIds = rosters.map(r => String(r.roster_id));
         const weeksSet = new Set();
-        rosterIds.forEach(rid => {
-            const map = weeklyPointsMap?.[rid] || {};
-            Object.keys(map).forEach(w => weeksSet.add(w));
-        });
+        rosterIds.forEach(rid => Object.keys(weeklyPointsMap?.[rid] || {}).forEach(w => weeksSet.add(w)));
         const weeks = Array.from(weeksSet).map(Number).filter(n => !isNaN(n)).sort((a,b) => a-b);
 
-        // Simulate eliminations week-by-week
         for (const wk of weeks) {
             if (aliveSet.size <= 1) break;
             const aliveScores = [];
@@ -491,28 +356,15 @@ const SeasonBreakdown = () => {
                 const ownerId = rosterIdToOwner[rid];
                 if (!aliveSet.has(ownerId) || eliminatedSet.has(ownerId)) return;
                 const pts = weeklyPointsMap?.[rid]?.[String(wk)];
-                if (typeof pts === 'number' && !isNaN(pts)) {
-                    aliveScores.push({ ownerId, pts });
-                }
+                if (typeof pts === 'number' && !isNaN(pts)) aliveScores.push({ ownerId, pts });
             });
-
-            const uniqueAliveScorers = new Set(aliveScores.map(s => s.ownerId));
-            if (uniqueAliveScorers.size < aliveSet.size) {
-                // incomplete data for this week; skip
-                continue;
-            }
-
-            // Find min points
+            if (new Set(aliveScores.map(s => s.ownerId)).size < aliveSet.size) continue;
             let minPoints = Infinity;
             aliveScores.forEach(s => { if (s.pts < minPoints) minPoints = s.pts; });
-            // Find owners with minPoints
             const mins = aliveScores.filter(s => s.pts === minPoints).map(s => s.ownerId);
-            if (mins.length === 0) continue;
-            // Deterministic tiebreak: pick smallest ownerId string
+            if (!mins.length) continue;
             mins.sort();
-            const elim = mins[0];
-            eliminatedSet.add(elim);
-            aliveSet.delete(elim);
+            eliminatedSet.add(mins[0]); aliveSet.delete(mins[0]);
         }
 
         let winner = 'N/A';
@@ -523,397 +375,375 @@ const SeasonBreakdown = () => {
         setSeasonSurvivorWinner(winner);
     }, [selectedSeason, historicalData, weeklyPointsMap, getTeamName, currentSeason]);
 
-    // Mock schedule: apply subject team's weekly points against each other team's schedule
     const computeMockAgainstSchedule = useCallback((subjectRosterId, scheduleOwnerRosterId) => {
         if (!subjectRosterId || !scheduleOwnerRosterId) return null;
         const weeks = scheduleMap[scheduleOwnerRosterId] ? Object.keys(scheduleMap[scheduleOwnerRosterId]) : [];
         let wins = 0, losses = 0, ties = 0, pointsFor = 0, pointsAgainst = 0, countedWeeks = 0;
-    // Exclude current in-progress NFL week from hypothetical results
-        const currentNFLWeek = nflState && nflState.week ? Number(nflState.week) : null;
+        const currentNFLWeek = nflState?.week ? Number(nflState.week) : null;
         const isCurrentSeason = Number(selectedSeason) === Number(currentSeason);
-
         weeks.forEach(w => {
             const wn = Number(w);
-            // Only skip in-progress/future weeks when looking at the current season
-            if (isCurrentSeason && !isNaN(currentNFLWeek) && currentNFLWeek && wn >= currentNFLWeek) return; // skip in-progress or future
-
+            if (isCurrentSeason && !isNaN(currentNFLWeek) && currentNFLWeek && wn >= currentNFLWeek) return;
             const oppEntry = scheduleMap[scheduleOwnerRosterId][w];
-            // If the opponent's schedule for this week is playing the subject team, skip counting it (don't count head-to-head ties/wins)
             if (oppEntry && String(oppEntry.opponentId) === String(subjectRosterId)) return;
-
             const subjPts = weeklyPointsMap[subjectRosterId]?.[w];
             const oppPts = oppEntry ? (weeklyPointsMap[oppEntry.opponentId]?.[w] ?? oppEntry.opponentPoints ?? null) : null;
-
-            // Only count if we have numeric points for both sides
-            const hasSubj = typeof subjPts === 'number' && !isNaN(subjPts);
-            const hasOpp = typeof oppPts === 'number' && !isNaN(oppPts);
-            if (!hasSubj || !hasOpp) return;
-
-            pointsFor += subjPts;
-            pointsAgainst += oppPts;
-            countedWeeks++;
-            if (subjPts > oppPts) wins++;
-            else if (subjPts < oppPts) losses++;
-            else ties++;
+            if (typeof subjPts !== 'number' || isNaN(subjPts) || typeof oppPts !== 'number' || isNaN(oppPts)) return;
+            pointsFor += subjPts; pointsAgainst += oppPts; countedWeeks++;
+            if (subjPts > oppPts) wins++; else if (subjPts < oppPts) losses++; else ties++;
         });
-
         const total = wins + losses + ties;
         const pct = total > 0 ? (wins + 0.5 * ties) / total : 0;
         return { wins, losses, ties, pointsFor, pointsAgainst, pct, totalWeeks: countedWeeks };
     }, [weeklyPointsMap, scheduleMap, nflState, selectedSeason, currentSeason]);
 
-    // Determine if any podium results exist
     const hasPodiumResults = seasonChampion !== 'N/A' || seasonRunnerUp !== 'N/A' || seasonThirdPlace !== 'N/A';
-
     const seasonHasTies = seasonStandings.some(t => t.ties && t.ties > 0);
-    // allPlayStandings comes from useMemo above; ensure we handle missing value safely
     const allPlayHasTies = (allPlayStandings || []).some(t => t.ties && t.ties > 0);
-    // debug UI removed
 
+    // ── Render ────────────────────────────────────────────────────────────────
     return (
-        <div className="p-4 bg-white rounded-lg shadow-md">
-            <h2 className="text-3xl font-bold text-gray-800 mb-6 text-center">Season Breakdown</h2>
+        <div className="max-w-4xl mx-auto space-y-8 pb-10">
 
-            <div className="mb-6 flex flex-col sm:flex-row items-center justify-center gap-4">
-                <label htmlFor="season-select" className="text-lg font-semibold text-gray-700">Select Season:</label>
-                <select
-                    id="season-select"
-                    value={selectedSeason || ''}
-                    onChange={(e) => setSelectedSeason(Number(e.target.value))}
-                    className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-gray-800 text-lg"
-                >
-                    {seasons.length === 0 && <option value="">No Seasons Available</option>}
-                    {seasons.map(year => (
-                        <option key={year} value={year}>
-                            {year}
-                        </option>
-                    ))}
-                </select>
+            {/* Page Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2">
+                <h2 className="text-2xl font-bold text-white tracking-tight">Season Breakdown</h2>
+                <div className="flex items-center gap-2">
+                    <label htmlFor="season-select" className="text-sm font-medium text-gray-300 whitespace-nowrap">Season</label>
+                    <select
+                        id="season-select"
+                        value={selectedSeason || ''}
+                        onChange={(e) => setSelectedSeason(Number(e.target.value))}
+                        className="px-3 py-1.5 border border-white/20 rounded-lg shadow-sm text-sm text-white bg-gray-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    >
+                        {seasons.length === 0 && <option value="">No Seasons Available</option>}
+                        {seasons.map(year => <option key={year} value={year}>{year}</option>)}
+                    </select>
+                </div>
             </div>
 
+            {!selectedSeason && !loading && !error && (
+                <p className="text-center text-gray-400 text-sm py-12">Select a season to view its breakdown.</p>
+            )}
+
             {selectedSeason && (
-                <div className="mt-8">
-                    <h3 className="text-2xl font-bold text-gray-800 mb-20 text-center">{selectedSeason} Season Summary</h3>
+                <div className="space-y-10">
 
-                    {/* Podium Section - Now only renders if results exist */}
+                    {/* ── Podium ─────────────────────────────────────────── */}
                     {hasPodiumResults && (
-                        // Render champion first in the DOM so on mobile (stacked column) it appears at the top.
-                        <div className="relative flex flex-col sm:flex-row sm:justify-center sm:items-end gap-2 md:gap-4 mb-8">
-                            {/* 1st Place (Champion) - render first for mobile stacking */}
-                            {seasonChampion !== 'N/A' && (
-                                <div className="order-1 sm:order-none relative flex flex-col items-center justify-center bg-gradient-to-br from-yellow-300 to-yellow-500 rounded-lg shadow-lg p-3 sm:p-6 sm:w-1/3 text-center transition-all duration-300 hover:scale-102">
-                                    <div className="mb-2 sm:mb-4 text-5xl sm:text-7xl">🏆</div>
-                                    <span className="text-xl sm:text-2xl font-bold text-white">SWEEN BOWL CHAMPION</span>
-                                    <p className="text-sm sm:text-lg font-semibold text-white truncate max-w-[220px]">{seasonChampion}</p>
-                                </div>
-                            )}
+                        <section>
+                            <SectionHeading>{selectedSeason} Playoff Results</SectionHeading>
+                            {/* Mobile: stacked compact list. Desktop: side-by-side podium */}
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-center sm:gap-3">
 
-                            {/* 2nd Place */}
-                            {seasonRunnerUp !== 'N/A' && (
-                                <div className="order-2 sm:order-none relative flex flex-col items-center justify-center bg-gray-300 rounded-lg shadow-lg p-3 sm:p-4 sm:w-1/4 text-center transition-all duration-300 hover:scale-102">
-                                    <div className="mb-2 sm:mb-4 text-4xl sm:text-5xl text-gray-500">🥈</div>
-                                    <span className="text-lg sm:text-xl font-bold text-gray-700">2nd Place</span>
-                                    <p className="text-sm sm:text-base font-semibold text-gray-800 truncate max-w-[180px]">{seasonRunnerUp}</p>
-                                </div>
-                            )}
-
-                            {/* 3rd Place */}
-                            {seasonThirdPlace !== 'N/A' && (
-                                <div className="order-3 sm:order-none relative flex flex-col items-center justify-center bg-amber-700 rounded-lg shadow-lg p-3 sm:p-4 sm:w-1/4 text-center text-white transition-all duration-300 hover:scale-102">
-                                    <div className="mb-2 sm:mb-4 text-4xl sm:text-5xl text-amber-800">🥉</div>
-                                    <span className="text-lg sm:text-xl font-bold">3rd Place</span>
-                                    <p className="text-sm sm:text-base font-semibold truncate max-w-[160px]">{seasonThirdPlace}</p>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Medals for top 3 points scorers */}
-                    {selectedSeason && seasonalMetrics[selectedSeason] && String(selectedSeason) !== String(currentSeason) && (
-                        (() => {
-                            const teams = Object.values(seasonalMetrics[selectedSeason] || {});
-                            const sortedByPoints = teams.slice().sort((a, b) => (b.pointsFor || 0) - (a.pointsFor || 0));
-                            const top3 = sortedByPoints.slice(0, 3);
-                            const medalColors = ['bg-yellow-300', 'bg-gray-300', 'bg-amber-700 text-white'];
-                            return (
-                                <div className="flex flex-wrap items-stretch justify-center gap-4 mb-8">
-                                    {top3.map((t, i) => (
-                                        <div key={t.rosterId || i} className={`w-full sm:w-1/3 md:w-1/4 rounded-lg shadow-md p-4 flex flex-col items-center justify-center ${medalColors[i]}`}>
-                                            <div className="text-3xl sm:text-4xl font-bold mb-2">{i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}</div>
-                                            <div className="font-semibold text-lg text-center truncate max-w-[220px]">{t.teamName || getTeamName(t.ownerId, selectedSeason)}</div>
-                                            <div className="text-sm text-gray-700 mt-1">{formatScore(Number(t.pointsFor || 0), 2)} pts</div>
-                                        </div>
-                                    ))}
-                                </div>
-                            );
-                        })()
-                    )}
-
-                    {/* Survivor Winner is shown below in the season stats grid */}
-
-                    {/* Season Stats Summary Section */}
-                    {seasonStats && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-                            {String(selectedSeason) !== String(currentSeason) && (
-                                <div className="bg-blue-50 rounded-lg p-4 shadow">
-                                    <h4 className="font-bold text-blue-700 mb-1">Points Champion</h4>
-                                    <div>{seasonStats.pointsChampion.teamName} ({formatScore(Number(seasonStats.pointsChampion.pointsFor ?? 0) , 2)} pts)</div>
-                                </div>
-                            )}
-                            {String(selectedSeason) !== String(currentSeason) && (
-                                <div className="bg-emerald-50 rounded-lg p-4 shadow">
-                                    <h4 className="font-bold text-emerald-700 mb-1">Regular Season Champion</h4>
-                                    <div>{seasonStats.regularSeasonChampion.teamName} ({seasonStats.regularSeasonChampion.wins}-{seasonStats.regularSeasonChampion.losses}-{seasonStats.regularSeasonChampion.ties})</div>
-                                </div>
-                            )}
-                            <div className="bg-green-50 rounded-lg p-4 shadow">
-                                <h4 className="font-bold text-green-700 mb-1">Best Record</h4>
-                                <div>{seasonStats.bestRecord.teamName} ({seasonStats.bestRecord.wins}-{seasonStats.bestRecord.losses}-{seasonStats.bestRecord.ties})</div>
-                            </div>
-                            <div className="bg-yellow-50 rounded-lg p-4 shadow">
-                                <h4 className="font-bold text-yellow-700 mb-1">Luckiest Team</h4>
-                                <div>{seasonStats.luckiest.teamName} ({typeof seasonStats.luckiest.luckRating === 'number' ? formatScore(seasonStats.luckiest.luckRating, 3) : 'N/A'})</div>
-                            </div>
-                            <div className="bg-red-50 rounded-lg p-4 shadow">
-                                <h4 className="font-bold text-red-700 mb-1">Unluckiest Team</h4>
-                                <div>{seasonStats.unluckiest.teamName} ({typeof seasonStats.unluckiest.luckRating === 'number' ? formatScore(seasonStats.unluckiest.luckRating, 3) : 'N/A'})</div>
-                            </div>
-                            <div className="bg-purple-50 rounded-lg p-4 shadow">
-                                <h4 className="font-bold text-purple-700 mb-1">All-Play Champion</h4>
-                                <div>{seasonStats.allPlayChamp.teamName} ({formatScore((seasonStats.allPlayChamp.allPlayWinPercentage * 100) ?? 0, 1)}%)</div>
-                            </div>
-                            <div className="bg-pink-50 rounded-lg p-4 shadow">
-                                <h4 className="font-bold text-pink-700 mb-1">Blowout King</h4>
-                                <div>{seasonStats.blowoutKing.teamName} ({seasonStats.blowoutKing.blowoutWins} blowout wins)</div>
-                            </div>
-                            <div className="bg-orange-50 rounded-lg p-4 shadow">
-                                <h4 className="font-bold text-orange-700 mb-1">Slim Margin Master</h4>
-                                <div>{seasonStats.slimMaster.teamName} ({seasonStats.slimMaster.slimWins} slim wins)</div>
-                            </div>
-                            <div className="bg-indigo-50 rounded-lg p-4 shadow">
-                                <h4 className="font-bold text-indigo-700 mb-1">Weekly Top Scorer</h4>
-                                <div>{seasonStats.topScorer.teamName} ({seasonStats.topScorer.topScoreWeeksCount} times)</div>
-                            </div>
-                            <div className="bg-teal-50 rounded-lg p-4 shadow">
-                                <h4 className="font-bold text-teal-700 mb-1">Highest Single-Week Score</h4>
-                                <div>{seasonStats.highestWeek.team} ({formatScore(typeof seasonStats.highestWeek.score === 'number' ? seasonStats.highestWeek.score : NaN, 2)} pts, Week {seasonStats.highestWeek.week})</div>
-                            </div>
-                            <div className="bg-gray-50 rounded-lg p-4 shadow">
-                                <h4 className="font-bold text-gray-700 mb-1">Lowest Single-Week Score</h4>
-                                <div>{seasonStats.lowestWeek.team} ({formatScore(typeof seasonStats.lowestWeek.score === 'number' ? seasonStats.lowestWeek.score : NaN, 2)} pts, Week {seasonStats.lowestWeek.week})</div>
-                            </div>
-                            {/* Survivor Winner block */}
-                            <div className="bg-white rounded-lg p-4 shadow">
-                                <h4 className="font-bold text-green-700 mb-1">Survivor Winner</h4>
-                                <div>{seasonSurvivorWinner}</div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Season Standings - responsive (mobile cards + desktop table) */}
-                    <h3 className="text-2xl font-bold text-gray-800 mb-4 text-center">Season Standings</h3>
-                    {seasonStandings.length > 0 ? (
-                        <>
-                            {/* Mobile Card List */}
-                            <div className="sm:hidden space-y-3">
-                                {seasonStandings.map((team, idx) => {
-                                    const metricsForTeam = seasonalMetrics?.[selectedSeason]?.[team.rosterId] || {};
-                                    const dprVal = metricsForTeam.adjustedDPR ?? metricsForTeam.dpr ?? null;
-                                    const pf = metricsForTeam.pointsFor ?? team.pointsFor ?? 0;
-                                    const pa = metricsForTeam.pointsAgainst ?? team.pointsAgainst ?? 0;
-                                    const recordStr = `${team.wins || 0}-${team.losses || 0}${team.ties?`-${team.ties}`:''}`;
-                                    const luck = typeof metricsForTeam.luckRating === 'number' ? formatScore(metricsForTeam.luckRating, 3) : 'N/A';
-                                    return (
-                                    <div key={team.rosterId} className="bg-white rounded-lg shadow-md p-4 border-l-4 border-blue-500">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center space-x-3 min-w-0">
-                                                <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">{idx + 1}</div>
-                                                <div className="min-w-0">
-                                                    <div className="font-semibold text-sm truncate">{team.teamName}</div>
-                                                    <div className="text-xs text-gray-500">Record: {recordStr} • DPR: {dprVal? formatScore(Number(dprVal), 3) : 'N/A'}</div>
-                                                </div>
-                                            </div>
-                                            <div className="text-right text-sm text-gray-600">
-                                                <div>PF: {formatScore(Number(pf), 2)}</div>
-                                                <div>PA: {formatScore(Number(pa), 2)}</div>
-                                                <div>Luck: {luck}</div>
+                                {/* 1st — always on top on mobile */}
+                                {seasonChampion !== 'N/A' && (
+                                    <div className="flex items-center gap-3 bg-gradient-to-r from-yellow-400 to-yellow-500 rounded-xl shadow-lg px-4 py-3 sm:flex-col sm:items-center sm:text-center sm:bg-gradient-to-b sm:from-yellow-300 sm:to-yellow-500 sm:rounded-2xl sm:px-6 sm:py-6 sm:w-56 order-1 sm:order-2">
+                                        <span className="text-3xl sm:text-5xl sm:mb-2 flex-shrink-0">🏆</span>
+                                        <div className="sm:contents">
+                                            <div>
+                                                <div className="text-[10px] font-bold uppercase tracking-widest text-yellow-900/70 leading-tight">Sween Bowl Champion</div>
+                                                <div className="text-sm font-bold text-white leading-snug">{seasonChampion}</div>
                                             </div>
                                         </div>
                                     </div>
-                                    );
-                                })}
-                            </div>
+                                )}
 
-                            {/* Desktop Table */}
-                            <div className="hidden sm:block overflow-x-auto shadow-lg rounded-lg">
-                                <table className="min-w-full bg-white border border-gray-200 rounded-lg">
-                                    <thead className="bg-blue-50 sticky top-0 z-10">
-                                        <tr>
-                                            <th className="py-3 px-4 text-left text-xs font-bold uppercase tracking-wider border-b">Rank</th>
-                                            <th className="py-3 px-4 text-left text-xs font-bold uppercase tracking-wider border-b">Team</th>
-                                            <th className="py-3 px-4 text-center text-xs font-bold uppercase tracking-wider border-b">DPR</th>
-                                            <th className="py-3 px-4 text-center text-xs font-bold uppercase tracking-wider border-b">Record</th>
-                                            <th className="py-3 px-4 text-center text-xs font-bold uppercase tracking-wider border-b">PF</th>
-                                            <th className="py-3 px-4 text-center text-xs font-bold uppercase tracking-wider border-b">PA</th>
-                                            <th className="py-3 px-4 text-center text-xs font-bold uppercase tracking-wider border-b">Luck</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {seasonStandings.map((team, index) => {
-                                            const metricsForTeam = seasonalMetrics?.[selectedSeason]?.[team.rosterId] || {};
-                                            const dprVal = metricsForTeam.adjustedDPR ?? metricsForTeam.dpr ?? null;
-                                            const pf = metricsForTeam.pointsFor ?? team.pointsFor ?? 0;
-                                            const pa = metricsForTeam.pointsAgainst ?? team.pointsAgainst ?? 0;
-                                            const recordStr = `${team.wins || 0}-${team.losses || 0}${team.ties?`-${team.ties}`:''}`;
-                                            const luck = typeof metricsForTeam.luckRating === 'number' ? formatScore(metricsForTeam.luckRating, 3) : 'N/A';
-                                            return (
-                                            <tr key={team.rosterId} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                                <td className="py-3 px-4 font-medium">{index + 1}</td>
-                                                <td className="py-3 px-4">{team.teamName}</td>
-                                                <td className="py-3 px-4 text-center">{dprVal? formatScore(Number(dprVal), 3) : 'N/A'}</td>
-                                                <td className="py-3 px-4 text-center">{recordStr}</td>
-                                                <td className="py-3 px-4 text-center">{formatScore(Number(pf), 2)}</td>
-                                                <td className="py-3 px-4 text-center">{formatScore(Number(pa), 2)}</td>
-                                                <td className="py-3 px-4 text-center">{luck}</td>
-                                            </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
+                                {/* 2nd */}
+                                {seasonRunnerUp !== 'N/A' && (
+                                    <div className="flex items-center gap-3 bg-gradient-to-r from-gray-200 to-gray-300 rounded-xl shadow-md px-4 py-3 sm:flex-col sm:items-center sm:text-center sm:bg-gradient-to-b sm:rounded-2xl sm:px-5 sm:py-5 sm:w-44 order-2 sm:order-1">
+                                        <span className="text-2xl sm:text-4xl sm:mb-2 flex-shrink-0">🥈</span>
+                                        <div>
+                                            <div className="text-[10px] font-bold uppercase tracking-widest text-gray-500 leading-tight">Runner-up</div>
+                                            <div className="text-sm font-bold text-gray-800 leading-snug">{seasonRunnerUp}</div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* 3rd */}
+                                {seasonThirdPlace !== 'N/A' && (
+                                    <div className="flex items-center gap-3 bg-gradient-to-r from-amber-600 to-amber-700 rounded-xl shadow-md px-4 py-3 sm:flex-col sm:items-center sm:text-center sm:bg-gradient-to-b sm:from-amber-600 sm:to-amber-800 sm:rounded-2xl sm:px-5 sm:py-5 sm:w-44 order-3">
+                                        <span className="text-2xl sm:text-4xl sm:mb-2 flex-shrink-0">🥉</span>
+                                        <div>
+                                            <div className="text-[10px] font-bold uppercase tracking-widest text-amber-200/80 leading-tight">3rd Place</div>
+                                            <div className="text-sm font-bold text-white leading-snug">{seasonThirdPlace}</div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
-                        </>
-                    ) : (
-                        <p className="text-center text-gray-600">No standings data available for this season.</p>
+                        </section>
                     )}
 
-
-
-                    {/* All-Play Standings */}
-                    <div className="mt-8">
-                        <h3 className="text-xl font-bold text-gray-800 mb-4">All-Play Standings</h3>
-                        {allPlayStandings && allPlayStandings.length > 0 ? (
-                            <>
-                                {/* Mobile */}
-                                <div className="sm:hidden space-y-3 mb-4">
-                                    {allPlayStandings.map((t, idx) => (
-                                        <div key={t.rosterId} className="bg-white rounded-lg shadow-md p-3 border-l-4 border-purple-600">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center space-x-3">
-                                                    <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold">{idx + 1}</div>
-                                                    <div className="min-w-0">
-                                                        <div className="font-semibold text-sm truncate">{t.teamName}</div>
-                                                        <div className="text-xs text-gray-500">W/L: {t.wins}-{t.losses}</div>
-                                                    </div>
-                                                </div>
-                                                <div className="text-sm text-gray-600">Pct: {formatDecimalFraction(t.pct)}</div>
+                    {/* ── Top Points Scorers ──────────────────────────────── */}
+                    {selectedSeason && seasonalMetrics[selectedSeason] && String(selectedSeason) !== String(currentSeason) && (() => {
+                        const teams = Object.values(seasonalMetrics[selectedSeason] || {});
+                        const top3 = teams.slice().sort((a, b) => (b.pointsFor || 0) - (a.pointsFor || 0)).slice(0, 3);
+                        const medals = ['🥇', '🥈', '🥉'];
+                        const bg = [
+                            'bg-yellow-400/20 border-yellow-400/30',
+                            'bg-gray-400/20 border-gray-400/30',
+                            'bg-amber-700/20 border-amber-600/30',
+                        ];
+                        const nameColor = ['text-yellow-100', 'text-gray-100', 'text-amber-100'];
+                        const ptColor = ['text-yellow-300/70', 'text-gray-300/70', 'text-amber-300/70'];
+                        return (
+                            <section>
+                                <SectionHeading>Top Points Scorers</SectionHeading>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                    {top3.map((t, i) => (
+                                        <div key={t.rosterId || i} className={`rounded-xl border p-3.5 flex items-center gap-3 ${bg[i]}`}>
+                                            <span className="text-2xl flex-shrink-0">{medals[i]}</span>
+                                            <div className="min-w-0">
+                                                <div className={`font-semibold text-sm truncate ${nameColor[i]}`}>{t.teamName || getTeamName(t.ownerId, selectedSeason)}</div>
+                                                <div className={`text-xs mt-0.5 ${ptColor[i]}`}>{formatScore(Number(t.pointsFor || 0), 2)} pts</div>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
+                            </section>
+                        );
+                    })()}
 
-                                {/* Desktop Table */}
-                                <div className="hidden sm:block overflow-x-auto rounded-lg shadow-md mb-6">
-                                    <table className="min-w-full bg-white border border-gray-200">
-                                        <thead className="bg-purple-50 text-gray-700 uppercase text-sm">
+                    {/* ── Season Stats Grid ───────────────────────────────── */}
+                    {seasonStats && (
+                        <section>
+                            <SectionHeading>Season Awards</SectionHeading>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {String(selectedSeason) !== String(currentSeason) && (
+                                    <StatCard color="blue" label="Points Champion">
+                                        {seasonStats.pointsChampion.teamName} &mdash; {formatScore(Number(seasonStats.pointsChampion.pointsFor ?? 0), 2)} pts
+                                    </StatCard>
+                                )}
+                                {String(selectedSeason) !== String(currentSeason) && (
+                                    <StatCard color="emerald" label="Regular Season Champion">
+                                        {seasonStats.regularSeasonChampion.teamName} ({seasonStats.regularSeasonChampion.wins}-{seasonStats.regularSeasonChampion.losses}-{seasonStats.regularSeasonChampion.ties})
+                                    </StatCard>
+                                )}
+                                <StatCard color="green" label="Best Record">
+                                    {seasonStats.bestRecord.teamName} ({seasonStats.bestRecord.wins}-{seasonStats.bestRecord.losses}-{seasonStats.bestRecord.ties})
+                                </StatCard>
+                                <StatCard color="yellow" label="Luckiest Team">
+                                    {seasonStats.luckiest.teamName} &mdash; {typeof seasonStats.luckiest.luckRating === 'number' ? formatScore(seasonStats.luckiest.luckRating, 3) : 'N/A'}
+                                </StatCard>
+                                <StatCard color="red" label="Unluckiest Team">
+                                    {seasonStats.unluckiest.teamName} &mdash; {typeof seasonStats.unluckiest.luckRating === 'number' ? formatScore(seasonStats.unluckiest.luckRating, 3) : 'N/A'}
+                                </StatCard>
+                                <StatCard color="purple" label="All-Play Champion">
+                                    {seasonStats.allPlayChamp.teamName} &mdash; {formatScore((seasonStats.allPlayChamp.allPlayWinPercentage * 100) ?? 0, 1)}%
+                                </StatCard>
+                                <StatCard color="pink" label="Blowout King">
+                                    {seasonStats.blowoutKing.teamName} &mdash; {seasonStats.blowoutKing.blowoutWins} blowout wins
+                                </StatCard>
+                                <StatCard color="orange" label="Slim Margin Master">
+                                    {seasonStats.slimMaster.teamName} &mdash; {seasonStats.slimMaster.slimWins} slim wins
+                                </StatCard>
+                                <StatCard color="indigo" label="Weekly Top Scorer">
+                                    {seasonStats.topScorer.teamName} &mdash; {seasonStats.topScorer.topScoreWeeksCount}×
+                                </StatCard>
+                                <StatCard color="teal" label="Highest Single-Week Score">
+                                    {seasonStats.highestWeek.team} &mdash; {formatScore(typeof seasonStats.highestWeek.score === 'number' ? seasonStats.highestWeek.score : NaN, 2)} pts (Wk {seasonStats.highestWeek.week})
+                                </StatCard>
+                                <StatCard color="gray" label="Lowest Single-Week Score">
+                                    {seasonStats.lowestWeek.team} &mdash; {formatScore(typeof seasonStats.lowestWeek.score === 'number' ? seasonStats.lowestWeek.score : NaN, 2)} pts (Wk {seasonStats.lowestWeek.week})
+                                </StatCard>
+                                <StatCard color="white" label="Survivor Winner">
+                                    {seasonSurvivorWinner}
+                                </StatCard>
+                            </div>
+                        </section>
+                    )}
+
+                    {/* ── Season Standings ────────────────────────────────── */}
+                    <section>
+                        <SectionHeading>Season Standings</SectionHeading>
+                        {seasonStandings.length > 0 ? (
+                            <>
+                                {/* Mobile cards */}
+                                <div className="sm:hidden space-y-2">
+                                    {seasonStandings.map((team, idx) => {
+                                        const m = seasonalMetrics?.[selectedSeason]?.[team.rosterId] || {};
+                                        const dprVal = m.adjustedDPR ?? m.dpr ?? null;
+                                        const pf = m.pointsFor ?? team.pointsFor ?? 0;
+                                        const pa = m.pointsAgainst ?? team.pointsAgainst ?? 0;
+                                        const rec = `${team.wins || 0}-${team.losses || 0}${team.ties ? `-${team.ties}` : ''}`;
+                                        const luck = typeof m.luckRating === 'number' ? formatScore(m.luckRating, 3) : 'N/A';
+                                        return (
+                                            <div key={team.rosterId} className="bg-white/10 rounded-xl border border-white/10 p-3.5 flex items-center gap-3">
+                                                <div className="w-7 h-7 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">{idx + 1}</div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="font-semibold text-sm text-white truncate">{team.teamName}</div>
+                                                    <div className="text-xs text-gray-400 mt-0.5">{rec} · DPR {dprVal ? formatScore(Number(dprVal), 3) : 'N/A'}</div>
+                                                </div>
+                                                <div className="text-right text-xs text-gray-400 flex-shrink-0">
+                                                    <div>PF {formatScore(Number(pf), 2)}</div>
+                                                    <div>PA {formatScore(Number(pa), 2)}</div>
+                                                    <div>Luck {luck}</div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                {/* Desktop table */}
+                                <TableWrapper>
+                                    <table className="hidden sm:table min-w-full bg-transparent">
+                                        <thead>
                                             <tr>
-                                                <th className="py-2 px-4 text-left">Rank</th>
-                                                <th className="py-2 px-4 text-left">Team</th>
-                                                <th className="py-2 px-4 text-center">Wins</th>
-                                                <th className="py-2 px-4 text-center">Losses</th>
-                                                {allPlayHasTies && <th className="py-2 px-4 text-center">Ties</th>}
-                                                <th className="py-2 px-4 text-center">Pct</th>
+                                                <Th>#</Th>
+                                                <Th>Team</Th>
+                                                <Th align="center">DPR</Th>
+                                                <Th align="center">Record</Th>
+                                                <Th align="center">PF</Th>
+                                                <Th align="center">PA</Th>
+                                                <Th align="center">Luck</Th>
                                             </tr>
                                         </thead>
-                                        <tbody>
+                                        <tbody className="divide-y divide-white/5">
+                                            {seasonStandings.map((team, idx) => {
+                                                const m = seasonalMetrics?.[selectedSeason]?.[team.rosterId] || {};
+                                                const dprVal = m.adjustedDPR ?? m.dpr ?? null;
+                                                const pf = m.pointsFor ?? team.pointsFor ?? 0;
+                                                const pa = m.pointsAgainst ?? team.pointsAgainst ?? 0;
+                                                const rec = `${team.wins || 0}-${team.losses || 0}${team.ties ? `-${team.ties}` : ''}`;
+                                                const luck = typeof m.luckRating === 'number' ? formatScore(m.luckRating, 3) : 'N/A';
+                                                return (
+                                                    <tr key={team.rosterId} className="hover:bg-white/5 transition-colors">
+                                                        <Td bold>{idx + 1}</Td>
+                                                        <Td>{team.teamName}</Td>
+                                                        <Td align="center">{dprVal ? formatScore(Number(dprVal), 3) : 'N/A'}</Td>
+                                                        <Td align="center">{rec}</Td>
+                                                        <Td align="center">{formatScore(Number(pf), 2)}</Td>
+                                                        <Td align="center">{formatScore(Number(pa), 2)}</Td>
+                                                        <Td align="center">{luck}</Td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </TableWrapper>
+                            </>
+                        ) : (
+                            <p className="text-sm text-gray-400 text-center py-6">No standings data available for this season.</p>
+                        )}
+                    </section>
+
+                    {/* ── All-Play Standings ──────────────────────────────── */}
+                    <section>
+                        <SectionHeading>All-Play Standings</SectionHeading>
+                        {allPlayStandings && allPlayStandings.length > 0 ? (
+                            <>
+                                {/* Mobile */}
+                                <div className="sm:hidden space-y-2 mb-4">
+                                    {allPlayStandings.map((t, idx) => (
+                                        <div key={t.rosterId} className="bg-white/10 rounded-xl border border-white/10 p-3.5 flex items-center gap-3">
+                                            <div className="w-7 h-7 rounded-full bg-purple-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">{idx + 1}</div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="font-semibold text-sm text-white truncate">{t.teamName}</div>
+                                                <div className="text-xs text-gray-400 mt-0.5">{t.wins}-{t.losses}</div>
+                                            </div>
+                                            <div className="text-xs text-gray-300 flex-shrink-0">{formatDecimalFraction(t.pct)}</div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Desktop */}
+                                <TableWrapper>
+                                    <table className="hidden sm:table min-w-full bg-transparent">
+                                        <thead>
+                                            <tr>
+                                                <Th>#</Th>
+                                                <Th>Team</Th>
+                                                <Th align="center">W</Th>
+                                                <Th align="center">L</Th>
+                                                {allPlayHasTies && <Th align="center">T</Th>}
+                                                <Th align="center">Pct</Th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-white/5">
                                             {allPlayStandings.map((t, idx) => (
-                                                <tr key={t.rosterId} className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                                    <td className="py-2 px-4 font-semibold">{idx + 1}</td>
-                                                    <td className="py-2 px-4">{t.teamName}</td>
-                                                    <td className="py-2 px-4 text-center">{t.wins}</td>
-                                                    <td className="py-2 px-4 text-center">{t.losses}</td>
-                                                    {allPlayHasTies && <td className="py-2 px-4 text-center">{t.ties}</td>}
-                                                    <td className="py-2 px-4 text-center">{formatDecimalFraction(t.pct)}</td>
+                                                <tr key={t.rosterId} className="hover:bg-white/5 transition-colors">
+                                                    <Td bold>{idx + 1}</Td>
+                                                    <Td>{t.teamName}</Td>
+                                                    <Td align="center">{t.wins}</Td>
+                                                    <Td align="center">{t.losses}</Td>
+                                                    {allPlayHasTies && <Td align="center">{t.ties}</Td>}
+                                                    <Td align="center">{formatDecimalFraction(t.pct)}</Td>
                                                 </tr>
                                             ))}
                                         </tbody>
                                     </table>
-                                </div>
+                                </TableWrapper>
                             </>
                         ) : (
-                            <p className="text-sm text-gray-500">All-play data is not available for this season.</p>
+                            <p className="text-sm text-gray-400 py-4">All-play data is not available for this season.</p>
                         )}
 
-                        {/* debug UI removed */}
+                        {/* ── Hypothetical Schedule Tool ──────────────────── */}
+                        <div className="mt-6 bg-white/5 border border-white/10 rounded-xl p-5">
+                            <h4 className="font-bold text-white mb-1">Hypothetical Schedule</h4>
+                            <p className="text-xs text-gray-400 mb-4">Pick a team to simulate their W/L record against every other team's schedule.</p>
 
-                        {/* Hypothetical Schedule Tool: pick a subject team and show simulated W/L vs other teams' schedules */}
-                        <div className="mt-4 bg-green-50 p-4 rounded-lg shadow">
-                            <h4 className="font-semibold mb-2">Hypothetical Schedule</h4>
-                            <p className="text-sm text-gray-600 mb-3">Select a subject team below to simulate hypothetical W/L results against each other team's schedules.</p>
-                            <div className="mb-3">
-                                <label className="block text-xs text-gray-500 mb-1">Subject Team</label>
+                            <div className="mb-4 max-w-xs">
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Subject Team</label>
+                                {/* bg-gray-800 ensures option elements are readable — bg-white/10 makes options invisible on most browsers */}
                                 <select
-                                    className="w-full p-2 border rounded"
+                                    className="w-full px-3 py-1.5 border border-white/20 rounded-lg text-sm text-white bg-gray-800 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                                     value={hypoSubject}
                                     onChange={(e) => setHypoSubject(e.target.value)}
                                 >
-                                    <option value="">Select team</option>
-                                    {allPlayStandings.map(t => (<option key={t.rosterId} value={t.rosterId}>{t.teamName}</option>))}
+                                    <option value="" className="bg-gray-800 text-gray-300">Select a team…</option>
+                                    {allPlayStandings.map(t => <option key={t.rosterId} value={t.rosterId} className="bg-gray-800 text-white">{t.teamName}</option>)}
                                 </select>
                             </div>
 
-                            <div id="hypo-results">
-                                {!hypoSubject ? (
-                                    <p className="text-sm text-gray-500">Choose a subject team to see hypothetical results vs the other schedules.</p>
-                                ) : (
-                                    <>
-                                        {/* Mobile: simple stacked list */}
-                                        <div className="sm:hidden space-y-2 mt-3">
-                                            {allPlayStandings.filter(o => o.rosterId !== hypoSubject).map((o, idx) => {
-                                                const res = computeMockAgainstSchedule(hypoSubject, o.rosterId) || { wins: 0, losses: 0, pct: 0 };
-                                                return (
-                                                    <div key={o.rosterId} className="bg-white rounded-lg shadow-sm p-3 flex items-center justify-between border-l-4 border-green-600">
-                                                        <div className="font-semibold truncate">{o.teamName}</div>
-                                                        <div className="text-sm text-gray-600">{res.wins} - {res.losses} • {formatDecimalFraction(res.pct)}</div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
+                            {!hypoSubject ? (
+                                <p className="text-sm text-gray-500">Choose a team above to see results.</p>
+                            ) : (
+                                <>
+                                    {/* Mobile */}
+                                    <div className="sm:hidden space-y-2">
+                                        {allPlayStandings.filter(o => o.rosterId !== hypoSubject).map(o => {
+                                            const res = computeMockAgainstSchedule(hypoSubject, o.rosterId) || { wins: 0, losses: 0, pct: 0 };
+                                            return (
+                                                <div key={o.rosterId} className="bg-white/10 rounded-xl border border-white/10 p-3 flex items-center justify-between">
+                                                    <span className="text-sm font-medium text-white truncate">{o.teamName}</span>
+                                                    <span className="text-xs text-gray-400 flex-shrink-0 ml-3">{res.wins}-{res.losses} · {formatDecimalFraction(res.pct)}</span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
 
-                                        {/* Desktop table */}
-                                        <div className="hidden sm:block overflow-x-auto rounded-lg shadow-md mt-3">
-                                            <table className="min-w-full bg-white border border-gray-200">
-                                                <thead className="bg-green-50 text-gray-700 uppercase text-sm">
-                                                    <tr>
-                                                        <th className="py-2 px-3 text-left">Opponent</th>
-                                                        <th className="py-2 px-3 text-center">W</th>
-                                                        <th className="py-2 px-3 text-center">L</th>
-                                                        <th className="py-2 px-3 text-center">Win %</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {allPlayStandings.filter(o => o.rosterId !== hypoSubject).map((o, idx) => {
-                                                        const res = computeMockAgainstSchedule(hypoSubject, o.rosterId) || { wins: 0, losses: 0, pct: 0 };
-                                                        return (
-                                                            <tr key={o.rosterId} className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                                                <td className="py-2 px-3 font-semibold">{o.teamName}</td>
-                                                                <td className="py-2 px-3 text-center">{res.wins}</td>
-                                                                <td className="py-2 px-3 text-center">{res.losses}</td>
-                                                                <td className="py-2 px-3 text-center">{formatDecimalFraction(res.pct)}</td>
-                                                            </tr>
-                                                        );
-                                                    })}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </>
-                                )}
-                            </div>
+                                    {/* Desktop */}
+                                    <TableWrapper>
+                                        <table className="hidden sm:table min-w-full bg-transparent">
+                                            <thead>
+                                                <tr>
+                                                    <Th>Opponent's Schedule</Th>
+                                                    <Th align="center">W</Th>
+                                                    <Th align="center">L</Th>
+                                                    <Th align="center">Win %</Th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-white/5">
+                                                {allPlayStandings.filter(o => o.rosterId !== hypoSubject).map((o) => {
+                                                    const res = computeMockAgainstSchedule(hypoSubject, o.rosterId) || { wins: 0, losses: 0, pct: 0 };
+                                                    return (
+                                                        <tr key={o.rosterId} className="hover:bg-white/5 transition-colors">
+                                                            <Td bold>{o.teamName}</Td>
+                                                            <Td align="center">{res.wins}</Td>
+                                                            <Td align="center">{res.losses}</Td>
+                                                            <Td align="center">{formatDecimalFraction(res.pct)}</Td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </TableWrapper>
+                                </>
+                            )}
                         </div>
-                    </div>
+                    </section>
                 </div>
-            )}
-            {!selectedSeason && !loading && !error && (
-                <p className="text-center text-gray-600 text-lg mt-8">Please select a season from the dropdown to view its breakdown.</p>
             )}
         </div>
     );

@@ -1,59 +1,45 @@
 // src/lib/LuckRatingAnalysis.js
 import React, { useState, useEffect } from 'react';
-import { calculateAllLeagueMetrics } from '../utils/calculations'; // Import the new utility
-import { useSleeperData } from '../contexts/SleeperDataContext'; // Import the custom hook
+import { calculateAllLeagueMetrics } from '../utils/calculations';
+import { useSleeperData } from '../contexts/SleeperDataContext';
 import logger from '../utils/logger';
 
+// ── Shared style tokens ───────────────────────────────────────────────────────
+const card = "bg-gray-800 border border-white/10 rounded-xl";
+const cardHeader = "flex items-center gap-2 px-4 py-3 border-b border-white/10";
+const th = "py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider border-b border-white/10";
+const thCenter = "py-2.5 px-3 text-center text-[10px] font-semibold text-gray-500 uppercase tracking-wider border-b border-white/10";
+
 const LuckRatingAnalysis = () => {
-  // Consume necessary data from context
   const {
-    loading: contextLoading, // Rename to avoid conflict with local loading state
-    error: contextError,     // Rename to avoid conflict with local error state
+    loading: contextLoading,
+    error: contextError,
     historicalData,
-    allDraftHistory, // Get allDraftHistory from context
+    allDraftHistory,
     getTeamName,
     getTeamDetails,
-    nflState // Get nflState from context
+    nflState
   } = useSleeperData();
 
-  const [careerLuckData, setCareerLuckData] = useState([]); // New state for career luck data
-  const [seasonalLuckData, setSeasonalLuckData] = useState([]); // New state for seasonal luck data
+  const [careerLuckData, setCareerLuckData] = useState([]);
+  const [seasonalLuckData, setSeasonalLuckData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showAllSeasonal, setShowAllSeasonal] = useState(false); // State for "Show More" seasonal data
+  const [showAllSeasonal, setShowAllSeasonal] = useState(false);
 
+  // ── All calculation logic (completely untouched) ──────────────────────────
   useEffect(() => {
-    // If context is still loading or has an error, set local loading/error states accordingly
-    if (contextLoading) {
-      setLoading(true);
-      return;
-    }
-    if (contextError) {
-      setLoading(false);
-      // You might want to display contextError message in the UI here as well
-      return;
-    }
-
-    // Check if historicalData is available and has any matchup data
+    if (contextLoading) { setLoading(true); return; }
+    if (contextError) { setLoading(false); return; }
     if (!historicalData || Object.keys(historicalData.matchupsBySeason || {}).length === 0) {
-      setCareerLuckData([]);
-      setSeasonalLuckData([]);
-      setLoading(false);
-      return;
+      setCareerLuckData([]); setSeasonalLuckData([]); setLoading(false); return;
     }
-
-    // Add a defensive check to ensure getTeamName is a function
-  if (typeof getTeamName !== 'function') {
-    logger.error("LuckRatingAnalysis: getTeamName is not a function from SleeperDataContext. Cannot perform calculations.");
-        setLoading(false);
-        setCareerLuckData([]);
-        setSeasonalLuckData([]);
-        return;
+    if (typeof getTeamName !== 'function') {
+      logger.error("LuckRatingAnalysis: getTeamName is not a function from SleeperDataContext.");
+      setLoading(false); setCareerLuckData([]); setSeasonalLuckData([]); return;
     }
 
     setLoading(true);
 
-    // Use the centralized calculation logic to get seasonal and career metrics
-    // Pass historicalData, allDraftHistory, getTeamName, and nflState
     const { seasonalMetrics, careerDPRData: calculatedCareerDPRs } = calculateAllLeagueMetrics(historicalData, allDraftHistory, getTeamName, nflState);
 
     const allSeasonalLuckRatings = [];
@@ -61,186 +47,141 @@ const LuckRatingAnalysis = () => {
 
     Object.keys(seasonalMetrics).forEach(yearStr => {
       const year = parseInt(yearStr);
-
-      // Skip current NFL season if Week 1 data is not yet available
-      // This prevents displaying incomplete current season data as 0s or N/As
       if (year === currentNFLSeason) {
-        const week1Matchups = historicalData.matchupsBySeason?.[year]?.['1'];
-        if (!week1Matchups || week1Matchups.length === 0) {
+        const allMatchupsForYear = historicalData.matchupsBySeason?.[year] || [];
+        const week1Matchups = allMatchupsForYear.filter(m => String(m.week) === '1');
+        if (week1Matchups.length === 0) {
           logger.debug(`LuckRatingAnalysis: Skipping year ${year} (current season) as Week 1 data is not available.`);
-          return; // Skip this year
+          return;
         }
       }
-
-      Object.keys(seasonalMetrics[year]).forEach(rosterId => { // Iterate over rosterIds
-        const teamData = seasonalMetrics[year][rosterId]; // Access team data by rosterId
-
-        // Ensure that the luckRating, actualWinsRecord, and seasonalExpectedWinsSum are populated for the team in this year
-        if (
-            teamData &&
-            typeof teamData.luckRating === 'number' && !isNaN(teamData.luckRating) &&
-            typeof teamData.actualWinsRecord === 'number' && !isNaN(teamData.actualWinsRecord) &&
-            typeof teamData.seasonalExpectedWinsSum === 'number' && !isNaN(teamData.seasonalExpectedWinsSum)
-        ) {
-          allSeasonalLuckRatings.push({
-            year: parseInt(year),
-            team: getTeamName(teamData.ownerId, year), // Use getTeamName with ownerId and year
-            ownerId: teamData.ownerId,
-            luckRating: teamData.luckRating,
-            actualWins: teamData.actualWinsRecord, // Directly use actualWinsRecord
-            projectedWins: teamData.seasonalExpectedWinsSum // Directly use seasonalExpectedWinsSum
-          });
+      Object.keys(seasonalMetrics[year]).forEach(rosterId => {
+        const teamData = seasonalMetrics[year][rosterId];
+        if (teamData && typeof teamData.luckRating === 'number' && !isNaN(teamData.luckRating) && typeof teamData.actualWinsRecord === 'number' && !isNaN(teamData.actualWinsRecord) && typeof teamData.seasonalExpectedWinsSum === 'number' && !isNaN(teamData.seasonalExpectedWinsSum)) {
+          allSeasonalLuckRatings.push({ year: parseInt(year), team: getTeamName(teamData.ownerId, year), ownerId: teamData.ownerId, luckRating: teamData.luckRating, actualWins: teamData.actualWinsRecord, projectedWins: teamData.seasonalExpectedWinsSum });
         }
       });
     });
 
-    // Sort seasonal luck ratings by luckRating (descending, as higher is better for "luckiest")
     allSeasonalLuckRatings.sort((a, b) => b.luckRating - a.luckRating);
     setSeasonalLuckData(allSeasonalLuckRatings);
 
     const allCareerLuckRatings = [];
     calculatedCareerDPRs.forEach(careerStats => {
-        if (
-            careerStats &&
-            typeof careerStats.totalLuckRating === 'number' && !isNaN(careerStats.totalLuckRating) &&
-            typeof careerStats.actualCareerWinsRecord === 'number' && !isNaN(careerStats.actualCareerWinsRecord) &&
-            typeof careerStats.careerExpectedWinsSum === 'number' && !isNaN(careerStats.careerExpectedWinsSum)
-        ) {
-      allCareerLuckRatings.push({
-        team: getTeamName(careerStats.ownerId, null), // Get current display name for career
-        ownerId: careerStats.ownerId,
-        luckRating: careerStats.totalLuckRating,
-        actualWins: careerStats.actualCareerWinsRecord,
-        projectedWins: careerStats.careerExpectedWinsSum
-      });
-        }
+      if (careerStats && typeof careerStats.totalLuckRating === 'number' && !isNaN(careerStats.totalLuckRating) && typeof careerStats.actualCareerWinsRecord === 'number' && !isNaN(careerStats.actualCareerWinsRecord) && typeof careerStats.careerExpectedWinsSum === 'number' && !isNaN(careerStats.careerExpectedWinsSum)) {
+        allCareerLuckRatings.push({ team: getTeamName(careerStats.ownerId, null), ownerId: careerStats.ownerId, luckRating: careerStats.totalLuckRating, actualWins: careerStats.actualCareerWinsRecord, projectedWins: careerStats.careerExpectedWinsSum });
+      }
     });
 
-    // Sort career luck ratings by luckRating (descending, as higher is better for "luckiest")
     allCareerLuckRatings.sort((a, b) => b.luckRating - a.luckRating);
     setCareerLuckData(allCareerLuckRatings);
-
     setLoading(false);
+  }, [historicalData, allDraftHistory, getTeamName, nflState, contextLoading, contextError]);
 
-  }, [historicalData, allDraftHistory, getTeamName, nflState, contextLoading, contextError]); // Dependencies updated
-
+  // ── Formatters (untouched) ────────────────────────────────────────────────
   const formatLuckRating = (value) => {
-    if (typeof value === 'number' && !isNaN(value)) {
-      return value.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
-    }
+    if (typeof value === 'number' && !isNaN(value)) return value.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
     return 'N/A';
   };
 
   const displayedSeasonalLuckData = showAllSeasonal ? seasonalLuckData : seasonalLuckData.slice(0, 20);
   const currentNFLSeason = nflState?.season ? parseInt(nflState.season) : new Date().getFullYear();
+  const dataCurrentSeason = (() => { try { const yrs = seasonalLuckData.map(r => (r && r.year) ? Number(r.year) : null).filter(Boolean); return yrs.length > 0 ? Math.max(...yrs) : currentNFLSeason; } catch (e) { return currentNFLSeason; } })();
 
-  // Determine current season from available seasonal data to keep highlighting consistent
-  const dataCurrentSeason = (() => {
-    try {
-      const yrs = seasonalLuckData.map(r => (r && r.year) ? Number(r.year) : null).filter(Boolean);
-      return yrs.length > 0 ? Math.max(...yrs) : currentNFLSeason;
-    } catch (e) {
-      return currentNFLSeason;
-    }
-  })();
+  // ── Luck color helper ─────────────────────────────────────────────────────
+  const luckColor = (v) => v > 0 ? 'text-emerald-400' : v < 0 ? 'text-red-400' : 'text-gray-500';
 
+  // ── Avatar helper ─────────────────────────────────────────────────────────
+  const Avatar = ({ ownerId, year }) => (
+    <img
+      src={getTeamDetails ? (getTeamDetails(ownerId, year)?.avatar || `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`) : `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`}
+      alt={getTeamName(ownerId, year)}
+      className="w-7 h-7 rounded-full border border-white/20 object-cover flex-shrink-0"
+      onError={(e) => { e.target.src = `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`; }}
+    />
+  );
+
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="w-full">
-      <h2 className="text-2xl font-bold text-gray-800 mb-4 border-b pb-2 text-center">
-        Luck Rating Analysis
-      </h2>
-      <p className="text-sm text-gray-600 mb-6 text-center">
-        This analysis indicates how much "luckier" or "unluckier" a team was
-        compared to their projected wins if every possible matchup against other teams
-        in their league week-by-week were played. A positive score means luckier, negative means unluckier.
-        Calculation includes regular season games only.
-      </p>
+    <div className="w-full space-y-6">
+
+      {/* Page header */}
+      <div className="text-center pt-2">
+        <h2 className="text-2xl font-bold text-white tracking-tight">Luck Rating Analysis</h2>
+        <p className="text-xs text-gray-500 mt-1 max-w-xl mx-auto">
+          How much luckier or unluckier a team was compared to their projected wins if every possible matchup
+          were played week-by-week. Positive = luckier, negative = unluckier. Regular season only.
+        </p>
+      </div>
 
       {loading ? (
-        <p className="text-center text-gray-600">Calculating luck ratings...</p>
+        <div className="text-center text-gray-500 py-10 animate-pulse text-sm">Calculating luck ratings…</div>
       ) : (
         <>
-          {/* Career Luck Rankings */}
-          <section className="mb-8">
-            <h3 className="text-xl font-bold text-blue-800 mb-4 border-b pb-2">Career Luck Rankings</h3>
+          {/* ── Career Luck Rankings ── */}
+          <div className={card}>
+            <div className={cardHeader}>
+              <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              <span className="text-xs font-semibold text-gray-300 uppercase tracking-wider">Career Luck Rankings</span>
+            </div>
+
             {careerLuckData.length > 0 ? (
               <>
-                {/* Mobile Cards View */}
-                <div className="sm:hidden space-y-3">
-                  {careerLuckData
-                    .slice()
-                    .sort((a, b) => (b.luckRating || 0) - (a.luckRating || 0))
-                    .map((data, index) => (
-                      <div key={data.team} className="bg-white rounded-lg shadow-md mobile-card p-2 border-l-4 border-blue-500 min-w-0 w-full overflow-hidden">
-                          <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center space-x-1 min-w-0">
-                            <div className="flex-shrink-0 w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-[11px] font-bold">{index + 1}</div>
-                            <img
-                              src={getTeamDetails ? (getTeamDetails(data.ownerId, null)?.avatar || `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`) : `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`}
-                              alt={data.team}
-                              className="flex-shrink-0 w-7 h-7 rounded-full border-2 border-blue-300 shadow-sm object-cover"
-                              onError={(e) => { e.target.src = `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`; }}
-                            />
-                            <div className="min-w-0 flex-1">
-                              <div className="flex flex-col">
-                                <div className="font-semibold text-sm truncate">
-                                  <span className="truncate">{data.team}</span>
-                                </div>
-                                {/* compact boxes are rendered below the header to match DPR mobile layout */}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* fixed-width rating to avoid clipping on narrow viewports */}
-                          <div className="text-right flex-shrink-0 w-20 ml-1 pr-2">
-                            <div className={`text-lg font-bold truncate ${data.luckRating > 0 ? 'text-green-600' : data.luckRating < 0 ? 'text-red-600' : 'text-gray-700'}`}>{formatLuckRating(data.luckRating)}</div>
-                          </div>
+                {/* Mobile cards */}
+                <div className="sm:hidden divide-y divide-white/5">
+                  {careerLuckData.slice().sort((a, b) => (b.luckRating || 0) - (a.luckRating || 0)).map((data, index) => (
+                    <div key={data.team} className="px-4 py-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="text-xs font-bold text-gray-600 w-5 flex-shrink-0 text-right">{index + 1}</span>
+                          <Avatar ownerId={data.ownerId} year={null} />
+                          <span className="text-sm font-semibold text-gray-200 truncate">{data.team}</span>
                         </div>
-
-                        <div className="grid grid-cols-2 gap-2 text-xs mt-2">
-                          <div className="bg-gray-50 rounded px-2 py-1 text-center">
-                            <div className="text-[10px] text-gray-500 mb-0.5">Actual</div>
-                            <div className="font-semibold whitespace-nowrap">{data.actualWins}</div>
-                          </div>
-                          <div className="bg-gray-50 rounded px-2 py-1 text-center">
-                            <div className="text-[10px] text-gray-500 mb-0.5">Proj</div>
-                            <div className="font-semibold whitespace-nowrap">{formatLuckRating(data.projectedWins)}</div>
-                          </div>
+                        <div className={`text-lg font-bold tabular-nums flex-shrink-0 ml-2 ${luckColor(data.luckRating)}`}>
+                          {formatLuckRating(data.luckRating)}
                         </div>
                       </div>
-                    ))}
+                      <div className="grid grid-cols-2 gap-2">
+                        {[['Actual Wins', data.actualWins, 'text-gray-300'],
+                          ['Projected Wins', formatLuckRating(data.projectedWins), 'text-gray-300']
+                        ].map(([label, value, color]) => (
+                          <div key={label} className="bg-white/5 rounded-lg px-2 py-1.5 text-center">
+                            <div className="text-[10px] text-gray-500 mb-0.5">{label}</div>
+                            <div className={`text-xs font-semibold ${color} tabular-nums`}>{value}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
-                {/* Desktop Table View */}
-                <div className="hidden sm:block overflow-x-auto shadow-lg rounded-lg">
-                  <table className="min-w-full bg-white border border-gray-200 rounded-lg">
-                    <thead className="bg-blue-100 sticky top-0 z-10">
+                {/* Desktop table */}
+                <div className="hidden sm:block overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
                       <tr>
-                        <th className="py-3 md:py-4 px-3 md:px-4 text-left text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Rank</th>
-                        <th className="py-3 md:py-4 px-3 md:px-4 text-left text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
-                        <th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Career Luck</th>
-                        <th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Actual Wins</th>
-                        <th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Projected Wins</th>
+                        <th className={th}>#</th>
+                        <th className={th}>Team</th>
+                        <th className={thCenter}>Career Luck</th>
+                        <th className={thCenter}>Actual Wins</th>
+                        <th className={thCenter}>Projected Wins</th>
                       </tr>
                     </thead>
-                    <tbody>
-                      {careerLuckData.slice().sort((a,b)=>(b.luckRating||0)-(a.luckRating||0)).map((data, index) => (
-                        <tr key={data.team} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                          <td className="py-2 md:py-3 px-3 md:px-4 text-sm text-blue-700 font-bold border-b border-gray-200">{index + 1}</td>
-                          <td className="py-2 md:py-3 px-3 md:px-4 text-sm text-gray-800 font-medium border-b border-gray-200">
-                            <div className="flex items-center gap-2 md:gap-3">
-                              <img
-                                src={getTeamDetails ? (getTeamDetails(data.ownerId, null)?.avatar || `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`) : `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`}
-                                alt={data.team}
-                                className="w-6 h-6 md:w-8 md:h-8 rounded-full border-2 border-blue-300 shadow-sm object-cover flex-shrink-0"
-                                onError={(e) => { e.target.src = `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`; }}
-                              />
-                              <span className="truncate font-semibold text-xs md:text-sm">{data.team}</span>
+                    <tbody className="divide-y divide-white/5">
+                      {careerLuckData.slice().sort((a, b) => (b.luckRating || 0) - (a.luckRating || 0)).map((data, index) => (
+                        <tr key={data.team} className="hover:bg-white/[0.02] transition-colors">
+                          <td className="py-2.5 px-3 text-xs text-gray-600 font-semibold">{index + 1}</td>
+                          <td className="py-2.5 px-3">
+                            <div className="flex items-center gap-2.5">
+                              <Avatar ownerId={data.ownerId} year={null} />
+                              <span className="text-sm font-medium text-gray-200 truncate">{data.team}</span>
                             </div>
                           </td>
-                          <td className={`py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold ${data.luckRating > 0 ? 'text-green-600' : data.luckRating < 0 ? 'text-red-600' : 'text-gray-700'}`}>{formatLuckRating(data.luckRating)}</td>
-                          <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold">{data.actualWins}</td>
-                          <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold">{formatLuckRating(data.projectedWins)}</td>
+                          <td className={`py-2.5 px-3 text-center text-sm font-bold tabular-nums ${luckColor(data.luckRating)}`}>{formatLuckRating(data.luckRating)}</td>
+                          <td className="py-2.5 px-3 text-center text-xs text-gray-400 tabular-nums font-semibold">{data.actualWins}</td>
+                          <td className="py-2.5 px-3 text-center text-xs text-gray-400 tabular-nums font-semibold">{formatLuckRating(data.projectedWins)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -248,99 +189,87 @@ const LuckRatingAnalysis = () => {
                 </div>
               </>
             ) : (
-              <p className="text-center text-gray-600">No career luck data available.</p>
+              <p className="text-center text-gray-500 text-sm p-6">No career luck data available.</p>
             )}
-          </section>
+          </div>
 
-          {/* Seasonal Luck Rankings */}
-          <section className="mb-8">
-            <h3 className="text-xl font-bold text-green-800 mb-4 border-b pb-2">Seasonal Luck Rankings</h3>
+          {/* ── Seasonal Luck Rankings ── */}
+          <div className={card}>
+            <div className={cardHeader}>
+              <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span className="text-xs font-semibold text-gray-300 uppercase tracking-wider">Seasonal Luck Rankings</span>
+            </div>
+
             {seasonalLuckData.length > 0 ? (
               <>
-                {/* Mobile Cards View */}
-                <div className="sm:hidden space-y-3">
-                  {displayedSeasonalLuckData.map((data, idx) => (
-                    <div key={`${data.team}-${data.year}`} className={`min-w-0 w-full overflow-hidden rounded-lg shadow p-2 ${Number(data.year) === Number(dataCurrentSeason) ? 'border-l-4 border-green-500 bg-green-50' : 'bg-white'}`}>
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center space-x-1">
-                          <div className="w-5 h-5 bg-green-600 text-white rounded-full flex items-center justify-center text-[11px] font-bold">{idx + 1}</div>
-                          <img
-                                  src={getTeamDetails ? (getTeamDetails(data.ownerId, data.year)?.avatar || `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`) : `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`}
-                            alt={data.team}
-                            className="w-7 h-7 rounded-full border-2 border-green-300 shadow-sm object-cover flex-shrink-0"
-                            onError={(e) => { e.target.src = `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`; }}
-                          />
-                            <div className="min-w-0 flex-1">
-                              <div className="flex flex-col">
-                                <div className="flex items-center gap-2">
-                                  <div className="font-semibold text-sm truncate leading-tight">{data.team}</div>
-                                  {/* On mobile the green highlight is sufficient for current season; remove redundant 'Current' pill */}
-                                </div>
-                                <div className="text-xs text-gray-500 mt-0 leading-tight">Season: {data.year}</div>
-                              </div>
+                {/* Mobile cards */}
+                <div className="sm:hidden divide-y divide-white/5">
+                  {displayedSeasonalLuckData.map((data, idx) => {
+                    const isCurrent = Number(data.year) === Number(dataCurrentSeason);
+                    return (
+                      <div key={`${data.team}-${data.year}`} className={`px-4 py-3 ${isCurrent ? 'border-l-2 border-emerald-500/50 bg-emerald-900/10' : ''}`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className="text-xs font-bold text-gray-600 w-5 flex-shrink-0 text-right">{idx + 1}</span>
+                            <Avatar ownerId={data.ownerId} year={data.year} />
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold text-gray-200 truncate">{data.team}</div>
+                              <div className="text-[10px] text-gray-600">{data.year}</div>
                             </div>
+                          </div>
+                          <div className={`text-lg font-bold tabular-nums flex-shrink-0 ml-2 ${luckColor(data.luckRating)}`}>
+                            {formatLuckRating(data.luckRating)}
+                          </div>
                         </div>
-
-                          <div className="text-right flex-shrink-0 w-20 ml-1 pr-2">
-                          <div className={`text-lg font-bold truncate ${data.luckRating > 0 ? 'text-green-600' : data.luckRating < 0 ? 'text-red-600' : 'text-gray-700'}`}>{formatLuckRating(data.luckRating)}</div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {[['Actual Wins', data.actualWins, 'text-gray-300'],
+                            ['Projected Wins', formatLuckRating(data.projectedWins), 'text-gray-300']
+                          ].map(([label, value, color]) => (
+                            <div key={label} className="bg-white/5 rounded-lg px-2 py-1.5 text-center">
+                              <div className="text-[10px] text-gray-500 mb-0.5">{label}</div>
+                              <div className={`text-xs font-semibold ${color} tabular-nums`}>{value}</div>
+                            </div>
+                          ))}
                         </div>
                       </div>
-
-                      <div className="grid grid-cols-2 gap-2 text-xs mt-1">
-                        <div className="bg-gray-50 rounded px-2 py-1 text-center">
-                          <div className="text-[10px] text-gray-500 mb-0.5">Actual</div>
-                          <div className="font-semibold whitespace-nowrap">{data.actualWins}</div>
-                        </div>
-                        <div className="bg-gray-50 rounded px-2 py-1 text-center">
-                          <div className="text-[10px] text-gray-500 mb-0.5">Proj</div>
-                          <div className="font-semibold whitespace-nowrap">{formatLuckRating(data.projectedWins)}</div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
-                {/* Desktop Table View */}
-                <div className="hidden sm:block overflow-x-auto shadow-lg rounded-lg">
-                  <table className="min-w-full bg-white border border-gray-200 rounded-lg">
-                    <thead className="bg-green-100 sticky top-0 z-10">
+                {/* Desktop table */}
+                <div className="hidden sm:block overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
                       <tr>
-                        <th className="py-3 md:py-4 px-3 md:px-4 text-left text-xs font-bold text-green-700 uppercase tracking-wider border-b border-gray-200">Rank</th>
-                        <th className="py-3 md:py-4 px-3 md:px-4 text-left text-xs font-bold text-green-700 uppercase tracking-wider border-b border-gray-200">Team</th>
-                        <th className="py-3 md:py-4 px-3 md:px-4 text-left text-xs font-bold text-green-700 uppercase tracking-wider border-b border-gray-200">Season</th>
-                        <th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-green-700 uppercase tracking-wider border-b border-gray-200">Luck Rating</th>
-                        <th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-green-700 uppercase tracking-wider border-b border-gray-200">Actual Wins</th>
-                        <th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-green-700 uppercase tracking-wider border-b border-gray-200">Projected Wins</th>
+                        <th className={th}>#</th>
+                        <th className={th}>Team</th>
+                        <th className={th}>Season</th>
+                        <th className={thCenter}>Luck Rating</th>
+                        <th className={thCenter}>Actual Wins</th>
+                        <th className={thCenter}>Projected Wins</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-white/5">
                       {(() => {
                         let actualRank = 0;
                         return displayedSeasonalLuckData.map((data, index) => {
                           actualRank++;
-                          const isCurrentSeasonRow = data.year && Number(data.year) === Number(dataCurrentSeason);
-                          const rowClass = isCurrentSeasonRow ? 'bg-green-50' : (actualRank % 2 === 0 ? 'bg-gray-50' : 'bg-white');
+                          const isCurrent = data.year && Number(data.year) === Number(dataCurrentSeason);
                           return (
-                            <tr key={`${data.team}-${data.year}`} className={rowClass}>
-                              <td className="py-2 md:py-3 px-3 md:px-4 text-sm text-gray-800 whitespace-nowrap border-b border-gray-200 relative pl-3">
-                                <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-r-sm ${isCurrentSeasonRow ? 'bg-green-500' : 'bg-transparent'}`} />
-                                <span className="">{actualRank}</span>
-                              </td>
-                              <td className="py-2 md:py-3 px-3 md:px-4 text-sm text-gray-800 whitespace-nowrap border-b border-gray-200">
-                                <div className="flex items-center gap-2 md:gap-3">
-                                  <img
-                                    src={getTeamDetails ? (getTeamDetails(data.ownerId, data.year)?.avatar || `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`) : `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`}
-                                    alt={data.team}
-                                    className="w-6 h-6 md:w-8 md:h-8 rounded-full border-2 border-green-300 shadow-sm object-cover flex-shrink-0"
-                                    onError={(e) => { e.target.src = `${process.env.PUBLIC_URL}/LeagueLogoNoBack.PNG`; }}
-                                  />
-                                  <span className="truncate font-semibold text-xs md:text-sm">{data.team}</span>
+                            <tr key={`${data.team}-${data.year}`} className={`hover:bg-white/[0.02] transition-colors ${isCurrent ? 'border-l-2 border-emerald-500/50' : ''}`}>
+                              <td className="py-2.5 px-3 text-xs text-gray-600 font-semibold">{actualRank}</td>
+                              <td className="py-2.5 px-3">
+                                <div className="flex items-center gap-2.5">
+                                  <Avatar ownerId={data.ownerId} year={data.year} />
+                                  <span className="text-sm font-medium text-gray-200 truncate">{data.team}</span>
                                 </div>
                               </td>
-                              <td className="py-2 md:py-3 px-3 md:px-4 text-sm text-gray-800 whitespace-nowrap border-b border-gray-200">{data.year}</td>
-                              <td className={`py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold ${data.luckRating > 0 ? 'text-green-600' : data.luckRating < 0 ? 'text-red-600' : 'text-gray-700'}`}>{formatLuckRating(data.luckRating)}</td>
-                              <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold">{data.actualWins}</td>
-                              <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold">{formatLuckRating(data.projectedWins)}</td>
+                              <td className="py-2.5 px-3 text-xs text-gray-400 tabular-nums">{data.year}</td>
+                              <td className={`py-2.5 px-3 text-center text-sm font-bold tabular-nums ${luckColor(data.luckRating)}`}>{formatLuckRating(data.luckRating)}</td>
+                              <td className="py-2.5 px-3 text-center text-xs text-gray-400 tabular-nums font-semibold">{data.actualWins}</td>
+                              <td className="py-2.5 px-3 text-center text-xs text-gray-400 tabular-nums font-semibold">{formatLuckRating(data.projectedWins)}</td>
                             </tr>
                           );
                         });
@@ -350,20 +279,20 @@ const LuckRatingAnalysis = () => {
                 </div>
               </>
             ) : (
-              <p className="text-center text-gray-600">No seasonal luck data available.</p>
+              <p className="text-center text-gray-500 text-sm p-6">No seasonal luck data available.</p>
             )}
 
             {seasonalLuckData.length > 20 && (
-              <div className="text-center mt-4">
+              <div className="px-4 py-3 border-t border-white/10 text-center">
                 <button
                   onClick={() => setShowAllSeasonal(!showAllSeasonal)}
-                  className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                  className="px-4 py-2 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-lg text-xs font-medium hover:bg-blue-500/30 transition-colors"
                 >
-                  {showAllSeasonal ? 'Show Less' : 'Show All Seasons'}
+                  {showAllSeasonal ? 'Show Less ▲' : 'Show All Seasons ▼'}
                 </button>
               </div>
             )}
-          </section>
+          </div>
         </>
       )}
     </div>

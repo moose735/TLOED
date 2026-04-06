@@ -5,6 +5,7 @@ import LOADING_SAYINGS from './data/loadingSayings';
 import LeagueHistory from './lib/LeagueHistory';
 import RecordBook from './lib/RecordBook';
 import DPRAnalysis from './lib/DPRAnalysis';
+import MostTradedPlayers from './lib/MostTradedPlayers';
 import LuckRatingAnalysis from './lib/LuckRatingAnalysis';
 import TeamDetailPage from './lib/TeamDetailPage';
 import Head2HeadGrid from './lib/Head2HeadGrid';
@@ -18,16 +19,13 @@ import Gamecenter from './components/Gamecenter';
 import Sportsbook from './components/Sportsbook';
 import KeeperList from './lib/KeeperList';
 const MemesAndMemories = lazy(() => import('./lib/MemesAndMemories'));
-// import MobileSidebarNav from './components/MobileSidebarNav';
 import DesktopNav from './components/DesktopNav';
 import PasswordLock from './components/PasswordLock';
 import { useAuth } from './contexts/AuthContext';
 
-// Import the custom hook from your SleeperDataContext
 import { SleeperDataProvider, useSleeperData } from './contexts/SleeperDataContext';
 import logger from './utils/logger';
 
-// Define the available tabs and their categories
 const NAV_CATEGORIES = {
     HOME: { label: 'Dashboard', tab: 'dashboard' },
     GAMECENTER: { label: 'Gamecenter', tab: 'gamecenter' },
@@ -37,7 +35,7 @@ const NAV_CATEGORIES = {
         label: 'League Data',
         subTabs: [
             { label: 'League History', tab: 'leagueHistory' },
-            { label: 'Hall of Champions', tab: 'hallOfChampions' }, // New Hall of Champions sub-tab
+            { label: 'Hall of Champions', tab: 'hallOfChampions' },
             { label: 'Keepers', tab: 'keepers' },
             { label: 'Record Book', tab: 'recordBook' },
             { label: 'Head-to-Head', tab: 'headToHead' },
@@ -50,12 +48,10 @@ const NAV_CATEGORIES = {
         tab: 'teamsOverview',
     },
     SEASON_BREAKDOWN: { label: 'Season Breakdown', tab: 'seasonBreakdown' },
-    DRAFT: { label: 'Draft', tab: 'draftAnalysis' }, // New tab for Draft Analysis
+    DRAFT: { label: 'Draft', tab: 'draftAnalysis' },
     FINANCIALS: { label: 'Financials', tab: 'financials' },
-    // Achievements removed - UI simplified
 };
 
-// Flattened list of all possible tabs
 const TABS = {
     HOME: 'dashboard',
     GAMECENTER: 'gamecenter',
@@ -75,19 +71,102 @@ const TABS = {
     DRAFT_ANALYSIS: 'draftAnalysis',
     KEEPERS: 'keepers',
     MEMES_AND_MEMORIES: 'memesAndMemories',
-    // TRADE_CALCULATOR removed
     ACHIEVEMENTS: 'achievements',
+    TRADE_HISTORY: 'tradeHistory',
 };
+
+// ─── Mobile Nav Item Components ──────────────────────────────────────────────
+
+const MobileNavButton = ({ icon, label, onClick, isActive }) => (
+    <button
+        className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-all duration-150 border-b border-white/5 ${
+            isActive
+                ? 'bg-blue-600/20 text-blue-300 border-l-2 border-l-blue-400'
+                : 'text-gray-200 hover:bg-white/5 hover:text-white active:bg-white/10'
+        }`}
+        onClick={onClick}
+    >
+        <span className="text-base w-5 text-center flex-shrink-0">{icon}</span>
+        <span className="text-sm font-medium">{label}</span>
+    </button>
+);
+
+const MobileDropdown = ({ icon, label, isOpen, onToggle, children }) => (
+    <li>
+        <button
+            className="w-full flex items-center gap-3 px-4 py-3 text-left text-gray-200 hover:bg-white/5 hover:text-white active:bg-white/10 transition-all duration-150 border-b border-white/5"
+            onClick={onToggle}
+        >
+            <span className="text-base w-5 text-center flex-shrink-0">{icon}</span>
+            <span className="text-sm font-medium flex-1">{label}</span>
+            <svg
+                className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor"
+            >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+        </button>
+        {isOpen && (
+            <ul className="bg-black/20 border-b border-white/5">
+                {children}
+            </ul>
+        )}
+    </li>
+);
+
+const MobileSubItem = ({ label, onClick }) => (
+    <li>
+        <button
+            className="w-full flex items-center gap-2 pl-12 pr-4 py-2.5 text-left text-gray-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition-all duration-150 text-sm border-b border-white/5 last:border-b-0"
+            onClick={(e) => { e.stopPropagation(); onClick(); }}
+        >
+            <span className="w-1 h-1 rounded-full bg-gray-500 flex-shrink-0" />
+            {label}
+        </button>
+    </li>
+);
+
+// ─── Finisher Badge ───────────────────────────────────────────────────────────
+
+const FinisherBadges = ({ finishers }) => {
+    if (!finishers.length) return null;
+    return (
+        <div className="flex items-center gap-1 sm:gap-2 mt-0.5 flex-wrap">
+            {/* Mobile: 1st only */}
+            <div className="sm:hidden flex items-center gap-1">
+                <span className="text-xs leading-none">{finishers[0].emoji}</span>
+                <span className="text-xs font-medium text-gray-200 truncate max-w-[80px]">
+                    {finishers[0].name}
+                </span>
+            </div>
+            {/* Desktop: all */}
+            <div className="hidden sm:flex items-center gap-2 flex-wrap">
+                {finishers.map((f, i) => (
+                    <div key={i} className="flex items-center gap-1">
+                        <span className="text-xs sm:text-sm">{f.emoji}</span>
+                        <span className="text-xs sm:text-sm font-medium text-gray-200 truncate max-w-[90px] md:max-w-none">
+                            {f.name}
+                        </span>
+                        {i < finishers.length - 1 && (
+                            <span className="text-gray-600 text-xs ml-1">·</span>
+                        )}
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+// ─── AppContent ───────────────────────────────────────────────────────────────
 
 const AppContent = () => {
     const { logout } = useAuth();
-    
-    // Consume data from SleeperDataContext
+
     const {
         loading,
         error,
         historicalData,
-        usersData // Make sure usersData is available here
+        usersData
     } = useSleeperData();
 
     const [activeTab, setActiveTab] = useState(TABS.HOME);
@@ -96,28 +175,20 @@ const AppContent = () => {
     const [showLoadingAlert, setShowLoadingAlert] = useState(false);
     const [selectedTeamName, setSelectedTeamName] = useState('');
     const [navigationHistory, setNavigationHistory] = useState([]);
+    const [loadingSaying, setLoadingSaying] = useState('');
+    const [topFinishers, setTopFinishers] = useState([]);
 
-    // Loading timeout effect
+    // Loading timeout
     useEffect(() => {
         let timeoutId;
         if (loading) {
-            // Show alert after 15 seconds of loading
-            timeoutId = setTimeout(() => {
-                setShowLoadingAlert(true);
-            }, 15000);
+            timeoutId = setTimeout(() => setShowLoadingAlert(true), 15000);
         } else {
-            // Reset alert when not loading
             setShowLoadingAlert(false);
         }
-
-        return () => {
-            if (timeoutId) {
-                clearTimeout(timeoutId);
-            }
-        };
+        return () => { if (timeoutId) clearTimeout(timeoutId); };
     }, [loading]);
 
-    // Pick a random loading saying when loading begins
     useEffect(() => {
         if (loading) {
             const pick = LOADING_SAYINGS[Math.floor(Math.random() * LOADING_SAYINGS.length)];
@@ -127,30 +198,18 @@ const AppContent = () => {
         }
     }, [loading]);
 
-    // Set up browser history handling
+    // Browser history
     useEffect(() => {
-        // Push initial state
-        const initialState = {
-            tab: activeTab,
-            selectedTeamName: selectedTeamName
-        };
+        const initialState = { tab: activeTab, selectedTeamName };
         window.history.replaceState(initialState, '', window.location.pathname);
 
-        // Handle browser back/forward buttons
         const handlePopState = (event) => {
             logger.debug('Pop state event:', event.state);
-            
             if (event.state) {
                 setActiveTab(event.state.tab || TABS.DASHBOARD);
                 setSelectedTeamName(event.state.selectedTeamName || '');
-                
-                // Sync our navigation history with browser history
-                setNavigationHistory(prev => {
-                    // If we're navigating back, remove the last entry
-                    return prev.slice(0, -1);
-                });
+                setNavigationHistory(prev => prev.slice(0, -1));
             } else {
-                // Default state when no history
                 setActiveTab(TABS.DASHBOARD);
                 setSelectedTeamName('');
                 setNavigationHistory([]);
@@ -158,656 +217,384 @@ const AppContent = () => {
         };
 
         window.addEventListener('popstate', handlePopState);
-
-        return () => {
-            window.removeEventListener('popstate', handlePopState);
-        };
+        return () => window.removeEventListener('popstate', handlePopState);
     }, []);
 
-    // Helper function to get user display name from user ID
     const getUserDisplayName = useCallback((userId, usersData) => {
-        if (!userId || !usersData) {
-            return 'Unknown Champion';
-        }
+        if (!userId || !usersData) return 'Unknown Champion';
         const user = usersData.find(u => u.user_id === userId);
         if (user) {
-            // Prioritize team_name from metadata, otherwise use display_name
-            const nameToDisplay = user.metadata?.team_name || user.display_name;
-            return nameToDisplay;
-        } else {
-            return 'Unknown Champion';
+            return user.metadata?.team_name || user.display_name;
         }
-    }, [usersData]); // Memoize this function, re-create only if usersData changes
+        return 'Unknown Champion';
+    }, [usersData]);
 
-    // State to hold the top 3 finishers
-    const [topFinishers, setTopFinishers] = useState([]); // Changed to array for top 3
-
-    // loading saying selected from external data file
-    const [loadingSaying, setLoadingSaying] = useState('');
-
-    // Update document title to reflect current page
-    const pageTitleForTab = (tab) => {
-        switch (tab) {
-            case TABS.HOME:
-                return 'Dashboard';
-            case TABS.GAMECENTER:
-                return 'Gamecenter';
-            case TABS.SPORTSBOOK:
-                return 'Sportsbook';
-            case TABS.LEAGUE_HISTORY:
-                return 'League History';
-            case TABS.HALL_OF_CHAMPIONS:
-                return 'Hall of Champions';
-            case TABS.RECORD_BOOK:
-                return 'Record Book';
-            case TABS.HEAD_TO_HEAD:
-                return 'Head-to-Head';
-            case TABS.DPR_ANALYSIS:
-                return 'DPR Analysis';
-            case TABS.LUCK_RATING:
-                return 'Luck Rating';
-            case TABS.TEAMS_OVERVIEW:
-                return selectedTeamName ? `${selectedTeamName}` : 'Teams';
-            case TABS.FINANCIALS:
-                return 'Financials';
-            case TABS.SEASON_BREAKDOWN:
-                return 'Season Breakdown';
-            case TABS.DRAFT_ANALYSIS:
-                return 'Draft Analysis';
-            case TABS.MEMES_AND_MEMORIES:
-                return 'Memes & Memories';
-            case TABS.ACHIEVEMENTS:
-                return 'Achievements';
-            default:
-                return 'Dashboard';
-        }
-    };
-
+    // Top finishers effect
     useEffect(() => {
-        const pageName = pageTitleForTab(activeTab);
-        document.title = `TLOED - ${pageName}`;
-    }, [activeTab, selectedTeamName]);
-
-    // Effect to determine the top 3 finishers once historicalData and usersData are loaded
-    useEffect(() => {
-        // Access rostersBySeason from historicalData
         const rostersBySeason = historicalData?.rostersBySeason;
-
-        // Check if all necessary top-level data objects are available
         const isDataReady = !loading && !error && historicalData && usersData && rostersBySeason;
+        if (!isDataReady) return;
 
-        if (isDataReady) {
-            // Further check if the specific summary objects within historicalData are present
-            const hasSummaryData = historicalData.seasonAwardsSummary || historicalData.awardsSummary || historicalData.winnersBracketBySeason;
+        const hasSummaryData = historicalData.seasonAwardsSummary || historicalData.awardsSummary || historicalData.winnersBracketBySeason;
+        if (!hasSummaryData) return;
 
-            if (hasSummaryData) {
-                let finishers = []; // Array to hold top 3 finishers
-                let foundFinishers = false;
+        let finishers = [];
+        let foundFinishers = false;
 
-                // Get all years from all relevant sources, sort them descending
-                const allYears = new Set();
-                if (historicalData.seasonAwardsSummary) {
-                    Object.keys(historicalData.seasonAwardsSummary).forEach(year => allYears.add(Number(year)));
-                }
-                if (historicalData.awardsSummary) {
-                    Object.keys(historicalData.awardsSummary).forEach(year => allYears.add(Number(year)));
-                }
-                if (historicalData.winnersBracketBySeason) {
-                    Object.keys(historicalData.winnersBracketBySeason).forEach(year => allYears.add(Number(year)));
-                }
-                const sortedYears = Array.from(allYears).sort((a, b) => b - a);
+        const allYears = new Set();
+        if (historicalData.seasonAwardsSummary) Object.keys(historicalData.seasonAwardsSummary).forEach(y => allYears.add(Number(y)));
+        if (historicalData.awardsSummary) Object.keys(historicalData.awardsSummary).forEach(y => allYears.add(Number(y)));
+        if (historicalData.winnersBracketBySeason) Object.keys(historicalData.winnersBracketBySeason).forEach(y => allYears.add(Number(y)));
+        const sortedYears = Array.from(allYears).sort((a, b) => b - a);
 
-                for (const year of sortedYears) {
-                    // Try to get top 3 finishers from winnersBracketBySeason
-                    if (historicalData.winnersBracketBySeason && historicalData.winnersBracketBySeason[year]) {
-                        const bracket = historicalData.winnersBracketBySeason[year];
-                        
-                        // Find championship game (p: 1)
-                        const championshipGame = bracket.find(matchup => matchup.p === 1 && matchup.w);
-                        // Find 3rd place game - try different position values
-                        let thirdPlaceGame = bracket.find(matchup => matchup.p === 2 && matchup.w);
-                        if (!thirdPlaceGame) {
-                            // Sometimes 3rd place game might have different position value
-                            thirdPlaceGame = bracket.find(matchup => matchup.p === 3 && matchup.w);
-                        }
-                        if (!thirdPlaceGame) {
-                            // Look for any game that might be 3rd place by checking for consolation bracket
-                            thirdPlaceGame = bracket.find(matchup => matchup.w && matchup.p > 1 && matchup.p <= 3);
-                        }
-                        
-                        if (championshipGame && rostersBySeason[year]) {
-                            const getTeamName = (rosterId) => {
-                                const roster = rostersBySeason[year].find(r => String(r.roster_id) === String(rosterId));
-                                if (roster && roster.owner_id) {
-                                    return getUserDisplayName(roster.owner_id, usersData);
-                                }
-                                return null;
-                            };
+        for (const year of sortedYears) {
+            if (historicalData.winnersBracketBySeason?.[year]) {
+                const bracket = historicalData.winnersBracketBySeason[year];
+                const championshipGame = bracket.find(m => m.p === 1 && m.w);
+                let thirdPlaceGame = bracket.find(m => m.p === 2 && m.w)
+                    || bracket.find(m => m.p === 3 && m.w)
+                    || bracket.find(m => m.w && m.p > 1 && m.p <= 3);
 
-                            // 1st place - winner of championship
-                            const firstPlace = getTeamName(championshipGame.w);
-                            // 2nd place - loser of championship
-                            const secondPlace = getTeamName(championshipGame.l);
-                            // 3rd place - winner of 3rd place game (if exists)
-                            const thirdPlace = thirdPlaceGame ? getTeamName(thirdPlaceGame.w) : null;
+                if (championshipGame && rostersBySeason[year]) {
+                    const getTeamName = (rosterId) => {
+                        const roster = rostersBySeason[year].find(r => String(r.roster_id) === String(rosterId));
+                        return roster?.owner_id ? getUserDisplayName(roster.owner_id, usersData) : null;
+                    };
 
-                            if (firstPlace) {
-                                finishers = [
-                                    { place: 1, name: firstPlace, emoji: '🥇' },
-                                    ...(secondPlace ? [{ place: 2, name: secondPlace, emoji: '🥈' }] : []),
-                                    ...(thirdPlace ? [{ place: 3, name: thirdPlace, emoji: '🥉' }] : [])
-                                ];
-                                foundFinishers = true;
-                                break;
-                            }
-                        }
-                    }
+                    const firstPlace = getTeamName(championshipGame.w);
+                    const secondPlace = getTeamName(championshipGame.l);
+                    const thirdPlace = thirdPlaceGame ? getTeamName(thirdPlaceGame.w) : null;
 
-                    // Fallback to just champion if bracket data not available
-                    if (!foundFinishers) {
-                        let potentialChampionValue = '';
-
-                        // Check seasonAwardsSummary
-                        if (historicalData.seasonAwardsSummary && historicalData.seasonAwardsSummary[year]) {
-                            const summary = historicalData.seasonAwardsSummary[year];
-                            if (summary.champion && summary.champion !== 'N/A' && summary.champion.trim() !== '') {
-                                potentialChampionValue = summary.champion.trim();
-                            }
-                        }
-
-                        // Check awardsSummary if not found
-                        if (!potentialChampionValue && historicalData.awardsSummary && historicalData.awardsSummary[year]) {
-                            const summary = historicalData.awardsSummary[year];
-                            const champKey = summary.champion || summary["Champion"];
-                            if (champKey && champKey !== 'N/A' && String(champKey).trim() !== '') {
-                                potentialChampionValue = String(champKey).trim();
-                            }
-                        }
-
-                        if (potentialChampionValue) {
-                            const resolvedName = getUserDisplayName(potentialChampionValue, usersData);
-                            const championName = resolvedName !== 'Unknown Champion' ? resolvedName : potentialChampionValue;
-                            
-                            finishers = [{ place: 1, name: championName, emoji: '🥇' }];
-                            foundFinishers = true;
-                            break;
-                        }
+                    if (firstPlace) {
+                        finishers = [
+                            { place: 1, name: firstPlace, emoji: '🥇' },
+                            ...(secondPlace ? [{ place: 2, name: secondPlace, emoji: '🥈' }] : []),
+                            ...(thirdPlace ? [{ place: 3, name: thirdPlace, emoji: '🥉' }] : [])
+                        ];
+                        foundFinishers = true;
+                        break;
                     }
                 }
+            }
 
-                setTopFinishers(finishers);
+            if (!foundFinishers) {
+                let potentialChampionValue = '';
+
+                if (historicalData.seasonAwardsSummary?.[year]) {
+                    const s = historicalData.seasonAwardsSummary[year];
+                    if (s.champion && s.champion !== 'N/A' && s.champion.trim() !== '') {
+                        potentialChampionValue = s.champion.trim();
+                    }
+                }
+                if (!potentialChampionValue && historicalData.awardsSummary?.[year]) {
+                    const s = historicalData.awardsSummary[year];
+                    const champKey = s.champion || s["Champion"];
+                    if (champKey && champKey !== 'N/A' && String(champKey).trim() !== '') {
+                        potentialChampionValue = String(champKey).trim();
+                    }
+                }
+                if (potentialChampionValue) {
+                    const resolved = getUserDisplayName(potentialChampionValue, usersData);
+                    const championName = resolved !== 'Unknown Champion' ? resolved : potentialChampionValue;
+                    finishers = [{ place: 1, name: championName, emoji: '🥇' }];
+                    foundFinishers = true;
+                    break;
+                }
             }
         }
+
+        setTopFinishers(finishers);
     }, [loading, error, historicalData, usersData, getUserDisplayName]);
 
+    // Page title
+    useEffect(() => {
+        const titles = {
+            [TABS.HOME]: 'Dashboard', [TABS.GAMECENTER]: 'Gamecenter',
+            [TABS.SPORTSBOOK]: 'Sportsbook', [TABS.LEAGUE_HISTORY]: 'League History',
+            [TABS.HALL_OF_CHAMPIONS]: 'Hall of Champions', [TABS.RECORD_BOOK]: 'Record Book',
+            [TABS.HEAD_TO_HEAD]: 'Head-to-Head', [TABS.DPR_ANALYSIS]: 'DPR Analysis',
+            [TABS.LUCK_RATING]: 'Luck Rating',
+            [TABS.TEAMS_OVERVIEW]: selectedTeamName || 'Teams',
+            [TABS.FINANCIALS]: 'Financials', [TABS.SEASON_BREAKDOWN]: 'Season Breakdown',
+            [TABS.DRAFT_ANALYSIS]: 'Draft Analysis', [TABS.MEMES_AND_MEMORIES]: 'Memes & Memories',
+            [TABS.ACHIEVEMENTS]: 'Achievements', [TABS.TRADE_HISTORY]: 'Trade History',
+        };
+        document.title = `TLOED - ${titles[activeTab] || 'Dashboard'}`;
+    }, [activeTab, selectedTeamName]);
 
-    // Placeholder functions for UI interactions
+    // Navigation handlers
     const handleTabClick = (tab) => {
         setActiveTab(tab);
-        setIsMobileMenuOpen(false); // Close mobile menu on tab click
-        setOpenSubMenu(null); // Close any open sub-menus
+        setIsMobileMenuOpen(false);
+        setOpenSubMenu(null);
     };
 
-    // Simplified handleSubTabClick - teamName is no longer passed from main nav
     const handleSubTabClick = (tab) => {
         setActiveTab(tab);
-        setIsMobileMenuOpen(false); // Close mobile menu on sub-tab click
-        setOpenSubMenu(null); // Close any open sub-menus
+        setIsMobileMenuOpen(false);
+        setOpenSubMenu(null);
     };
 
-    const toggleMobileMenu = () => {
-        setIsMobileMenuOpen(!isMobileMenuOpen);
-    };
-
-    const toggleSubMenu = (category) => {
-        setOpenSubMenu(openSubMenu === category ? null : category);
-    };
-
-    const handleRefresh = () => {
-        window.location.reload();
-    };
+    const toggleMobileMenu = () => setIsMobileMenuOpen(prev => !prev);
+    const toggleSubMenu = (category) => setOpenSubMenu(prev => prev === category ? null : category);
+    const handleRefresh = () => window.location.reload();
 
     const handleTeamNameClick = (teamName) => {
-        // Push current state to browser history
-        const currentState = {
-            tab: activeTab,
-            selectedTeamName: selectedTeamName
-        };
+        const currentState = { tab: activeTab, selectedTeamName };
         window.history.pushState(currentState, '', window.location.pathname);
-        
-        // Track navigation for our custom back button
         setNavigationHistory(prev => [...prev, { tab: activeTab, teamName: selectedTeamName }]);
-        
-        // Navigate to team detail
         setSelectedTeamName(teamName);
         setActiveTab(TABS.TEAMS_OVERVIEW);
         setIsMobileMenuOpen(false);
         setOpenSubMenu(null);
-        
-        // Push new state to browser history
-        const newState = {
-            tab: TABS.TEAMS_OVERVIEW,
-            selectedTeamName: teamName
-        };
-        window.history.pushState(newState, '', window.location.pathname);
+        window.history.pushState({ tab: TABS.TEAMS_OVERVIEW, selectedTeamName: teamName }, '', window.location.pathname);
     };
 
     const handleGoBack = () => {
-        // Use browser's back functionality
         window.history.back();
-        // Also update our navigation history
-        if (navigationHistory.length > 0) {
-            setNavigationHistory(prev => prev.slice(0, -1));
-        }
+        if (navigationHistory.length > 0) setNavigationHistory(prev => prev.slice(0, -1));
     };
 
     const renderContent = () => {
-        // Use the loading and error states from SleeperDataContext
         if (loading) {
             return (
-                <div className="flex items-center justify-center min-h-screen bg-gray-100 font-inter">
-                    <div className="text-center p-6 bg-gray-800 rounded-lg shadow-md max-w-md w-full mx-4">
-                        <div className="mb-6">
-                            <img
-                                src={process.env.PUBLIC_URL + '/LeagueLogoNoBack.PNG'}
-                                alt="League Logo"
-                                className="h-16 w-16 mx-auto mb-4 object-contain"
-                            />
-                            <p className="text-lg font-semibold text-white mb-2">Loading Sleeper fantasy data...</p>
-                        </div>
-                        
-                        {/* Progress Bar */}
-                        <div className="w-full bg-gray-600 rounded-full h-3 mb-4 overflow-hidden">
-                            <div className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full animate-progress shadow-sm"></div>
-                        </div>
-                        
-                        {/* Removed extra explanatory text to keep the loading screen clean. */}
-
+                <div className="flex items-center justify-center min-h-screen bg-gray-950">
+                    <div className="text-center p-8 bg-gray-900 border border-white/10 rounded-2xl shadow-2xl max-w-sm w-full mx-4">
+                        <img
+                            src={process.env.PUBLIC_URL + '/LeagueLogoNoBack.PNG'}
+                            alt="League Logo"
+                            className="h-16 w-16 mx-auto mb-5 object-contain opacity-90"
+                        />
+                        <p className="text-base font-semibold text-white mb-1">Loading Sleeper data…</p>
                         {loadingSaying && (
-                            <div className="text-sm text-gray-200 italic mb-4">{loadingSaying}</div>
+                            <p className="text-xs text-gray-400 italic mb-5">{loadingSaying}</p>
                         )}
-
-                        {/* Loading timeout alert */}
+                        <div className="w-full bg-gray-800 rounded-full h-1.5 mb-4 overflow-hidden">
+                            <div className="bg-gradient-to-r from-blue-500 to-indigo-500 h-1.5 rounded-full animate-progress" />
+                        </div>
                         {showLoadingAlert && (
-                            <div className="bg-yellow-600 text-yellow-100 p-4 rounded-lg border border-yellow-500 mb-4">
-                                <div className="flex items-center mb-2">
-                                    <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                                    </svg>
-                                    <span className="font-semibold">Taking longer than usual?</span>
-                                </div>
-                                <p className="text-sm mb-3">
-                                    If the app seems stuck loading, try refreshing the page. The Sleeper API might be experiencing delays.
+                            <div className="bg-amber-900/40 border border-amber-500/40 text-amber-200 p-4 rounded-xl mt-4 text-left">
+                                <p className="font-semibold text-sm mb-1">Taking longer than usual?</p>
+                                <p className="text-xs text-amber-300/80 mb-3">
+                                    The Sleeper API may be slow. Try refreshing the page.
                                 </p>
                                 <button
                                     onClick={handleRefresh}
-                                    className="bg-yellow-500 hover:bg-yellow-400 text-yellow-900 px-4 py-2 rounded font-medium text-sm transition-colors duration-200"
+                                    className="bg-amber-500 hover:bg-amber-400 text-amber-950 px-4 py-1.5 rounded-lg font-semibold text-xs transition-colors"
                                 >
-                                    Refresh Page
+                                    Refresh
                                 </button>
                             </div>
                         )}
                     </div>
-                    
                     <style>{`
                         @keyframes progress {
-                            0% {
-                                width: 0%;
-                                transform: translateX(-100%);
-                            }
-                            50% {
-                                width: 100%;
-                                transform: translateX(0%);
-                            }
-                            100% {
-                                width: 100%;
-                                transform: translateX(100%);
-                            }
+                            0% { width: 0%; transform: translateX(-100%); }
+                            50% { width: 100%; transform: translateX(0%); }
+                            100% { width: 100%; transform: translateX(100%); }
                         }
-                        .animate-progress {
-                            animation: progress 2s ease-in-out infinite;
-                        }
+                        .animate-progress { animation: progress 2s ease-in-out infinite; }
                     `}</style>
                 </div>
             );
         }
+
         if (error) {
             return (
-                <div className="flex items-center justify-center min-h-screen bg-gray-100 font-inter">
-                    <div className="text-center p-6 bg-red-100 border border-red-400 text-red-700 rounded-lg shadow-md">
-                        <p className="font-bold text-xl mb-2">Error Loading Data</p>
-                        <p className="text-base">Failed to load historical data: {error.message || String(error)}</p>
-                        <p className="text-sm mt-2">Please check your internet connection or the Sleeper API configuration in `config.js` and `sleeperApi.js`.</p>
+                <div className="flex items-center justify-center min-h-screen bg-gray-950">
+                    <div className="text-center p-6 bg-red-950/60 border border-red-500/30 text-red-300 rounded-2xl shadow-xl max-w-sm mx-4">
+                        <p className="font-bold text-lg mb-2">Error Loading Data</p>
+                        <p className="text-sm text-red-400">{error.message || String(error)}</p>
+                        <p className="text-xs mt-2 text-red-500/70">Check your connection or Sleeper API config.</p>
                     </div>
                 </div>
             );
         }
 
-        // Flatten historical matchups from the object structure to a single array
-        // This is kept here because other components (RecordBook, Head2HeadGrid) still need it
-        const allMatchups = historicalData && historicalData.matchupsBySeason
+        const allMatchups = historicalData?.matchupsBySeason
             ? Object.values(historicalData.matchupsBySeason).flat()
             : [];
 
-        // Render components based on activeTab, passing necessary data from context
         switch (activeTab) {
-            case TABS.DASHBOARD:
-                return <Dashboard />;
-            case TABS.GAMECENTER:
-                return <Gamecenter />;
-            case TABS.SPORTSBOOK:
-                return <Sportsbook />;
-            case TABS.LEAGUE_HISTORY:
-                return <LeagueHistory />;
-            case TABS.HALL_OF_CHAMPIONS: // New case for Hall of Champions
-                return <HallOfChampions />;
-            case TABS.RECORD_BOOK:
-                return <RecordBook historicalMatchups={allMatchups} />;
-            case TABS.HEAD_TO_HEAD:
-                return <Head2HeadGrid historicalMatchups={allMatchups} getDisplayTeamName={getUserDisplayName} />;
-            case TABS.DPR_ANALYSIS:
-                return <DPRAnalysis />;
-            case TABS.LUCK_RATING:
-                return <LuckRatingAnalysis />;
-            case TABS.KEEPERS:
-                return <KeeperList />;
-            case TABS.TEAMS_OVERVIEW:
-                return <TeamsOverviewPage selectedTeamName={selectedTeamName} />;
-            case TABS.FINANCIALS:
-                return <FinancialTracker />;
-            case TABS.SEASON_BREAKDOWN:
-                return <SeasonBreakdown />;
-            case TABS.DRAFT_ANALYSIS: // New case for Draft Analysis
-                return <DraftAnalysis />;
+            case TABS.HOME: return <Dashboard />;
+            case TABS.GAMECENTER: return <Gamecenter />;
+            case TABS.SPORTSBOOK: return <Sportsbook />;
+            case TABS.LEAGUE_HISTORY: return <LeagueHistory />;
+            case TABS.HALL_OF_CHAMPIONS: return <HallOfChampions />;
+            case TABS.RECORD_BOOK: return <RecordBook historicalMatchups={allMatchups} />;
+            case TABS.HEAD_TO_HEAD: return <Head2HeadGrid historicalMatchups={allMatchups} getDisplayTeamName={getUserDisplayName} />;
+            case TABS.DPR_ANALYSIS: return <DPRAnalysis />;
+            case TABS.LUCK_RATING: return <LuckRatingAnalysis />;
+            case TABS.KEEPERS: return <KeeperList />;
+            case TABS.TEAMS_OVERVIEW: return <TeamsOverviewPage selectedTeamName={selectedTeamName} />;
+            case TABS.FINANCIALS: return <FinancialTracker />;
+            case TABS.SEASON_BREAKDOWN: return <SeasonBreakdown />;
+            case TABS.DRAFT_ANALYSIS: return <DraftAnalysis />;
             case TABS.MEMES_AND_MEMORIES:
                 return (
-                    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><p>Loading gallery...</p></div>}>
+                    <Suspense fallback={<div className="flex items-center justify-center min-h-screen text-gray-400"><p>Loading gallery…</p></div>}>
                         <MemesAndMemories />
                     </Suspense>
                 );
-            case TABS.ACHIEVEMENTS:
-                // Achievements UI removed; redirect to dashboard
-                return <Dashboard />;
-            default:
-                return <Dashboard />;
+            case TABS.ACHIEVEMENTS: return <Dashboard />;
+            case TABS.TRADE_HISTORY: return <MostTradedPlayers />;
+            default: return <Dashboard />;
         }
     };
 
     return (
-        <div className="min-h-screen bg-gray-100 flex flex-col font-inter overflow-x-hidden">
-            {/* Header - Mobile Optimized */}
-            <header className="bg-gray-800 text-white shadow-md safe-area-top relative">
-                <div className="flex items-center justify-between px-4 py-1 md:px-6 md:py-2 max-w-6xl w-full mx-auto gap-2">
-                    {/* Logo and Title Section */}
-                    <div className="flex items-center flex-1 min-w-0 gap-2">
+        <div className="min-h-screen bg-gray-900 flex flex-col font-inter overflow-x-hidden">
+
+            {/* ── Header ─────────────────────────────────────────────── */}
+            <header className="bg-gray-900 border-b border-white/10 text-white shadow-xl safe-area-top">
+                <div className="flex items-center justify-between px-3 py-1.5 md:px-6 md:py-2 max-w-6xl w-full mx-auto gap-3">
+
+                    {/* Logo + Title */}
+                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
                         <button
                             onClick={() => {
-                                // Navigate to dashboard and push state so back/forward works
                                 setActiveTab(TABS.HOME);
                                 setSelectedTeamName('');
                                 setNavigationHistory([]);
-                                const newState = { tab: TABS.HOME, selectedTeamName: '' };
                                 try {
-                                    window.history.pushState(newState, '', window.location.pathname);
-                                } catch (e) {
-                                    // ignore pushState failures in some environments
-                                }
+                                    window.history.pushState({ tab: TABS.HOME, selectedTeamName: '' }, '', window.location.pathname);
+                                } catch (e) {}
                             }}
                             aria-label="Go to dashboard"
-                            title="Go to dashboard"
-                            className="p-0 bg-transparent border-0 flex-shrink-0"
+                            className="p-0 bg-transparent border-0 flex-shrink-0 rounded-xl overflow-hidden hover:opacity-80 transition-opacity"
                         >
                             <img
                                 src={process.env.PUBLIC_URL + '/LeagueLogoNoBack.PNG'}
                                 alt="League Logo"
-                                className="h-16 w-16 md:h-24 md:w-24 object-contain flex-shrink-0 transition-all duration-200"
+                                className="h-14 w-14 md:h-20 md:w-20 object-contain"
                             />
                         </button>
+
                         <div className="flex flex-col min-w-0 flex-1">
-                            <h1 className="text-sm sm:text-lg md:text-2xl font-bold truncate">
-                                <span className="sm:hidden">TLOED</span>
-                                <span className="hidden sm:inline">The League of Extraordinary Douchebags</span>
+                            <h1 className="font-bold leading-tight tracking-tight">
+                                <span className="sm:hidden text-sm text-white">TLOED</span>
+                                <span className="hidden sm:inline text-base md:text-xl text-white">
+                                    The League of Extraordinary Douchebags
+                                </span>
                             </h1>
-                            {/* Champion - Show only on mobile, all finishers on desktop */}
-                            {topFinishers.length > 0 && (
-                                <div className="flex items-center gap-0.5 sm:gap-2 mt-0.5">
-                                    {/* Mobile: Show only 1st place */}
-                                    <div className="sm:hidden flex items-center gap-0.5 whitespace-nowrap" title="Champion">
-                                        <span className="text-xs">{topFinishers[0].emoji}</span>
-                                        <span className="font-medium text-white text-xs truncate max-w-20">
-                                            {topFinishers[0].name}
-                                        </span>
-                                    </div>
-                                    
-                                    {/* Desktop: Show all finishers */}
-                                    <div className="hidden sm:flex items-center gap-0.5 sm:gap-2 overflow-x-auto">
-                                        {topFinishers.map((finisher, index) => (
-                                            <div key={index} className="flex items-center gap-0.5 whitespace-nowrap" title={`${finisher.place === 1 ? 'Champion' : finisher.place === 2 ? 'Runner-up' : '3rd Place'}`}>
-                                                <span className="text-xs sm:text-sm md:text-base">{finisher.emoji}</span>
-                                                <span className="font-medium text-white text-xs sm:text-sm md:text-base max-w-16 sm:max-w-24 md:max-w-none truncate">
-                                                    {finisher.name}
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
+                            <FinisherBadges finishers={topFinishers} />
                         </div>
                     </div>
 
-                    {/* Right Controls Section - Back, Menu, Logout */}
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                        {/* Back Button */}
+                    {/* Right controls */}
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
                         {navigationHistory.length > 0 && (
-                            <button 
-                                className="text-white text-xl touch-friendly flex items-center justify-center hover:text-gray-300" 
+                            <button
+                                className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
                                 onClick={handleGoBack}
-                                aria-label="Go back to previous page"
+                                aria-label="Go back"
                                 title="Go back"
                             >
-                                ←
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                                </svg>
                             </button>
                         )}
-                        
-                        {/* Mobile Menu Button */}
-                        <button 
-                            className="md:hidden text-white text-xl touch-friendly flex items-center justify-center p-1" 
-                            onClick={toggleMobileMenu} 
-                            aria-label={isMobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+
+                        {/* Hamburger – mobile only */}
+                        <button
+                            className="md:hidden flex items-center justify-center w-9 h-9 rounded-lg text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
+                            onClick={toggleMobileMenu}
+                            aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'}
                         >
-                            {isMobileMenuOpen ? '✕' : '☰'}
+                            {isMobileMenuOpen ? (
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            ) : (
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                                </svg>
+                            )}
                         </button>
-                        
-                        {/* Logout Button */}
+
                         {logout && (
-                            <button 
+                            <button
                                 onClick={logout}
-                                className="px-2 md:px-3 py-1 bg-red-600 text-white rounded text-[10px] md:text-sm hover:bg-red-700 active:bg-red-800 transition-colors touch-friendly flex-shrink-0"
+                                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-red-600/80 hover:bg-red-600 active:bg-red-700 text-white rounded-lg text-xs font-medium transition-colors border border-red-500/30"
                                 title="Logout"
                             >
                                 <span className="hidden md:inline">Logout</span>
-                                <span className="md:hidden">⎋</span>
+                                <svg className="w-3.5 h-3.5 md:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h6a2 2 0 012 2v1" />
+                                </svg>
                             </button>
                         )}
                     </div>
                 </div>
             </header>
 
-            {/* Navigation - Mobile Optimized */}
-            <nav className={`bg-gray-700 text-white shadow-lg transition-all duration-300 md:block relative z-50 ${
-                isMobileMenuOpen ? 'block max-h-screen' : 'hidden max-h-0'
-            } md:max-h-none`}>
+            {/* ── Navigation ──────────────────────────────────────────── */}
+            <nav className={`bg-gray-800 border-b border-white/10 text-white shadow-md transition-all duration-300 md:block relative z-50 ${
+                isMobileMenuOpen ? 'block' : 'hidden'
+            }`}>
                 <div className="max-w-6xl w-full mx-auto">
-                    {/* Mobile Navigation */}
-                    <ul className="md:hidden flex flex-col">
-                        {/* Dashboard */}
+
+                    {/* Mobile nav */}
+                    <ul className="md:hidden flex flex-col py-1">
                         <li>
-                            <button 
-                                className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600"
+                            <MobileNavButton
+                                icon="🏠"
+                                label="Dashboard"
                                 onClick={() => handleTabClick(NAV_CATEGORIES.HOME.tab)}
-                            >
-                                <span className="text-base font-medium">🏠 {NAV_CATEGORIES.HOME.label}</span>
-                            </button>
+                                isActive={activeTab === NAV_CATEGORIES.HOME.tab}
+                            />
                         </li>
-                        {/* Games Dropdown */}
+
+                        <MobileDropdown
+                            icon="🎮"
+                            label="Games"
+                            isOpen={openSubMenu === 'games'}
+                            onToggle={() => toggleSubMenu('games')}
+                        >
+                            <MobileSubItem label="Gamecenter" onClick={() => handleTabClick(NAV_CATEGORIES.GAMECENTER.tab)} />
+                            <MobileSubItem label="Sportsbook" onClick={() => handleTabClick(NAV_CATEGORIES.SPORTSBOOK.tab)} />
+                            <MobileSubItem label="Head-to-Head" onClick={() => handleTabClick(NAV_CATEGORIES.HEAD_TO_HEAD.tab)} />
+                        </MobileDropdown>
+
+                        <MobileDropdown
+                            icon="🏆"
+                            label="League"
+                            isOpen={openSubMenu === 'league'}
+                            onToggle={() => toggleSubMenu('league')}
+                        >
+                            <MobileSubItem label="Hall of Champions" onClick={() => handleTabClick('hallOfChampions')} />
+                            <MobileSubItem label="Keepers" onClick={() => handleTabClick('keepers')} />
+                            <MobileSubItem label="League History" onClick={() => handleTabClick('leagueHistory')} />
+                            <MobileSubItem label="Record Book" onClick={() => handleTabClick('recordBook')} />
+                            <MobileSubItem label="Season Breakdown" onClick={() => handleTabClick('seasonBreakdown')} />
+                            <MobileSubItem label="Finances" onClick={() => handleTabClick('financials')} />
+                            <MobileSubItem label="Memes & Memories" onClick={() => handleTabClick('memesAndMemories')} />
+                        </MobileDropdown>
+
                         <li>
-                            <button 
-                                className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600 flex items-center justify-between"
-                                onClick={() => toggleSubMenu('games')}
-                            >
-                                <span className="text-base font-medium">🎮 Games</span>
-                                <span className={`transform transition-transform duration-200 ${openSubMenu === 'games' ? 'rotate-180' : ''}`}>▼</span>
-                            </button>
-                            {openSubMenu === 'games' && (
-                                <ul className="bg-gray-600">
-                                    <li>
-                                        <button 
-                                            className="w-full px-8 py-3 text-left hover:bg-gray-500 active:bg-gray-400 touch-friendly text-sm border-b border-gray-500 last:border-b-0"
-                                            onClick={(e) => { e.stopPropagation(); handleTabClick(NAV_CATEGORIES.GAMECENTER.tab); }}
-                                        >
-                                            {NAV_CATEGORIES.GAMECENTER.label}
-                                        </button>
-                                    </li>
-                                    <li>
-                                        <button 
-                                            className="w-full px-8 py-3 text-left hover:bg-gray-500 active:bg-gray-400 touch-friendly text-sm border-b border-gray-500 last:border-b-0"
-                                            onClick={(e) => { e.stopPropagation(); handleTabClick(NAV_CATEGORIES.SPORTSBOOK.tab); }}
-                                        >
-                                            {NAV_CATEGORIES.SPORTSBOOK.label}
-                                        </button>
-                                    </li>
-                                    <li>
-                                        <button
-                                            className="w-full px-8 py-3 text-left hover:bg-gray-500 active:bg-gray-400 touch-friendly text-sm border-b border-gray-500 last:border-b-0"
-                                            onClick={(e) => { e.stopPropagation(); handleTabClick(NAV_CATEGORIES.HEAD_TO_HEAD.tab); }}
-                                        >
-                                            {NAV_CATEGORIES.HEAD_TO_HEAD.label}
-                                        </button>
-                                    </li>
-                                </ul>
-                            )}
-                        </li>
-                        {/* League Dropdown (with Season Breakdown & Financials) */}
-                        <li>
-                            <button 
-                                className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600 flex items-center justify-between"
-                                onClick={() => toggleSubMenu('league')}
-                            >
-                                <span className="text-base font-medium">🏆 League</span>
-                                <span className={`transform transition-transform duration-200 ${openSubMenu === 'league' ? 'rotate-180' : ''}`}>▼</span>
-                            </button>
-                            {openSubMenu === 'league' && (
-                                <ul className="bg-gray-600">
-                                    <li>
-                                        <button 
-                                            className="w-full px-8 py-3 text-left hover:bg-gray-500 active:bg-gray-400 touch-friendly text-sm border-b border-gray-500 last:border-b-0"
-                                            onClick={(e) => { e.stopPropagation(); handleTabClick('hallOfChampions'); }}
-                                        >
-                                            Hall of Champions
-                                        </button>
-                                    </li>
-                                    <li>
-                                        <button 
-                                            className="w-full px-8 py-3 text-left hover:bg-gray-500 active:bg-gray-400 touch-friendly text-sm border-b border-gray-500 last:border-b-0"
-                                            onClick={(e) => { e.stopPropagation(); handleTabClick('keepers'); }}
-                                        >
-                                            Keepers
-                                        </button>
-                                    </li>
-                                    <li>
-                                        <button 
-                                            className="w-full px-8 py-3 text-left hover:bg-gray-500 active:bg-gray-400 touch-friendly text-sm border-b border-gray-500 last:border-b-0"
-                                            onClick={(e) => { e.stopPropagation(); handleTabClick('leagueHistory'); }}
-                                        >
-                                            League History
-                                        </button>
-                                    </li>
-                                    <li>
-                                        <button 
-                                            className="w-full px-8 py-3 text-left hover:bg-gray-500 active:bg-gray-400 touch-friendly text-sm border-b border-gray-500 last:border-b-0"
-                                            onClick={(e) => { e.stopPropagation(); handleTabClick('recordBook'); }}
-                                        >
-                                            Record Book
-                                        </button>
-                                    </li>
-                                    <li>
-                                        <button 
-                                            className="w-full px-8 py-3 text-left hover:bg-gray-500 active:bg-gray-400 touch-friendly text-sm border-b border-gray-500 last:border-b-0"
-                                            onClick={(e) => { e.stopPropagation(); handleTabClick('seasonBreakdown'); }}
-                                        >
-                                            Season Breakdown
-                                        </button>
-                                    </li>
-                                    <li>
-                                        <button 
-                                            className="w-full px-8 py-3 text-left hover:bg-gray-500 active:bg-gray-400 touch-friendly text-sm border-b border-gray-500 last:border-b-0"
-                                            onClick={(e) => { e.stopPropagation(); handleTabClick('financials'); }}
-                                        >
-                                            Finances
-                                        </button>
-                                    </li>
-                                    <li>
-                                        <button 
-                                            className="w-full px-8 py-3 text-left hover:bg-gray-500 active:bg-gray-400 touch-friendly text-sm border-b border-gray-500 last:border-b-0"
-                                            onClick={(e) => { e.stopPropagation(); handleTabClick('memesAndMemories'); }}
-                                        >
-                                            Memes & Memories
-                                        </button>
-                                    </li>
-                                </ul>
-                            )}
-                        </li>
-                        {/* Achievements removed */}
-                        {/* Teams */}
-                        <li>
-                            <button 
-                                className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600"
+                            <MobileNavButton
+                                icon="👥"
+                                label="Teams"
                                 onClick={() => handleTabClick(NAV_CATEGORIES.TEAMS.tab)}
-                            >
-                                <span className="text-base font-medium">👥 {NAV_CATEGORIES.TEAMS.label}</span>
-                            </button>
+                                isActive={activeTab === NAV_CATEGORIES.TEAMS.tab}
+                            />
                         </li>
-                        {/* Analysis Dropdown */}
-                        <li>
-                            <button 
-                                className="w-full px-4 py-3 text-left hover:bg-gray-600 active:bg-gray-500 touch-friendly border-b border-gray-600 flex items-center justify-between"
-                                onClick={() => toggleSubMenu('analysis')}
-                            >
-                                <span className="text-base font-medium">📊 Analysis</span>
-                                <span className={`transform transition-transform duration-200 ${openSubMenu === 'analysis' ? 'rotate-180' : ''}`}>▼</span>
-                            </button>
-                            {openSubMenu === 'analysis' && (
-                                <ul className="bg-gray-600">
-                                    <li>
-                                        <button 
-                                            className="w-full px-8 py-3 text-left hover:bg-gray-500 active:bg-gray-400 touch-friendly text-sm border-b border-gray-500 last:border-b-0"
-                                            onClick={(e) => { e.stopPropagation(); handleTabClick('draftAnalysis'); }}
-                                        >
-                                            Draft
-                                        </button>
-                                    </li>
-                                    <li>
-                                        <button 
-                                            className="w-full px-8 py-3 text-left hover:bg-gray-500 active:bg-gray-400 touch-friendly text-sm border-b border-gray-500 last:border-b-0"
-                                            onClick={(e) => { e.stopPropagation(); handleTabClick('dprAnalysis'); }}
-                                        >
-                                            DPR Analysis
-                                        </button>
-                                    </li>
-                                    <li>
-                                        <button 
-                                            className="w-full px-8 py-3 text-left hover:bg-gray-500 active:bg-gray-400 touch-friendly text-sm border-b border-gray-500 last:border-b-0"
-                                            onClick={(e) => { e.stopPropagation(); handleTabClick('luckRating'); }}
-                                        >
-                                            Luck Rating
-                                        </button>
-                                    </li>
-                                </ul>
-                            )}
-                        </li>
+
+                        <MobileDropdown
+                            icon="📊"
+                            label="Analysis"
+                            isOpen={openSubMenu === 'analysis'}
+                            onToggle={() => toggleSubMenu('analysis')}
+                        >
+                            <MobileSubItem label="Draft" onClick={() => handleTabClick('draftAnalysis')} />
+                            <MobileSubItem label="DPR Analysis" onClick={() => handleTabClick('dprAnalysis')} />
+                            <MobileSubItem label="Luck Rating" onClick={() => handleTabClick('luckRating')} />
+                            <MobileSubItem label="Trade History" onClick={() => handleTabClick(TABS.TRADE_HISTORY)} />
+                        </MobileDropdown>
                     </ul>
 
-                    {/* Unified Navigation */}
+                    {/* Desktop nav — unchanged, passed to your existing DesktopNav */}
                     <DesktopNav
                         handleTabClick={handleTabClick}
                         handleSubTabClick={handleSubTabClick}
@@ -818,27 +605,22 @@ const AppContent = () => {
                 </div>
             </nav>
 
-            {/* Main Content Area */}
+            {/* ── Main Content ─────────────────────────────────────────── */}
             <main className="flex-grow w-full max-w-6xl mx-auto p-3 sm:p-4 md:p-6 safe-area-bottom">
                 <div className="mobile-scroll">
                     {renderContent()}
                 </div>
             </main>
-            {/* Dev-only ByeWeek debug panel */}
-            {/* ByeWeekDebugPanel removed - dev-only bye week debugging UI disabled */}
         </div>
     );
 };
 
-// This is the outer App component that provides the Sleeper Context
-const App = () => {
-    return (
-        <PasswordLock>
-            <SleeperDataProvider>
-                <AppContent />
-            </SleeperDataProvider>
-        </PasswordLock>
-    );
-};
+const App = () => (
+    <PasswordLock>
+        <SleeperDataProvider>
+            <AppContent />
+        </SleeperDataProvider>
+    </PasswordLock>
+);
 
 export default App;

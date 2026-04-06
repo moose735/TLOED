@@ -4,141 +4,114 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
     <title>TLOED Dashboard</title>
+
+    <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" xintegrity="sha512-1ycn6IcaQQ40/MKBW2W4Rhis/DbILU74C1vSrLJxCq57o941Ym01SwNsOMqvEBFlcgUa6xLiPY/NS5R+E6ztJQ==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    
-    <!-- iOS Specific Meta Tags -->
+
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+    <!-- PWA / iOS -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="TLOED">
-    <meta name="format-detection" content="telephone=no">
     <meta name="mobile-web-app-capable" content="yes">
-    
-    <!-- Prevent text inflation on mobile -->
-    <meta name="text-size-adjust" content="100%">
-    <meta name="webkit-text-size-adjust" content="100%">
-    <meta name="ms-text-size-adjust" content="100%">
-    
+    <meta name="format-detection" content="telephone=no">
+    <meta name="theme-color" content="#111827">
+
+    <!-- Favicons -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <link rel="icon" sizes="192x192" href="/android-chrome-192x192.png">
+    <link rel="icon" sizes="512x512" href="/android-chrome-512x512.png">
+    <link rel="manifest" href="/site.webmanifest">
+    <link rel="shortcut icon" href="/favicon.ico" />
+
     <style>
-        /* Global CSS for smoother transitions and accessibility */
+        /* ── Base ────────────────────────────────────────────────── */
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
         html {
-            scroll-behavior: smooth; /* Enables smooth scrolling when navigating to anchor links */
-            /* Prevent horizontal scrolling */
+            scroll-behavior: smooth;
             overflow-x: hidden;
         }
+
         body {
-            -webkit-font-smoothing: antialiased; /* Ensures consistent font rendering across browsers */
+            margin: 0;
+            background-color: #111827; /* gray-900 — eliminates flash before React mounts */
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
-            /* Prevent horizontal scrolling */
             overflow-x: hidden;
-            /* Improve touch scrolling on iOS */
+            overscroll-behavior-y: auto;
             -webkit-overflow-scrolling: touch;
         }
-        
-        /* iOS Safe Area Support */
+
+        /* ── iOS Safe Areas ──────────────────────────────────────── */
         @supports (padding: max(0px)) {
-            .safe-area-top {
-                padding-top: max(1rem, env(safe-area-inset-top));
-            }
-            .safe-area-bottom {
-                padding-bottom: max(1rem, env(safe-area-inset-bottom));
-            }
-            .safe-area-left {
-                padding-left: max(1rem, env(safe-area-inset-left));
-            }
-            .safe-area-right {
-                padding-right: max(1rem, env(safe-area-inset-right));
-            }
+            .safe-area-top    { padding-top:    max(1rem, env(safe-area-inset-top));    }
+            .safe-area-bottom { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+            .safe-area-left   { padding-left:   max(1rem, env(safe-area-inset-left));   }
+            .safe-area-right  { padding-right:  max(1rem, env(safe-area-inset-right));  }
         }
-        
-        /* Touch-friendly interactions */
+
+        /* ── Touch targets ───────────────────────────────────────── */
         button, a, [role="button"] {
-            min-height: 44px; /* Apple's recommended minimum touch target */
+            min-height: 44px;
             min-width: 44px;
         }
-        
-        /* Improve focus states for accessibility */
-        *:focus {
-            outline: 2px solid theme('colors.blue.500'); /* Use Tailwind's default blue for outline */
+
+        /* ── Focus ring ──────────────────────────────────────────── */
+        *:focus-visible {
+            outline: 2px solid #3b82f6; /* blue-500 */
             outline-offset: 2px;
-            border-radius: theme('borderRadius.md'); /* Apply rounded corners to focus outline */
+            border-radius: 6px;
         }
-        
-        /* Prevent zoom on input focus on iOS */
+
+        /* ── Inputs — prevent iOS zoom ───────────────────────────── */
         input, select, textarea {
             font-size: 16px !important;
         }
-        
-        /* Better mobile scrolling */
+
+        /* ── Scrolling helpers ───────────────────────────────────── */
         .mobile-scroll {
             -webkit-overflow-scrolling: touch;
             overflow-y: auto;
         }
-        
-        /* Hide scrollbars on mobile while keeping functionality */
+
         @media (max-width: 768px) {
-            .hide-scrollbar {
-                -ms-overflow-style: none;
-                scrollbar-width: none;
-            }
-            .hide-scrollbar::-webkit-scrollbar {
-                display: none;
-            }
+            .hide-scrollbar                    { scrollbar-width: none; -ms-overflow-style: none; }
+            .hide-scrollbar::-webkit-scrollbar { display: none; }
         }
-        
-        /* Prevent pull-to-refresh on iOS */
-        body {
-            overscroll-behavior-y: none;
-        }
-        
-        /* Custom CSS for mobile optimization */
-        .touch-friendly {
-            min-height: 44px;
-            min-width: 44px;
-        }
-        
-        /* Better mobile card styling: stronger, even shadow and subtle border so depth reads on all sides */
+
+        /* ── Cards ───────────────────────────────────────────────── */
         .mobile-card {
             border-radius: 12px;
-            /* slightly larger, softer shadow plus a small top/side highlight via a thin border so the card reads as a single floating surface */
             box-shadow: 0 6px 18px rgba(2, 6, 23, 0.08), 0 1px 2px rgba(2, 6, 23, 0.04);
             border: 1px solid rgba(2, 6, 23, 0.04);
             background-clip: padding-box;
-            -webkit-backface-visibility: hidden; /* helps some mobile browsers render shadows more consistently */
-            backface-visibility: hidden;
             transform: translateZ(0);
         }
-        
-        /* Mobile-optimized text sizes */
-        @media (max-width: 640px) {
-            .mobile-text-sm { font-size: 14px; }
-            .mobile-text-base { font-size: 16px; }
-            .mobile-text-lg { font-size: 18px; }
-            .mobile-text-xl { font-size: 20px; }
-            .mobile-text-2xl { font-size: 24px; }
+
+        /* ── Loading spinner (shown before React mounts) ─────────── */
+        #root:empty::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #111827;
         }
     </style>
-
-    <!-- Favicon and App Icon Links (Generated from LeagueLogoNoBack.PNG) -->
-    <!-- You will need to use an online favicon generator (e.g., favicon.io or RealFaviconGenerator) -->
-    <!-- to convert your 'LeagueLogoNoBack.PNG' into these various files. -->
-    <!-- After generation, place all generated files directly into your project's 'public/' directory. -->
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
-    <link rel="manifest" href="/site.webmanifest">
-    <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#5bbad5">
-    <meta name="msapplication-TileColor" content="#da532c">
-    <meta name="theme-color" content="#ffffff">
-    <link rel="shortcut icon" href="/favicon.ico" />
-    <meta name="msapplication-config" content="/browserconfig.xml" />
-    <!-- Android Chrome Icons -->
-    <link rel="icon" sizes="192x192" href="/android-chrome-192x192.png">
-    <link rel="icon" sizes="512x512" href="/android-chrome-512x512.png">
-
 </head>
-<body class="font-inter bg-gray-100 antialiased">
+<body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
 </body>
