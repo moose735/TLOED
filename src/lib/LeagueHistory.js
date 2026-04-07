@@ -11,7 +11,7 @@ import { calculatePlayoffFinishes } from '../utils/playoffRankings';
 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Bar, Cell, Area, AreaChart } from 'recharts';
 
-// ── Helpers (untouched) ───────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 const getOrdinalSuffix = (n) => {
     if (typeof n !== 'number' || isNaN(n)) return '';
@@ -47,6 +47,55 @@ const AwardBadge = ({ icon, color, count, years, title }) => (
     </span>
 );
 
+// ── Playoff record calculator ─────────────────────────────────────────────────
+// Winners bracket ONLY. Each team's record counts up until their first loss —
+// after that they're in consolation and no further games count.
+const calculatePlayoffRecords = (historicalData) => {
+    const records = {};
+
+    const getOwner = (rosterId, year, rostersBySeason) => {
+        const rosters = rostersBySeason?.[String(year)] || [];
+        const found = rosters.find(r => String(r.roster_id) === String(rosterId));
+        return found?.owner_id ? String(found.owner_id) : null;
+    };
+
+    Object.keys(historicalData.winnersBracketBySeason || {}).forEach(year => {
+        const bracket = historicalData.winnersBracketBySeason[year];
+        if (!Array.isArray(bracket)) return;
+
+        // Once a roster loses in the winners bracket they drop to consolation.
+        // Track eliminated rosters so we skip any matchup they appear in after that.
+        const eliminatedRosters = new Set();
+
+        // Sort by round ascending so eliminations are registered before later rounds.
+        const sorted = [...bracket].sort((a, b) => (a.r || 0) - (b.r || 0));
+
+        sorted.forEach(matchup => {
+            if (!matchup.w || !matchup.l) return;
+            const winRoster = String(matchup.w);
+            const lossRoster = String(matchup.l);
+
+            // If either side was already knocked to consolation, skip this game
+            if (eliminatedRosters.has(winRoster) || eliminatedRosters.has(lossRoster)) return;
+
+            const winOwner = getOwner(winRoster, year, historicalData.rostersBySeason);
+            const lossOwner = getOwner(lossRoster, year, historicalData.rostersBySeason);
+
+            if (winOwner) {
+                if (!records[winOwner]) records[winOwner] = { wins: 0, losses: 0 };
+                records[winOwner].wins++;
+            }
+            if (lossOwner) {
+                if (!records[lossOwner]) records[lossOwner] = { wins: 0, losses: 0 };
+                records[lossOwner].losses++;
+                eliminatedRosters.add(lossRoster);
+            }
+        });
+    });
+
+    return records;
+};
+
 const LeagueHistory = () => {
     const {
         loading: contextLoading,
@@ -79,6 +128,7 @@ const LeagueHistory = () => {
     const [availableYears, setAvailableYears] = useState([]);
     const [selectedStartYear, setSelectedStartYear] = useState('');
     const [selectedEndYear, setSelectedEndYear] = useState('');
+    const [playoffRecords, setPlayoffRecords] = useState({});
     const leagueTxCache = React.useRef(new Map());
 
     const teamColors = [
@@ -103,7 +153,7 @@ const LeagueHistory = () => {
         return null;
     };
 
-    // ── All data logic (completely untouched) ─────────────────────────────────
+    // ── All data logic ────────────────────────────────────────────────────────
     useEffect(() => {
         const { seasonalMetrics, careerDPRData: calculatedCareerDPRs } = calculateAllLeagueMetrics(historicalData, allDraftHistory, getDisplayTeamNameFromContext, nflState);
         logger.debug("LeagueHistory: calculatedCareerDPRs after initial calculation:", calculatedCareerDPRs);
@@ -157,6 +207,11 @@ const LeagueHistory = () => {
                 ownerToRosterIds[owner].add(rosterId); rosterIdToYear[rosterId] = String(year);
             });
         });
+
+        // ── Calculate playoff records ──────────────────────────────────────
+        const computedPlayoffRecords = calculatePlayoffRecords(historicalData);
+        setPlayoffRecords(computedPlayoffRecords);
+
         const compiledStandings = Object.keys(teamOverallStats).map(teamName => {
             const stats = teamOverallStats[teamName];
             if (stats.seasonsPlayed.size === 0) return null;
@@ -177,7 +232,11 @@ const LeagueHistory = () => {
                 secondPoints: careerStatsForTeam.pointsRunnerUps || 0, secondPointsYears: getAwardYears('isPointsRunnerUp'),
                 thirdPoints: careerStatsForTeam.thirdPlacePoints || 0, thirdPointsYears: getAwardYears('isThirdPlacePoints'),
             } : { championships: 0, championshipsYears: [], runnerUps: 0, runnerUpsYears: [], thirdPlace: 0, thirdPlaceYears: [], firstPoints: 0, firstPointsYears: [], secondPoints: 0, secondPointsYears: [], thirdPoints: 0, thirdPointsYears: [] };
-            return { team: teamName, seasons: seasonsDisplay, totalDPR: stats.careerDPR, record: `${stats.totalWins}-${stats.totalLosses}-${stats.totalTies}`, totalWins: stats.totalWins, winPercentage, awards: awardsToDisplay, ownerId: stats.ownerId };
+
+            // Attach playoff record from computed map
+            const pRec = computedPlayoffRecords[String(stats.ownerId)] || { wins: 0, losses: 0 };
+
+            return { team: teamName, seasons: seasonsDisplay, totalDPR: stats.careerDPR, record: `${stats.totalWins}-${stats.totalLosses}-${stats.totalTies}`, totalWins: stats.totalWins, winPercentage, awards: awardsToDisplay, ownerId: stats.ownerId, playoffWins: pRec.wins, playoffLosses: pRec.losses };
         }).filter(Boolean).sort((a, b) => b.winPercentage - a.winPercentage);
         setAllTimeStandings(compiledStandings);
         const chartData = [];
@@ -302,6 +361,7 @@ const LeagueHistory = () => {
                 } catch (e) { logger.warn('LeagueHistory: error while computing all-time financial totals', e); }
                 const pickupsByOwner = {};
                 const tradesByOwner = {};
+                const seenTradeTxIds = new Set();
                 filteredTx.forEach(tx => {
                     try {
                         if (!tx) return;
@@ -316,6 +376,9 @@ const LeagueHistory = () => {
                         }
                         if (txType !== 'trade') return;
                         if (tx.status && String(tx.status).toLowerCase() === 'failed') return;
+                        const txKey = tx.transaction_id || JSON.stringify({ r: tx.roster_ids, c: tx.created });
+                        if (seenTradeTxIds.has(txKey)) return;
+                        seenTradeTxIds.add(txKey);
                         const rosterIds = Array.isArray(tx.roster_ids) ? tx.roster_ids.map(r => String(r)) : [];
                         if (rosterIds.length === 0) { const inferred = new Set(); if (tx.adds) Object.values(tx.adds).forEach(v => { if (v?.roster_id) inferred.add(String(v.roster_id)); }); if (tx.drops) Object.values(tx.drops).forEach(v => { if (v?.roster_id) inferred.add(String(v.roster_id)); }); if (tx.team && Array.isArray(tx.team)) tx.team.forEach(t => inferred.add(String(t))); rosterIds.push(...Array.from(inferred)); }
                         let txYear = tx.season || tx.year || tx.metadata?.season || null;
@@ -371,7 +434,7 @@ const LeagueHistory = () => {
         })();
     }, [historicalData, allDraftHistory, nflState, getDisplayTeamNameFromContext, contextLoading, contextError, transactions]);
 
-    // ── Formatters (untouched) ────────────────────────────────────────────────
+    // ── Formatters ────────────────────────────────────────────────────────────
     const formatPercentage = (value) => {
         if (typeof value === 'number' && !isNaN(value)) {
             let formatted = value.toFixed(3);
@@ -387,7 +450,7 @@ const LeagueHistory = () => {
         return 'N/A';
     };
 
-    // ── Custom chart tooltip (untouched logic) ────────────────────────────────
+    // ── Custom chart tooltip ──────────────────────────────────────────────────
     const CustomTooltip = ({ active, payload, label }) => {
         if (active && payload && payload.length) {
             const year = typeof label === 'string' ? parseInt(label) : label;
@@ -418,7 +481,7 @@ const LeagueHistory = () => {
     const yAxisTicks = [];
     for (let t = 1; t <= numTeams; t++) yAxisTicks.push(t);
 
-    // ── Sort logic (untouched) ────────────────────────────────────────────────
+    // ── Sort logic ────────────────────────────────────────────────────────────
     const getSortedStandings = () => {
         const sorted = [...allTimeStandings];
         sorted.sort((a, b) => {
@@ -426,6 +489,7 @@ const LeagueHistory = () => {
             if (sortBy === 'team') { aVal = aVal?.toLowerCase() || ''; bVal = bVal?.toLowerCase() || ''; if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1; if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1; return 0; }
             if (sortBy === 'seasons') { const aCount = a.seasons?.props?.children?.[1]?.props?.children || 0; const bCount = b.seasons?.props?.children?.[1]?.props?.children || 0; return sortOrder === 'asc' ? aCount - bCount : bCount - aCount; }
             if (sortBy === 'awards') { const aAwards = a.awards || {}; const bAwards = b.awards || {}; if (aAwards.championships !== bAwards.championships) return sortOrder === 'asc' ? aAwards.championships - bAwards.championships : bAwards.championships - aAwards.championships; if (aAwards.runnerUps !== bAwards.runnerUps) return sortOrder === 'asc' ? aAwards.runnerUps - bAwards.runnerUps : bAwards.runnerUps - aAwards.runnerUps; if (aAwards.thirdPlace !== bAwards.thirdPlace) return sortOrder === 'asc' ? aAwards.thirdPlace - bAwards.thirdPlace : bAwards.thirdPlace - aAwards.thirdPlace; return 0; }
+            if (sortBy === 'playoffWins') { return sortOrder === 'asc' ? (a.playoffWins - b.playoffWins) : (b.playoffWins - a.playoffWins); }
             aVal = typeof aVal === 'string' ? parseFloat(aVal) : aVal; bVal = typeof bVal === 'string' ? parseFloat(bVal) : bVal;
             if (isNaN(aVal)) aVal = 0; if (isNaN(bVal)) bVal = 0;
             return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
@@ -434,6 +498,11 @@ const LeagueHistory = () => {
     };
 
     const handleSort = (column) => { if (sortBy === column) setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc'); else { setSortBy(column); setSortOrder('desc'); } };
+
+    const SortIcon = ({ col }) => {
+        if (sortBy !== col) return <span className="opacity-20 ml-0.5">↕</span>;
+        return <span className="ml-0.5">{sortOrder === 'asc' ? '↑' : '↓'}</span>;
+    };
 
     const getFilteredChartData = (data) => {
         if (!selectedStartYear || !selectedEndYear || !data.length) return data;
@@ -495,6 +564,7 @@ const LeagueHistory = () => {
                         <div className="sm:hidden divide-y divide-white/5">
                             {getSortedStandings().map((team, idx) => {
                                 const teamDetails = getTeamDetails ? getTeamDetails(team.ownerId, null) : { name: team.team, avatar: undefined };
+                                const hasPlayoffGames = (team.playoffWins + team.playoffLosses) > 0;
                                 return (
                                     <div key={team.team} className="px-4 py-3">
                                         <div className="flex items-center justify-between mb-2">
@@ -511,7 +581,7 @@ const LeagueHistory = () => {
                                                 <div className="text-[10px] text-gray-600">Career DPR</div>
                                             </div>
                                         </div>
-                                        <div className="grid grid-cols-2 gap-2 mb-2">
+                                        <div className="grid grid-cols-3 gap-2 mb-2">
                                             <div className="bg-white/5 rounded-lg px-3 py-2">
                                                 <div className="text-[10px] text-gray-500 mb-0.5">Record</div>
                                                 <div className="text-xs font-semibold text-gray-300">{team.record}</div>
@@ -519,6 +589,12 @@ const LeagueHistory = () => {
                                             <div className="bg-white/5 rounded-lg px-3 py-2">
                                                 <div className="text-[10px] text-gray-500 mb-0.5">Win %</div>
                                                 <div className="text-xs font-semibold text-blue-400">{formatPercentage(team.winPercentage)}</div>
+                                            </div>
+                                            <div className="bg-white/5 rounded-lg px-3 py-2">
+                                                <div className="text-[10px] text-gray-500 mb-0.5">Playoffs</div>
+                                                <div className={`text-xs font-semibold ${hasPlayoffGames ? 'text-amber-400' : 'text-gray-600'}`}>
+                                                    {hasPlayoffGames ? `${team.playoffWins}-${team.playoffLosses}` : '—'}
+                                                </div>
                                             </div>
                                         </div>
                                         {renderAwards(team.awards)}
@@ -533,17 +609,19 @@ const LeagueHistory = () => {
                                 <thead>
                                     <tr className="border-b border-white/10">
                                         <th className={th}>#</th>
-                                        <th className={th}>Team</th>
+                                        <th className={`${th} cursor-pointer hover:text-gray-300 transition-colors`} onClick={() => handleSort('team')}>Team <SortIcon col="team" /></th>
                                         <th className={thCenter}>Seasons</th>
-                                        <th className={thCenter}>Career DPR</th>
-                                        <th className={thCenter}>Record</th>
-                                        <th className={thCenter}>Win %</th>
+                                        <th className={`${thCenter} cursor-pointer hover:text-gray-300 transition-colors`} onClick={() => handleSort('totalDPR')}>Career DPR <SortIcon col="totalDPR" /></th>
+                                        <th className={`${thCenter} cursor-pointer hover:text-gray-300 transition-colors`} onClick={() => handleSort('winPercentage')}>Record / Win% <SortIcon col="winPercentage" /></th>
+                                        <th className={`${thCenter} cursor-pointer hover:text-gray-300 transition-colors`} onClick={() => handleSort('playoffWins')}>Playoff W-L <SortIcon col="playoffWins" /></th>
                                         <th className={thCenter}>Awards</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
                                     {getSortedStandings().map((team, index) => {
                                         const teamDetails = getTeamDetails ? getTeamDetails(team.ownerId, null) : { name: team.team, avatar: undefined };
+                                        const hasPlayoffGames = (team.playoffWins + team.playoffLosses) > 0;
+                                        const playoffWinPct = hasPlayoffGames ? team.playoffWins / (team.playoffWins + team.playoffLosses) : null;
                                         return (
                                             <tr key={team.team} className="hover:bg-white/[0.02] transition-colors">
                                                 <td className="py-2.5 px-3 text-xs text-gray-600 font-semibold">{index + 1}</td>
@@ -555,8 +633,20 @@ const LeagueHistory = () => {
                                                 </td>
                                                 <td className="py-2.5 px-3 text-center text-xs text-gray-400">{team.seasons}</td>
                                                 <td className="py-2.5 px-3 text-center text-sm font-bold text-blue-400 tabular-nums">{formatDPR(team.totalDPR)}</td>
-                                                <td className="py-2.5 px-3 text-center text-xs text-gray-300 tabular-nums">{team.record}</td>
-                                                <td className="py-2.5 px-3 text-center text-xs font-semibold text-blue-400 tabular-nums">{formatPercentage(team.winPercentage)}</td>
+                                                <td className="py-2.5 px-3 text-center tabular-nums">
+                                                    <div className="text-xs text-gray-300">{team.record}</div>
+                                                    <div className="text-[10px] font-semibold text-blue-400 mt-0.5">{formatPercentage(team.winPercentage)}</div>
+                                                </td>
+                                                <td className="py-2.5 px-3 text-center tabular-nums">
+                                                    {hasPlayoffGames ? (
+                                                        <div>
+                                                            <div className="text-xs font-semibold text-amber-400">{team.playoffWins}-{team.playoffLosses}</div>
+                                                            <div className="text-[10px] text-gray-500 mt-0.5">{formatPercentage(playoffWinPct)}</div>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-gray-700 text-xs">—</span>
+                                                    )}
+                                                </td>
                                                 <td className="py-2.5 px-3">
                                                     <div className="flex flex-wrap justify-center gap-2">{renderAwards(team.awards)}</div>
                                                 </td>
@@ -844,7 +934,6 @@ const LeagueHistory = () => {
                             </div>
                             <div className={cardPad}>
                                 <p className="text-[10px] text-gray-600 mb-3">Highest and lowest team season averages with overall league average.</p>
-                                {/* Mobile */}
                                 <div className="sm:hidden" style={{ height: 300 }}>
                                     <ResponsiveContainer width="100%" height="100%">
                                         <ComposedChart data={getFilteredChartData(averageScoreChartData)} margin={{ top: 10, right: 15, left: 10, bottom: 20 }}>
@@ -859,7 +948,6 @@ const LeagueHistory = () => {
                                         </ComposedChart>
                                     </ResponsiveContainer>
                                 </div>
-                                {/* Desktop */}
                                 <div className="hidden sm:block">
                                     <ResponsiveContainer width="100%" aspect={2.5}>
                                         <ComposedChart data={getFilteredChartData(averageScoreChartData)} margin={{ top: 10, right: 30, left: 10, bottom: 5 }}>
@@ -888,7 +976,6 @@ const LeagueHistory = () => {
                                 <span className="text-xs font-semibold text-gray-300 uppercase tracking-wider">Total DPR Progression Over Seasons</span>
                             </div>
                             <div className={cardPad}>
-                                {/* Mobile */}
                                 <div className="sm:hidden" style={{ height: 350 }}>
                                     <ResponsiveContainer width="100%" height="100%">
                                         <LineChart data={getFilteredChartData(seasonalDPRChartData)} margin={{ top: 10, right: 5, left: 5, bottom: 40 }}>
@@ -903,7 +990,6 @@ const LeagueHistory = () => {
                                         </LineChart>
                                     </ResponsiveContainer>
                                 </div>
-                                {/* Desktop */}
                                 <div className="hidden sm:block">
                                     <ResponsiveContainer width="100%" aspect={1.5}>
                                         <LineChart data={getFilteredChartData(seasonalDPRChartData)} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>

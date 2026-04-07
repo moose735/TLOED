@@ -43,9 +43,9 @@ const StatCard = ({ color, label, value }) => {
     );
 };
 
-// ─── TradeHistory ─────────────────────────────────────────────────────────────
+// ─── MostTradedPlayers ────────────────────────────────────────────────────────
 
-const TradeHistory = () => {
+const MostTradedPlayers = () => {
   const { transactions = [], nflPlayers = {}, getTeamName, rostersWithDetails = [], historicalData = {}, nflState = {} } = useSleeperData();
   const [sortBy, setSortBy] = useState('trades');
   const [displayMode, setDisplayMode] = useState('top50');
@@ -95,7 +95,7 @@ const TradeHistory = () => {
             for (let w = 1; w <= 18; w++) {
               weekPromises.push(
                 fetchTransactionsForWeek(leagueId, w).catch(err => {
-                  logger.debug(`TradeHistory: fetchTransactionsForWeek failed for ${leagueId} week ${w}: ${err}`);
+                  logger.debug(`MostTradedPlayers: fetchTransactionsForWeek failed for ${leagueId} week ${w}: ${err}`);
                   return [];
                 })
               );
@@ -109,7 +109,7 @@ const TradeHistory = () => {
             leagueFetchedTransactions.push(...seasonTx);
           }
         } catch (e) {
-          logger.warn('TradeHistory: error fetching league transactions', e);
+          logger.warn('MostTradedPlayers: error fetching league transactions', e);
         }
 
         const contextTx = Array.isArray(transactions) ? transactions : [];
@@ -123,7 +123,7 @@ const TradeHistory = () => {
 
         setAllTransactions(Array.from(txMap.values()));
       } catch (e) {
-        logger.warn('TradeHistory: error in transaction fetching', e);
+        logger.warn('MostTradedPlayers: error in transaction fetching', e);
         setAllTransactions(transactions);
       }
     })();
@@ -146,21 +146,30 @@ const TradeHistory = () => {
 
   const tradeStats = useMemo(() => {
     const playerTrades = {};
-    const trackedTransactions = new Set();
+    // seenTxIds per player prevents the same transaction being counted more than once
+    // per player — which happened because a player appears in both adds (received) AND
+    // drops (sent) of the same transaction, causing a double-count.
+    const playerSeenTxIds = {};
 
     allTransactions.forEach((tx) => {
       if (tx.type !== 'trade') return;
+      if (tx.status && String(tx.status).toLowerCase() === 'failed') return;
+
       const adds = tx.adds || {};
       const drops = tx.drops || {};
+      // Union of adds + drops = every player touched by this trade (once each)
       const allPlayersInTrade = new Set([...Object.keys(adds), ...Object.keys(drops)]);
 
-      // For each player in this trade, add the trade record only once
       allPlayersInTrade.forEach((playerId) => {
         const pidStr = String(playerId);
-        const txKey = `${tx.transaction_id}-${pidStr}`;
-        
-        if (trackedTransactions.has(txKey)) return;
-        trackedTransactions.add(txKey);
+
+        // Deduplicate: skip if we've already recorded this transaction for this player
+        const txKey = tx.transaction_id
+          ? `${tx.transaction_id}-${pidStr}`
+          : `${tx.created}-${JSON.stringify(tx.roster_ids)}-${pidStr}`;
+        if (!playerSeenTxIds[pidStr]) playerSeenTxIds[pidStr] = new Set();
+        if (playerSeenTxIds[pidStr].has(txKey)) return;
+        playerSeenTxIds[pidStr].add(txKey);
 
         if (!playerTrades[pidStr]) {
           playerTrades[pidStr] = { playerId, trades: [], totalTrades: 0, playerInfo: nflPlayers[pidStr] || {} };
@@ -173,45 +182,31 @@ const TradeHistory = () => {
         const type = addEntry ? 'received' : 'sent';
 
         const fromRosterId = dropRosterId || Object.keys(drops)
-          .map(id => {
-            const data = drops[id];
-            return data && typeof data === 'object' ? data.roster_id : data;
-          })
+          .map(id => { const data = drops[id]; return data && typeof data === 'object' ? data.roster_id : data; })
           .find(id => id != null && String(id) !== String(addRosterId));
 
         const toRosterId = addRosterId || Object.keys(adds)
-          .map(id => {
-            const data = adds[id];
-            return data && typeof data === 'object' ? data.roster_id : data;
-          })
+          .map(id => { const data = adds[id]; return data && typeof data === 'object' ? data.roster_id : data; })
           .find(id => id != null && String(id) !== String(dropRosterId));
 
         const fromOwnerId = fromRosterId ? getOwnerIdForRoster(fromRosterId, tx.season) : null;
         const toOwnerId = toRosterId ? getOwnerIdForRoster(toRosterId, tx.season) : null;
 
         const addsArray = Object.keys(adds)
-          .map(id => {
-            const data = adds[id];
-            const rosterId = data && typeof data === 'object' ? data.roster_id : data;
-            return { playerId: id, rosterId, ...nflPlayers[id] };
-          })
+          .map(id => { const data = adds[id]; const rosterId = data && typeof data === 'object' ? data.roster_id : data; return { playerId: id, rosterId, ...nflPlayers[id] }; })
           .filter(p => p.first_name || p.last_name)
           .filter(p => String(p.playerId) !== pidStr || !dropEntry);
 
         const dropsArray = Object.keys(drops)
-          .map(id => {
-            const data = drops[id];
-            const rosterId = data && typeof data === 'object' ? data.roster_id : data;
-            return { playerId: id, rosterId, ...nflPlayers[id] };
-          })
+          .map(id => { const data = drops[id]; const rosterId = data && typeof data === 'object' ? data.roster_id : data; return { playerId: id, rosterId, ...nflPlayers[id] }; })
           .filter(p => p.first_name || p.last_name)
           .filter(p => !(String(p.playerId) === pidStr && addEntry));
 
-        playerTrades[pidStr].trades.push({ 
-          transactionId: tx.transaction_id, 
+        playerTrades[pidStr].trades.push({
+          transactionId: tx.transaction_id,
           type,
-          week: tx.leg, 
-          created: tx.created, 
+          week: tx.leg,
+          created: tx.created,
           season: tx.season,
           adds: addsArray,
           drops: dropsArray,
@@ -244,7 +239,7 @@ const TradeHistory = () => {
     }
 
     return players;
-  }, [allTransactions, nflPlayers, sortBy]);
+  }, [allTransactions, nflPlayers, sortBy, getOwnerIdForRoster, getTeamName]);
 
   const displayedPlayers = displayMode === 'all' ? tradeStats : tradeStats.slice(0, 50);
   const maxTrades = tradeStats.reduce((max, player) => Math.max(max, player.totalTrades || 0), 0);
@@ -287,10 +282,10 @@ const TradeHistory = () => {
               <select
                 value={displayMode}
                 onChange={(e) => setDisplayMode(e.target.value)}
-                className="rounded-lg bg-white/10 border border-white/10 text-sm text-gray-200 px-3 py-2 outline-none hover:border-white/20"
+                className="rounded-lg bg-gray-800 border border-white/10 text-sm text-gray-200 px-3 py-2 outline-none hover:border-white/20"
               >
-                <option value="top50">Top 50</option>
-                <option value="all">All players</option>
+                <option value="top50" className="bg-gray-800">Top 50</option>
+                <option value="all" className="bg-gray-800">All players</option>
               </select>
             </div>
           </div>
@@ -350,40 +345,36 @@ const TradeHistory = () => {
                               <div className="space-y-3">
                                 <h4 className="font-semibold text-white text-sm">Trade Details</h4>
                                 <div className="space-y-2 max-h-64 overflow-y-auto">
-                                  {player.trades.map((trade, tradeIdx) => {
-                                    return (
-                                      <div key={tradeIdx} className="bg-white/5 rounded-lg border border-white/10 p-3 text-sm space-y-2">
-                                        <div>
-                                          <div className="text-gray-300 text-xs">
-                                            Week {trade.week}{trade.season ? ` · Season ${trade.season}` : ''}
+                                  {player.trades.map((trade, tradeIdx) => (
+                                    <div key={tradeIdx} className="bg-white/5 rounded-lg border border-white/10 p-3 text-sm space-y-2">
+                                      <div>
+                                        <div className="text-gray-300 text-xs">
+                                          Week {trade.week}{trade.season ? ` · Season ${trade.season}` : ''}
+                                        </div>
+                                        {trade.created && (
+                                          <div className="text-gray-500 text-xs mt-0.5">
+                                            {new Date(trade.created).toLocaleDateString()}
                                           </div>
-                                          {trade.created && (
-                                            <div className="text-gray-500 text-xs mt-0.5">
-                                              {new Date(trade.created).toLocaleDateString()}
+                                        )}
+                                      </div>
+                                      {(trade.fromTeam || trade.toTeam) && (
+                                        <div className="grid gap-2 sm:grid-cols-2">
+                                          {trade.fromTeam && (
+                                            <div className="bg-white/[0.05] rounded p-2 text-xs">
+                                              <div className="text-gray-400 uppercase tracking-wide">From</div>
+                                              <div className="text-gray-200 font-semibold">{trade.fromTeam}</div>
+                                            </div>
+                                          )}
+                                          {trade.toTeam && (
+                                            <div className="bg-white/[0.05] rounded p-2 text-xs">
+                                              <div className="text-gray-400 uppercase tracking-wide">To</div>
+                                              <div className="text-gray-200 font-semibold">{trade.toTeam}</div>
                                             </div>
                                           )}
                                         </div>
-
-                                        {(trade.fromTeam || trade.toTeam) && (
-                                          <div className="grid gap-2 sm:grid-cols-2">
-                                            {trade.fromTeam && (
-                                              <div className="bg-white/[0.05] rounded p-2 text-xs">
-                                                <div className="text-gray-400 uppercase tracking-wide">From</div>
-                                                <div className="text-gray-200 font-semibold">{trade.fromTeam}</div>
-                                              </div>
-                                            )}
-                                            {trade.toTeam && (
-                                              <div className="bg-white/[0.05] rounded p-2 text-xs">
-                                                <div className="text-gray-400 uppercase tracking-wide">To</div>
-                                                <div className="text-gray-200 font-semibold">{trade.toTeam}</div>
-                                              </div>
-                                            )}
-                                          </div>
-                                        )}
-
-                                      </div>
-                                    );
-                                  })}
+                                      )}
+                                    </div>
+                                  ))}
                                 </div>
                               </div>
                             </td>
@@ -424,38 +415,34 @@ const TradeHistory = () => {
                       <div className="bg-white/[0.02] rounded-xl border border-white/10 p-3.5 ml-2">
                         <h4 className="font-semibold text-white text-sm mb-3">Trade Details</h4>
                         <div className="space-y-2 max-h-48 overflow-y-auto">
-                          {player.trades.map((trade, tradeIdx) => {
-                            return (
-                              <div key={tradeIdx} className="bg-white/5 rounded-lg border border-white/10 p-2.5 text-xs space-y-1.5">
-                                <div className="text-gray-300 text-xs mt-1">
-                                  Week {trade.week}{trade.season ? ` · S${trade.season}` : ''}
-                                </div>
-                                {trade.created && (
-                                  <div className="text-gray-500 text-xs">
-                                    {new Date(trade.created).toLocaleDateString()}
-                                  </div>
-                                )}
-
-                                {(trade.fromTeam || trade.toTeam) && (
-                                  <div className="grid gap-2 sm:grid-cols-2">
-                                    {trade.fromTeam && (
-                                      <div className="bg-white/[0.05] rounded px-1.5 py-1 text-xs">
-                                        <div className="text-gray-400 uppercase tracking-wide">From</div>
-                                        <div className="text-gray-200 font-semibold">{trade.fromTeam}</div>
-                                      </div>
-                                    )}
-                                    {trade.toTeam && (
-                                      <div className="bg-white/[0.05] rounded px-1.5 py-1 text-xs">
-                                        <div className="text-gray-400 uppercase tracking-wide">To</div>
-                                        <div className="text-gray-200 font-semibold">{trade.toTeam}</div>
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                                
+                          {player.trades.map((trade, tradeIdx) => (
+                            <div key={tradeIdx} className="bg-white/5 rounded-lg border border-white/10 p-2.5 text-xs space-y-1.5">
+                              <div className="text-gray-300 text-xs mt-1">
+                                Week {trade.week}{trade.season ? ` · S${trade.season}` : ''}
                               </div>
-                            );
-                          })}
+                              {trade.created && (
+                                <div className="text-gray-500 text-xs">
+                                  {new Date(trade.created).toLocaleDateString()}
+                                </div>
+                              )}
+                              {(trade.fromTeam || trade.toTeam) && (
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                  {trade.fromTeam && (
+                                    <div className="bg-white/[0.05] rounded px-1.5 py-1 text-xs">
+                                      <div className="text-gray-400 uppercase tracking-wide">From</div>
+                                      <div className="text-gray-200 font-semibold">{trade.fromTeam}</div>
+                                    </div>
+                                  )}
+                                  {trade.toTeam && (
+                                    <div className="bg-white/[0.05] rounded px-1.5 py-1 text-xs">
+                                      <div className="text-gray-400 uppercase tracking-wide">To</div>
+                                      <div className="text-gray-200 font-semibold">{trade.toTeam}</div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )}
@@ -484,4 +471,4 @@ const TradeHistory = () => {
   );
 };
 
-export default TradeHistory;
+export default MostTradedPlayers;
