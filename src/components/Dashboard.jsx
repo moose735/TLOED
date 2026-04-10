@@ -475,6 +475,14 @@ const Dashboard = () => {
 
                 {/* ── Power Rankings ───────────────────────────────────────── */}
                 <div className={`${card} -mx-4 sm:mx-0 rounded-none sm:rounded-xl overflow-hidden`}>
+                    <div className={cardHeader}>
+                        <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                        <span className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                            Power Rankings
+                        </span>
+                    </div>
                     <PowerRankings />
                 </div>
 

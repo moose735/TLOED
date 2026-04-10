@@ -612,8 +612,6 @@ const renderMovement = (movement) => {
 
 		return (
 			<div className="w-full max-w-full px-0 font-inter overflow-x-hidden">
-				<h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-800 mb-4 sm:mb-6 md:mb-8 text-center tracking-tight px-2">Power Rankings</h2>
-
 				{loading ? (
 					<div className="flex justify-center items-center h-32">
 						<span className="text-sm sm:text-lg text-gray-500 animate-pulse">Calculating power rankings...</span>
@@ -633,14 +631,14 @@ const renderMovement = (movement) => {
 									<React.Fragment key={row.ownerId}>
 										{isNewTier && (
 											<div className="flex items-center justify-center py-3">
-												<div className="flex-1 h-px bg-blue-300"></div>
-												<span className="px-3 text-xs font-semibold text-blue-600 uppercase tracking-wide">
+												<div className="flex-1 h-px bg-blue-500"></div>
+												<span className="px-3 text-xs font-semibold text-blue-300 uppercase tracking-wide">
 													Tier {row.tier}
 												</span>
-												<div className="flex-1 h-px bg-blue-300"></div>
+												<div className="flex-1 h-px bg-blue-500"></div>
 											</div>
 										)}
-										<div className="bg-white rounded-md shadow-md mobile-card p-3 border border-gray-100 border-l-4 border-blue-500 ring-1 ring-blue-50 min-w-0 w-full overflow-hidden">
+										<div className="bg-gray-800 rounded-md shadow-sm mobile-card p-3 border border-white/10 border-l-4 border-blue-500 ring-1 ring-white/10 min-w-0 w-full overflow-hidden">
 											<div className="flex items-center justify-between mb-2 flex-wrap min-w-0">
 												<div className="flex items-center space-x-2">
 													<div className={`w-6 h-6 text-white rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0`} style={getTierCircleStyle(row.tier, Math.max(1, ...powerRankings.map(p => p.tier || 1)))}>
@@ -656,7 +654,7 @@ const renderMovement = (movement) => {
 													/>
 													<div className="min-w-0 flex-1">
 														<div className="flex items-center">
-															<h3 className="font-semibold text-gray-800 text-sm truncate flex-1">{getTeamName(row.ownerId, row.year)}</h3>
+															<h3 className="font-semibold text-white text-sm truncate flex-1">{getTeamName(row.ownerId, row.year)}</h3>
 															<div className="flex-shrink-0 ml-1 flex items-center space-x-1 text-xs">
 																{survivorMarkers?.[row.ownerId] && (
 																	<span title={survivorMarkers[row.ownerId] === '💀' ? 'Eliminated from Survivor' : 'Survivor Winner'}>{survivorMarkers[row.ownerId]}</span>
@@ -670,41 +668,41 @@ const renderMovement = (movement) => {
 												</div>
 
 												<div className="text-right ml-2 flex-shrink-0">
-													<div className="text-sm font-bold text-blue-800 truncate max-w-[5.5rem]">{formatDPR(row.dpr)}</div>
-													<div className="text-[11px] text-gray-500">DPR</div>
+													<div className="text-sm font-bold text-blue-300 truncate max-w-[5.5rem]">{formatDPR(row.dpr)}</div>
+													<div className="text-[11px] text-gray-400">DPR</div>
 												</div>
 											</div>
 
 											{/* Top row: Record / Points For / Points Against */}
 											<div className="grid grid-cols-3 gap-3 text-sm mt-2">
-												<div className="bg-gray-50 rounded-lg p-2">
-													<div className="text-xs text-gray-500 mb-1">Record</div>
-													<div className="font-semibold">{renderRecord(row.wins, row.losses, row.ties)}</div>
+												<div className="bg-gray-700 rounded-lg p-2">
+													<div className="text-xs text-gray-400 mb-1">Record</div>
+													<div className="font-semibold text-white">{renderRecord(row.wins, row.losses, row.ties)}</div>
 												</div>
-												<div className="bg-gray-50 rounded-lg p-2">
-													<div className="text-xs text-gray-500 mb-1">Points For</div>
-													<div className="font-semibold text-green-700">{formatPoints(row.pointsFor)}</div>
+												<div className="bg-gray-700 rounded-lg p-2">
+													<div className="text-xs text-gray-400 mb-1">Points For</div>
+													<div className="font-semibold text-green-400">{formatPoints(row.pointsFor)}</div>
 												</div>
-												<div className="bg-gray-50 rounded-lg p-2">
-													<div className="text-xs text-gray-500 mb-1">Points Against</div>
-													<div className="font-semibold text-red-700">{formatPoints(row.pointsAgainst)}</div>
+												<div className="bg-gray-700 rounded-lg p-2">
+													<div className="text-xs text-gray-400 mb-1">Points Against</div>
+													<div className="font-semibold text-red-400">{formatPoints(row.pointsAgainst)}</div>
 												</div>
 											</div>
 
 											{/* Bottom row: Proj. Record / Luck / Rem. SOS */}
 											<div className="grid grid-cols-3 gap-3 text-sm mt-3">
-												<div className="bg-gray-50 rounded-lg p-2">
-													<div className="text-xs text-gray-500 mb-1">Proj. Record</div>
-													<div className="font-semibold text-blue-700">{row.projectedRecord}</div>
+												<div className="bg-gray-700 rounded-lg p-2">
+													<div className="text-xs text-gray-400 mb-1">Proj. Record</div>
+													<div className="font-semibold text-blue-400">{row.projectedRecord}</div>
 												</div>
-												<div className="bg-gray-50 rounded-lg p-2">
-													<div className="text-xs text-gray-500 mb-1">Luck</div>
-													<div className={`font-semibold ${row.luckRating > 0 ? 'text-green-600' : row.luckRating < 0 ? 'text-red-600' : 'text-gray-700'}`}>
+												<div className="bg-gray-700 rounded-lg p-2">
+													<div className="text-xs text-gray-400 mb-1">Luck</div>
+													<div className={`font-semibold ${row.luckRating > 0 ? 'text-green-400' : row.luckRating < 0 ? 'text-red-400' : 'text-gray-400'}`}>
 														{formatLuckRating(row.luckRating)}
 													</div>
 												</div>
-												<div className="bg-gray-50 rounded-lg p-2">
-													<div className="text-xs text-gray-500 mb-1">Rem. SOS</div>
+												<div className="bg-gray-700 rounded-lg p-2">
+													<div className="text-xs text-gray-400 mb-1">Rem. SOS</div>
 													{(() => {
 														const min = 1, max = teamCount || 12;
 														const percent = (row.sosRank - min) / (max - min || 1);
@@ -712,7 +710,7 @@ const renderMovement = (movement) => {
 														const g = Math.round(38 + (163 - 38) * percent);
 														const b = Math.round(38 + (74 - 38) * percent);
 														const color = `rgb(${r},${g},${b})`;
-														return <div className="font-bold" style={{color}}>{row.sosRank}</div>;
+														return <div className="font-bold text-white" style={{color}}>{row.sosRank}</div>;
 													})()}
 												</div>
 											</div>
@@ -724,19 +722,19 @@ const renderMovement = (movement) => {
 
 						{/* Desktop Table View */}
 						<div className="hidden sm:block overflow-x-auto shadow-lg rounded-lg min-w-0">
-							<table className="min-w-full bg-white border border-gray-200 rounded-lg min-w-0">
-								<thead className="bg-blue-100 sticky top-0 z-10">
+							<table className="min-w-full bg-gray-800 border border-white/10 rounded-lg min-w-0">
+								<thead className="bg-gray-700 sticky top-0 z-10">
 									<tr>
-										<th className="py-3 md:py-4 px-3 md:px-4 text-left text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Rank</th>
-										<th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Change</th>
-										<th className="py-3 md:py-4 px-3 md:px-4 text-left text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Team</th>
-										<th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">DPR</th>
-										<th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Record</th>
-										<th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">PF</th>
-										<th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">PA</th>
-										<th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Luck</th>
-										<th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Proj. Record</th>
-										<th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-700 uppercase tracking-wider border-b border-gray-200">Rem. SOS</th>
+										<th className="py-3 md:py-4 px-3 md:px-4 text-left text-xs font-bold text-blue-300 uppercase tracking-wider border-b border-white/10">Rank</th>
+										<th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-300 uppercase tracking-wider border-b border-white/10">Change</th>
+										<th className="py-3 md:py-4 px-3 md:px-4 text-left text-xs font-bold text-blue-300 uppercase tracking-wider border-b border-white/10">Team</th>
+										<th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-300 uppercase tracking-wider border-b border-white/10">DPR</th>
+										<th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-300 uppercase tracking-wider border-b border-white/10">Record</th>
+										<th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-300 uppercase tracking-wider border-b border-white/10">PF</th>
+										<th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-300 uppercase tracking-wider border-b border-white/10">PA</th>
+										<th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-300 uppercase tracking-wider border-b border-white/10">Luck</th>
+										<th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-300 uppercase tracking-wider border-b border-white/10">Proj. Record</th>
+										<th className="py-3 md:py-4 px-3 md:px-4 text-center text-xs font-bold text-blue-300 uppercase tracking-wider border-b border-white/10">Rem. SOS</th>
 									</tr>
 								</thead>
 								<tbody>
@@ -747,24 +745,24 @@ const renderMovement = (movement) => {
 										return (
 											<React.Fragment key={row.ownerId}>
 												{isNewTier && (
-													<tr className="bg-blue-50">
+													<tr className="bg-gray-700">
 														<td colSpan="10" className="py-1 px-3 md:px-4 text-center">
 															<div className="flex items-center justify-center w-full">
-																<div className="flex-1 h-px bg-blue-300"></div>
-																<span className="px-3 text-xs font-semibold text-blue-600 uppercase tracking-wide">
+																<div className="flex-1 h-px bg-blue-500"></div>
+																<span className="px-3 text-xs font-semibold text-blue-300 uppercase tracking-wide">
 																	Tier {row.tier}
 																</span>
-																<div className="flex-1 h-px bg-blue-300"></div>
+																<div className="flex-1 h-px bg-blue-500"></div>
 															</div>
 														</td>
 													</tr>
 												)}
-												<tr className="hover:bg-gray-50 transition-colors touch-friendly">
-													<td className="py-2 md:py-3 px-3 md:px-4 text-sm text-blue-700 font-bold border-b border-gray-200">{row.rank}</td>
-													<td className="py-2 md:py-3 px-3 md:px-4 text-sm text-center border-b border-gray-200">
+												<tr className="hover:bg-white/5 transition-colors touch-friendly">
+													<td className="py-2 md:py-3 px-3 md:px-4 text-sm text-blue-300 font-bold border-b border-white/10">{row.rank}</td>
+													<td className="py-2 md:py-3 px-3 md:px-4 text-sm text-center border-b border-white/10">
 														{renderMovement(row.movement)}
 													</td>
-													<td className="py-2 md:py-3 px-3 md:px-4 text-sm text-gray-800 font-medium border-b border-gray-200">
+													<td className="py-2 md:py-3 px-3 md:px-4 text-sm text-white font-medium border-b border-white/10">
 														<div className="flex items-center gap-2 md:gap-3">
 															<img
 																src={getTeamDetails(row.ownerId, row.year)?.avatar || `https://sleepercdn.com/avatars/default_avatar.png`}
@@ -786,12 +784,12 @@ const renderMovement = (movement) => {
 															</div>
 														</div>
 													</td>
-													<td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold text-blue-800">{formatDPR(row.dpr)}</td>
-													<td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold">{renderRecord(row.wins, row.losses, row.ties)}</td>
-													<td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold text-green-700">{formatPoints(row.pointsFor)}</td>
-													<td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold text-red-700">{formatPoints(row.pointsAgainst)}</td>
-													<td className={`py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold ${row.luckRating > 0 ? 'text-green-600' : row.luckRating < 0 ? 'text-red-600' : 'text-gray-700'}`}>{formatLuckRating(row.luckRating)}</td>
-													<td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-semibold text-blue-700">{row.projectedRecord}</td>
+													<td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-white/10 font-semibold text-blue-300">{formatDPR(row.dpr)}</td>
+													<td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-white/10 font-semibold text-white">{renderRecord(row.wins, row.losses, row.ties)}</td>
+													<td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-white/10 font-semibold text-green-400">{formatPoints(row.pointsFor)}</td>
+													<td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-white/10 font-semibold text-red-400">{formatPoints(row.pointsAgainst)}</td>
+													<td className={`py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-white/10 font-semibold ${row.luckRating > 0 ? 'text-green-400' : row.luckRating < 0 ? 'text-red-400' : 'text-gray-400'}`}>{formatLuckRating(row.luckRating)}</td>
+													<td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-white/10 font-semibold text-blue-400">{row.projectedRecord}</td>
 													{/* Smooth red-to-green gradient for SOS rank: 1 (hardest, red) to 12 (easiest, green) */}
 													{(() => {
 														// 1 = hardest (red), 12 = easiest (green)
@@ -803,7 +801,7 @@ const renderMovement = (movement) => {
 														const b = Math.round(38 + (74 - 38) * percent);
 														const color = `rgb(${r},${g},${b})`;
 														return (
-															<td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-gray-200 font-bold" style={{color}}>{row.sosRank}</td>
+															<td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-center border-b border-white/10 font-bold text-white" style={{color}}>{row.sosRank}</td>
 														);
 													})()}
 												</tr>
@@ -827,7 +825,7 @@ const renderMovement = (movement) => {
 						{legendOpen ? 'Hide legend' : 'Legend'}
 					</button>
 					{legendOpen && (
-						<div className="mx-auto max-w-md text-left text-xs text-gray-700 bg-white shadow-sm rounded p-3 mt-2">
+						<div className="mx-auto max-w-md text-left text-xs text-gray-300 bg-gray-800 shadow-sm rounded p-3 mt-2">
 							<div className="flex items-center gap-2 mb-1"><span>🔥</span><span className="text-sm">Hot — Multi-week upward trend</span></div>
 							<div className="flex items-center gap-2 mb-1"><span>❄️</span><span className="text-sm">Cold — Multi-week downward trend</span></div>
 							<div className="flex items-center gap-2 mb-1"><span>☠️</span><span className="text-sm">Eliminated — Removed from Survivor</span></div>
