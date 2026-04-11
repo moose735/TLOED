@@ -96,6 +96,359 @@ const darkComparisonClass = (teamValue, opponentValue, isHigherBetter = true) =>
     }
 };
 
+// ── Notable Rivalry Card ──────────────────────────────────────────────────────
+
+const RivalryBarCompare = ({ leftVal, rightVal, leftColor = '#10b981', rightColor = '#ef4444' }) => {
+    const total = (leftVal || 0) + (rightVal || 0);
+    if (!total) return null;
+    const leftPct = (leftVal / total) * 100;
+    return (
+        <div className="w-full h-1.5 rounded-full overflow-hidden flex mt-1">
+            <div style={{ width: `${leftPct}%`, background: leftColor, transition: 'width 0.4s ease' }} />
+            <div style={{ width: `${100 - leftPct}%`, background: rightColor }} />
+        </div>
+    );
+};
+
+const NotableRivalryCard = ({ title, subtitle, accentColor, statLabel, statValue, teamA, teamB, onSelect }) => {
+    const accentBorder = {
+        blue:   'border-blue-500/60',
+        purple: 'border-purple-500/60',
+        amber:  'border-amber-500/60',
+        teal:   'border-teal-500/60',
+        rose:   'border-rose-500/60',
+        indigo: 'border-indigo-500/60',
+    }[accentColor] || 'border-blue-500/60';
+
+    const accentText = {
+        blue:   'text-blue-400',
+        purple: 'text-purple-400',
+        amber:  'text-amber-400',
+        teal:   'text-teal-400',
+        rose:   'text-rose-400',
+        indigo: 'text-indigo-400',
+    }[accentColor] || 'text-blue-400';
+
+    const accentBg = {
+        blue:   'bg-blue-500/10',
+        purple: 'bg-purple-500/10',
+        amber:  'bg-amber-500/10',
+        teal:   'bg-teal-500/10',
+        rose:   'bg-rose-500/10',
+        indigo: 'bg-indigo-500/10',
+    }[accentColor] || 'bg-blue-500/10';
+
+    const totalGamesA = (teamA?.wins || 0) + (teamA?.losses || 0) + (teamA?.ties || 0);
+    const totalGamesB = (teamB?.wins || 0) + (teamB?.losses || 0) + (teamB?.ties || 0);
+
+    return (
+        <div
+            onClick={onSelect}
+            className={`${card} border-l-2 ${accentBorder} flex flex-col gap-0 cursor-pointer hover:bg-white/[0.04] transition-all duration-150 overflow-hidden`}
+        >
+            {/* Title row */}
+            <div className="px-4 pt-4 pb-2">
+                <div className={`text-sm font-bold text-white leading-tight`}>{title}</div>
+                <div className="text-[10px] text-gray-500 mt-0.5">{subtitle}</div>
+            </div>
+
+            {/* Stat highlight */}
+            <div className={`mx-4 mb-3 ${accentBg} border border-white/5 rounded-lg px-3 py-2.5 text-center`}>
+                <div className={`text-[10px] font-semibold ${accentText} uppercase tracking-widest mb-0.5`}>{statLabel}</div>
+                <div className="text-2xl font-black text-white tracking-tight leading-none">{statValue}</div>
+            </div>
+
+            {/* Team A */}
+            <div className="px-4 pb-1">
+                <div className="flex justify-between items-center mb-1">
+                    <span className="text-xs font-semibold text-gray-200 truncate max-w-[45%]">{teamA?.name}</span>
+                    <span className="text-xs font-semibold text-gray-200 truncate max-w-[45%] text-right">{teamB?.name}</span>
+                </div>
+                {/* Record row */}
+                <div className="flex justify-between items-center text-[10px] text-gray-400 mb-0.5">
+                    <span className="font-medium">
+                        {teamA?.wins || 0}-{teamA?.losses || 0}{teamA?.ties ? `-${teamA.ties}` : ''}{' '}
+                        <span className="text-gray-600">({totalGamesA ? Math.round(((teamA?.wins || 0) / totalGamesA) * 100) : 0}%)</span>
+                    </span>
+                    <span className="text-gray-600 text-[9px] uppercase tracking-wider">Record</span>
+                    <span className="font-medium text-right">
+                        <span className="text-gray-600">({totalGamesB ? Math.round(((teamB?.wins || 0) / totalGamesB) * 100) : 0}%) </span>
+                        {teamB?.wins || 0}-{teamB?.losses || 0}{teamB?.ties ? `-${teamB.ties}` : ''}
+                    </span>
+                </div>
+                <RivalryBarCompare leftVal={teamA?.wins || 0} rightVal={teamB?.wins || 0} />
+
+                {/* Points row */}
+                <div className="flex justify-between items-center text-[10px] text-gray-400 mt-2 mb-0.5">
+                    <span className="font-medium">
+                        {teamA?.ptsFor != null ? formatScore(teamA.ptsFor, 2) : '—'}
+                        {teamA?.ppg != null ? <span className="text-gray-600"> ({formatScore(teamA.ppg, 1)})</span> : ''}
+                    </span>
+                    <span className="text-gray-600 text-[9px] uppercase tracking-wider">Total Pts (PPG)</span>
+                    <span className="font-medium text-right">
+                        {teamB?.ptsFor != null ? formatScore(teamB.ptsFor, 2) : '—'}
+                        {teamB?.ppg != null ? <span className="text-gray-600"> ({formatScore(teamB.ppg, 1)})</span> : ''}
+                    </span>
+                </div>
+                <RivalryBarCompare leftVal={teamA?.ptsFor || 0} rightVal={teamB?.ptsFor || 0} leftColor="#3b82f6" rightColor="#6366f1" />
+            </div>
+
+            {/* Footer */}
+            <div className="mt-auto px-4 py-2.5 border-t border-white/5 text-center">
+                <span className="text-[10px] text-gray-600 font-medium">{teamA?.matchups || 0} Matchups</span>
+            </div>
+        </div>
+    );
+};
+
+// ── Team Rivalries Table ──────────────────────────────────────────────────────
+
+const heatCell = (value, min, max, isGood = true) => {
+    if (value == null || isNaN(value) || max === min) return { background: 'transparent', color: '#9ca3af' };
+    const t = (value - min) / (max - min);
+    const clampedT = Math.max(0, Math.min(1, t));
+    let r, g, b;
+    if (isGood) {
+        // red → yellow → green
+        if (clampedT < 0.5) {
+            r = 239; g = Math.round(lerp(68, 222, clampedT * 2)); b = 68;
+        } else {
+            r = Math.round(lerp(239, 34, (clampedT - 0.5) * 2)); g = Math.round(lerp(222, 197, (clampedT - 0.5) * 2)); b = Math.round(lerp(68, 94, (clampedT - 0.5) * 2));
+        }
+    } else {
+        if (clampedT < 0.5) {
+            r = 34; g = Math.round(lerp(197, 222, clampedT * 2)); b = 94;
+        } else {
+            r = Math.round(lerp(34, 239, (clampedT - 0.5) * 2)); g = Math.round(lerp(222, 68, (clampedT - 0.5) * 2)); b = Math.round(lerp(94, 68, (clampedT - 0.5) * 2));
+        }
+    }
+    const lum = rgbLuminance(r, g, b);
+    const color = lum < 0.4 ? '#fff' : '#0f172a';
+    return { background: `rgba(${r},${g},${b},0.85)`, color };
+};
+
+const TeamRivalriesTable = ({ selectedOwnerId, headToHeadRecords, getTeamName, sortedDisplayNamesAndOwners, onChangeTeam, onSelectRivalry }) => {
+    const [sortCol, setSortCol] = useState('opponent');
+    const [sortDir, setSortDir] = useState('asc');
+
+    const rows = useMemo(() => {
+        const result = [];
+        Object.entries(headToHeadRecords).forEach(([key, rivalry]) => {
+            const owners = rivalry.owners || [];
+            if (!owners.includes(selectedOwnerId)) return;
+            const opponentId = owners.find(o => o !== selectedOwnerId);
+            if (!opponentId) return;
+            const myRecord = rivalry[selectedOwnerId] || { wins: 0, losses: 0, ties: 0 };
+            const totalGames = (myRecord.wins || 0) + (myRecord.losses || 0) + (myRecord.ties || 0);
+            if (totalGames === 0) return;
+
+            let myPtsFor = 0, oppPtsFor = 0;
+            let matchCount = 0;
+            rivalry.allMatches.forEach(m => {
+                const isTeam1 = m.team1OwnerId === selectedOwnerId;
+                const myScore = isTeam1 ? m.team1Score : m.team2Score;
+                const oppScore = isTeam1 ? m.team2Score : m.team1Score;
+                if (isNaN(myScore) || isNaN(oppScore) || (myScore === 0 && oppScore === 0)) return;
+                myPtsFor += myScore;
+                oppPtsFor += oppScore;
+                matchCount++;
+            });
+
+            const myAvg = matchCount > 0 ? myPtsFor / matchCount : 0;
+            const oppAvg = matchCount > 0 ? oppPtsFor / matchCount : 0;
+            const ptsMargin = myPtsFor - oppPtsFor;
+            const winPct = totalGames > 0 ? ((myRecord.wins || 0) / totalGames) * 100 : 0;
+            const avgDiff = matchCount > 0 ? (myPtsFor - oppPtsFor) / matchCount : 0;
+
+            result.push({
+                key, opponentId,
+                opponentName: getTeamName(opponentId, null),
+                ptsForAvg: myAvg,
+                ptsAgainstAvg: oppAvg,
+                wins: myRecord.wins || 0,
+                losses: myRecord.losses || 0,
+                ties: myRecord.ties || 0,
+                totalPts: myPtsFor,
+                ptsMargin,
+                winPct,
+                avgDiff,
+                totalGames,
+            });
+        });
+        return result;
+    }, [selectedOwnerId, headToHeadRecords, getTeamName]);
+
+    const sorted = useMemo(() => {
+        return [...rows].sort((a, b) => {
+            let valA = a[sortCol], valB = b[sortCol];
+            if (sortCol === 'opponent') { valA = a.opponentName; valB = b.opponentName; }
+            if (typeof valA === 'string') return sortDir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+            return sortDir === 'asc' ? valA - valB : valB - valA;
+        });
+    }, [rows, sortCol, sortDir]);
+
+    const handleSort = (col) => {
+        if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+        else { setSortCol(col); setSortDir(col === 'opponent' ? 'asc' : 'desc'); }
+    };
+
+    // Range helpers for heat coloring
+    const range = (key) => {
+        const vals = rows.map(r => r[key]).filter(v => typeof v === 'number' && !isNaN(v));
+        return { min: Math.min(...vals), max: Math.max(...vals) };
+    };
+    const rPtsFAvg = range('ptsForAvg');
+    const rPtsAAvg = range('ptsAgainstAvg');
+    const rWins = range('wins');
+    const rLosses = range('losses');
+    const rTotalPts = range('totalPts');
+    const rPtsMargin = range('ptsMargin');
+    const rWinPct = range('winPct');
+    const rAvgDiff = range('avgDiff');
+
+    const SortIcon = ({ col }) => sortCol === col ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
+
+    const colClass = "py-2.5 px-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-white transition-colors whitespace-nowrap select-none";
+
+    if (rows.length === 0) {
+        return <div className="text-center text-gray-500 text-sm py-6">No rivalry data for this team.</div>;
+    }
+
+    return (
+        <div className={card}>
+            <div className={cardHeader}>
+                <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0" />
+                </svg>
+                <div className="flex-1 min-w-0">
+                    <span className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                        Rivalries for <span className="text-white">{getTeamName(selectedOwnerId, null)}</span>
+                    </span>
+                    <div className="text-[10px] text-gray-600 mt-0.5">Use the button to the right to change the team you want to view the rivalries for.</div>
+                </div>
+                <button
+                    onClick={onChangeTeam}
+                    className="flex-shrink-0 px-3 py-1.5 bg-gray-700 border border-white/15 text-gray-200 text-xs font-semibold rounded-lg hover:bg-gray-600 hover:text-white transition-colors whitespace-nowrap"
+                >
+                    Change Team
+                </button>
+            </div>
+            <div className="overflow-x-auto">
+                <table className="min-w-full text-xs">
+                    <thead>
+                        <tr className="border-b border-white/10 bg-gray-900/30">
+                            <th className={`${colClass} text-left sticky left-0 bg-gray-900/80 z-10`} onClick={() => handleSort('opponent')}>Opponent<SortIcon col="opponent" /></th>
+                            <th className={colClass} onClick={() => handleSort('ptsForAvg')}>Pts For Avg<SortIcon col="ptsForAvg" /></th>
+                            <th className={colClass} onClick={() => handleSort('ptsAgainstAvg')}>Pts Against Avg<SortIcon col="ptsAgainstAvg" /></th>
+                            <th className={colClass} onClick={() => handleSort('wins')}>Wins<SortIcon col="wins" /></th>
+                            <th className={colClass} onClick={() => handleSort('losses')}>Losses<SortIcon col="losses" /></th>
+                            <th className={colClass} onClick={() => handleSort('totalPts')}>Total Pts<SortIcon col="totalPts" /></th>
+                            <th className={colClass} onClick={() => handleSort('ptsMargin')}>Pts Margin<SortIcon col="ptsMargin" /></th>
+                            <th className={colClass} onClick={() => handleSort('winPct')}>Win %<SortIcon col="winPct" /></th>
+                            <th className={colClass} onClick={() => handleSort('avgDiff')}>Avg Diff<SortIcon col="avgDiff" /></th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                        {sorted.map((row) => {
+                            const pfStyle = heatCell(row.ptsForAvg, rPtsFAvg.min, rPtsFAvg.max, true);
+                            const paStyle = heatCell(row.ptsAgainstAvg, rPtsAAvg.min, rPtsAAvg.max, false);
+                            const wStyle = heatCell(row.wins, rWins.min, rWins.max, true);
+                            const lStyle = heatCell(row.losses, rLosses.min, rLosses.max, false);
+                            const tpStyle = heatCell(row.totalPts, rTotalPts.min, rTotalPts.max, true);
+                            const pmStyle = heatCell(row.ptsMargin, rPtsMargin.min, rPtsMargin.max, true);
+                            const wpStyle = heatCell(row.winPct, rWinPct.min, rWinPct.max, true);
+                            const adStyle = heatCell(row.avgDiff, rAvgDiff.min, rAvgDiff.max, true);
+                            return (
+                                <tr
+                                    key={row.key}
+                                    className="hover:bg-white/[0.03] transition-colors cursor-pointer"
+                                    onClick={() => onSelectRivalry(row.key, [selectedOwnerId, row.opponentId])}
+                                >
+                                    <td className="py-2 px-3 font-semibold text-gray-200 whitespace-nowrap sticky left-0 bg-gray-800 z-10 border-r border-white/5">
+                                        {row.opponentName}
+                                    </td>
+                                    <td className="py-1 px-1">
+                                        <div style={pfStyle} className="rounded px-2 py-1 text-center tabular-nums font-semibold">
+                                            {formatScore(row.ptsForAvg, 1)}
+                                        </div>
+                                    </td>
+                                    <td className="py-1 px-1">
+                                        <div style={paStyle} className="rounded px-2 py-1 text-center tabular-nums font-semibold">
+                                            {formatScore(row.ptsAgainstAvg, 1)}
+                                        </div>
+                                    </td>
+                                    <td className="py-1 px-1">
+                                        <div style={wStyle} className="rounded px-2 py-1 text-center tabular-nums font-semibold">
+                                            {row.wins}
+                                        </div>
+                                    </td>
+                                    <td className="py-1 px-1">
+                                        <div style={lStyle} className="rounded px-2 py-1 text-center tabular-nums font-semibold">
+                                            {row.losses}
+                                        </div>
+                                    </td>
+                                    <td className="py-1 px-1">
+                                        <div style={tpStyle} className="rounded px-2 py-1 text-center tabular-nums font-semibold">
+                                            {formatScore(row.totalPts, 0)}
+                                        </div>
+                                    </td>
+                                    <td className="py-1 px-1">
+                                        <div style={pmStyle} className="rounded px-2 py-1 text-center tabular-nums font-semibold">
+                                            {formatScore(row.ptsMargin, 1)}
+                                        </div>
+                                    </td>
+                                    <td className="py-1 px-1">
+                                        <div style={wpStyle} className="rounded px-2 py-1 text-center tabular-nums font-semibold">
+                                            {Math.round(row.winPct)}%
+                                        </div>
+                                    </td>
+                                    <td className="py-1 px-1">
+                                        <div style={adStyle} className="rounded px-2 py-1 text-center tabular-nums font-semibold">
+                                            {formatScore(row.avgDiff, 1)}
+                                        </div>
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
+// ── Team picker modal ─────────────────────────────────────────────────────────
+
+const TeamPickerModal = ({ teams, onSelect, onClose }) => (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+        <div
+            className="relative bg-gray-900 border border-white/15 rounded-2xl shadow-2xl w-full max-w-sm p-5 z-10"
+            onClick={e => e.stopPropagation()}
+        >
+            <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider">Select a Team</h3>
+                <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div className="space-y-1 max-h-72 overflow-y-auto pr-1">
+                {teams.map(t => (
+                    <button
+                        key={t.ownerId}
+                        onClick={() => { onSelect(t.ownerId); onClose(); }}
+                        className="w-full text-left px-3 py-2.5 rounded-lg text-sm text-gray-200 hover:bg-white/10 hover:text-white transition-colors font-medium"
+                    >
+                        {t.displayName}
+                    </button>
+                ))}
+            </div>
+        </div>
+    </div>
+);
+
 // ── Main Component ────────────────────────────────────────────────────────────
 
 const Head2HeadGrid = () => {
@@ -114,6 +467,8 @@ const Head2HeadGrid = () => {
     const [selectedRivalryOwners, setSelectedRivalryOwners] = useState(null);
     const [loading, setLoading] = useState(true);
     const [weeklyHighScoreCounts, setWeeklyHighScoreCounts] = useState({});
+    const [teamRivalriesOwnerId, setTeamRivalriesOwnerId] = useState(null);
+    const [showTeamPicker, setShowTeamPicker] = useState(false);
 
     // ── Data processing (untouched) ───────────────────────────────────────────
     useEffect(() => {
@@ -303,6 +658,13 @@ const Head2HeadGrid = () => {
             .sort((a, b) => a.displayName.localeCompare(b.displayName));
     }, [headToHeadRecords, getTeamName]);
 
+    // Set default team for rivalries table
+    useEffect(() => {
+        if (!teamRivalriesOwnerId && sortedDisplayNamesAndOwners.length > 0) {
+            setTeamRivalriesOwnerId(sortedDisplayNamesAndOwners[0].ownerId);
+        }
+    }, [sortedDisplayNamesAndOwners, teamRivalriesOwnerId]);
+
     const bestRecordsByOwner = useMemo(() => {
         const result = {};
         Object.values(headToHeadRecords).forEach(r => {
@@ -349,6 +711,152 @@ const Head2HeadGrid = () => {
         });
         return rows;
     }, [bestRecordsByOwner, getTeamName]);
+
+    // ── Notable Rivalries computation ─────────────────────────────────────────
+    const notableRivalries = useMemo(() => {
+        if (!Object.keys(headToHeadRecords).length) return null;
+
+        // Build enriched rivalry stats for each key
+        const enriched = Object.entries(headToHeadRecords).map(([key, rivalry]) => {
+            const owners = rivalry.owners || [];
+            if (owners.length < 2) return null;
+            const [ownerA, ownerB] = owners;
+            const recA = rivalry[ownerA] || { wins: 0, losses: 0, ties: 0 };
+            const recB = rivalry[ownerB] || { wins: 0, losses: 0, ties: 0 };
+            const totalGames = (recA.wins + recA.losses + recA.ties);
+
+            let ptsA = 0, ptsB = 0, playedCount = 0;
+            let margins = [];
+            rivalry.allMatches.forEach(m => {
+                const isA1 = m.team1OwnerId === ownerA;
+                const scoreA = isA1 ? m.team1Score : m.team2Score;
+                const scoreB = isA1 ? m.team2Score : m.team1Score;
+                if (isNaN(scoreA) || isNaN(scoreB) || (scoreA === 0 && scoreB === 0)) return;
+                ptsA += scoreA; ptsB += scoreB; playedCount++;
+                if (!m.isTie) margins.push(Math.abs(scoreA - scoreB));
+            });
+
+            const ppgA = playedCount > 0 ? ptsA / playedCount : 0;
+            const ppgB = playedCount > 0 ? ptsB / playedCount : 0;
+            const totalPts = ptsA + ptsB;
+            const avgMargin = margins.length > 0 ? margins.reduce((a, b) => a + b, 0) / margins.length : Infinity;
+            const winPctA = totalGames > 0 ? recA.wins / totalGames : 0;
+            const winPctB = totalGames > 0 ? recB.wins / totalGames : 0;
+            const maxWinPct = Math.max(winPctA, winPctB);
+            const minOppPpg = Math.min(ppgA, ppgB);
+            const maxPpg = Math.max(ppgA, ppgB);
+
+            return { key, ownerA, ownerB, recA, recB, ptsA, ptsB, ppgA, ppgB, totalPts, totalGames, avgMargin, winPctA, winPctB, maxWinPct, minOppPpg, maxPpg, playedCount };
+        }).filter(Boolean);
+
+        if (!enriched.length) return null;
+
+        // Helper to build team side object
+        const teamSide = (ownerId, ptsFor, ppg, rec, matchups) => ({
+            name: getTeamName(ownerId, null),
+            wins: rec.wins, losses: rec.losses, ties: rec.ties,
+            ptsFor, ppg, matchups,
+        });
+
+        // 1. Little Bro — most lopsided win % (higher winner win%)
+        const littleBro = enriched.reduce((best, r) => {
+            if (!best || r.maxWinPct > best.maxWinPct) return r;
+            return best;
+        }, null);
+
+        // 2. Power Couple — most total pts combined
+        const powerCouple = enriched.reduce((best, r) => {
+            if (!best || r.totalPts > best.totalPts) return r;
+            return best;
+        }, null);
+
+        // 3. Wrecking Ball — best individual PPG in any rivalry
+        const wreckingBall = enriched.reduce((best, r) => {
+            if (!best || r.maxPpg > best.maxPpg) return r;
+            return best;
+        }, null);
+
+        // 4. '85 Bears — lowest opponent PPG (best defense / worst offense faced)
+        const bears85 = enriched.filter(r => r.playedCount >= 2).reduce((best, r) => {
+            if (!best || r.minOppPpg < best.minOppPpg) return r;
+            return best;
+        }, null) || enriched.reduce((best, r) => {
+            if (!best || r.minOppPpg < best.minOppPpg) return r;
+            return best;
+        }, null);
+
+        // 5. Mirror, Mirror — closest average margin
+        const mirror = enriched.filter(r => r.playedCount >= 2).reduce((best, r) => {
+            if (!best || r.avgMargin < best.avgMargin) return r;
+            return best;
+        }, null) || enriched.reduce((best, r) => {
+            if (!best || r.avgMargin < best.avgMargin) return r;
+            return best;
+        }, null);
+
+        // 6. Elder Statesmen — most matchups
+        const elderStates = enriched.reduce((best, r) => {
+            if (!best || r.totalGames > best.totalGames) return r;
+            return best;
+        }, null);
+
+        const build = (r, winnerSide) => {
+            // winnerSide: 'A' = ownerA is the "better" team for this category, 'B' = ownerB
+            const dominantOwner = winnerSide === 'A' ? r.ownerA : r.ownerB;
+            const otherOwner = winnerSide === 'A' ? r.ownerB : r.ownerA;
+            const domPts = winnerSide === 'A' ? r.ptsA : r.ptsB;
+            const othPts = winnerSide === 'A' ? r.ptsB : r.ptsA;
+            const domPpg = winnerSide === 'A' ? r.ppgA : r.ppgB;
+            const othPpg = winnerSide === 'A' ? r.ppgB : r.ppgA;
+            const domRec = winnerSide === 'A' ? r.recA : r.recB;
+            const othRec = winnerSide === 'A' ? r.recB : r.recA;
+            return {
+                teamA: teamSide(dominantOwner, domPts, domPpg, domRec, r.totalGames),
+                teamB: teamSide(otherOwner, othPts, othPpg, othRec, r.totalGames),
+                key: r.key,
+                owners: [dominantOwner, otherOwner],
+            };
+        };
+
+        const whichSideDominates = (r) => r.winPctA >= r.winPctB ? 'A' : 'B';
+        const whichSideMorePts = (r) => r.ptsA >= r.ptsB ? 'A' : 'B';
+        const whichSideBetterPpg = (r) => r.ppgA >= r.ppgB ? 'A' : 'B';
+        const whichSideWorseOppPpg = (r) => r.ppgA <= r.ppgB ? 'A' : 'B'; // the team that scored LESS against the weaker scorer
+
+        return {
+            total: enriched.length,
+            littleBro: littleBro ? {
+                ...build(littleBro, whichSideDominates(littleBro)),
+                statLabel: 'Win %',
+                statValue: `${Math.round(littleBro.maxWinPct * 100)}%`,
+            } : null,
+            powerCouple: powerCouple ? {
+                ...build(powerCouple, whichSideMorePts(powerCouple)),
+                statLabel: 'Fantasy Points',
+                statValue: formatScore(powerCouple.totalPts, 2),
+            } : null,
+            wreckingBall: wreckingBall ? {
+                ...build(wreckingBall, whichSideBetterPpg(wreckingBall)),
+                statLabel: 'PPG',
+                statValue: formatScore(wreckingBall.maxPpg, 2),
+            } : null,
+            bears85: bears85 ? {
+                ...build(bears85, whichSideWorseOppPpg(bears85)),
+                statLabel: 'Opponent PPG',
+                statValue: formatScore(bears85.minOppPpg, 2),
+            } : null,
+            mirror: mirror ? {
+                ...build(mirror, 'A'),
+                statLabel: 'Avg Margin',
+                statValue: formatScore(mirror.avgMargin, 2),
+            } : null,
+            elderStates: elderStates ? {
+                ...build(elderStates, whichSideDominates(elderStates)),
+                statLabel: 'Matchups',
+                statValue: String(elderStates.totalGames),
+            } : null,
+        };
+    }, [headToHeadRecords, getTeamName]);
 
     // ── Rivalry detail renderer ───────────────────────────────────────────────
     const renderSelectedRivalryDetails = useCallback(() => {
@@ -741,10 +1249,68 @@ const Head2HeadGrid = () => {
     }
 
     // ── Main grid view ────────────────────────────────────────────────────────
+
+    const NOTABLE_CARDS = notableRivalries ? [
+        { key: 'littleBro',    title: "Little Bro",       subtitle: "Most lopsided win % in any rivalry.",        accent: 'rose',   data: notableRivalries.littleBro },
+        { key: 'powerCouple',  title: "Power Couple",     subtitle: "Rivalry with the most points scored all time.", accent: 'purple', data: notableRivalries.powerCouple },
+        { key: 'wreckingBall', title: "Wrecking Ball",    subtitle: "Best individual PPG in any rivalry.",         accent: 'amber',  data: notableRivalries.wreckingBall },
+        { key: 'bears85',      title: "'85 Bears",        subtitle: "Dominant defense? Or inept offense?",        accent: 'teal',   data: notableRivalries.bears85 },
+        { key: 'mirror',       title: "Mirror, Mirror",   subtitle: "Closest average margin of victory.",         accent: 'indigo', data: notableRivalries.mirror },
+        { key: 'elderStates',  title: "Elder Statesmen",  subtitle: "Most matchups played.",                      accent: 'blue',   data: notableRivalries.elderStates },
+    ].filter(c => c.data) : [];
+
     return (
         <div className="w-full space-y-6">
             {selectedRivalryKey ? renderSelectedRivalryDetails() : (
                 <>
+                    {/* ── Notable Rivalries ── */}
+                    {NOTABLE_CARDS.length > 0 && (
+                        <div>
+                            <div className="flex items-center justify-between mb-3">
+                                <div>
+                                    <h2 className="text-base font-bold text-white">Notable Rivalries</h2>
+                                </div>
+                                <span className="text-[10px] font-semibold text-gray-500 bg-white/5 border border-white/10 rounded-full px-2.5 py-1">
+                                    {notableRivalries.total} Total
+                                </span>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {NOTABLE_CARDS.map(({ key, title, subtitle, accent, data }) => (
+                                    <NotableRivalryCard
+                                        key={key}
+                                        title={title}
+                                        subtitle={subtitle}
+                                        accentColor={accent}
+                                        statLabel={data.statLabel}
+                                        statValue={data.statValue}
+                                        teamA={data.teamA}
+                                        teamB={data.teamB}
+                                        onSelect={() => {
+                                            setSelectedRivalryOwners(data.owners);
+                                            setSelectedRivalryKey(data.key);
+                                        }}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── Team Rivalries Table ── */}
+                    {teamRivalriesOwnerId && (
+                        <TeamRivalriesTable
+                            selectedOwnerId={teamRivalriesOwnerId}
+                            headToHeadRecords={headToHeadRecords}
+                            getTeamName={getTeamName}
+                            sortedDisplayNamesAndOwners={sortedDisplayNamesAndOwners}
+                            onChangeTeam={() => setShowTeamPicker(true)}
+                            onSelectRivalry={(key, owners) => {
+                                setSelectedRivalryOwners(owners);
+                                setSelectedRivalryKey(key);
+                            }}
+                        />
+                    )}
+
+                    {/* ── H2H Grid ── */}
                     <div className={card}>
                         <div className={cardHeader}>
                             <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -768,7 +1334,6 @@ const Head2HeadGrid = () => {
                                 overflow-x: auto;
                                 overflow-y: visible;
                                 padding: 1rem;
-                                /* New stacking context — critical for sticky to work inside overflow */
                                 position: relative;
                                 isolation: isolate;
                                 -webkit-overflow-scrolling: touch;
@@ -780,23 +1345,18 @@ const Head2HeadGrid = () => {
                                 min-width: 100%;
                                 table-layout: auto;
                             }
-                            /* Sticky column — works on both desktop and iOS Safari */
                             .h2h-sticky,
                             .h2h-corner {
                                 position: -webkit-sticky;
                                 position: sticky;
                                 left: 0;
-                                /* Hard-coded color — no Tailwind, no inheritance, no override possible */
                                 background: #1e293b !important;
                                 -webkit-background-clip: padding-box;
                                 background-clip: padding-box;
-                                /* Shadow to visually separate from scrolling content */
                                 box-shadow: 3px 0 0 0 rgba(255,255,255,0.06), 6px 0 16px 0 rgba(0,0,0,0.9);
                             }
                             .h2h-sticky { z-index: 30; }
                             .h2h-corner { z-index: 40; }
-
-                            /* Pseudo-element wall behind sticky cells — covers any bleed on mobile */
                             .h2h-sticky::before,
                             .h2h-corner::before {
                                 content: '';
@@ -805,7 +1365,6 @@ const Head2HeadGrid = () => {
                                 background: #1e293b;
                                 z-index: -1;
                             }
-
                             .h2h-cell {
                                 font-size: 11px;
                                 font-weight: 700;
@@ -836,7 +1395,6 @@ const Head2HeadGrid = () => {
                                 vertical-align: bottom;
                                 border-bottom: 1px solid rgba(255,255,255,0.08);
                             }
-                            /* Mobile: slightly smaller cells to fit more columns */
                             @media (max-width: 640px) {
                                 .h2h-cell { font-size: 10px; padding: 5px 2px; min-width: 48px; }
                                 .h2h-th   { font-size: 9px;  padding: 5px 2px; min-width: 48px; max-width: 56px; }
@@ -956,6 +1514,15 @@ const Head2HeadGrid = () => {
                         </div>
                     )}
                 </>
+            )}
+
+            {/* Team picker modal */}
+            {showTeamPicker && (
+                <TeamPickerModal
+                    teams={sortedDisplayNamesAndOwners}
+                    onSelect={setTeamRivalriesOwnerId}
+                    onClose={() => setShowTeamPicker(false)}
+                />
             )}
         </div>
     );

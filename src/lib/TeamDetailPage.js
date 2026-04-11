@@ -55,6 +55,8 @@ const thCenter = "py-2.5 px-3 text-center text-[10px] font-semibold text-gray-50
 const darkGrid = { stroke: 'rgba(255,255,255,0.05)' };
 const darkTick = { fill: '#6b7280', fontSize: 10 };
 
+const SEASON_HISTORY_PREVIEW = 5;
+
 // ── StatCard ──────────────────────────────────────────────────────────────────
 const StatCard = ({ title, value, rank }) => (
     <div className="bg-white/5 border border-white/10 rounded-xl p-3 flex flex-col items-center justify-center text-center min-w-[90px]">
@@ -100,6 +102,7 @@ const TeamDetailPage = ({ teamName }) => {
     const [activeTab, setActiveTab] = useState('game');
     const [financialDataByYear, setFinancialDataByYear] = useState({});
     const [loadingFinancial, setLoadingFinancial] = useState(true);
+    const [seasonHistoryExpanded, setSeasonHistoryExpanded] = useState(false);
 
     // ── All logic (completely untouched) ─────────────────────────────────────
     const aggregateTeamCareerRecords = async (teamName, ownerId) => {
@@ -494,6 +497,54 @@ const TeamDetailPage = ({ teamName }) => {
         return Math.floor(dataLength / 8);
     };
 
+    // ── Season history totals (across all seasons, not just visible) ──────────
+    const seasonHistoryTotals = useMemo(() => {
+        if (!sortedSeasonHistory.length) return null;
+        const ownerId = teamOverallStats?.ownerId;
+        let totalWins = 0, totalLosses = 0, totalTies = 0;
+        let totalPtsFor = 0, totalPtsAgainst = 0, totalLuck = 0;
+        let totalTrades = 0, totalWaivers = 0, totalNet = 0;
+        let totalAllPlay = 0, allPlayCount = 0;
+
+        sortedSeasonHistory.forEach(s => {
+            totalWins += s.wins ?? 0;
+            totalLosses += s.losses ?? 0;
+            totalTies += s.ties ?? 0;
+            totalPtsFor += s.pointsFor ?? 0;
+            totalPtsAgainst += s.pointsAgainst ?? 0;
+            totalLuck += s.luckRating ?? 0;
+            if (typeof s.allPlayWinPercentage === 'number') {
+                totalAllPlay += s.allPlayWinPercentage;
+                allPlayCount++;
+            }
+            if (ownerId) {
+                const fin = getTeamFinancialDataForYear(s.year.toString(), ownerId);
+                const txn = getTeamTransactionCountsForYear(s.year.toString(), ownerId);
+                totalNet += fin.netTotal ?? 0;
+                totalTrades += txn.tradeFees ?? 0;
+                totalWaivers += txn.waiverFees ?? 0;
+            }
+        });
+
+        return {
+            record: totalTies > 0 ? `${totalWins}-${totalLosses}-${totalTies}` : `${totalWins}-${totalLosses}`,
+            ptsFor: totalPtsFor,
+            ptsAgainst: totalPtsAgainst,
+            luck: totalLuck,
+            dpr: teamOverallStats?.avgDPR ?? null,
+            allPlayWinPct: allPlayCount > 0 ? totalAllPlay / allPlayCount : null,
+            trades: totalTrades,
+            waivers: totalWaivers,
+            net: totalNet,
+        };
+    }, [sortedSeasonHistory, teamOverallStats, financialDataByYear]);
+
+    // Rows to show — always the sorted list, sliced when collapsed
+    const hasMoreSeasons = sortedSeasonHistory.length > SEASON_HISTORY_PREVIEW;
+    const visibleSeasonHistory = seasonHistoryExpanded
+        ? sortedSeasonHistory
+        : sortedSeasonHistory.slice(0, SEASON_HISTORY_PREVIEW);
+
     // ── Loading / error ───────────────────────────────────────────────────────
     if (loadingStats) {
         return (
@@ -580,7 +631,8 @@ const TeamDetailPage = ({ teamName }) => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
-                                {sortedSeasonHistory.map((season, index) => {
+                                {/* Season rows — sliced when collapsed */}
+                                {visibleSeasonHistory.map((season) => {
                                     const financialData = getTeamFinancialDataForYear(season.year.toString(), teamOverallStats?.ownerId);
                                     const transactionCounts = getTeamTransactionCountsForYear(season.year.toString(), teamOverallStats?.ownerId);
                                     return (
@@ -602,6 +654,50 @@ const TeamDetailPage = ({ teamName }) => {
                                         </tr>
                                     );
                                 })}
+
+                                {/* Expand / collapse toggle row */}
+                                {hasMoreSeasons && (
+                                    <tr className="border-t border-white/5 bg-gray-900/20">
+                                        <td colSpan={12} className="py-0 px-2">
+                                            <button
+                                                onClick={() => setSeasonHistoryExpanded(prev => !prev)}
+                                                className="w-full py-2.5 flex items-center justify-center gap-1.5 text-[10px] font-semibold text-blue-400 hover:text-blue-300 uppercase tracking-wider transition-colors"
+                                            >
+                                                {seasonHistoryExpanded ? (
+                                                    <>
+                                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" /></svg>
+                                                        Show fewer seasons
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
+                                                        Show {sortedSeasonHistory.length - SEASON_HISTORY_PREVIEW} more season{sortedSeasonHistory.length - SEASON_HISTORY_PREVIEW !== 1 ? 's' : ''}
+                                                    </>
+                                                )}
+                                            </button>
+                                        </td>
+                                    </tr>
+                                )}
+
+                                {/* Totals row — always uses ALL seasons regardless of expand state */}
+                                {seasonHistoryTotals && (
+                                    <tr className="border-t-2 border-white/20 bg-gray-700/30">
+                                        <td className="py-2.5 px-2 text-center text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Total</td>
+                                        <td className="py-2.5 px-2 text-center font-bold text-white tabular-nums">{seasonHistoryTotals.record}</td>
+                                        <td className="py-2.5 px-2 text-center font-bold text-emerald-400 tabular-nums">{formatScore(seasonHistoryTotals.ptsFor)}</td>
+                                        <td className="py-2.5 px-2 text-center font-bold text-red-400 tabular-nums">{formatScore(seasonHistoryTotals.ptsAgainst)}</td>
+                                        <td className="py-2.5 px-2 text-center font-bold text-gray-300 tabular-nums">{formatLuckRating(seasonHistoryTotals.luck)}</td>
+                                        <td className="py-2.5 px-2 text-center text-gray-600">—</td>
+                                        <td className="py-2.5 px-2 text-center text-gray-600">—</td>
+                                        <td className="py-2.5 px-2 text-center font-bold text-blue-400 tabular-nums">{formatDPR(seasonHistoryTotals.dpr)}</td>
+                                        <td className="py-2.5 px-2 text-center font-bold text-gray-300 tabular-nums">{formatPercentage(seasonHistoryTotals.allPlayWinPct)}</td>
+                                        <td className="py-2.5 px-2 text-center font-bold text-gray-300 tabular-nums">{loadingFinancial ? '…' : seasonHistoryTotals.trades}</td>
+                                        <td className="py-2.5 px-2 text-center font-bold text-gray-300 tabular-nums">{loadingFinancial ? '…' : seasonHistoryTotals.waivers}</td>
+                                        <td className={`py-2.5 px-2 text-center font-bold tabular-nums ${loadingFinancial ? 'text-gray-600' : seasonHistoryTotals.net > 0 ? 'text-emerald-400' : seasonHistoryTotals.net < 0 ? 'text-red-400' : 'text-gray-500'}`}>
+                                            {loadingFinancial ? '…' : formatCurrency(seasonHistoryTotals.net)}
+                                        </td>
+                                    </tr>
+                                )}
                             </tbody>
                         </table>
                     </div>
