@@ -1,597 +1,421 @@
 // src/lib/PlayoffRecords.js
 import React, { useState, useEffect } from 'react';
-import { useSleeperData } from '../contexts/SleeperDataContext'; // Import useSleeperData context hook
+import { useSleeperData } from '../contexts/SleeperDataContext';
 import logger from '../utils/logger';
 
-const PlayoffRecords = ({ historicalMatchups }) => { // Removed getDisplayTeamName from props as it's now from context
-  const { historicalData, getTeamName, loading, error } = useSleeperData(); // Get historicalData and getTeamName from context
-  const [aggregatedPlayoffRecords, setAggregatedPlayoffRecords] = useState({});
-  
-  // State for collapsible sections
-  const [expandedSections, setExpandedSections] = useState({});
-  const [allPlayoffData, setAllPlayoffData] = useState({});
+const PlayoffRecords = ({ historicalMatchups }) => {
+    const { historicalData, getTeamName, loading, error } = useSleeperData();
+    const [aggregatedPlayoffRecords, setAggregatedPlayoffRecords] = useState({});
+    const [expandedSections, setExpandedSections] = useState({});
+    const [allPlayoffData, setAllPlayoffData] = useState({});
 
-  // Toggle function for expanding/collapsing sections
-  const toggleSection = (key) => {
-    setExpandedSections(prev => ({
-      ...prev,
-      [key]: !prev[key]
-    }));
-  };
-
-  useEffect(() => {
-    if (loading || error || !historicalMatchups || historicalMatchups.length === 0 || !historicalData || !historicalData.rostersBySeason) {
-      setAggregatedPlayoffRecords({});
-      setAllPlayoffData({});
-      return;
-    }
-
-    // Initialize collection for all playoff data
-    const tempAllPlayoffData = {
-      mostPlayoffAppearances: [],
-      mostPlayoffWins: [],
-      mostPlayoffLosses: [],
-      bestPlayoffWinPercentage: [],
-      worstPlayoffWinPercentage: [],
-      mostPlayoffPointsFor: [],
-      mostPlayoffPointsAgainst: [],
-      mostChampionships: [],
-      mostFirstPlaceFinishes: [],
-      mostSecondPlaceFinishes: [],
-      mostThirdPlaceFinishes: []
+    const toggleSection = (key) => {
+        setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
     };
 
-    // Helper function to add data to all playoff data collection
-    const addToAllPlayoffData = (recordKey, value, teamInfo) => {
-      if (typeof value === 'number' && !isNaN(value) && tempAllPlayoffData[recordKey]) {
-        tempAllPlayoffData[recordKey].push({
-          ...teamInfo,
-          value: value
-        });
-      }
-    };
-
-    // teamPlayoffStats will now be keyed by ownerId for consistent aggregation
-    const teamPlayoffStats = {}; // { ownerId: { appearances: Set<year>, wins: 0, losses: 0, ties: 0, pointsFor: 0, pointsAgainst: 0, medals: { 1: 0, 2: 0, 3: 0 }, championships: 0 } }
-
-    historicalMatchups.forEach((match, index) => {
-      const year = parseInt(match.year);
-      const team1RosterId = String(match.team1_roster_id);
-      const team2RosterId = String(match.team2_roster_id);
-      const team1Score = parseFloat(match.team1Score);
-      const team2Score = parseFloat(match.team2Score);
-
-      // Get owner IDs for consistent tracking across seasons
-      const rosterForTeam1 = historicalData.rostersBySeason?.[year]?.find(r => String(r.roster_id) === team1RosterId);
-      const team1OwnerId = rosterForTeam1?.owner_id;
-      const rosterForTeam2 = historicalData.rostersBySeason?.[year]?.find(r => String(r.roster_id) === team2RosterId);
-      const team2OwnerId = rosterForTeam2?.owner_id;
-
-      // Basic validation for any playoff match
-      if (!team1OwnerId || !team2OwnerId || isNaN(year) || isNaN(team1Score) || isNaN(team2Score) || !match.playoffs) {
-        logger.warn(`PlayoffRecords useEffect: Skipping match ${index} due to invalid data, not a playoff game, or missing owner IDs. Match:`, match, `Team1 Owner: ${team1OwnerId}, Team2 Owner: ${team2OwnerId}`);
-        return;
-      }
-
-      // Initialize team stats if not present for any owner involved in a playoff game
-      [team1OwnerId, team2OwnerId].forEach(ownerId => {
-        if (!teamPlayoffStats[ownerId]) {
-          teamPlayoffStats[ownerId] = {
-            appearances: new Set(),
-            wins: 0,
-            losses: 0,
-            ties: 0,
-            pointsFor: 0,
-            pointsAgainst: 0,
-            medals: { 1: 0, 2: 0, 3: 0 },
-            championships: 0
-          };
-        }
-      });
-
-      // --- Track Playoff Appearances (ONLY for Winners Bracket games) ---
-      // An appearance is counted if they played in a winners bracket playoff game in a season.
-      if (match.isWinnersBracket) {
-        teamPlayoffStats[team1OwnerId].appearances.add(year);
-        teamPlayoffStats[team2OwnerId].appearances.add(year);
-        logger.debug(`PlayoffRecords: Counting appearance for Owner ${team1OwnerId} (${getTeamName(team1OwnerId, year)}) and Owner ${team2OwnerId} (${getTeamName(team2OwnerId, year)}) in ${year} (Winners Bracket). Match:`, match);
-      } else if (match.isLosersBracket) {
-          logger.debug(`PlayoffRecords: NOT counting appearance for Owner ${team1OwnerId} (${getTeamName(team1OwnerId, year)}) and Owner ${team2OwnerId} (${getTeamName(team2OwnerId, year)}) in ${year} (Losers Bracket). Match:`, match);
-      }
-
-
-      // --- Track Wins/Losses/Ties, Points For/Against, Medals, Championships (ONLY for Winners Bracket games) ---
-      if (match.isWinnersBracket) {
-        const isTie = team1Score === team2Score;
-        const team1Won = team1Score > team2Score;
-
-        if (isTie) {
-          teamPlayoffStats[team1OwnerId].ties++;
-          teamPlayoffStats[team2OwnerId].ties++;
-        } else if (team1Won) {
-          teamPlayoffStats[team1OwnerId].wins++;
-          teamPlayoffStats[team2OwnerId].losses++;
-        } else { // team2Won
-          teamPlayoffStats[team2OwnerId].wins++;
-          teamPlayoffStats[team1OwnerId].losses++;
+    // ── All logic untouched ───────────────────────────────────────────────────
+    useEffect(() => {
+        if (loading || error || !historicalMatchups || historicalMatchups.length === 0 || !historicalData || !historicalData.rostersBySeason) {
+            setAggregatedPlayoffRecords({});
+            setAllPlayoffData({});
+            return;
         }
 
-        teamPlayoffStats[team1OwnerId].pointsFor += team1Score;
-        teamPlayoffStats[team1OwnerId].pointsAgainst += team2Score;
-        teamPlayoffStats[team2OwnerId].pointsFor += team2Score;
-        teamPlayoffStats[team2OwnerId].pointsAgainst += team1Score;
+        const tempAllPlayoffData = {
+            mostPlayoffAppearances: [], mostPlayoffWins: [], mostPlayoffLosses: [],
+            bestPlayoffWinPercentage: [], worstPlayoffWinPercentage: [],
+            mostPlayoffPointsFor: [], mostPlayoffPointsAgainst: [],
+            mostChampionships: [], mostFirstPlaceFinishes: [],
+            mostSecondPlaceFinishes: [], mostThirdPlaceFinishes: []
+        };
 
-  logger.debug(`PlayoffRecords: Processing winners bracket stats for Owner ${team1OwnerId} (${getTeamName(team1OwnerId, year)}) vs Owner ${team2OwnerId} (${getTeamName(team2OwnerId, year)}). Match:`, match);
+        const addToAllPlayoffData = (recordKey, value, teamInfo) => {
+            if (typeof value === 'number' && !isNaN(value) && tempAllPlayoffData[recordKey])
+                tempAllPlayoffData[recordKey].push({ ...teamInfo, value });
+        };
 
-        // Handle Medals and Championships based on finalSeedingGame
-        if (typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0) {
-          let winnerOwnerId = '';
-          let loserOwnerId = '';
-          if (team1Won) {
-            winnerOwnerId = team1OwnerId;
-            loserOwnerId = team2OwnerId;
-          } else if (team2Score > team1Score) {
-            winnerOwnerId = team2OwnerId;
-            loserOwnerId = team1OwnerId;
-          }
+        const teamPlayoffStats = {};
 
-          const finalPlacement = match.finalSeedingGame;
+        historicalMatchups.forEach((match, index) => {
+            const year = parseInt(match.year);
+            const team1RosterId = String(match.team1_roster_id);
+            const team2RosterId = String(match.team2_roster_id);
+            const team1Score = parseFloat(match.team1Score);
+            const team2Score = parseFloat(match.team2Score);
+            const rosterForTeam1 = historicalData.rostersBySeason?.[year]?.find(r => String(r.roster_id) === team1RosterId);
+            const team1OwnerId = rosterForTeam1?.owner_id;
+            const rosterForTeam2 = historicalData.rostersBySeason?.[year]?.find(r => String(r.roster_id) === team2RosterId);
+            const team2OwnerId = rosterForTeam2?.owner_id;
 
-          if (finalPlacement === 1) { // Championship Game
-            if (winnerOwnerId) {
-              teamPlayoffStats[winnerOwnerId].medals[1]++;
-              teamPlayoffStats[winnerOwnerId].championships++;
-              if (loserOwnerId) {
-                teamPlayoffStats[loserOwnerId].medals[2]++;
-              }
+            if (!team1OwnerId || !team2OwnerId || isNaN(year) || isNaN(team1Score) || isNaN(team2Score) || !match.playoffs) {
+                logger.warn(`PlayoffRecords useEffect: Skipping match ${index} due to invalid data, not a playoff game, or missing owner IDs. Match:`, match, `Team1 Owner: ${team1OwnerId}, Team2 Owner: ${team2OwnerId}`);
+                return;
             }
-          } else if (finalPlacement === 3) { // 3rd Place Game
-            if (winnerOwnerId) {
-              teamPlayoffStats[winnerOwnerId].medals[3]++;
-            }
-          }
-          // Can add logic for other final placements (e.g., 5th place) if desired
-        }
-    } else if (match.isLosersBracket) {
-      logger.debug(`PlayoffRecords: Skipping losers bracket stats for Owner ${team1OwnerId} (${getTeamName(team1OwnerId, year)}) vs Owner ${team2OwnerId} (${getTeamName(team2OwnerId, year)}) (only counting appearance). Match:`, match);
-    }
-    });
 
-    // --- DEBUGGING: Log aggregated playoff stats for each team ---
-    logger.debug("PlayoffRecords: Aggregated Playoff Stats Per Team:");
-    Object.entries(teamPlayoffStats).forEach(([ownerId, stats]) => {
-      // Use getTeamName(ownerId, null) to get the most current team name for display
-      const currentTeamName = getTeamName(ownerId, null);
-      logger.debug(`  Team: ${currentTeamName} (Owner ID: ${ownerId})`);
-      logger.debug(`    Playoff Appearances: ${stats.appearances.size} (Years: ${Array.from(stats.appearances).join(', ')})`);
-      logger.debug(`    Wins: ${stats.wins}`);
-      logger.debug(`    Losses: ${stats.losses}`);
-      logger.debug(`    Ties: ${stats.ties}`);
-      logger.debug(`    Points For: ${stats.pointsFor.toFixed(2)}`);
-      logger.debug(`    Points Against: ${stats.pointsAgainst.toFixed(2)}`);
-      logger.debug(`    Championships: ${stats.championships}`);
-      logger.debug(`    2nd Place Finishes: ${stats.medals[2]}`);
-      logger.debug(`    3rd Place Finishes: ${stats.medals[3]}`);
-    });
-    // --- END DEBUGGING ---
-
-
-    // Initialize aggregated records for top performers
-    const newAggregatedRecords = {
-      mostPlayoffAppearances: { value: 0, entries: [] }, // team, appearances
-      mostPlayoffWins: { value: 0, entries: [] }, // team, wins
-      totalPlayoffPoints: { value: 0, entries: [] }, // team, points
-      mostPlayoffPointsAgainst: { value: 0, entries: [] },
-      mostChampionships: { value: 0, entries: [] }, // team, championships
-      most2ndPlaceFinishes: { value: 0, entries: [] }, // team, 2nd places
-      most3rdPlaceFinishes: { value: 0, entries: [] }, // team, 3rd places
-    };
-
-    // Helper to update a record (max/min)
-    const updateRecord = (recordObj, newValue, entryDetails, isMin = false) => {
-      if (typeof newValue !== 'number' || isNaN(newValue)) return; // Ensure value is a number
-
-      if (isMin) {
-        if (newValue < recordObj.value) {
-          recordObj.value = newValue;
-          recordObj.entries = [entryDetails];
-        } else if (newValue === recordObj.value) {
-          // Prevent duplicates for ties
-          if (!recordObj.entries.some(e => e.team === entryDetails.team)) {
-            recordObj.entries.push(entryDetails);
-          }
-        }
-      } else { // Max
-        if (newValue > recordObj.value) {
-          recordObj.value = newValue;
-          recordObj.entries = [entryDetails];
-        } else if (newValue === recordObj.value) {
-          // Prevent duplicates for ties
-          if (!recordObj.entries.some(e => e.team === entryDetails.team)) {
-            recordObj.entries.push(entryDetails);
-          }
-        }
-      }
-    };
-
-    // Populate aggregated records from teamPlayoffStats
-    Object.keys(teamPlayoffStats).forEach(ownerId => { // Iterate through ownerIds
-      const stats = teamPlayoffStats[ownerId];
-      const currentTeamName = getTeamName(ownerId, null); // Get the current team name for display
-
-      const appearancesEntry = { team: currentTeamName, appearances: stats.appearances.size };
-      const winsEntry = { team: currentTeamName, wins: stats.wins };
-      const pointsEntry = { team: currentTeamName, points: stats.pointsFor };
-      const pointsAgainstEntry = { team: currentTeamName, pointsAgainst: stats.pointsAgainst };
-      const championshipsEntry = { team: currentTeamName, championships: stats.championships };
-      const secondPlaceEntry = { team: currentTeamName, secondPlaces: stats.medals[2] };
-      const thirdPlaceEntry = { team: currentTeamName, thirdPlaces: stats.medals[3] };
-
-      updateRecord(newAggregatedRecords.mostPlayoffAppearances, stats.appearances.size, appearancesEntry);
-      updateRecord(newAggregatedRecords.mostPlayoffWins, stats.wins, winsEntry);
-      updateRecord(newAggregatedRecords.totalPlayoffPoints, stats.pointsFor, pointsEntry);
-      updateRecord(newAggregatedRecords.mostPlayoffPointsAgainst, stats.pointsAgainst, pointsAgainstEntry);
-      updateRecord(newAggregatedRecords.mostChampionships, stats.championships, championshipsEntry);
-      updateRecord(newAggregatedRecords.most2ndPlaceFinishes, stats.medals[2], secondPlaceEntry);
-      updateRecord(newAggregatedRecords.most3rdPlaceFinishes, stats.medals[3], thirdPlaceEntry);
-
-      // Add to all playoff data for top 5 rankings
-      addToAllPlayoffData('mostPlayoffAppearances', stats.appearances.size, appearancesEntry);
-      addToAllPlayoffData('mostPlayoffWins', stats.wins, winsEntry);
-      addToAllPlayoffData('mostPlayoffPointsFor', stats.pointsFor, pointsEntry);
-      addToAllPlayoffData('mostPlayoffPointsAgainst', stats.pointsAgainst, pointsAgainstEntry);
-      addToAllPlayoffData('mostChampionships', stats.championships, championshipsEntry);
-      addToAllPlayoffData('mostFirstPlaceFinishes', stats.championships, championshipsEntry);
-      addToAllPlayoffData('mostSecondPlaceFinishes', stats.medals[2], secondPlaceEntry);
-      addToAllPlayoffData('mostThirdPlaceFinishes', stats.medals[3], thirdPlaceEntry);
-    });
-
-    // Clean up: filter out initial -Infinity/Infinity values, sort entries
-    Object.keys(newAggregatedRecords).forEach(key => {
-        const record = newAggregatedRecords[key];
-        // If a record has -Infinity or Infinity value and no entries, it means no valid record was found
-        if ((record.value === -Infinity || record.value === Infinity) && record.entries.length === 0) {
-            record.value = 0; // Default to 0 for display if no data
-            record.entries = [];
-        } else if (record.value === Infinity) { // If it's still Infinity, means no data, set to N/A for display
-            record.value = 'N/A';
-        }
-
-        // Sort entries consistently for tied records
-        if (record.entries.length > 1) {
-            record.entries.sort((a, b) => {
-                const teamCompare = (a.team || '').localeCompare(b.team || '');
-                if (teamCompare !== 0) return teamCompare;
-                // If teams are the same, order by value (desc for most, asc for lowest)
-                // The value to compare depends on the record key, e.g., 'appearances', 'wins', 'points', etc.
-                let valueA, valueB;
-                if (key === 'mostPlayoffAppearances') {
-                    valueA = a.appearances;
-                    valueB = b.appearances;
-                } else if (key === 'mostPlayoffWins') {
-                    valueA = a.wins;
-                    valueB = b.wins;
-                } else if (key === 'totalPlayoffPoints') {
-                    valueA = a.points;
-                    valueB = b.points;
-                } else if (key === 'mostPlayoffPointsAgainst') {
-                    valueA = a.pointsAgainst;
-                    valueB = b.pointsAgainst;
-                } else if (key === 'mostChampionships') {
-                    valueA = a.championships;
-                    valueB = b.championships;
-                } else if (key === 'most2ndPlaceFinishes') {
-                    valueA = a.secondPlaces;
-                    valueB = b.secondPlaces;
-                } else if (key === 'most3rdPlaceFinishes') {
-                    valueA = a.thirdPlaces;
-                    valueB = b.thirdPlaces;
-                } else {
-                    valueA = a.value; // Fallback to general 'value' if specific key not found
-                    valueB = b.value;
-                }
-
-                if (typeof valueA === 'number' && typeof valueB === 'number') {
-                    return valueB - valueA; // Always descending for "most" records
-                }
-                return 0;
+            [team1OwnerId, team2OwnerId].forEach(ownerId => {
+                if (!teamPlayoffStats[ownerId])
+                    teamPlayoffStats[ownerId] = { appearances: new Set(), wins: 0, losses: 0, ties: 0, pointsFor: 0, pointsAgainst: 0, medals: { 1: 0, 2: 0, 3: 0 }, championships: 0 };
             });
+
+            if (match.isWinnersBracket) {
+                teamPlayoffStats[team1OwnerId].appearances.add(year);
+                teamPlayoffStats[team2OwnerId].appearances.add(year);
+                logger.debug(`PlayoffRecords: Counting appearance for Owner ${team1OwnerId} (${getTeamName(team1OwnerId, year)}) and Owner ${team2OwnerId} (${getTeamName(team2OwnerId, year)}) in ${year} (Winners Bracket). Match:`, match);
+            } else if (match.isLosersBracket) {
+                logger.debug(`PlayoffRecords: NOT counting appearance for Owner ${team1OwnerId} (${getTeamName(team1OwnerId, year)}) and Owner ${team2OwnerId} (${getTeamName(team2OwnerId, year)}) in ${year} (Losers Bracket). Match:`, match);
+            }
+
+            if (match.isWinnersBracket) {
+                const isTie = team1Score === team2Score;
+                const team1Won = team1Score > team2Score;
+                if (isTie) { teamPlayoffStats[team1OwnerId].ties++; teamPlayoffStats[team2OwnerId].ties++; }
+                else if (team1Won) { teamPlayoffStats[team1OwnerId].wins++; teamPlayoffStats[team2OwnerId].losses++; }
+                else { teamPlayoffStats[team2OwnerId].wins++; teamPlayoffStats[team1OwnerId].losses++; }
+                teamPlayoffStats[team1OwnerId].pointsFor += team1Score;
+                teamPlayoffStats[team1OwnerId].pointsAgainst += team2Score;
+                teamPlayoffStats[team2OwnerId].pointsFor += team2Score;
+                teamPlayoffStats[team2OwnerId].pointsAgainst += team1Score;
+                logger.debug(`PlayoffRecords: Processing winners bracket stats for Owner ${team1OwnerId} (${getTeamName(team1OwnerId, year)}) vs Owner ${team2OwnerId} (${getTeamName(team2OwnerId, year)}). Match:`, match);
+
+                if (typeof match.finalSeedingGame === 'number' && match.finalSeedingGame > 0) {
+                    let winnerOwnerId = '', loserOwnerId = '';
+                    if (team1Won) { winnerOwnerId = team1OwnerId; loserOwnerId = team2OwnerId; }
+                    else if (team2Score > team1Score) { winnerOwnerId = team2OwnerId; loserOwnerId = team1OwnerId; }
+                    const finalPlacement = match.finalSeedingGame;
+                    if (finalPlacement === 1) {
+                        if (winnerOwnerId) { teamPlayoffStats[winnerOwnerId].medals[1]++; teamPlayoffStats[winnerOwnerId].championships++; if (loserOwnerId) teamPlayoffStats[loserOwnerId].medals[2]++; }
+                    } else if (finalPlacement === 3) {
+                        if (winnerOwnerId) teamPlayoffStats[winnerOwnerId].medals[3]++;
+                    }
+                }
+            } else if (match.isLosersBracket) {
+                logger.debug(`PlayoffRecords: Skipping losers bracket stats for Owner ${team1OwnerId} (${getTeamName(team1OwnerId, year)}) vs Owner ${team2OwnerId} (${getTeamName(team2OwnerId, year)}) (only counting appearance). Match:`, match);
+            }
+        });
+
+        logger.debug("PlayoffRecords: Aggregated Playoff Stats Per Team:");
+        Object.entries(teamPlayoffStats).forEach(([ownerId, stats]) => {
+            const currentTeamName = getTeamName(ownerId, null);
+            logger.debug(`  Team: ${currentTeamName} (Owner ID: ${ownerId})`);
+            logger.debug(`    Playoff Appearances: ${stats.appearances.size} (Years: ${Array.from(stats.appearances).join(', ')})`);
+            logger.debug(`    Wins: ${stats.wins}`);
+            logger.debug(`    Losses: ${stats.losses}`);
+            logger.debug(`    Ties: ${stats.ties}`);
+            logger.debug(`    Points For: ${stats.pointsFor.toFixed(2)}`);
+            logger.debug(`    Points Against: ${stats.pointsAgainst.toFixed(2)}`);
+            logger.debug(`    Championships: ${stats.championships}`);
+            logger.debug(`    2nd Place Finishes: ${stats.medals[2]}`);
+            logger.debug(`    3rd Place Finishes: ${stats.medals[3]}`);
+        });
+
+        const newAggregatedRecords = {
+            mostPlayoffAppearances: { value: 0, entries: [] },
+            mostPlayoffWins: { value: 0, entries: [] },
+            totalPlayoffPoints: { value: 0, entries: [] },
+            mostPlayoffPointsAgainst: { value: 0, entries: [] },
+            mostChampionships: { value: 0, entries: [] },
+            most2ndPlaceFinishes: { value: 0, entries: [] },
+            most3rdPlaceFinishes: { value: 0, entries: [] },
+        };
+
+        const updateRecord = (recordObj, newValue, entryDetails, isMin = false) => {
+            if (typeof newValue !== 'number' || isNaN(newValue)) return;
+            if (isMin) {
+                if (newValue < recordObj.value) { recordObj.value = newValue; recordObj.entries = [entryDetails]; }
+                else if (newValue === recordObj.value) { if (!recordObj.entries.some(e => e.team === entryDetails.team)) recordObj.entries.push(entryDetails); }
+            } else {
+                if (newValue > recordObj.value) { recordObj.value = newValue; recordObj.entries = [entryDetails]; }
+                else if (newValue === recordObj.value) { if (!recordObj.entries.some(e => e.team === entryDetails.team)) recordObj.entries.push(entryDetails); }
+            }
+        };
+
+        Object.keys(teamPlayoffStats).forEach(ownerId => {
+            const stats = teamPlayoffStats[ownerId];
+            const currentTeamName = getTeamName(ownerId, null);
+            const appearancesEntry = { team: currentTeamName, appearances: stats.appearances.size };
+            const winsEntry = { team: currentTeamName, wins: stats.wins };
+            const pointsEntry = { team: currentTeamName, points: stats.pointsFor };
+            const pointsAgainstEntry = { team: currentTeamName, pointsAgainst: stats.pointsAgainst };
+            const championshipsEntry = { team: currentTeamName, championships: stats.championships };
+            const secondPlaceEntry = { team: currentTeamName, secondPlaces: stats.medals[2] };
+            const thirdPlaceEntry = { team: currentTeamName, thirdPlaces: stats.medals[3] };
+            updateRecord(newAggregatedRecords.mostPlayoffAppearances, stats.appearances.size, appearancesEntry);
+            updateRecord(newAggregatedRecords.mostPlayoffWins, stats.wins, winsEntry);
+            updateRecord(newAggregatedRecords.totalPlayoffPoints, stats.pointsFor, pointsEntry);
+            updateRecord(newAggregatedRecords.mostPlayoffPointsAgainst, stats.pointsAgainst, pointsAgainstEntry);
+            updateRecord(newAggregatedRecords.mostChampionships, stats.championships, championshipsEntry);
+            updateRecord(newAggregatedRecords.most2ndPlaceFinishes, stats.medals[2], secondPlaceEntry);
+            updateRecord(newAggregatedRecords.most3rdPlaceFinishes, stats.medals[3], thirdPlaceEntry);
+            addToAllPlayoffData('mostPlayoffAppearances', stats.appearances.size, appearancesEntry);
+            addToAllPlayoffData('mostPlayoffWins', stats.wins, winsEntry);
+            addToAllPlayoffData('mostPlayoffPointsFor', stats.pointsFor, pointsEntry);
+            addToAllPlayoffData('mostPlayoffPointsAgainst', stats.pointsAgainst, pointsAgainstEntry);
+            addToAllPlayoffData('mostChampionships', stats.championships, championshipsEntry);
+            addToAllPlayoffData('mostFirstPlaceFinishes', stats.championships, championshipsEntry);
+            addToAllPlayoffData('mostSecondPlaceFinishes', stats.medals[2], secondPlaceEntry);
+            addToAllPlayoffData('mostThirdPlaceFinishes', stats.medals[3], thirdPlaceEntry);
+        });
+
+        Object.keys(newAggregatedRecords).forEach(key => {
+            const record = newAggregatedRecords[key];
+            if ((record.value === -Infinity || record.value === Infinity) && record.entries.length === 0) { record.value = 0; record.entries = []; }
+            else if (record.value === Infinity) record.value = 'N/A';
+            if (record.entries.length > 1) {
+                record.entries.sort((a, b) => {
+                    const tc = (a.team || '').localeCompare(b.team || '');
+                    if (tc !== 0) return tc;
+                    let vA, vB;
+                    if (key === 'mostPlayoffAppearances') { vA = a.appearances; vB = b.appearances; }
+                    else if (key === 'mostPlayoffWins') { vA = a.wins; vB = b.wins; }
+                    else if (key === 'totalPlayoffPoints') { vA = a.points; vB = b.points; }
+                    else if (key === 'mostPlayoffPointsAgainst') { vA = a.pointsAgainst; vB = b.pointsAgainst; }
+                    else if (key === 'mostChampionships') { vA = a.championships; vB = b.championships; }
+                    else if (key === 'most2ndPlaceFinishes') { vA = a.secondPlaces; vB = b.secondPlaces; }
+                    else if (key === 'most3rdPlaceFinishes') { vA = a.thirdPlaces; vB = b.thirdPlaces; }
+                    else { vA = a.value; vB = b.value; }
+                    return (typeof vA === 'number' && typeof vB === 'number') ? vB - vA : 0;
+                });
+            }
+        });
+
+        setAggregatedPlayoffRecords(newAggregatedRecords);
+        setAllPlayoffData(tempAllPlayoffData);
+    }, [historicalMatchups, historicalData, getTeamName, loading, error]);
+
+    const formatDisplayValue = (value, recordKey) => {
+        if (typeof value === 'number') {
+            if (['mostPlayoffAppearances','mostPlayoffWins','mostChampionships','most2ndPlaceFinishes','most3rdPlaceFinishes'].includes(recordKey)) return value;
+            if (['totalPlayoffPoints','mostPlayoffPointsAgainst'].includes(recordKey)) return value.toFixed(2);
+            return value;
         }
-    });
+        return value;
+    };
 
-    setAggregatedPlayoffRecords(newAggregatedRecords);
-    setAllPlayoffData(tempAllPlayoffData);
-  }, [historicalMatchups, historicalData, getTeamName, loading, error]); // Add historicalData, loading, error to dependencies
+    const recordsToDisplay = [
+        { key: 'mostPlayoffAppearances',   label: 'Most Playoff Appearances' },
+        { key: 'mostPlayoffWins',          label: 'Most Playoff Wins' },
+        { key: 'totalPlayoffPoints',       label: 'Total Playoff Points For' },
+        { key: 'mostPlayoffPointsAgainst', label: 'Most Playoff Points Against' },
+        { key: 'mostChampionships',        label: 'Most Championships' },
+        { key: 'most2ndPlaceFinishes',     label: 'Most 2nd Place Finishes' },
+        { key: 'most3rdPlaceFinishes',     label: 'Most 3rd Place Finishes' },
+    ];
 
-  // Helper to format values for display
-  const formatDisplayValue = (value, recordKey) => {
-    if (typeof value === 'number') {
-      if (recordKey === 'mostPlayoffAppearances' || recordKey === 'mostPlayoffWins' || 
-          recordKey === 'mostChampionships' || recordKey === 'most2ndPlaceFinishes' || 
-          recordKey === 'most3rdPlaceFinishes') {
-        return value; // Whole number for counts
-      } else if (recordKey === 'totalPlayoffPoints' || recordKey === 'mostPlayoffPointsAgainst') {
-        return value.toFixed(2); // Two decimal places for points
-      } else {
-        return value; // Default fallback
-      }
-    }
-    return value; // For non-numeric values, return as is
-  };
+    const KEY_MAP = {
+        'totalPlayoffPoints': 'mostPlayoffPointsFor',
+        'most2ndPlaceFinishes': 'mostSecondPlaceFinishes',
+        'most3rdPlaceFinishes': 'mostThirdPlaceFinishes',
+    };
 
-  const recordsToDisplay = [
-    { key: 'mostPlayoffAppearances', label: 'Most Playoff Appearances' },
-    { key: 'mostPlayoffWins', label: 'Most Playoff Wins' },
-    { key: 'totalPlayoffPoints', label: 'Total Playoff Points For' },
-    { key: 'mostPlayoffPointsAgainst', label: 'Most Playoff Points Against Total' },
-    { key: 'mostChampionships', label: 'Most Championships' },
-    { key: 'most2ndPlaceFinishes', label: 'Most 2nd Place Finishes' },
-    { key: 'most3rdPlaceFinishes', label: 'Most 3rd Place Finishes' },
-  ];
+    const rankBadgeClass = (idx) => {
+        if (idx === 0) return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40';
+        if (idx === 1) return 'bg-gray-500/20 text-gray-300 border-gray-500/40';
+        if (idx === 2) return 'bg-amber-700/20 text-amber-500 border-amber-700/40';
+        return 'bg-white/5 text-gray-500 border-white/10';
+    };
 
-  // Render component
-  return (
-    <div className="p-4 sm:p-6 lg:p-8">
-        {/* Header Section */}
-        <div className="mb-6 sm:mb-8">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-4">
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center text-white text-lg sm:text-xl font-bold">
-                    🏆
-                </div>
-                <div>
-                    <h3 className="text-2xl sm:text-3xl font-bold text-gray-900">All-Time Playoff Records</h3>
-                    <p className="text-gray-600 mt-1 text-sm sm:text-base">
-                        Historical playoff performance and championship accolades.
-                    </p>
-                </div>
+    const isEmpty = Object.keys(aggregatedPlayoffRecords).length === 0
+        || recordsToDisplay.every(r => aggregatedPlayoffRecords[r.key]?.entries.length === 0);
+
+    // ── Render ────────────────────────────────────────────────────────────────
+    return (
+        <div className="p-3 sm:p-5 space-y-1">
+
+            {/* Section header */}
+            <div className="flex items-center gap-2 px-1 pb-3 border-b border-white/8">
+                <svg className="w-3.5 h-3.5 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M5 3l14 9-14 9V3z" />
+                </svg>
+                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">All-Time Playoff Records</span>
             </div>
-        </div>
 
-        {/* Records Table */}
-        {Object.keys(aggregatedPlayoffRecords).length === 0 || recordsToDisplay.every(r => aggregatedPlayoffRecords[r.key]?.entries.length === 0) ? (
-            <div className="text-center py-12 bg-gray-50 rounded-xl sm:rounded-2xl border border-gray-200">
-                <div className="text-4xl mb-4">🤷‍♂️</div>
-                <h4 className="text-xl font-semibold text-gray-800">No Playoff Data Available</h4>
-                <p className="text-gray-500">Cannot display records without historical playoff data.</p>
-            </div>
-    ) : ( <>
-
-      {/* Mobile: compact card list */}
-      <div className="space-y-3 sm:hidden">
-        {recordsToDisplay.map((recordDef) => {
-          const recordData = aggregatedPlayoffRecords[recordDef.key];
-          if (!recordData || recordData.entries.length === 0) {
-            return (
-              <div key={recordDef.key} className="bg-white border border-gray-200 rounded-lg p-3">
-                <div className="text-xs font-semibold text-gray-700">{recordDef.label}</div>
-                <div className="text-xs text-gray-500">No data</div>
-              </div>
-            );
-          }
-
-          // Get all tied holders (same value as the record)
-          const recordValue = recordData.value;
-          const tiedHolders = recordData.entries.filter(entry => {
-            // Get the appropriate value field for this record type
-            if (recordDef.key === 'mostPlayoffAppearances') return entry.appearances === recordValue;
-            if (recordDef.key === 'mostPlayoffWins') return entry.wins === recordValue;
-            if (recordDef.key === 'totalPlayoffPoints') return entry.points === recordValue;
-            if (recordDef.key === 'mostPlayoffPointsAgainst') return entry.pointsAgainst === recordValue;
-            if (recordDef.key === 'mostChampionships') return entry.championships === recordValue;
-            if (recordDef.key === 'most2ndPlaceFinishes') return entry.secondPlaces === recordValue;
-            if (recordDef.key === 'most3rdPlaceFinishes') return entry.thirdPlaces === recordValue;
-            return false;
-          });
-          const primary = tiedHolders[0];
-
-          return (
-            <div key={recordDef.key} className="bg-white border border-gray-200 rounded-lg p-3">
-              <div className="flex items-start justify-between">
-                <div className="flex-1 min-w-0 pr-3">
-                  <div className="text-sm font-semibold text-gray-900">{recordDef.label}</div>
-                  {tiedHolders.length > 0 && (
-                    <div className="text-xs text-gray-600 mt-1">
-                      {tiedHolders.map((holder, idx) => (
-                        <div key={idx} className={idx > 0 ? "mt-1" : ""}>
-                          <span className="font-medium">{holder.team}</span>
-                          {holder.season !== undefined && (
-                            <span className="text-gray-500"> — S{holder.season}</span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
+            {isEmpty ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <div className="text-4xl mb-3">🏆</div>
+                    <p className="text-sm text-gray-500">No playoff data available to display.</p>
                 </div>
-                <div className="ml-3 flex items-center gap-3">
-                  {primary && (
-                    <div className="inline-flex items-center px-2 py-1 rounded-full bg-gradient-to-r from-gray-100 to-green-100 border border-gray-200">
-                      <span className="font-bold text-gray-900 text-sm">{formatDisplayValue(recordData.value, recordDef.key)}</span>
-                    </div>
-                  )}
-                  <button onClick={() => toggleSection(recordDef.key)} className="p-2 rounded-md hover:bg-gray-100">
-                    <svg className={`w-5 h-5 text-gray-600 transition-transform ${expandedSections[recordDef.key] ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
+            ) : (
+                <>
+                    {/* ── Mobile: stacked cards ── */}
+                    <div className="sm:hidden space-y-1.5 pt-2">
+                        {recordsToDisplay.map((recordDef) => {
+                            const recordData = aggregatedPlayoffRecords[recordDef.key];
+                            const isExpanded = !!expandedSections[recordDef.key];
+                            const dataKey = KEY_MAP[recordDef.key] || recordDef.key;
+                            const hasTop5 = allPlayoffData[dataKey]?.some(d => d.value > 0);
 
-              {(() => {
-                // Map record keys to allPlayoffData keys for mobile
-                const keyMapping = {
-                  'totalPlayoffPoints': 'mostPlayoffPointsFor',
-                  'most2ndPlaceFinishes': 'mostSecondPlaceFinishes',
-                  'most3rdPlaceFinishes': 'mostThirdPlaceFinishes'
-                };
-                const dataKey = keyMapping[recordDef.key] || recordDef.key;
-                return expandedSections[recordDef.key] && allPlayoffData[dataKey] && allPlayoffData[dataKey].length > 0;
-              })() && (
-                <div className="mt-3 space-y-2">
-                  {(() => {
-                    const keyMapping = {
-                      'totalPlayoffPoints': 'mostPlayoffPointsFor',
-                      'most2ndPlaceFinishes': 'mostSecondPlaceFinishes',
-                      'most3rdPlaceFinishes': 'mostThirdPlaceFinishes'
-                    };
-                    const dataKey = keyMapping[recordDef.key] || recordDef.key;
-                    return allPlayoffData[dataKey].filter(data => data.value > 0).sort((a,b) => b.value - a.value).slice(0,5);
-                  })().map((item, idx) => (
-                    <div key={`${recordDef.key}-mobile-${idx}`} className="flex items-center justify-between bg-gray-50 rounded-md p-2 border border-gray-100">
-                      <div className="flex items-center gap-3">
-                        <div className="w-7 h-7 flex items-center justify-center bg-blue-100 text-blue-800 rounded-full text-xs font-bold">{idx+1}</div>
-                        <div className="text-sm font-medium text-gray-900 truncate">{item.team || item.teamName || item.team1}</div>
-                      </div>
-                      <div className="text-sm font-semibold text-gray-900">{item.value.toFixed ? item.value.toFixed(2) : item.value}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                            if (!recordData || recordData.entries.length === 0) {
+                                return (
+                                    <div key={recordDef.key} className="bg-white/[0.03] border border-white/8 rounded-xl px-3 py-2.5">
+                                        <div className="text-xs font-semibold text-gray-500">{recordDef.label}</div>
+                                        <div className="text-[10px] text-gray-600 mt-0.5">No data</div>
+                                    </div>
+                                );
+                            }
 
-      <div className="hidden sm:block bg-gradient-to-r from-gray-50 to-white rounded-xl sm:rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="min-w-full">
-                        <thead>
-                            <tr className="bg-gradient-to-r from-gray-100 to-gray-50 border-b border-gray-200">
-                                <th className="py-3 px-3 sm:py-4 sm:px-6 text-left text-xs sm:text-sm font-bold text-gray-800 uppercase tracking-wide">
-                                    <div className="flex items-center gap-1 sm:gap-2">
-                                        <span className="hidden sm:inline">�</span> Record
+                            return (
+                                <div key={recordDef.key} className="bg-white/[0.03] border border-white/8 rounded-xl overflow-hidden">
+                                    <div className="flex items-center gap-3 px-3 py-2.5">
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-xs font-semibold text-gray-300 leading-tight">{recordDef.label}</div>
+                                            <div className="text-[10px] text-gray-500 mt-0.5 truncate">
+                                                {recordData.entries.map(e => e.team).join(', ')}
+                                                {recordData.entries.length > 1 && (
+                                                    <span className="text-gray-600"> (tied)</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="flex-shrink-0 px-2.5 py-1 bg-red-500/15 border border-red-500/25 rounded-lg">
+                                            <span className="text-xs font-bold text-red-300 tabular-nums whitespace-nowrap">
+                                                {formatDisplayValue(recordData.value, recordDef.key)}
+                                            </span>
+                                        </div>
+                                        {hasTop5 && (
+                                            <button
+                                                onClick={() => toggleSection(recordDef.key)}
+                                                className="flex-shrink-0 p-1 rounded-md text-gray-600 hover:text-gray-300 transition-colors"
+                                                aria-label={`${isExpanded ? 'Hide' : 'Show'} top 5`}
+                                            >
+                                                <svg className={`w-3.5 h-3.5 transition-transform duration-150 ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                                                </svg>
+                                            </button>
+                                        )}
                                     </div>
-                                </th>
-                                <th className="py-3 px-3 sm:py-4 sm:px-6 text-center text-xs sm:text-sm font-bold text-gray-800 uppercase tracking-wide">
-                                    <div className="flex items-center justify-center gap-1 sm:gap-2">
-                                        <span className="hidden sm:inline">📊</span> Value
-                                    </div>
-                                </th>
-                                <th className="py-3 px-3 sm:py-4 sm:px-6 text-left text-xs sm:text-sm font-bold text-gray-800 uppercase tracking-wide">
-                                    <div className="flex items-center gap-1 sm:gap-2">
-                                        <span className="hidden sm:inline">👑</span> Holder(s)
-                                    </div>
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {recordsToDisplay.map((recordDef, recordGroupIndex) => {
-                                const recordData = aggregatedPlayoffRecords[recordDef.key];
-                                const isExpanded = expandedSections[recordDef.key];
-                                
-                                if (!recordData || recordData.entries.length === 0) {
+
+                                    {isExpanded && hasTop5 && (
+                                        <div className="border-t border-white/8 px-3 py-3 bg-black/20 space-y-1.5">
+                                            <div className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-2">Top 5</div>
+                                            {allPlayoffData[dataKey]
+                                                .filter(d => d.value > 0)
+                                                .sort((a, b) => b.value - a.value)
+                                                .slice(0, 5)
+                                                .map((item, idx) => (
+                                                    <div key={`${recordDef.key}-m5-${idx}`} className="flex items-center justify-between gap-2">
+                                                        <div className="flex items-center gap-2 min-w-0">
+                                                            <span className={`w-5 h-5 flex-shrink-0 flex items-center justify-center rounded-md text-[10px] font-bold border ${rankBadgeClass(idx)}`}>
+                                                                {idx + 1}
+                                                            </span>
+                                                            <span className="text-xs text-gray-300 truncate">{item.team}</span>
+                                                        </div>
+                                                        <span className="text-xs font-semibold text-gray-400 tabular-nums flex-shrink-0">
+                                                            {formatDisplayValue(item.value, recordDef.key)}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* ── Desktop: table ── */}
+                    <div className="hidden sm:block pt-2">
+                        <table className="min-w-full text-xs">
+                            <thead>
+                                <tr className="border-b border-white/10">
+                                    <th className="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider w-[36%]">Record</th>
+                                    <th className="py-2.5 px-3 text-center text-[10px] font-semibold text-gray-500 uppercase tracking-wider w-[18%]">Value</th>
+                                    <th className="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider w-[46%]">Holder(s)</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/5">
+                                {recordsToDisplay.map((recordDef, ri) => {
+                                    const recordData = aggregatedPlayoffRecords[recordDef.key];
+                                    const isExpanded = !!expandedSections[recordDef.key];
+                                    const dataKey = KEY_MAP[recordDef.key] || recordDef.key;
+                                    const hasTop5 = allPlayoffData[dataKey]?.some(d => d.value > 0);
+
+                                    if (!recordData || recordData.entries.length === 0) {
+                                        return (
+                                            <tr key={recordDef.key} className={ri % 2 === 0 ? '' : 'bg-white/[0.015]'}>
+                                                <td className="py-2.5 px-3 font-semibold text-gray-500">{recordDef.label}</td>
+                                                <td colSpan={2} className="py-2.5 px-3 text-center text-gray-600 text-[10px] italic">No data available</td>
+                                            </tr>
+                                        );
+                                    }
+
                                     return (
                                         <React.Fragment key={recordDef.key}>
-                                            <tr className={`transition-all duration-200 hover:bg-blue-50 ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}>
-                                                <td className="py-3 px-3 sm:py-4 sm:px-6">
-                                                    <span className="font-semibold text-gray-900 text-xs sm:text-sm">{recordDef.label}</span>
-                                                </td>
-                                                <td colSpan="2" className="py-3 px-3 sm:py-4 sm:px-6 text-center">
-                                                    <span className="text-gray-500 text-xs sm:text-sm italic">No data available</span>
-                                                </td>
-                                            </tr>
-                                        </React.Fragment>
-                                    );
-                                }
+                                            <tr className={`hover:bg-white/[0.025] transition-colors ${ri % 2 === 0 ? '' : 'bg-white/[0.015]'}`}>
 
-                                return (
-                                    <React.Fragment key={recordDef.key}>
-                                        <tr className={`transition-all duration-200 hover:bg-blue-50 hover:shadow-sm ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}>
-                                            <td className="py-3 px-3 sm:py-4 sm:px-6">
-                                                <div className="flex items-center gap-2 sm:gap-3">
-                                                    <span className="font-semibold text-gray-900 text-xs sm:text-sm">{recordDef.label}</span>
-                                                    <button
-                                                        onClick={() => toggleSection(recordDef.key)}
-                                                        className="ml-2 p-1 rounded-md hover:bg-gray-200 transition-colors"
-                                                        aria-label={`${isExpanded ? 'Hide' : 'Show'} top 5 for ${recordDef.label}`}
-                                                    >
-                                                        <svg
-                                                            className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                                                            fill="none"
-                                                            stroke="currentColor"
-                                                            viewBox="0 0 24 24"
-                                                        >
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                                        </svg>
-                                                    </button>
-                                                </div>
-                                            </td>
-                                            <td className="py-3 px-3 sm:py-4 sm:px-6 text-center">
-                                                <div className="inline-flex items-center px-2 py-1 sm:px-3 sm:py-1 rounded-full bg-gradient-to-r from-blue-100 to-indigo-100 border border-blue-200">
-                                                    <span className="font-bold text-gray-900 text-xs sm:text-sm">
+                                                {/* Record label */}
+                                                <td className="py-2.5 px-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-semibold text-gray-200">{recordDef.label}</span>
+                                                        {hasTop5 && (
+                                                            <button
+                                                                onClick={() => toggleSection(recordDef.key)}
+                                                                className="text-gray-600 hover:text-red-400 transition-colors"
+                                                                aria-label={`${isExpanded ? 'Hide' : 'Show'} top 5`}
+                                                            >
+                                                                <svg className={`w-3.5 h-3.5 transition-transform duration-150 ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                                                                </svg>
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </td>
+
+                                                {/* Value */}
+                                                <td className="py-2.5 px-3 text-center">
+                                                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-red-500/15 border border-red-500/25 font-bold text-red-300 tabular-nums">
                                                         {formatDisplayValue(recordData.value, recordDef.key)}
                                                     </span>
-                                                </div>
-                                            </td>
-                                            <td className="py-3 px-3 sm:py-4 sm:px-6">
-                                                <div className="flex flex-col space-y-1 sm:space-y-2">
-                                                    {recordData.entries.map((entry, index) => (
-                                                        <div key={index} className="flex items-center gap-2 sm:gap-3 bg-gray-100 rounded-lg p-1.5 sm:p-2 border border-gray-200">
-                                                            <span className="font-medium text-gray-800 text-xs sm:text-sm truncate">{entry.team}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                        
-                                        {/* Collapsible Top 5 Section */}
-                                        {(() => {
-                                            // Map record keys to allPlayoffData keys
-                                            const keyMapping = {
-                                                'totalPlayoffPoints': 'mostPlayoffPointsFor',
-                                                'most2ndPlaceFinishes': 'mostSecondPlaceFinishes',
-                                                'most3rdPlaceFinishes': 'mostThirdPlaceFinishes'
-                                            };
-                                            const dataKey = keyMapping[recordDef.key] || recordDef.key;
-                                            return isExpanded && allPlayoffData[dataKey] && allPlayoffData[dataKey].length > 0;
-                                        })() && (
-                                            <tr className={`${recordGroupIndex % 2 === 0 ? 'bg-gray-50' : 'bg-gray-75'}`}>
-                                                <td colSpan="3" className="p-0">
-                                                    <div className="px-3 py-4 sm:px-6 sm:py-6">
-                                                        <h4 className="text-sm font-semibold text-gray-700 mb-3">
-                                                            Top 5 {recordDef.label}
-                                                        </h4>
-                                                        <div className="space-y-2">
-                                                            {(() => {
-                                                                const keyMapping = {
-                                                                    'totalPlayoffPoints': 'mostPlayoffPointsFor',
-                                                                    'most2ndPlaceFinishes': 'mostSecondPlaceFinishes',
-                                                                    'most3rdPlaceFinishes': 'mostThirdPlaceFinishes'
-                                                                };
-                                                                const dataKey = keyMapping[recordDef.key] || recordDef.key;
-                                                                return allPlayoffData[dataKey];
-                                                            })()
-                                                                .filter(data => data.value > 0)
+                                                </td>
+
+                                                {/* Holder chips */}
+                                                <td className="py-2.5 px-3">
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {recordData.entries.map((entry, i) => (
+                                                            <span key={i} className="inline-flex items-center px-2 py-0.5 rounded-md bg-white/8 border border-white/10 text-gray-200 text-xs font-medium">
+                                                                {entry.team}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </td>
+                                            </tr>
+
+                                            {/* Top-5 expansion */}
+                                            {isExpanded && hasTop5 && (
+                                                <tr className="bg-black/20 border-b border-white/8">
+                                                    <td colSpan={3} className="px-4 py-3">
+                                                        <div className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-2">Top 5 Rankings</div>
+                                                        <div className="grid grid-cols-1 sm:grid-cols-5 gap-1.5">
+                                                            {allPlayoffData[dataKey]
+                                                                .filter(d => d.value > 0)
                                                                 .sort((a, b) => b.value - a.value)
                                                                 .slice(0, 5)
-                                                                .map((playoffData, index) => (
-                                                                    <div key={`${playoffData.team}-${playoffData.value}-${index}`} 
-                                                                         className="flex items-center justify-between py-2 px-3 bg-white rounded-lg border border-gray-200">
-                                                                        <div className="flex items-center gap-3">
-                                                                            <span className="flex items-center justify-center w-6 h-6 bg-blue-100 text-blue-800 text-xs font-bold rounded-full">
-                                                                                {index + 1}
-                                                                            </span>
-                                                                            <span className="font-medium text-gray-900 text-sm">{playoffData.team}</span>
-                                                                        </div>
-                                                                        <div className="flex items-center gap-4">
-                                                                            <span className="font-bold text-gray-900">{formatDisplayValue(playoffData.value, recordDef.key)}</span>
+                                                                .map((d, idx) => (
+                                                                    <div key={`${recordDef.key}-dt5-${d.team}-${idx}`}
+                                                                        className="flex items-center gap-2 bg-white/[0.04] border border-white/8 rounded-lg px-2.5 py-2">
+                                                                        <span className={`w-5 h-5 flex-shrink-0 flex items-center justify-center rounded-md text-[10px] font-bold border ${rankBadgeClass(idx)}`}>
+                                                                            {idx + 1}
+                                                                        </span>
+                                                                        <div className="min-w-0 flex-1">
+                                                                            <div className="text-xs font-medium text-gray-200 truncate">{d.team}</div>
+                                                                            <div className="text-[10px] text-gray-500 tabular-nums">
+                                                                                {formatDisplayValue(d.value, recordDef.key)}
+                                                                            </div>
                                                                         </div>
                                                                     </div>
                                                                 ))}
                                                         </div>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        )}
-                                    </React.Fragment>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-      </div>
-    </>) }
-    </div>
-);
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </React.Fragment>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </>
+            )}
+        </div>
+    );
 };
 
 export default PlayoffRecords;

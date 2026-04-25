@@ -736,6 +736,62 @@ const LeagueHistory = () => {
                         </div>
                     </div>
 
+                    {/* ── Most Trades ── */}
+                    <div className={card}>
+                        <div className={cardHeader}>
+                            <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                            </svg>
+                            <span className="text-xs font-semibold text-gray-300 uppercase tracking-wider">Most Trades</span>
+                        </div>
+                        <div className={cardPad}>
+                            {(() => {
+                                const topTrades = [...teamTransactionTotals].sort((a, b) => b.trades - a.trades).slice(0, 5);
+                                return (
+                                    <div className="space-y-2">
+                                        {topTrades.map((team, idx) => (
+                                            <div key={team.ownerId} className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <span className="text-sm font-bold text-gray-600 w-5">{idx + 1}</span>
+                                                    <span className="text-sm font-medium text-gray-200">{team.teamName}</span>
+                                                </div>
+                                                <span className="text-sm font-bold text-blue-400">{team.trades}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                    </div>
+
+                    {/* ── Most Waivers ── */}
+                    <div className={card}>
+                        <div className={cardHeader}>
+                            <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                            </svg>
+                            <span className="text-xs font-semibold text-gray-300 uppercase tracking-wider">Most Waivers</span>
+                        </div>
+                        <div className={cardPad}>
+                            {(() => {
+                                const topWaivers = [...teamTransactionTotals].sort((a, b) => b.pickups - a.pickups).slice(0, 5);
+                                return (
+                                    <div className="space-y-2">
+                                        {topWaivers.map((team, idx) => (
+                                            <div key={team.ownerId} className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <span className="text-sm font-bold text-gray-600 w-5">{idx + 1}</span>
+                                                    <span className="text-sm font-medium text-gray-200">{team.teamName}</span>
+                                                </div>
+                                                <span className="text-sm font-bold text-blue-400">{team.pickups}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                    </div>
+
                     {/* ── Waiver/FA & Trade Totals ── */}
                     <div className={card}>
                         <div className={cardHeader}>

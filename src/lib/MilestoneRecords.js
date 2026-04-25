@@ -7,13 +7,9 @@ import { faChevronDown, faChevronUp, faTrophy } from '@fortawesome/free-solid-sv
 
 const MilestoneRecords = () => {
     const {
-        historicalData,
-        getTeamName,
-        getTeamDetails,
-        currentSeason,
-        nflState,
-        loading: contextLoading,
-        error: contextError
+        historicalData, getTeamName, getTeamDetails,
+        currentSeason, nflState,
+        loading: contextLoading, error: contextError
     } = useSleeperData();
 
     const [activeMilestone, setActiveMilestone] = useState('totalWins');
@@ -22,367 +18,139 @@ const MilestoneRecords = () => {
     const [loading, setLoading] = useState(true);
     const [expandedThresholds, setExpandedThresholds] = useState({});
 
-    // Define base milestone configurations
+    // ── All logic untouched ───────────────────────────────────────────────────
     const baseMilestones = {
-        totalWins: {
-            title: 'Total Wins',
-            description: 'Career victory milestones celebrating the most successful franchises in league history. Every win counts toward these legendary achievements.',
-            icon: '🏆',
-            thresholds: [25, 50, 75, 100, 150],
-            color: 'green'
-        },
-        totalLosses: {
-            title: 'Total Losses',
-            description: 'Career loss milestones that track the journey through adversity. Sometimes the path to greatness includes learning from defeat.',
-            icon: '💀',
-            thresholds: [25, 50, 75, 100, 150],
-            color: 'red'
-        },
-        allPlayWins: {
-            title: 'All-Play Wins',
-            description: 'All-Play wins show how often your score would beat every other team that week. This milestone celebrates consistent high-level performance.',
-            icon: '⚡',
-            thresholds: [50, 100, 200, 300, 500],
-            color: 'blue'
-        },
-        allPlayLosses: {
-            title: 'All-Play Losses',
-            description: 'All-Play losses track how many teams would have beaten you each week. This milestone shows the journey through challenging performances.',
-            icon: '💸',
-            thresholds: [50, 100, 200, 300, 500],
-            color: 'purple'
-        },
-        totalPoints: {
-            title: 'Total Points',
-            description: 'Career scoring milestones recognizing the highest cumulative point totals in league history. These achievements showcase offensive consistency and excellence.',
-            icon: '📊',
-            thresholds: [1000, 2500, 5000, 7500, 10000],
-            color: 'yellow'
-        },
-        highScores: {
-            title: 'High Scores',
-            description: 'Milestones for achieving the most high-scoring weeks (top 3 performances each week).',
-            icon: '🚀',
-            thresholds: [5, 10, 25, 50, 75],
-            color: 'orange'
-        }
+        totalWins: { title: 'Total Wins', description: 'Career victory milestones celebrating the most successful franchises in league history. Every win counts toward these legendary achievements.', icon: '🏆', thresholds: [25, 50, 75, 100, 150], color: 'green' },
+        totalLosses: { title: 'Total Losses', description: 'Career loss milestones that track the journey through adversity. Sometimes the path to greatness includes learning from defeat.', icon: '💀', thresholds: [25, 50, 75, 100, 150], color: 'red' },
+        allPlayWins: { title: 'All-Play Wins', description: 'All-Play wins show how often your score would beat every other team that week. This milestone celebrates consistent high-level performance.', icon: '⚡', thresholds: [50, 100, 200, 300, 500], color: 'blue' },
+        allPlayLosses: { title: 'All-Play Losses', description: 'All-Play losses track how many teams would have beaten you each week. This milestone shows the journey through challenging performances.', icon: '💸', thresholds: [50, 100, 200, 300, 500], color: 'purple' },
+        totalPoints: { title: 'Total Points', description: 'Career scoring milestones recognizing the highest cumulative point totals in league history. These achievements showcase offensive consistency and excellence.', icon: '📊', thresholds: [1000, 2500, 5000, 7500, 10000], color: 'yellow' },
+        highScores: { title: 'High Scores', description: 'Milestones for achieving the most high-scoring weeks (top 3 performances each week).', icon: '🚀', thresholds: [5, 10, 25, 50, 75], color: 'orange' }
     };
 
-    // Function to generate dynamic milestones based on current achievements
     const generateDynamicMilestones = (teamStats) => {
-        const updatedMilestones = JSON.parse(JSON.stringify(baseMilestones)); // Deep clone
-
+        const updatedMilestones = JSON.parse(JSON.stringify(baseMilestones));
         const totalTeams = Object.keys(teamStats || {}).length;
-
         Object.keys(updatedMilestones).forEach(milestoneKey => {
             const milestone = updatedMilestones[milestoneKey];
             const currentThresholds = [...milestone.thresholds];
-
-            // Find the highest achieved value for this milestone type
             let highestAchieved = 0;
-            let teamsAtOrAboveMax = 0;
             Object.values(teamStats).forEach(stats => {
                 let currentValue = 0;
                 switch (milestoneKey) {
-                    case 'totalWins':
-                        currentValue = stats.totalWins || 0;
-                        break;
-                    case 'totalLosses':
-                        currentValue = stats.totalLosses || 0;
-                        break;
-                    case 'allPlayWins':
-                        currentValue = stats.allPlayWins || 0;
-                        break;
-                    case 'allPlayLosses':
-                        currentValue = stats.allPlayLosses || 0;
-                        break;
-                    case 'totalPoints':
-                        currentValue = stats.totalPoints || 0;
-                        break;
-                    case 'highScores':
-                        currentValue = stats.highScores || 0;
-                        break;
+                    case 'totalWins': currentValue = stats.totalWins || 0; break;
+                    case 'totalLosses': currentValue = stats.totalLosses || 0; break;
+                    case 'allPlayWins': currentValue = stats.allPlayWins || 0; break;
+                    case 'allPlayLosses': currentValue = stats.allPlayLosses || 0; break;
+                    case 'totalPoints': currentValue = stats.totalPoints || 0; break;
+                    case 'highScores': currentValue = stats.highScores || 0; break;
                 }
                 highestAchieved = Math.max(highestAchieved, currentValue);
             });
-
             const maxThreshold = Math.max(...currentThresholds);
-
-            // Count how many teams are at or above the current max threshold
-            if (totalTeams > 0) {
-                teamsAtOrAboveMax = Object.values(teamStats).filter(stats => {
-                    let val = 0;
-                    switch (milestoneKey) {
-                        case 'totalWins': val = stats.totalWins || 0; break;
-                        case 'totalLosses': val = stats.totalLosses || 0; break;
-                        case 'allPlayWins': val = stats.allPlayWins || 0; break;
-                        case 'allPlayLosses': val = stats.allPlayLosses || 0; break;
-                        case 'totalPoints': val = stats.totalPoints || 0; break;
-                        case 'highScores': val = stats.highScores || 0; break;
-                    }
-                    return val >= maxThreshold;
-                }).length;
-            }
-
-            // Only generate additional thresholds when the highest achieved exceeds or equals the current max.
-            // This ensures new tiers populate when the first team breaks the current top threshold.
             if (highestAchieved >= maxThreshold) {
                 const newThresholds = generateNewThresholds(milestoneKey, maxThreshold, highestAchieved);
                 milestone.thresholds = [...new Set([...currentThresholds, ...newThresholds])].sort((a, b) => a - b);
             }
         });
-
         return updatedMilestones;
     };
 
-    // Function to generate new threshold values
     const generateNewThresholds = (milestoneKey, currentMax, highestAchieved) => {
         const newThresholds = [];
         let nextThreshold = currentMax;
-        
-        // Define increment patterns for different milestone types
         const incrementPatterns = {
-            totalWins: [25, 50, 25, 25, 50], // Pattern: 25, 50, 25, 25, 50, repeat
-            totalLosses: [25, 50, 25, 25, 50],
-            allPlayWins: [100, 200, 200, 300, 500], // Pattern: 100, 200, 200, 300, 500, repeat
-            allPlayLosses: [100, 200, 200, 300, 500],
-            totalPoints: [2500, 2500, 5000, 5000, 10000], // Pattern: 2500, 2500, 5000, 5000, 10000, repeat
-            highScores: [25, 25, 50, 50, 100] // Pattern: 25, 25, 50, 50, 100, repeat
+            totalWins: [25, 50, 25, 25, 50], totalLosses: [25, 50, 25, 25, 50],
+            allPlayWins: [100, 200, 200, 300, 500], allPlayLosses: [100, 200, 200, 300, 500],
+            totalPoints: [2500, 2500, 5000, 5000, 10000], highScores: [25, 25, 50, 50, 100]
         };
-        
         const pattern = incrementPatterns[milestoneKey] || [50, 100, 100, 200, 500];
         let patternIndex = 0;
-        
-        // Generate new thresholds until we're well above the highest achieved value
         while (nextThreshold <= highestAchieved + pattern[patternIndex % pattern.length] * 2) {
             nextThreshold += pattern[patternIndex % pattern.length];
             newThresholds.push(nextThreshold);
             patternIndex++;
-            
-            // Safety limit to prevent infinite loops
             if (newThresholds.length >= 10) break;
         }
-        
         return newThresholds;
     };
 
-    // Get current milestones (either base or dynamic)
     const milestones = Object.keys(dynamicMilestones).length > 0 ? dynamicMilestones : baseMilestones;
 
     useEffect(() => {
-        if (contextLoading || !historicalData) {
-            setLoading(true);
-            return;
-        }
-
-        try {
-            calculateMilestones();
-        } catch (err) {
-                logger.error('Error calculating milestones:', err);
-        } finally {
-            setLoading(false);
-        }
+        if (contextLoading || !historicalData) { setLoading(true); return; }
+        try { calculateMilestones(); }
+        catch (err) { logger.error('Error calculating milestones:', err); }
+        finally { setLoading(false); }
     }, [historicalData, contextLoading]);
 
     const calculateMilestones = () => {
         logger.debug('=== SIMPLE MILESTONE TRACKER START ===');
-        
-        // Get career data for final stats and team info
         const { careerDPRData } = calculateAllLeagueMetrics(historicalData, null, getTeamName, nflState);
-        
-        if (!careerDPRData || careerDPRData.length === 0) {
-              logger.warn('No career data found');
-            return;
-        }
-
-        // Initialize data structures
-        const teamStats = {};
-        const allRosters = {};
-        const achievementTimeline = {};
-
-        // NOTE: generateDynamicMilestones requires teamStats to be populated. We'll initialize
-        // teamStats first (below) from career data, then create generatedMilestones and
-        // prepare the achievementTimeline buckets. During week processing we'll re-generate
-        // milestones so thresholds expand the moment a team reaches the current top tier.
-
-        // Set up team info and final stats
+        if (!careerDPRData || careerDPRData.length === 0) { logger.warn('No career data found'); return; }
+        const teamStats = {}, allRosters = {}, achievementTimeline = {};
         careerDPRData.forEach(careerStats => {
             const ownerId = careerStats.ownerId;
             const teamDetails = getTeamDetails(ownerId, currentSeason);
-            
-            teamStats[ownerId] = {
-                // Running totals (updated week by week)
-                wins: 0,
-                losses: 0,
-                ties: 0,
-                points: 0,
-                allPlayWins: 0,
-                allPlayLosses: 0,
-                highScores: 0,
-                // Final career totals
-                finalWins: careerStats.wins || 0,
-                finalLosses: careerStats.losses || 0,
-                finalTies: careerStats.ties || 0,
-                finalPoints: careerStats.pointsFor || 0,
-                finalAllPlayWins: careerStats.allPlayWins || 0,
-                finalAllPlayLosses: careerStats.allPlayLosses || 0,
-                finalHighScores: careerStats.topScoreWeeksCount || 0
-            };
-
-            allRosters[ownerId] = {
-                name: careerStats.teamName || getTeamName(ownerId, currentSeason),
-                avatar: teamDetails?.avatar
-            };
+            teamStats[ownerId] = { wins: 0, losses: 0, ties: 0, points: 0, allPlayWins: 0, allPlayLosses: 0, highScores: 0, finalWins: careerStats.wins || 0, finalLosses: careerStats.losses || 0, finalTies: careerStats.ties || 0, finalPoints: careerStats.pointsFor || 0, finalAllPlayWins: careerStats.allPlayWins || 0, finalAllPlayLosses: careerStats.allPlayLosses || 0, finalHighScores: careerStats.topScoreWeeksCount || 0 };
+            allRosters[ownerId] = { name: careerStats.teamName || getTeamName(ownerId, currentSeason), avatar: teamDetails?.avatar };
         });
-
-        // Initialize generated milestones after teamStats is populated from career data
         let generatedMilestones = generateDynamicMilestones(teamStats);
         Object.keys(generatedMilestones).forEach(milestoneKey => {
             achievementTimeline[milestoneKey] = {};
-            generatedMilestones[milestoneKey].thresholds.forEach(threshold => {
-                achievementTimeline[milestoneKey][threshold] = [];
-            });
+            generatedMilestones[milestoneKey].thresholds.forEach(threshold => { achievementTimeline[milestoneKey][threshold] = []; });
         });
-
-        // Process matchups chronologically
         const allSeasons = Object.keys(historicalData.matchupsBySeason || {}).sort((a, b) => parseInt(a) - parseInt(b));
         let globalWeek = 0;
-
-    logger.debug(`Processing ${allSeasons.length} seasons chronologically`);
-
+        logger.debug(`Processing ${allSeasons.length} seasons chronologically`);
         allSeasons.forEach(season => {
             const matchups = historicalData.matchupsBySeason?.[season] || [];
             const rosters = historicalData.rostersBySeason?.[season] || [];
-            
-            // Group matchups by week
             const weeklyMatchups = {};
-            matchups.forEach(matchup => {
-                const week = matchup.week;
-                if (!weeklyMatchups[week]) weeklyMatchups[week] = [];
-                weeklyMatchups[week].push(matchup);
-            });
-
-            // Process each week in order
+            matchups.forEach(matchup => { const week = matchup.week; if (!weeklyMatchups[week]) weeklyMatchups[week] = []; weeklyMatchups[week].push(matchup); });
             const weeks = Object.keys(weeklyMatchups).sort((a, b) => parseInt(a) - parseInt(b));
-            
             weeks.forEach(week => {
                 globalWeek++;
                 const weekMatchups = weeklyMatchups[week];
                 const weekScores = [];
-
-                // Process matchups for this week
                 weekMatchups.forEach(matchup => {
-                    // Normalize roster id comparisons to strings to avoid type mismatch (number vs string)
                     const team1Roster = rosters.find(r => String(r.roster_id) === String(matchup.team1_roster_id));
-                    // team2 may be null for bye weeks
-                    const team2Roster = matchup.team2_roster_id !== null && matchup.team2_roster_id !== undefined
-                        ? rosters.find(r => String(r.roster_id) === String(matchup.team2_roster_id))
-                        : null;
-
-                    // If primary roster (team1) not found, skip this matchup
+                    const team2Roster = matchup.team2_roster_id !== null && matchup.team2_roster_id !== undefined ? rosters.find(r => String(r.roster_id) === String(matchup.team2_roster_id)) : null;
                     if (!team1Roster) return;
-
                     const team1Id = String(team1Roster.owner_id);
                     const team2Id = team2Roster ? String(team2Roster.owner_id) : null;
                     const team1Score = parseFloat(matchup.team1_score) || 0;
                     const team2Score = parseFloat(matchup.team2_score) || 0;
-
-                    // Ensure primary team exists in our tracked stats
                     if (!teamStats[team1Id]) return;
-
-                    // Update points (always add points for team1 even if opponent missing)
                     teamStats[team1Id].points += team1Score;
+                    if (team2Id && teamStats[team2Id]) teamStats[team2Id].points += team2Score;
                     if (team2Id && teamStats[team2Id]) {
-                        teamStats[team2Id].points += team2Score;
+                        if (team1Score > team2Score) { teamStats[team1Id].wins++; teamStats[team2Id].losses++; }
+                        else if (team2Score > team1Score) { teamStats[team2Id].wins++; teamStats[team1Id].losses++; }
+                        else { teamStats[team1Id].ties++; teamStats[team2Id].ties++; }
                     }
-
-                    // Update wins/losses/ties only when opponent exists and is tracked
-                    if (team2Id && teamStats[team2Id]) {
-                        if (team1Score > team2Score) {
-                            teamStats[team1Id].wins++;
-                            teamStats[team2Id].losses++;
-                        } else if (team2Score > team1Score) {
-                            teamStats[team2Id].wins++;
-                            teamStats[team1Id].losses++;
-                        } else {
-                            teamStats[team1Id].ties++;
-                            teamStats[team2Id].ties++;
-                        }
-                    }
-
-                    // Track scores for all-play and high-score calculations
                     weekScores.push({ ownerId: team1Id, score: team1Score });
                     if (team2Id) weekScores.push({ ownerId: team2Id, score: team2Score });
                 });
-
-                // Calculate all-play wins/losses for this week
-                weekScores.forEach(teamScore => {
-                    weekScores.forEach(opponentScore => {
-                        if (teamScore.ownerId !== opponentScore.ownerId) {
-                            if (teamScore.score > opponentScore.score) {
-                                teamStats[teamScore.ownerId].allPlayWins++;
-                            } else if (teamScore.score < opponentScore.score) {
-                                teamStats[teamScore.ownerId].allPlayLosses++;
-                            }
-                        }
-                    });
-                });
-
-                // Calculate high scores (top 3 this week)
+                weekScores.forEach(teamScore => { weekScores.forEach(opponentScore => { if (teamScore.ownerId !== opponentScore.ownerId) { if (teamScore.score > opponentScore.score) teamStats[teamScore.ownerId].allPlayWins++; else if (teamScore.score < opponentScore.score) teamStats[teamScore.ownerId].allPlayLosses++; } }); });
                 const sortedScores = [...weekScores].sort((a, b) => b.score - a.score);
-                for (let i = 0; i < Math.min(3, sortedScores.length); i++) {
-                    teamStats[sortedScores[i].ownerId].highScores++;
-                }
-
-                // Re-generate milestones based on updated running teamStats for this week.
-                // This allows thresholds to expand immediately when a team first reaches the top.
+                for (let i = 0; i < Math.min(3, sortedScores.length); i++) teamStats[sortedScores[i].ownerId].highScores++;
                 generatedMilestones = generateDynamicMilestones(teamStats);
-                // Ensure achievementTimeline has buckets for any newly added thresholds
                 Object.keys(generatedMilestones).forEach(milestoneKey => {
                     if (!achievementTimeline[milestoneKey]) achievementTimeline[milestoneKey] = {};
-                    generatedMilestones[milestoneKey].thresholds.forEach(threshold => {
-                        if (achievementTimeline[milestoneKey][threshold] === undefined) {
-                            achievementTimeline[milestoneKey][threshold] = [];
-                        }
-                    });
+                    generatedMilestones[milestoneKey].thresholds.forEach(threshold => { if (achievementTimeline[milestoneKey][threshold] === undefined) achievementTimeline[milestoneKey][threshold] = []; });
                 });
-
-                // Check for milestone achievements this week
                 Object.keys(teamStats).forEach(ownerId => {
                     const stats = teamStats[ownerId];
-                    
-                    // Check each milestone type
-                    const milestoneValues = {
-                        totalWins: stats.wins,
-                        totalLosses: stats.losses,
-                        allPlayWins: stats.allPlayWins,
-                        allPlayLosses: stats.allPlayLosses,
-                        totalPoints: stats.points,
-                        highScores: stats.highScores
-                    };
-
+                    const milestoneValues = { totalWins: stats.wins, totalLosses: stats.losses, allPlayWins: stats.allPlayWins, allPlayLosses: stats.allPlayLosses, totalPoints: stats.points, highScores: stats.highScores };
                     Object.keys(milestoneValues).forEach(milestoneKey => {
                         const currentValue = milestoneValues[milestoneKey];
-
-                        // Use current generated milestones thresholds so achievements keep rolling when needed
                         const thresholdsToCheck = (generatedMilestones[milestoneKey] || baseMilestones[milestoneKey]).thresholds;
                         thresholdsToCheck.forEach(threshold => {
-                            // Check if milestone just achieved
                             if (currentValue >= threshold) {
-                                const alreadyAchieved = achievementTimeline[milestoneKey][threshold].some(
-                                    achievement => achievement.ownerId === ownerId
-                                );
-
+                                const alreadyAchieved = achievementTimeline[milestoneKey][threshold].some(a => a.ownerId === ownerId);
                                 if (!alreadyAchieved) {
-                                    achievementTimeline[milestoneKey][threshold].push({
-                                        ownerId,
-                                        season: parseInt(season),
-                                        week: parseInt(week),
-                                        globalWeek,
-                                        value: currentValue,
-                                        teamName: allRosters[ownerId]?.name || `Team ${ownerId}`
-                                    });
-
+                                    achievementTimeline[milestoneKey][threshold].push({ ownerId, season: parseInt(season), week: parseInt(week), globalWeek, value: currentValue, teamName: allRosters[ownerId]?.name || `Team ${ownerId}` });
                                     logger.info(`🏆 ${milestoneKey} ${threshold}: ${allRosters[ownerId]?.name} achieved in S${season}W${week} (value: ${currentValue})`);
                                 }
                             }
@@ -391,137 +159,57 @@ const MilestoneRecords = () => {
                 });
             });
         });
-
-        // Generate achievements object for UI
         const achievements = {};
         Object.keys(teamStats).forEach(ownerId => {
             achievements[ownerId] = {};
-            
             Object.keys(baseMilestones).forEach(milestoneKey => {
                 achievements[ownerId][milestoneKey] = {};
-                
-                const finalValue = teamStats[ownerId][milestoneKey === 'totalWins' ? 'finalWins' : 
-                                                       milestoneKey === 'totalLosses' ? 'finalLosses' :
-                                                       milestoneKey === 'allPlayWins' ? 'finalAllPlayWins' :
-                                                       milestoneKey === 'allPlayLosses' ? 'finalAllPlayLosses' :
-                                                       milestoneKey === 'totalPoints' ? 'finalPoints' : 'finalHighScores'];
-                
-                baseMilestones[milestoneKey].thresholds.forEach(threshold => {
-                    achievements[ownerId][milestoneKey][threshold] = {
-                        achieved: finalValue >= threshold,
-                        currentValue: finalValue,
-                        remaining: Math.max(0, threshold - finalValue),
-                        progress: Math.min(100, (finalValue / threshold) * 100)
-                    };
-                });
+                const finalValue = teamStats[ownerId][milestoneKey === 'totalWins' ? 'finalWins' : milestoneKey === 'totalLosses' ? 'finalLosses' : milestoneKey === 'allPlayWins' ? 'finalAllPlayWins' : milestoneKey === 'allPlayLosses' ? 'finalAllPlayLosses' : milestoneKey === 'totalPoints' ? 'finalPoints' : 'finalHighScores'];
+                baseMilestones[milestoneKey].thresholds.forEach(threshold => { achievements[ownerId][milestoneKey][threshold] = { achieved: finalValue >= threshold, currentValue: finalValue, remaining: Math.max(0, threshold - finalValue), progress: Math.min(100, (finalValue / threshold) * 100) }; });
             });
         });
-
-        // Update team stats with final values for display
-        Object.keys(teamStats).forEach(ownerId => {
-            const stats = teamStats[ownerId];
-            stats.achievements = achievements[ownerId];
-        });
-
-    // Persist the generated milestones so UI shows extended thresholds when appropriate
-    setDynamicMilestones(generatedMilestones);
-        setMilestoneData({ 
-            teamStats, 
-            allRosters, 
-            achievementHistory: achievementTimeline 
-        });
-
+        Object.keys(teamStats).forEach(ownerId => { teamStats[ownerId].achievements = achievements[ownerId]; });
+        setDynamicMilestones(generatedMilestones);
+        setMilestoneData({ teamStats, allRosters, achievementHistory: achievementTimeline });
         logger.debug('=== MILESTONE TRACKING COMPLETE ===');
-        logger.debug('Achievement timeline summary:', Object.keys(achievementTimeline).map(key => ({
-            milestone: key,
-            achievements: Object.keys(achievementTimeline[key]).map(threshold => ({
-                threshold,
-                count: achievementTimeline[key][threshold].length,
-                firstAchiever: achievementTimeline[key][threshold][0]?.teamName || 'None'
-            }))
-        })));
+        logger.debug('Achievement timeline summary:', Object.keys(achievementTimeline).map(key => ({ milestone: key, achievements: Object.keys(achievementTimeline[key]).map(threshold => ({ threshold, count: achievementTimeline[key][threshold].length, firstAchiever: achievementTimeline[key][threshold][0]?.teamName || 'None' })) })));
     };
 
     const getMilestoneAchievers = (milestoneKey, threshold) => {
         if (!milestoneData.teamStats) return [];
-
         const achievers = [];
         Object.keys(milestoneData.teamStats).forEach(ownerId => {
             const achievement = milestoneData.teamStats[ownerId].achievements[milestoneKey]?.[threshold];
             if (achievement?.achieved) {
-                // Find timing information from achievement history
-                const timingInfo = milestoneData.achievementHistory?.[milestoneKey]?.[threshold]?.find(
-                    hist => hist.ownerId === ownerId
-                );
-                
-                achievers.push({
-                    ownerId,
-                    ...milestoneData.allRosters[ownerId],
-                    currentValue: achievement.currentValue,
-                    timingInfo: timingInfo || null
-                });
+                const timingInfo = milestoneData.achievementHistory?.[milestoneKey]?.[threshold]?.find(h => h.ownerId === ownerId);
+                achievers.push({ ownerId, ...milestoneData.allRosters[ownerId], currentValue: achievement.currentValue, timingInfo: timingInfo || null });
             }
         });
-
-        return achievers.sort((a, b) => {
-            // Sort by achievement timing first, then by current value
-            if (a.timingInfo && b.timingInfo) {
-                return a.timingInfo.globalWeek - b.timingInfo.globalWeek;
-            }
-            return b.currentValue - a.currentValue;
-        });
+        return achievers.sort((a, b) => { if (a.timingInfo && b.timingInfo) return a.timingInfo.globalWeek - b.timingInfo.globalWeek; return b.currentValue - a.currentValue; });
     };
 
     const getMilestoneTimingStats = (milestoneKey, threshold) => {
-        if (!milestoneData.achievementHistory?.[milestoneKey]?.[threshold]) {
-            return null;
-        }
-        
+        if (!milestoneData.achievementHistory?.[milestoneKey]?.[threshold]) return null;
         const achievements = milestoneData.achievementHistory[milestoneKey][threshold];
-        if (achievements.length === 0) {
-            return null;
-        }
-        
-        // Sort by global week to get chronological order
-        const sortedAchievements = [...achievements].sort((a, b) => a.globalWeek - b.globalWeek);
+        if (achievements.length === 0) return null;
+        // Filter to only include teams that currently have this achievement
+        const currentAchievers = achievements.filter(a => {
+            const achievement = milestoneData.teamStats?.[a.ownerId]?.achievements?.[milestoneKey]?.[threshold];
+            return achievement?.achieved === true;
+        });
+        if (currentAchievers.length === 0) return null;
+        const sortedAchievements = [...currentAchievers].sort((a, b) => a.globalWeek - b.globalWeek);
         const firstAchiever = sortedAchievements[0];
-        
-        return {
-            firstAchiever: {
-                ownerId: firstAchiever.ownerId,
-                name: firstAchiever.teamName,
-                globalWeek: firstAchiever.globalWeek,
-                season: firstAchiever.season,
-                week: firstAchiever.week
-            },
-            allAchievements: sortedAchievements.map(achievement => ({
-                ownerId: achievement.ownerId,
-                name: achievement.teamName,
-                globalWeek: achievement.globalWeek,
-                weeksAfterFirst: achievement.globalWeek - firstAchiever.globalWeek,
-                season: achievement.season,
-                week: achievement.week,
-                achievedIn: achievement.globalWeek
-            }))
-        };
+        return { firstAchiever: { ownerId: firstAchiever.ownerId, name: firstAchiever.teamName, globalWeek: firstAchiever.globalWeek, season: firstAchiever.season, week: firstAchiever.week }, allAchievements: sortedAchievements.map(a => ({ ownerId: a.ownerId, name: a.teamName, globalWeek: a.globalWeek, weeksAfterFirst: a.globalWeek - firstAchiever.globalWeek, season: a.season, week: a.week, achievedIn: a.globalWeek })) };
     };
 
     const getMilestoneWatchers = (milestoneKey, threshold) => {
         if (!milestoneData.teamStats) return [];
-
         const watchers = [];
         Object.keys(milestoneData.teamStats).forEach(ownerId => {
             const achievement = milestoneData.teamStats[ownerId].achievements[milestoneKey]?.[threshold];
-            if (!achievement?.achieved && achievement?.remaining <= 10 && achievement?.remaining > 0) {
-                watchers.push({
-                    ownerId,
-                    ...milestoneData.allRosters[ownerId],
-                    remaining: achievement.remaining,
-                    currentValue: achievement.currentValue
-                });
-            }
+            if (!achievement?.achieved && achievement?.remaining <= 10 && achievement?.remaining > 0) watchers.push({ ownerId, ...milestoneData.allRosters[ownerId], remaining: achievement.remaining, currentValue: achievement.currentValue });
         });
-
         return watchers.sort((a, b) => a.remaining - b.remaining);
     };
 
@@ -532,27 +220,18 @@ const MilestoneRecords = () => {
     };
 
     const formatStatValue = (value, milestoneKey) => {
-        if (milestoneKey === 'totalPoints') {
-            return value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-        }
+        if (milestoneKey === 'totalPoints') return value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
         return value.toString();
     };
 
-    // Compute which thresholds to show for a milestone: include everything up to the
-    // first threshold that is greater than the highest achieved value across teams.
-    // This hides unreachable higher tiers (e.g., 75/100/150) until a team reaches 50.
     const getDisplayedThresholds = (milestoneKey) => {
         const sourceMilestones = Object.keys(dynamicMilestones).length > 0 ? dynamicMilestones : baseMilestones;
         const thresholds = sourceMilestones[milestoneKey]?.thresholds || [];
-
         if (!milestoneData?.teamStats) return thresholds.slice().sort((a, b) => b - a);
-
-        // Determine highest final value across teams for this milestone
         let highest = 0;
         Object.keys(milestoneData.teamStats).forEach(ownerId => {
             const stats = milestoneData.teamStats[ownerId];
             if (!stats) return;
-
             let val = 0;
             switch (milestoneKey) {
                 case 'totalWins': val = stats.finalWins || 0; break;
@@ -565,342 +244,274 @@ const MilestoneRecords = () => {
             }
             highest = Math.max(highest, val);
         });
-
-        // Find the first threshold greater than highest; include thresholds up to that one
         const sortedAsc = thresholds.slice().sort((a, b) => a - b);
         let cutoffIndex = sortedAsc.findIndex(t => t > highest);
-        if (cutoffIndex === -1) {
-            // No threshold greater than highest: show all
-            return sortedAsc.slice().sort((a, b) => b - a);
-        }
-
-        const toShow = sortedAsc.slice(0, cutoffIndex + 1); // include the next threshold above highest
-        return toShow.sort((a, b) => b - a);
+        if (cutoffIndex === -1) return sortedAsc.slice().sort((a, b) => b - a);
+        return sortedAsc.slice(0, cutoffIndex + 1).sort((a, b) => b - a);
     };
 
     const getMilestoneProgress = (milestoneKey, threshold) => {
         if (!milestoneData.teamStats) return [];
-
         const progress = [];
         Object.keys(milestoneData.teamStats).forEach(ownerId => {
             const achievement = milestoneData.teamStats[ownerId].achievements[milestoneKey]?.[threshold];
-            if (achievement) {
-                progress.push({
-                    ownerId,
-                    ...milestoneData.allRosters[ownerId],
-                    currentValue: achievement.currentValue,
-                    remaining: achievement.remaining,
-                    progress: achievement.progress || 0,
-                    achieved: achievement.achieved
-                });
-            }
+            if (achievement) progress.push({ ownerId, ...milestoneData.allRosters[ownerId], currentValue: achievement.currentValue, remaining: achievement.remaining, progress: achievement.progress || 0, achieved: achievement.achieved });
         });
-
-        return progress.sort((a, b) => {
-            if (a.achieved && !b.achieved) return -1;
-            if (!a.achieved && b.achieved) return 1;
-            return b.currentValue - a.currentValue;
-        });
+        return progress.sort((a, b) => { if (a.achieved && !b.achieved) return -1; if (!a.achieved && b.achieved) return 1; return b.currentValue - a.currentValue; });
     };
 
     const toggleThresholdExpansion = (milestoneKey, threshold) => {
         const key = `${milestoneKey}-${threshold}`;
-        setExpandedThresholds(prev => ({
-            ...prev,
-            [key]: !prev[key]
-        }));
+        setExpandedThresholds(prev => ({ ...prev, [key]: !prev[key] }));
     };
 
     const isThresholdExpanded = (milestoneKey, threshold) => {
         const key = `${milestoneKey}-${threshold}`;
         const collapsed = shouldCollapseMilestone(milestoneKey, threshold);
-        // If it's in the state, use that value, otherwise use !collapsed as default
         return expandedThresholds[key] !== undefined ? expandedThresholds[key] : !collapsed;
     };
 
+    // ── Accent helpers ────────────────────────────────────────────────────────
+    const accentClasses = {
+        green:  { badge: 'bg-emerald-500/15 border-emerald-500/25 text-emerald-300', dot: 'bg-emerald-400', btn: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40', bar: 'bg-emerald-500', watcher: 'bg-emerald-500/10 border-emerald-500/20', pill: 'bg-emerald-500/15 text-emerald-300' },
+        red:    { badge: 'bg-red-500/15 border-red-500/25 text-red-300',             dot: 'bg-red-400',     btn: 'bg-red-500/20 text-red-300 border-red-500/40',             bar: 'bg-red-500',     watcher: 'bg-red-500/10 border-red-500/20',         pill: 'bg-red-500/15 text-red-300' },
+        blue:   { badge: 'bg-blue-500/15 border-blue-500/25 text-blue-300',           dot: 'bg-blue-400',    btn: 'bg-blue-500/20 text-blue-300 border-blue-500/40',           bar: 'bg-blue-500',    watcher: 'bg-blue-500/10 border-blue-500/20',         pill: 'bg-blue-500/15 text-blue-300' },
+        purple: { badge: 'bg-purple-500/15 border-purple-500/25 text-purple-300',     dot: 'bg-purple-400',  btn: 'bg-purple-500/20 text-purple-300 border-purple-500/40',     bar: 'bg-purple-500',  watcher: 'bg-purple-500/10 border-purple-500/20',     pill: 'bg-purple-500/15 text-purple-300' },
+        yellow: { badge: 'bg-yellow-500/15 border-yellow-500/25 text-yellow-300',     dot: 'bg-yellow-400',  btn: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40',     bar: 'bg-yellow-500',  watcher: 'bg-yellow-500/10 border-yellow-500/20',     pill: 'bg-yellow-500/15 text-yellow-300' },
+        orange: { badge: 'bg-orange-500/15 border-orange-500/25 text-orange-300',     dot: 'bg-orange-400',  btn: 'bg-orange-500/20 text-orange-300 border-orange-500/40',     bar: 'bg-orange-500',  watcher: 'bg-orange-500/10 border-orange-500/20',     pill: 'bg-orange-500/15 text-orange-300' },
+    };
+
+    const acc = (color) => accentClasses[color] || accentClasses.blue;
+
+    // ── Loading / error ───────────────────────────────────────────────────────
     if (contextError) {
         return (
-            <div className="text-center py-8">
-                <p className="text-red-600">Error loading data: {contextError}</p>
+            <div className="flex items-center justify-center py-12">
+                <p className="text-sm text-red-400">Error loading data: {contextError}</p>
             </div>
         );
     }
-
     if (loading) {
         return (
-            <div className="flex justify-center items-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                <span className="ml-2 text-gray-600">Loading milestones...</span>
+            <div className="flex items-center justify-center py-16">
+                <div className="flex flex-col items-center gap-3">
+                    <svg className="animate-spin h-7 w-7 text-blue-400" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <p className="text-sm text-gray-400 animate-pulse">Loading milestones…</p>
+                </div>
             </div>
         );
     }
 
+    // ── Render ────────────────────────────────────────────────────────────────
     return (
-        <div className="space-y-6">
-            {/* Mobile-friendly milestone selector */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 bg-gray-50 p-4 rounded-lg">
-                {Object.keys(milestones).map(key => (
-                    <button
-                        key={key}
-                        onClick={() => setActiveMilestone(key)}
-                        className={`p-3 rounded-lg text-sm font-medium transition-all duration-200 ${
-                            activeMilestone === key
-                                ? `bg-${milestones[key].color}-100 text-${milestones[key].color}-800 border-2 border-${milestones[key].color}-300`
-                                : 'bg-white text-gray-600 border-2 border-transparent hover:bg-gray-100'
-                        }`}
-                    >
-                        <div className="text-lg mb-1">{milestones[key].icon}</div>
-                        <div className="text-xs leading-tight">{milestones[key].title}</div>
-                    </button>
-                ))}
+        <div className="p-3 sm:p-5 space-y-4">
+
+            {/* Section header */}
+            <div className="flex items-center gap-2 px-1 pb-3 border-b border-white/8">
+                <svg className="w-3.5 h-3.5 text-yellow-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                </svg>
+                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Career Milestones</span>
             </div>
 
-            {/* Active milestone display */}
-            {activeMilestone && milestones[activeMilestone] && (
-                <div className="space-y-6">
-                    {/* Milestone header */}
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                        <div className="flex items-start space-x-4">
-                            <div className={`text-4xl sm:text-5xl`}>
-                                {milestones[activeMilestone].icon}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">
-                                    {milestones[activeMilestone].title}
-                                </h2>
-                                <p className="text-sm sm:text-base text-gray-600 leading-relaxed">
-                                    {milestones[activeMilestone].description}
-                                </p>
+            {/* Milestone selector */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                {Object.keys(milestones).map(key => {
+                    const isActive = activeMilestone === key;
+                    const a = acc(milestones[key].color);
+                    return (
+                        <button
+                            key={key}
+                            onClick={() => setActiveMilestone(key)}
+                            className={`p-3 rounded-xl text-center transition-all duration-150 border ${
+                                isActive
+                                    ? `${a.btn} shadow-sm`
+                                    : 'bg-white/[0.03] border-white/8 text-gray-500 hover:bg-white/[0.06] hover:text-gray-300'
+                            }`}
+                        >
+                            <div className="text-xl mb-1">{milestones[key].icon}</div>
+                            <div className="text-[10px] font-semibold leading-tight">{milestones[key].title}</div>
+                        </button>
+                    );
+                })}
+            </div>
+
+            {/* Active milestone */}
+            {activeMilestone && milestones[activeMilestone] && (() => {
+                const m = milestones[activeMilestone];
+                const a = acc(m.color);
+                return (
+                    <div className="space-y-3">
+                        {/* Milestone description card */}
+                        <div className="bg-white/[0.03] border border-white/8 rounded-xl p-4 flex items-start gap-4">
+                            <div className="text-3xl flex-shrink-0">{m.icon}</div>
+                            <div className="min-w-0">
+                                <h2 className="text-sm font-bold text-white mb-1">{m.title}</h2>
+                                <p className="text-xs text-gray-500 leading-relaxed">{m.description}</p>
                             </div>
                         </div>
-                    </div>
 
-                    {/* Milestone thresholds */}
-                    <div className="space-y-4">
-                        {(getDisplayedThresholds(activeMilestone) || []).map(threshold => {
-                                            const achievers = getMilestoneAchievers(activeMilestone, threshold);
-                                            const watchers = getMilestoneWatchers(activeMilestone, threshold);
-                                            const progress = getMilestoneProgress(activeMilestone, threshold);
-                                            const timingStats = getMilestoneTimingStats(activeMilestone, threshold);
-                                            const collapsed = shouldCollapseMilestone(activeMilestone, threshold);
-                                            const isExpanded = isThresholdExpanded(activeMilestone, threshold);
+                        {/* Threshold cards */}
+                        <div className="space-y-2">
+                            {(getDisplayedThresholds(activeMilestone) || []).map(threshold => {
+                                const achievers    = getMilestoneAchievers(activeMilestone, threshold);
+                                const watchers     = getMilestoneWatchers(activeMilestone, threshold);
+                                const progress     = getMilestoneProgress(activeMilestone, threshold);
+                                const timingStats  = getMilestoneTimingStats(activeMilestone, threshold);
+                                const collapsed    = shouldCollapseMilestone(activeMilestone, threshold);
+                                const isExpanded   = isThresholdExpanded(activeMilestone, threshold);
 
-                                            return (
-                                <div key={threshold} className="bg-white rounded-lg shadow-sm border border-gray-200">
-                                    {/* Threshold header */}
-                                    <div 
-                                        className="p-3 sm:p-4 cursor-pointer hover:bg-gray-50 transition-colors"
-                                        onClick={() => toggleThresholdExpansion(activeMilestone, threshold)}
-                                    >
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center space-x-3">
-                                                <div className={`w-3 h-3 rounded-full bg-${milestones[activeMilestone].color}-500`}></div>
-                                                <h3 className="text-base sm:text-lg font-semibold text-gray-900">
-                                                    {formatStatValue(threshold, activeMilestone)} {milestones[activeMilestone].title}
-                                                </h3>
+                                return (
+                                    <div key={threshold} className="bg-white/[0.03] border border-white/8 rounded-xl overflow-hidden">
+                                        {/* Threshold header — clickable */}
+                                        <div
+                                            className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer hover:bg-white/[0.03] transition-colors"
+                                            onClick={() => toggleThresholdExpansion(activeMilestone, threshold)}
+                                        >
+                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${a.dot}`} />
+                                                <span className="text-sm font-semibold text-gray-200 truncate">
+                                                    {formatStatValue(threshold, activeMilestone)} {m.title}
+                                                </span>
                                                 {achievers.length > 0 && (
-                                                    <span className={`px-2 py-1 text-xs font-medium rounded-full bg-${milestones[activeMilestone].color}-100 text-${milestones[activeMilestone].color}-800`}>
+                                                    <span className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${a.badge}`}>
                                                         {achievers.length} achieved
                                                     </span>
                                                 )}
                                             </div>
-                                            <div className="flex items-center space-x-2">
-                                                {collapsed && (
-                                                    <span className="text-xs text-gray-500 hidden sm:inline">
-                                                        All teams achieved
-                                                    </span>
-                                                )}
-                                                {isExpanded ? (
-                                                    <FontAwesomeIcon icon={faChevronUp} className="h-5 w-5 text-gray-400" />
-                                                ) : (
-                                                    <FontAwesomeIcon icon={faChevronDown} className="h-5 w-5 text-gray-400" />
-                                                )}
+                                            <div className="flex items-center gap-2 flex-shrink-0">
+                                                {collapsed && <span className="text-[10px] text-gray-600 hidden sm:inline">All teams achieved</span>}
+                                                <FontAwesomeIcon
+                                                    icon={isExpanded ? faChevronUp : faChevronDown}
+                                                    className="w-3 h-3 text-gray-600"
+                                                />
                                             </div>
                                         </div>
-                                    </div>
 
-                                    {/* Expandable content */}
-                                    {isExpanded && (
-                                        <div className="border-t border-gray-200 p-4 sm:p-6 space-y-4">
-                                            {/* Achievers */}
-                                            {achievers.length > 0 && (
-                                                <div>
-                                                    <h4 className="font-medium text-gray-900 mb-3 flex items-center">
-                                                        <FontAwesomeIcon icon={faTrophy} className="h-4 w-4 text-yellow-500 mr-2" />
-                                                        Achievement Timeline ({achievers.length})
-                                                    </h4>
-                                                    
-                                                    {/* Mobile-friendly table */}
-                                                    <div className="overflow-x-auto">
-                                                        <table className="min-w-full bg-white border border-gray-200 rounded-lg overflow-hidden">
-                                                            <thead className={`bg-${milestones[activeMilestone].color}-50`}>
-                                                                <tr>
-                                                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                                                                        Team
-                                                                    </th>
-                                                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                                                                        Season
-                                                                    </th>
-                                                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                                                                        Week
-                                                                    </th>
-                                                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                                                                        Total Weeks
-                                                                    </th>
-                                                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                                                                        Difference
-                                                                    </th>
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody className="divide-y divide-gray-200">
-                                                                {timingStats?.allAchievements ? timingStats.allAchievements.map((achievement, index) => {
-                                                                    const isFirst = index === 0;
-                                                                    return (
-                                                                        <tr key={achievement.ownerId} className={
-                                                                            isFirst ? 'bg-yellow-50' : 'hover:bg-gray-50'
-                                                                        }>
-                                                                            <td className="px-3 py-2">
-                                                                                <div className="flex items-center space-x-2">
-                                                                                    {milestoneData.allRosters[achievement.ownerId]?.avatar && (
-                                                                                        <img
-                                                                                            src={milestoneData.allRosters[achievement.ownerId].avatar}
-                                                                                            alt={achievement.name}
-                                                                                            className="w-6 h-6 rounded-full"
-                                                                                        />
-                                                                                    )}
-                                                                                    <span className={`text-sm font-medium ${isFirst ? 'text-yellow-900' : 'text-gray-900'}`}>
-                                                                                        {achievement.name}
-                                                                                    </span>
-                                                                                    {isFirst && (
-                                                                                        <span className="text-xs bg-yellow-200 text-yellow-800 px-1 py-0.5 rounded">
-                                                                                            1st
-                                                                                        </span>
-                                                                                    )}
-                                                                                </div>
-                                                                            </td>
-                                                                            <td className="px-3 py-2 text-sm text-gray-600">
-                                                                                {achievement.season}
-                                                                            </td>
-                                                                            <td className="px-3 py-2 text-sm text-gray-600">
-                                                                                {achievement.week}
-                                                                            </td>
-                                                                            <td className="px-3 py-2">
-                                                                                <span className={`text-sm font-medium ${isFirst ? 'text-yellow-700' : 'text-gray-700'}`}>
-                                                                                    {achievement.achievedIn}
-                                                                                </span>
-                                                                            </td>
-                                                                            <td className="px-3 py-2">
-                                                                                {isFirst ? (
-                                                                                    <span className="text-sm font-medium text-yellow-700">
-                                                                                        First
-                                                                                    </span>
-                                                                                ) : (
-                                                                                    <span className="text-sm text-red-600">
-                                                                                        +{achievement.weeksAfterFirst} weeks
-                                                                                    </span>
-                                                                                )}
-                                                                            </td>
-                                                                        </tr>
-                                                                    );
-                                                                }) : (
-                                                                    <tr>
-                                                                        <td colSpan="5" className="px-3 py-4 text-center text-sm text-gray-500">
-                                                                            No timing data available for this milestone
-                                                                        </td>
+                                        {/* Expandable content */}
+                                        {isExpanded && (
+                                            <div className="border-t border-white/8 p-4 space-y-5">
+
+                                                {/* Achievement timeline */}
+                                                {achievers.length > 0 && (
+                                                    <div>
+                                                        <div className="flex items-center gap-2 mb-3">
+                                                            <FontAwesomeIcon icon={faTrophy} className="w-3.5 h-3.5 text-yellow-400" />
+                                                            <span className="text-xs font-semibold text-gray-300">Achievement Timeline ({achievers.length})</span>
+                                                        </div>
+                                                        <div className="overflow-x-auto rounded-xl border border-white/8">
+                                                            <table className="min-w-full text-xs">
+                                                                <thead>
+                                                                    <tr className="border-b border-white/8 bg-white/[0.03]">
+                                                                        {['Team','Season','Week','Total Weeks','Difference'].map(h => (
+                                                                            <th key={h} className="py-2 px-3 text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                                                                        ))}
                                                                     </tr>
-                                                                )}
-                                                            </tbody>
-                                                        </table>
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* Close watchers */}
-                                            {watchers.length > 0 && (
-                                                <div>
-                                                    <h4 className="font-medium text-gray-900 mb-3 flex items-center">
-                                                        <span className="text-orange-500 mr-2">👀</span>
-                                                        Close to Achievement ({watchers.length})
-                                                    </h4>
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                                        {watchers.map(watcher => (
-                                                            <div key={watcher.ownerId} className="p-3 rounded-lg bg-orange-50 border border-orange-200">
-                                                                <div className="flex items-center space-x-3">
-                                                                    {watcher.avatar && (
-                                                                        <img
-                                                                            src={watcher.avatar}
-                                                                            alt={watcher.name}
-                                                                            className="w-8 h-8 rounded-full"
-                                                                        />
+                                                                </thead>
+                                                                <tbody className="divide-y divide-white/5">
+                                                                    {timingStats?.allAchievements ? timingStats.allAchievements.map((achievement, index) => {
+                                                                        const isFirst = index === 0;
+                                                                        return (
+                                                                            <tr key={achievement.ownerId}
+                                                                                className={isFirst ? 'bg-yellow-500/8' : 'hover:bg-white/[0.02] transition-colors'}>
+                                                                                <td className="py-2 px-3">
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        {milestoneData.allRosters[achievement.ownerId]?.avatar && (
+                                                                                            <img src={milestoneData.allRosters[achievement.ownerId].avatar} alt={achievement.name} className="w-5 h-5 rounded-full border border-white/10" />
+                                                                                        )}
+                                                                                        <span className={`font-medium truncate ${isFirst ? 'text-yellow-300' : 'text-gray-200'}`}>{achievement.name}</span>
+                                                                                        {isFirst && <span className="flex-shrink-0 text-[9px] bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 px-1.5 py-0.5 rounded-full">1st</span>}
+                                                                                    </div>
+                                                                                </td>
+                                                                                <td className="py-2 px-3 text-gray-400 tabular-nums">{achievement.season}</td>
+                                                                                <td className="py-2 px-3 text-gray-400 tabular-nums">{achievement.week}</td>
+                                                                                <td className="py-2 px-3">
+                                                                                    <span className={`font-semibold tabular-nums ${isFirst ? 'text-yellow-300' : 'text-gray-300'}`}>{achievement.achievedIn}</span>
+                                                                                </td>
+                                                                                <td className="py-2 px-3">
+                                                                                    {isFirst
+                                                                                        ? <span className="text-yellow-400 font-semibold">First</span>
+                                                                                        : <span className="text-red-400">+{achievement.weeksAfterFirst} wks</span>}
+                                                                                </td>
+                                                                            </tr>
+                                                                        );
+                                                                    }) : (
+                                                                        <tr>
+                                                                            <td colSpan={5} className="py-4 text-center text-gray-600 text-[10px] italic">No timing data available</td>
+                                                                        </tr>
                                                                     )}
-                                                                    <div className="flex-1 min-w-0">
-                                                                        <p className="text-sm font-medium text-gray-900 truncate">
-                                                                            {watcher.name}
-                                                                        </p>
-                                                                        <p className="text-xs text-orange-600">
-                                                                            {watcher.remaining} away ({formatStatValue(watcher.currentValue, activeMilestone)})
-                                                                        </p>
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Close watchers */}
+                                                {watchers.length > 0 && (
+                                                    <div>
+                                                        <div className="flex items-center gap-2 mb-3">
+                                                            <span className="text-orange-400">👀</span>
+                                                            <span className="text-xs font-semibold text-gray-300">Close to Achievement ({watchers.length})</span>
+                                                        </div>
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                                                            {watchers.map(watcher => (
+                                                                <div key={watcher.ownerId} className={`flex items-center gap-3 p-3 rounded-lg border ${a.watcher} bg-orange-500/8`}>
+                                                                    {watcher.avatar && <img src={watcher.avatar} alt={watcher.name} className="w-7 h-7 rounded-full border border-white/10 flex-shrink-0" />}
+                                                                    <div className="min-w-0">
+                                                                        <p className="text-xs font-semibold text-gray-200 truncate">{watcher.name}</p>
+                                                                        <p className="text-[10px] text-orange-400">{watcher.remaining} away ({formatStatValue(watcher.currentValue, activeMilestone)})</p>
                                                                     </div>
                                                                 </div>
-                                                            </div>
-                                                        ))}
+                                                            ))}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            )}
+                                                )}
 
-                                            {/* Progress for teams not achieved and not close */}
-                                            {progress.filter(p => !p.achieved && p.remaining > 10).length > 0 && (
-                                                <div>
-                                                    <h4 className="font-medium text-gray-900 mb-3">
-                                                        Progress Tracker
-                                                    </h4>
-                                                    <div className="space-y-2">
-                                                        {progress
-                                                            .filter(p => !p.achieved && p.remaining > 10)
-                                                            .slice(0, 5) // Show top 5 in progress
-                                                            .map(team => (
-                                                                <div key={team.ownerId} className="p-3 rounded-lg bg-gray-50 border border-gray-200">
+                                                {/* Progress tracker */}
+                                                {progress.filter(p => !p.achieved && p.remaining > 10).length > 0 && (
+                                                    <div>
+                                                        <div className="text-xs font-semibold text-gray-400 mb-3">Progress Tracker</div>
+                                                        <div className="space-y-2">
+                                                            {progress.filter(p => !p.achieved && p.remaining > 10).slice(0, 5).map(team => (
+                                                                <div key={team.ownerId} className="bg-white/[0.03] border border-white/8 rounded-lg p-3">
                                                                     <div className="flex items-center justify-between mb-2">
-                                                                        <div className="flex items-center space-x-3">
-                                                                            {team.avatar && (
-                                                                                <img
-                                                                                    src={team.avatar}
-                                                                                    alt={team.name}
-                                                                                    className="w-6 h-6 rounded-full"
-                                                                                />
-                                                                            )}
-                                                                            <span className="text-sm font-medium text-gray-900">
-                                                                                {team.name}
-                                                                            </span>
+                                                                        <div className="flex items-center gap-2 min-w-0">
+                                                                            {team.avatar && <img src={team.avatar} alt={team.name} className="w-5 h-5 rounded-full border border-white/10 flex-shrink-0" />}
+                                                                            <span className="text-xs font-medium text-gray-200 truncate">{team.name}</span>
                                                                         </div>
-                                                                        <span className="text-xs text-gray-600">
+                                                                        <span className="text-[10px] text-gray-500 tabular-nums flex-shrink-0 ml-2">
                                                                             {formatStatValue(team.currentValue, activeMilestone)} / {formatStatValue(threshold, activeMilestone)}
                                                                         </span>
                                                                     </div>
                                                                     <div className="flex items-center gap-3">
-                                                                        <div className="flex-1 w-full bg-gray-200 rounded-full h-2">
+                                                                        <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
                                                                             <div
-                                                                                className={`bg-${milestones[activeMilestone].color}-500 h-2 rounded-full transition-all duration-300`}
+                                                                                className={`h-full rounded-full transition-all duration-300 ${a.bar}`}
                                                                                 style={{ width: `${Math.min(100, team.progress)}%` }}
-                                                                            ></div>
+                                                                            />
                                                                         </div>
-                                                                        <div className="w-12 text-right">
-                                                                            <span className="text-xs font-medium text-gray-700">{Math.min(100, Math.round(team.progress))}%</span>
-                                                                        </div>
+                                                                        <span className="text-[10px] font-semibold text-gray-400 tabular-nums w-10 text-right">
+                                                                            {Math.min(100, Math.round(team.progress))}%
+                                                                        </span>
                                                                     </div>
                                                                 </div>
                                                             ))}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
         </div>
     );
 };

@@ -5,18 +5,120 @@ import LeagueRecords from '../lib/LeagueRecords';
 import SeasonRecords from '../lib/SeasonRecords';
 import StreaksRecords from '../lib/StreaksRecords';
 import MatchupRecords from '../lib/MatchupRecords';
-import PlayoffRecords from '../lib/PlayoffRecords'; // Import the PlayoffRecords component
-import PlayerRecords from '../lib/PlayerRecords'; // Import the new PlayerRecords component
-import MilestoneRecords from '../lib/MilestoneRecords'; // Import MilestoneRecords to expose milestones in Record Book
-
+import PlayoffRecords from '../lib/PlayoffRecords';
+import PlayerRecords from '../lib/PlayerRecords';
+import MilestoneRecords from '../lib/MilestoneRecords';
 // IMPORTANT: This import is absolutely crucial for calculateAllLeagueMetrics to be defined.
 import { calculateAllLeagueMetrics } from '../utils/calculations';
 
-const RecordBook = () => {
-    // State to manage which tab is active: 'overall', 'seasonal', 'streaks', 'matchup', 'playoffs', or 'players'
-    const [activeTab, setActiveTab] = useState('overall'); // Default to 'overall'
+// ── Tab config ────────────────────────────────────────────────────────────────
+const TABS = [
+    {
+        id: 'overall',
+        label: 'Overall',
+        sub: 'Career Leaders',
+        icon: (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+        ),
+        activeClass: 'bg-blue-500/20 text-blue-300 border-blue-500/40',
+        dotClass: 'bg-blue-400',
+    },
+    {
+        id: 'seasonal',
+        label: 'Seasonal',
+        sub: 'Single Season',
+        icon: (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+        ),
+        activeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+        dotClass: 'bg-emerald-400',
+    },
+    {
+        id: 'streaks',
+        label: 'Streaks',
+        sub: 'Consecutive',
+        icon: (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+        ),
+        activeClass: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
+        dotClass: 'bg-purple-400',
+    },
+    {
+        id: 'matchup',
+        label: 'Games',
+        sub: 'Single Game',
+        icon: (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+        ),
+        activeClass: 'bg-orange-500/20 text-orange-300 border-orange-500/40',
+        dotClass: 'bg-orange-400',
+    },
+    {
+        id: 'playoffs',
+        label: 'Playoffs',
+        sub: 'Postseason',
+        icon: (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M5 3l14 9-14 9V3z" />
+            </svg>
+        ),
+        activeClass: 'bg-red-500/20 text-red-300 border-red-500/40',
+        dotClass: 'bg-red-400',
+    },
+    {
+        id: 'players',
+        label: 'Players',
+        sub: 'Individual Stars',
+        icon: (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+        ),
+        activeClass: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40',
+        dotClass: 'bg-indigo-400',
+    },
+    {
+        id: 'milestones',
+        label: 'Milestones',
+        sub: 'Career Milestones',
+        icon: (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+            </svg>
+        ),
+        activeClass: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40',
+        dotClass: 'bg-yellow-400',
+    },
+];
 
-    // Destructure all necessary data from the context
+// ── Empty state ───────────────────────────────────────────────────────────────
+const EmptyState = ({ emoji, title, message }) => (
+    <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
+        <div className="text-5xl mb-4">{emoji}</div>
+        <h3 className="text-base font-semibold text-gray-300 mb-1">{title}</h3>
+        <p className="text-sm text-gray-600">{message}</p>
+    </div>
+);
+
+// ── Main component ────────────────────────────────────────────────────────────
+const RecordBook = () => {
+    const [activeTab, setActiveTab] = useState('overall');
+
     const {
         historicalData,
         processedSeasonalRecords,
@@ -25,64 +127,60 @@ const RecordBook = () => {
         error: dataError
     } = useSleeperData();
 
-    
-
-    // Handle loading state
+    // ── Loading ───────────────────────────────────────────────────────────────
     if (dataIsLoading) {
         return (
-            <div className="text-center py-8 text-xl font-semibold">
-                Loading league data...
+            <div className="flex items-center justify-center min-h-[240px]">
+                <div className="flex flex-col items-center gap-3">
+                    <svg className="animate-spin h-8 w-8 text-blue-400" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <p className="text-sm text-gray-400 animate-pulse">Loading league data…</p>
+                </div>
             </div>
         );
     }
 
-    // Handle error state
+    // ── Error ─────────────────────────────────────────────────────────────────
     if (dataError) {
         return (
-            <div className="text-center py-8 text-red-600">
-                Error loading data: {dataError.message}
+            <div className="flex items-center justify-center min-h-[160px]">
+                <p className="text-sm text-red-400">Error loading data: {dataError.message}</p>
             </div>
         );
     }
 
-    // Correctly flatten ALL historical matchups, including enriched bracket data, into a single array
+    // ── Data flattening (logic untouched) ─────────────────────────────────────
     const allHistoricalMatchupsFlat = [];
-    const processedMatchupIds = new Set(); // To prevent duplicates if a match appears in both raw and bracket data
+    const processedMatchupIds = new Set();
 
-    // 1. Add all regular season and raw playoff week matchups first
     if (historicalData?.matchupsBySeason) {
         for (const yearStr in historicalData.matchupsBySeason) {
             const year = parseInt(yearStr);
-            // yearMatchupsArray is already a flat array of matchups for the year from SleeperDataContext
             const yearMatchupsArray = historicalData.matchupsBySeason[yearStr];
-            if (Array.isArray(yearMatchupsArray)) { // Ensure it's an array
+            if (Array.isArray(yearMatchupsArray)) {
                 yearMatchupsArray.forEach(match => {
-                    // Use a unique identifier for the match (e.g., combination of matchup_id, season, week)
-                    // Note: matchup_id might not be unique across seasons, so include year/week
                     const uniqueMatchId = `${match.matchup_id}-${match.season}-${match.week}-${match.team1_roster_id}-${match.team2_roster_id}`;
                     if (!processedMatchupIds.has(uniqueMatchId)) {
-                        // Explicitly look up owner_id from the merged historicalData.rostersBySeason
                         const team1RosterId = String(match.team1_roster_id);
                         const team2RosterId = String(match.team2_roster_id);
-
                         const rosterForTeam1 = historicalData.rostersBySeason?.[yearStr]?.find(r => String(r.roster_id) === team1RosterId);
                         const rosterForTeam2 = historicalData.rostersBySeason?.[yearStr]?.find(r => String(r.roster_id) === team2RosterId);
-
                         const team1OwnerId = rosterForTeam1?.owner_id;
                         const team2OwnerId = rosterForTeam2?.owner_id;
-
                         allHistoricalMatchupsFlat.push({
                             ...match,
-                            year: year, // Ensure year is a number
-                            team1: getTeamName(team1OwnerId, year), // Pass year for historical name resolution
-                            team2: getTeamName(team2OwnerId, year), // Pass year for historical name resolution
+                            year: year,
+                            team1: getTeamName(team1OwnerId, year),
+                            team2: getTeamName(team2OwnerId, year),
                             team1Score: match.team1_score,
                             team2Score: match.team2_score,
-                            // Explicitly set playoff/finalSeedingGame to false/null for regular matches
                             playoffs: false,
                             finalSeedingGame: null,
-                            isWinnersBracket: false, // Flag for winners bracket
-                            isLosersBracket: false   // Flag for losers bracket
+                            isWinnersBracket: false,
+                            isLosersBracket: false
                         });
                         processedMatchupIds.add(uniqueMatchId);
                     }
@@ -91,43 +189,35 @@ const RecordBook = () => {
         }
     }
 
-    // 2. Now, add enriched winners bracket matches (these should have 'playoffs' and 'finalSeedingGame' flags)
     if (historicalData?.winnersBracketBySeason) {
         for (const yearStr in historicalData.winnersBracketBySeason) {
             const year = parseInt(yearStr);
             const bracketMatches = historicalData.winnersBracketBySeason[yearStr];
             if (Array.isArray(bracketMatches)) {
                 bracketMatches.forEach(match => {
-                    // Use a unique identifier for the match (e.g., combination of bracket match_id, season)
-                    // Note: bracket match_id (m) is unique per bracket, but not across seasons, so include year
-                    const uniqueBracketMatchId = `bracket-${match.m}-${yearStr}-${match.t1}-${match.t2}`; // Use match.t1 and match.t2
+                    const uniqueBracketMatchId = `bracket-${match.m}-${yearStr}-${match.t1}-${match.t2}`;
                     if (!processedMatchupIds.has(uniqueBracketMatchId)) {
-                        // Explicitly look up owner_id from the merged historicalData.rostersBySeason
-                        const team1RosterId = String(match.t1); // Correctly use match.t1
-                        const team2RosterId = String(match.t2); // Correctly use match.t2
-
+                        const team1RosterId = String(match.t1);
+                        const team2RosterId = String(match.t2);
                         const rosterForTeam1 = historicalData.rostersBySeason?.[yearStr]?.find(r => String(r.roster_id) === team1RosterId);
                         const rosterForTeam2 = historicalData.rostersBySeason?.[yearStr]?.find(r => String(r.roster_id) === team2RosterId);
-
                         const team1OwnerId = rosterForTeam1?.owner_id;
                         const team2OwnerId = rosterForTeam2?.owner_id;
-
                         allHistoricalMatchupsFlat.push({
                             ...match,
-                            // Map bracket properties to the expected format for PlayoffRecords
-                            matchup_id: match.m, // Use bracket's match ID
+                            matchup_id: match.m,
                             season: yearStr,
-                            week: match.week, // Use the correct 'week' from enriched bracket match
+                            week: match.week,
                             team1_roster_id: team1RosterId,
                             team1Score: match.t1_score,
                             team2_roster_id: team2RosterId,
                             team2Score: match.t2_score,
-                            team1: getTeamName(team1OwnerId, year), // Pass year for historical name resolution
-                            team2: getTeamName(team2OwnerId, year), // Pass year for historical name resolution
-                            year: year, // Ensure year is a number
-                            playoffs: match.playoffs || true, // Ensure it's true
-                            finalSeedingGame: match.p || null, // Correctly map 'p' to finalSeedingGame
-                            isWinnersBracket: true, // This match is from the winners bracket
+                            team1: getTeamName(team1OwnerId, year),
+                            team2: getTeamName(team2OwnerId, year),
+                            year: year,
+                            playoffs: match.playoffs || true,
+                            finalSeedingGame: match.p || null,
+                            isWinnersBracket: true,
                             isLosersBracket: false
                         });
                         processedMatchupIds.add(uniqueBracketMatchId);
@@ -137,39 +227,34 @@ const RecordBook = () => {
         }
     }
 
-    // 3. Add enriched losers bracket matches
     if (historicalData?.losersBracketBySeason) {
         for (const yearStr in historicalData.losersBracketBySeason) {
             const year = parseInt(yearStr);
             const bracketMatches = historicalData.losersBracketBySeason[yearStr];
             if (Array.isArray(bracketMatches)) {
                 bracketMatches.forEach(match => {
-                    const uniqueBracketMatchId = `bracket-loser-${match.m}-${yearStr}-${match.t1}-${match.t2}`; // Use match.t1 and match.t2
+                    const uniqueBracketMatchId = `bracket-loser-${match.m}-${yearStr}-${match.t1}-${match.t2}`;
                     if (!processedMatchupIds.has(uniqueBracketMatchId)) {
-                        // Explicitly look up owner_id from the merged historicalData.rostersBySeason
-                        const team1RosterId = String(match.t1); // Correctly use match.t1
-                        const team2RosterId = String(match.t2); // Correctly use match.t2
-
+                        const team1RosterId = String(match.t1);
+                        const team2RosterId = String(match.t2);
                         const rosterForTeam1 = historicalData.rostersBySeason?.[yearStr]?.find(r => String(r.roster_id) === team1RosterId);
                         const rosterForTeam2 = historicalData.rostersBySeason?.[yearStr]?.find(r => String(r.roster_id) === team2RosterId);
-
                         const team1OwnerId = rosterForTeam1?.owner_id;
                         const team2OwnerId = rosterForTeam2?.owner_id;
-
                         allHistoricalMatchupsFlat.push({
                             ...match,
                             matchup_id: match.m,
                             season: yearStr,
-                            week: match.week, // Use the correct 'week' from enriched bracket match
+                            week: match.week,
                             team1_roster_id: team1RosterId,
                             team1Score: match.t1_score,
                             team2_roster_id: team2RosterId,
                             team2Score: match.t2_score,
-                            team1: getTeamName(team1OwnerId, year), // Pass year for historical name resolution
-                            team2: getTeamName(team2OwnerId, year), // Pass year for historical name resolution
+                            team1: getTeamName(team1OwnerId, year),
+                            team2: getTeamName(team2OwnerId, year),
                             year: year,
                             playoffs: match.playoffs || true,
-                            finalSeedingGame: match.p || null, // Correctly map 'p' to finalSeedingGame
+                            finalSeedingGame: match.p || null,
                             isWinnersBracket: false,
                             isLosersBracket: true
                         });
@@ -180,253 +265,144 @@ const RecordBook = () => {
         }
     }
 
-    // Define flags for data availability for each tab
-    const hasOverallData = historicalData && Object.keys(historicalData).length > 0 && historicalData.matchupsBySeason && Object.keys(historicalData.matchupsBySeason).length > 0;
+    // ── Availability flags (logic untouched) ──────────────────────────────────
+    const hasOverallData = historicalData && Object.keys(historicalData).length > 0
+        && historicalData.matchupsBySeason
+        && Object.keys(historicalData.matchupsBySeason).length > 0;
     const hasSeasonalData = processedSeasonalRecords && Object.keys(processedSeasonalRecords).length > 0;
-    // Check if allHistoricalMatchupsFlat has data for streaks and matchups
     const hasStreaksAndMatchupData = allHistoricalMatchupsFlat.length > 0;
-    const hasPlayoffData = historicalData && historicalData.winnersBracketBySeason && Object.keys(historicalData.winnersBracketBySeason).length > 0;
+    const hasPlayoffData = historicalData
+        && historicalData.winnersBracketBySeason
+        && Object.keys(historicalData.winnersBracketBySeason).length > 0;
 
-    // (Top-5 headers removed by request) — RecordBook now only renders the main record components
+    // ── Active tab meta ───────────────────────────────────────────────────────
+    const activeTabMeta = TABS.find(t => t.id === activeTab);
 
-
+    // ── Render ────────────────────────────────────────────────────────────────
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-            <div className="container mx-auto px-4 py-12 max-w-7xl">
-                {/* Header Section */}
-                <div className="text-center mb-12">
-                    <h1 className="text-5xl font-black text-gray-900 mb-4 tracking-tight">
-                        🏆 League Record Book
-                    </h1>
-                    <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-                        Discover the greatest achievements and records in our league's history
-                    </p>
+        <div className="w-full space-y-4 pb-6">
+
+            {/* ── Page header ── */}
+            <div className="flex items-center gap-3 px-1 pt-1">
+                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-yellow-500/15 border border-yellow-500/25 flex-shrink-0">
+                    <svg className="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                    </svg>
                 </div>
-
-                {/* Modern Tab Navigation */}
-                <div className="mb-10">
-                    <div className="bg-white rounded-2xl shadow-lg p-2 border border-gray-200">
-                        <nav className="flex flex-col sm:flex-row gap-2 sm:gap-1">
-                            <button
-                                className={`w-full sm:flex-1 py-3 px-4 sm:py-4 sm:px-6 text-sm font-semibold rounded-xl transition-all duration-200 ${
-                                    activeTab === 'overall'
-                                        ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
-                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                                }`}
-                                onClick={() => setActiveTab('overall')}
-                                aria-current={activeTab === 'overall' ? 'page' : undefined}
-                            >
-                                <span className="block text-center">Overall Records</span>
-                                <span className="block text-xs opacity-80 mt-1">Career Leaders</span>
-                            </button>
-                            <button
-                                className={`w-full sm:flex-1 py-3 px-4 sm:py-4 sm:px-6 text-sm font-semibold rounded-xl transition-all duration-200 ${
-                                    activeTab === 'seasonal'
-                                        ? 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg'
-                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                                }`}
-                                onClick={() => setActiveTab('seasonal')}
-                                aria-current={activeTab === 'seasonal' ? 'page' : undefined}
-                            >
-                                <span className="block text-center">Seasonal Records</span>
-                                <span className="block text-xs opacity-80 mt-1">Single Season</span>
-                            </button>
-                            <button
-                                className={`w-full sm:flex-1 py-3 px-4 sm:py-4 sm:px-6 text-sm font-semibold rounded-xl transition-all duration-200 ${
-                                    activeTab === 'streaks'
-                                        ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg'
-                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                                }`}
-                                onClick={() => setActiveTab('streaks')}
-                                aria-current={activeTab === 'streaks' ? 'page' : undefined}
-                            >
-                                <span className="block text-center">Streak Records</span>
-                                <span className="block text-xs opacity-80 mt-1">Consecutive</span>
-                            </button>
-                            <button
-                                className={`w-full sm:flex-1 py-3 px-4 sm:py-4 sm:px-6 text-sm font-semibold rounded-xl transition-all duration-200 ${
-                                    activeTab === 'matchup'
-                                        ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg'
-                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                                }`}
-                                onClick={() => setActiveTab('matchup')}
-                                aria-current={activeTab === 'matchup' ? 'page' : undefined}
-                            >
-                                <span className="block text-center">Game Records</span>
-                                <span className="block text-xs opacity-80 mt-1">Single Game</span>
-                            </button>
-                            <button
-                                className={`w-full sm:flex-1 py-3 px-4 sm:py-4 sm:px-6 text-sm font-semibold rounded-xl transition-all duration-200 ${
-                                    activeTab === 'playoffs'
-                                        ? 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg'
-                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                                }`}
-                                onClick={() => setActiveTab('playoffs')}
-                                aria-current={activeTab === 'playoffs' ? 'page' : undefined}
-                            >
-                                <span className="block text-center">Playoff Records</span>
-                                <span className="block text-xs opacity-80 mt-1">Postseason</span>
-                            </button>
-                            <button
-                                className={`w-full sm:flex-1 py-3 px-4 sm:py-4 sm:px-6 text-sm font-semibold rounded-xl transition-all duration-200 ${
-                                    activeTab === 'players'
-                                        ? 'bg-gradient-to-r from-indigo-500 to-indigo-600 text-white shadow-lg'
-                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                                }`}
-                                onClick={() => setActiveTab('players')}
-                                aria-current={activeTab === 'players' ? 'page' : undefined}
-                            >
-                                <span className="block text-center">Player Records</span>
-                                <span className="block text-xs opacity-80 mt-1">Individual Stars</span>
-                            </button>
-                            <button
-                                className={`w-full sm:flex-1 py-3 px-4 sm:py-4 sm:px-6 text-sm font-semibold rounded-xl transition-all duration-200 ${
-                                    activeTab === 'milestones'
-                                        ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-white shadow-lg'
-                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                                }`}
-                                onClick={() => setActiveTab('milestones')}
-                                aria-current={activeTab === 'milestones' ? 'page' : undefined}
-                            >
-                                <span className="block text-center">Milestones</span>
-                                <span className="block text-xs opacity-80 mt-1">Career Milestones</span>
-                            </button>
-                        </nav>
-                    </div>
+                <div>
+                    <h1 className="text-base font-bold text-white leading-tight">League Record Book</h1>
+                    <p className="text-[10px] text-gray-500 mt-0.5">Greatest achievements in league history</p>
                 </div>
+            </div>
 
-                {/* Tab Content */}
-                <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-                    {activeTab === 'overall' && (
-                        <>
-                            {hasOverallData ? (
-                                <>
-                                    {/* Mobile header (Top-5 removed) */}
-                                    <LeagueRecords
-                                        historicalData={historicalData}
-                                        getTeamName={getTeamName}
-                                        calculateAllLeagueMetrics={calculateAllLeagueMetrics}
-                                    />
-                                </>
-                            ) : (
-                                <div className="text-center py-16 px-6">
-                                    <div className="text-6xl mb-4">📊</div>
-                                    <h3 className="text-xl font-semibold text-gray-700 mb-2">No Overall Data</h3>
-                                    <p className="text-gray-500">No overall league data available yet.</p>
-                                </div>
-                            )}
-                        </>
-                    )}
+            {/* ── Tab strip ── */}
+            <div className="bg-gray-800 border border-white/10 rounded-xl p-1.5 overflow-x-auto">
+                <nav className="flex gap-1 min-w-max sm:min-w-0 sm:grid sm:grid-cols-7">
+                    {TABS.map(tab => {
+                        const isActive = activeTab === tab.id;
+                        return (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                aria-current={isActive ? 'page' : undefined}
+                                className={`
+                                    flex flex-col items-center justify-center gap-1
+                                    px-3 py-2.5 rounded-lg text-center
+                                    transition-all duration-150 select-none
+                                    border
+                                    ${isActive
+                                        ? `${tab.activeClass} shadow-sm`
+                                        : 'border-transparent text-gray-500 hover:text-gray-300 hover:bg-white/5'
+                                    }
+                                `}
+                            >
+                                <span className={`${isActive ? '' : 'opacity-60'}`}>{tab.icon}</span>
+                                <span className="text-[11px] font-semibold leading-none whitespace-nowrap">{tab.label}</span>
+                                <span className={`text-[9px] leading-none whitespace-nowrap hidden sm:block ${isActive ? 'opacity-70' : 'opacity-0'}`}>
+                                    {tab.sub}
+                                </span>
+                            </button>
+                        );
+                    })}
+                </nav>
+            </div>
 
-                    
+            {/* ── Active tab label (mobile) ── */}
+            <div className="flex items-center gap-2 px-1 sm:hidden">
+                <span className={`inline-block w-1.5 h-1.5 rounded-full ${activeTabMeta?.dotClass}`} />
+                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                    {activeTabMeta?.label}
+                </span>
+                <span className="text-xs text-gray-600">— {activeTabMeta?.sub}</span>
+            </div>
 
-                    {activeTab === 'seasonal' && (
-                        <>
-                            {hasSeasonalData ? (
-                                <>
-                                    {/* Mobile header (Top-5 removed) */}
-                                    <SeasonRecords />
-                                </>
-                            ) : (
-                                <div className="text-center py-16 px-6">
-                                    <div className="text-6xl mb-4">📅</div>
-                                    <h3 className="text-xl font-semibold text-gray-700 mb-2">No Seasonal Data</h3>
-                                    <p className="text-gray-500">No seasonal data available for display.</p>
-                                </div>
-                            )}
-                        </>
-                    )}
+            {/* ── Content card ── */}
+            <div className="bg-gray-800 border border-white/10 rounded-xl overflow-hidden">
 
-                    {activeTab === 'streaks' && (
-                        <>
-                            {hasStreaksAndMatchupData ? (
-                                <>
-                                    {/* Mobile header (Top-5 removed) */}
-                                    <StreaksRecords
-                                        historicalMatchups={allHistoricalMatchupsFlat} // Pass the correctly flattened array
-                                    />
-                                </>
-                            ) : (
-                                <div className="text-center py-16 px-6">
-                                    <div className="text-6xl mb-4">🔥</div>
-                                    <h3 className="text-xl font-semibold text-gray-700 mb-2">No Streak Data</h3>
-                                    <p className="text-gray-500">No historical matchup data available to calculate streaks.</p>
-                                </div>
-                            )}
-                        </>
-                    )}
+                {activeTab === 'overall' && (
+                    hasOverallData ? (
+                        <LeagueRecords
+                            historicalData={historicalData}
+                            getTeamName={getTeamName}
+                            calculateAllLeagueMetrics={calculateAllLeagueMetrics}
+                        />
+                    ) : (
+                        <EmptyState emoji="📊" title="No Overall Data" message="No overall league data available yet." />
+                    )
+                )}
 
-                    {activeTab === 'matchup' && (
-                        <>
-                            {hasStreaksAndMatchupData ? (
-                                <>
-                                    {/* Mobile header (Top-5 removed) */}
-                                    <MatchupRecords />
-                                </>
-                            ) : (
-                                <div className="text-center py-16 px-6">
-                                    <div className="text-6xl mb-4">⚔️</div>
-                                    <h3 className="text-xl font-semibold text-gray-700 mb-2">No Matchup Data</h3>
-                                    <p className="text-gray-500">No historical matchup data available to calculate matchup records.</p>
-                                </div>
-                            )}
-                        </>
-                    )}
+                {activeTab === 'seasonal' && (
+                    hasSeasonalData ? (
+                        <SeasonRecords />
+                    ) : (
+                        <EmptyState emoji="📅" title="No Seasonal Data" message="No seasonal data available for display." />
+                    )
+                )}
 
-                    {activeTab === 'playoffs' && (
-                        <>
-                            {hasPlayoffData ? (
-                                <>
-                                    {/* Mobile header (Top-5 removed) */}
-                                    <PlayoffRecords
-                                        historicalMatchups={allHistoricalMatchupsFlat} // Pass the now fully flattened matchups
-                                        getDisplayTeamName={getTeamName} // Pass the team name resolver
-                                    />
-                                </>
-                            ) : (
-                                <div className="text-center py-16 px-6">
-                                    <div className="text-6xl mb-4">🏆</div>
-                                    <h3 className="text-xl font-semibold text-gray-700 mb-2">No Playoff Data</h3>
-                                    <p className="text-gray-500">No historical playoff data available.</p>
-                                </div>
-                            )}
-                        </>
-                    )}
+                {activeTab === 'streaks' && (
+                    hasStreaksAndMatchupData ? (
+                        <StreaksRecords historicalMatchups={allHistoricalMatchupsFlat} />
+                    ) : (
+                        <EmptyState emoji="🔥" title="No Streak Data" message="No historical matchup data available to calculate streaks." />
+                    )
+                )}
 
-                    {activeTab === 'players' && (
-                        <>
-                            {historicalData ? (
-                                <>
-                                    {/* Mobile header (Top-5 removed) */}
-                                    <PlayerRecords />
-                                </>
-                            ) : (
-                                <div className="text-center py-16 px-6">
-                                    <div className="text-6xl mb-4">⭐</div>
-                                    <h3 className="text-xl font-semibold text-gray-700 mb-2">No Player Data</h3>
-                                    <p className="text-gray-500">No historical player data available.</p>
-                                </div>
-                            )}
-                        </>
-                    )}
+                {activeTab === 'matchup' && (
+                    hasStreaksAndMatchupData ? (
+                        <MatchupRecords />
+                    ) : (
+                        <EmptyState emoji="⚔️" title="No Matchup Data" message="No historical matchup data available to calculate matchup records." />
+                    )
+                )}
 
-                    {activeTab === 'milestones' && (
-                        <>
-                            {historicalData ? (
-                                <>
-                                    {/* Mobile header (Top-5 removed) */}
-                                    <MilestoneRecords />
-                                </>
-                            ) : (
-                                <div className="text-center py-16 px-6">
-                                    <div className="text-6xl mb-4">🏆</div>
-                                    <h3 className="text-xl font-semibold text-gray-700 mb-2">No Milestone Data</h3>
-                                    <p className="text-gray-500">No historical data available to compute milestones.</p>
-                                </div>
-                            )}
-                        </>
-                    )}
-                </div>
+                {activeTab === 'playoffs' && (
+                    hasPlayoffData ? (
+                        <PlayoffRecords
+                            historicalMatchups={allHistoricalMatchupsFlat}
+                            getDisplayTeamName={getTeamName}
+                        />
+                    ) : (
+                        <EmptyState emoji="🏆" title="No Playoff Data" message="No historical playoff data available." />
+                    )
+                )}
+
+                {activeTab === 'players' && (
+                    historicalData ? (
+                        <PlayerRecords />
+                    ) : (
+                        <EmptyState emoji="⭐" title="No Player Data" message="No historical player data available." />
+                    )
+                )}
+
+                {activeTab === 'milestones' && (
+                    historicalData ? (
+                        <MilestoneRecords />
+                    ) : (
+                        <EmptyState emoji="🏅" title="No Milestone Data" message="No historical data available to compute milestones." />
+                    )
+                )}
+
             </div>
         </div>
     );

@@ -16,35 +16,41 @@ const LeagueRecords = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [financialDataByYear, setFinancialDataByYear] = useState({});
     const [loadingFinancial, setLoadingFinancial] = useState(false);
-    // For syncing with LeagueHistory transaction totals
     const [transactionTotals, setTransactionTotals] = useStateHistory([]);
-    // Get transaction totals from LeagueHistory (waivers and trades)
+
     useEffectHistory(() => {
-        // Try to get the totals from localStorage (if LeagueHistory has set them)
+        // Try to load from localStorage first (in case event already fired before this component mounted)
         const storedTotals = window.localStorage.getItem('teamTransactionTotals');
         if (storedTotals) {
             try {
-                setTransactionTotals(JSON.parse(storedTotals));
-            } catch (e) {
-                setTransactionTotals([]);
+                const parsed = JSON.parse(storedTotals);
+                logger.debug("LeagueRecords: Loaded transaction totals from localStorage:", parsed.length, "teams");
+                setTransactionTotals(parsed);
+            } catch (err) {
+                logger.warn("LeagueRecords: Failed to parse stored transaction totals:", err);
             }
         }
-        // Listen for updates from LeagueHistory so we can update reactively
+
+        // Listen for future updates from LeagueHistory
         const handler = (e) => {
             try {
-                if (e && e.detail) setTransactionTotals(e.detail);
-            } catch (err) {
-                // ignore
+                if (e && e.detail) {
+                    logger.debug("LeagueRecords: Received teamTransactionTotalsUpdated event with", e.detail.length, "teams");
+                    setTransactionTotals(e.detail);
+                }
+            }
+            catch (err) {
+                logger.error("LeagueRecords: Error handling teamTransactionTotalsUpdated event:", err);
             }
         };
         window.addEventListener('teamTransactionTotalsUpdated', handler);
         return () => window.removeEventListener('teamTransactionTotalsUpdated', handler);
     }, []);
 
-    // Persist computed metrics so we can re-run calculations when transactionTotals updates
     const [computedCareerDPRs, setComputedCareerDPRs] = useState(null);
     const [computedSeasonalMetrics, setComputedSeasonalMetrics] = useState(null);
     const [computedFinancialData, setComputedFinancialData] = useState({});
+
     const formatConfig = {
         highestDPR: { decimals: 3, type: 'decimal' },
         lowestDPR: { decimals: 3, type: 'decimal' },
@@ -75,48 +81,34 @@ const LeagueRecords = () => {
     const updateRecord = (currentRecord, newValue, teamInfo) => {
         if (!teamInfo.ownerId && teamInfo.rosterId && historicalData.rostersBySeason) {
             const rosterMap = Object.values(historicalData.rostersBySeason).flat().find(r => r.roster_id === teamInfo.rosterId);
-            if (rosterMap) {
-                teamInfo.ownerId = rosterMap.owner_id;
-            }
+            if (rosterMap) teamInfo.ownerId = rosterMap.owner_id;
         }
-
         if (newValue > currentRecord.value) {
             currentRecord.value = newValue;
             currentRecord.teams = [teamInfo];
         } else if (newValue === currentRecord.value && newValue !== -Infinity) {
-            if (!currentRecord.teams.some(t => t.ownerId === teamInfo.ownerId && t.year === teamInfo.year)) {
+            if (!currentRecord.teams.some(t => t.ownerId === teamInfo.ownerId && t.year === teamInfo.year))
                 currentRecord.teams.push(teamInfo);
-            }
         }
     };
 
     const updateLowestRecord = (currentRecord, newValue, teamInfo) => {
         if (!teamInfo.ownerId && teamInfo.rosterId && historicalData.rostersBySeason) {
             const rosterMap = Object.values(historicalData.rostersBySeason).flat().find(r => r.roster_id === teamInfo.rosterId);
-            if (rosterMap) {
-                teamInfo.ownerId = rosterMap.owner_id;
-            }
+            if (rosterMap) teamInfo.ownerId = rosterMap.owner_id;
         }
-
         if (newValue < currentRecord.value) {
             currentRecord.value = newValue;
             currentRecord.teams = [teamInfo];
         } else if (newValue === currentRecord.value && newValue !== Infinity) {
-            if (!currentRecord.teams.some(t => t.ownerId === teamInfo.ownerId && t.year === teamInfo.year)) {
+            if (!currentRecord.teams.some(t => t.ownerId === teamInfo.ownerId && t.year === teamInfo.year))
                 currentRecord.teams.push(teamInfo);
-            }
         }
     };
 
-    // Calculate historical record progression
     const calculateRecordHistory = (seasonalMetrics) => {
-        // Return a minimal history shape keyed by metric so other code can safely read values.
         const history = {};
-
-        if (!seasonalMetrics || Object.keys(seasonalMetrics).length === 0) {
-            return history;
-        }
-
+        if (!seasonalMetrics || Object.keys(seasonalMetrics).length === 0) return history;
         try {
             const metricKeys = [
                 'highestDPR','lowestDPR','bestLuck','worstLuck','mostWins','mostLosses',
@@ -125,38 +117,20 @@ const LeagueRecords = () => {
                 'mostSlimWins','mostSlimLosses','mostTotalPoints','mostPointsAgainst',
                 'mostTrades','mostWaivers','mostPointsChampionships','mostRegularSeasonTitles'
             ];
-
             metricKeys.forEach(key => {
-                history[key] = {
-                    currentValue: null,
-                    currentHolders: [],
-                    allTimeHolders: [],
-                    recordHistory: []
-                };
+                history[key] = { currentValue: null, currentHolders: [], allTimeHolders: [], recordHistory: [] };
             });
-        } catch (err) {
-            logger.warn('Failed to build minimal record history:', err);
-        }
-
+        } catch (err) { logger.warn('Failed to build minimal record history:', err); }
         return history;
     };
 
-    // Calculate top-5 rankings helper
     const calculateTopFiveRankings = (careerDPRData) => {
         const rankings = {};
-
-        // Helper function to get top 5 for a metric
-        const getTop5 = (metric, isHigherBetter = true) => {
-            return careerDPRData
-                .map(team => ({
-                    name: team.teamName,
-                    ownerId: team.ownerId,
-                    value: team[metric]
-                }))
-                .filter(team => team.value !== undefined && team.value !== null)
-                .sort((a, b) => isHigherBetter ? b.value - a.value : a.value - b.value)
-                .slice(0, 5);
-        };
+        const getTop5 = (metric, isHigherBetter = true) => careerDPRData
+            .map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team[metric] }))
+            .filter(team => team.value !== undefined && team.value !== null)
+            .sort((a, b) => isHigherBetter ? b.value - a.value : a.value - b.value)
+            .slice(0, 5);
 
         rankings.highestDPR = getTop5('dpr', true);
         rankings.lowestDPR = getTop5('dpr', false);
@@ -176,71 +150,36 @@ const LeagueRecords = () => {
         rankings.lowestPointsShare = getTop5('lowestPointsShare', false);
         rankings.mostPointsChampionships = getTop5('mostPointsTitles', true);
         rankings.mostRegularSeasonTitles = getTop5('regularSeasonTitles', true);
-
-        // Luck-based rankings using totalLuckRating
         rankings.bestLuck = careerDPRData
             .map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.totalLuckRating }))
             .filter(team => typeof team.value === 'number' && !isNaN(team.value))
-            .sort((a, b) => b.value - a.value)
-            .slice(0, 5);
-
+            .sort((a, b) => b.value - a.value).slice(0, 5);
         rankings.worstLuck = careerDPRData
             .map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.totalLuckRating }))
             .filter(team => typeof team.value === 'number' && !isNaN(team.value))
-            .sort((a, b) => a.value - b.value)
-            .slice(0, 5);
-
-        // Calculate winning/losing seasons separately
-        const seasonalData = careerDPRData.map(team => {
-            let winningSeasonsCount = 0;
-            let losingSeasonsCount = 0;
-            
-            // This would need access to seasonalMetrics, so we'll calculate it differently
-            return {
-                name: team.teamName,
-                ownerId: team.ownerId,
-                winningSeasons: winningSeasonsCount,
-                losingSeasons: losingSeasonsCount
-            };
-        });
-
+            .sort((a, b) => a.value - b.value).slice(0, 5);
         return rankings;
     };
 
     const toggleSection = (recordKey) => {
-        setExpandedSections(prev => ({
-            ...prev,
-            [recordKey]: !prev[recordKey]
-        }));
+        setExpandedSections(prev => ({ ...prev, [recordKey]: !prev[recordKey] }));
     };
 
-    // Function to handle all calculations that require both league and financial data
     const doAllCalculations = (calculatedCareerDPRs, seasonalMetrics, financialData) => {
-        // Calculate top 5 rankings
         const rankings = calculateTopFiveRankings(calculatedCareerDPRs);
-        
-        // Calculate winning/losing seasons and transaction counts for rankings
         calculatedCareerDPRs.forEach(careerStats => {
             const ownerId = careerStats.ownerId;
-            let winningSeasonsCount = 0;
-            let losingSeasonsCount = 0;
-
+            let winningSeasonsCount = 0, losingSeasonsCount = 0;
             Object.keys(seasonalMetrics).forEach(year => {
                 const teamsInSeason = Object.values(seasonalMetrics[year]);
                 const currentOwnerTeamInSeason = teamsInSeason.find(t => t.ownerId === ownerId);
                 if (currentOwnerTeamInSeason && currentOwnerTeamInSeason.totalGames > 0) {
-                    if (currentOwnerTeamInSeason.winPercentage > 0.5) {
-                        winningSeasonsCount++;
-                    } else if (currentOwnerTeamInSeason.winPercentage < 0.5) {
-                        losingSeasonsCount++;
-                    }
+                    if (currentOwnerTeamInSeason.winPercentage > 0.5) winningSeasonsCount++;
+                    else if (currentOwnerTeamInSeason.winPercentage < 0.5) losingSeasonsCount++;
                 }
             });
-            
             careerStats.winningSeasonsCount = winningSeasonsCount;
             careerStats.losingSeasonsCount = losingSeasonsCount;
-            
-            // Add transaction counts using the passed financial data
             if (Object.keys(financialData).length > 0) {
                 const transactionCounts = calculateCareerTransactionCountsByOwnerId(financialData, ownerId);
                 careerStats.careerTradeFees = transactionCounts.careerTradeFees;
@@ -251,55 +190,29 @@ const LeagueRecords = () => {
                 careerStats.careerWaiverFees = 0;
             }
         });
-
-        // Update rankings with winning/losing seasons and transaction counts
         rankings.mostWinningSeasons = calculatedCareerDPRs
             .map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.winningSeasonsCount }))
-            .sort((a, b) => b.value - a.value)
-            .slice(0, 5);
-        
+            .sort((a, b) => b.value - a.value).slice(0, 5);
         rankings.mostLosingSeasons = calculatedCareerDPRs
             .map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.losingSeasonsCount }))
-            .sort((a, b) => b.value - a.value)
-            .slice(0, 5);
-
-        // Use LeagueHistory's transaction totals if available
+            .sort((a, b) => b.value - a.value).slice(0, 5);
         if (transactionTotals && transactionTotals.length > 0) {
-            rankings.mostTrades = [...transactionTotals]
-                .map(t => ({ name: t.teamName, ownerId: t.ownerId, value: t.trades }))
-                .sort((a, b) => b.value - a.value)
-                .slice(0, 5);
-            rankings.mostWaivers = [...transactionTotals]
-                .map(t => ({ name: t.teamName, ownerId: t.ownerId, value: t.pickups }))
-                .sort((a, b) => b.value - a.value)
-                .slice(0, 5);
+            logger.debug("LeagueRecords: Using transactionTotals from LeagueHistory event");
+            rankings.mostTrades = [...transactionTotals].map(t => ({ name: t.teamName, ownerId: t.ownerId, value: t.trades })).sort((a, b) => b.value - a.value).slice(0, 5);
+            rankings.mostWaivers = [...transactionTotals].map(t => ({ name: t.teamName, ownerId: t.ownerId, value: t.pickups })).sort((a, b) => b.value - a.value).slice(0, 5);
+            logger.debug("LeagueRecords: mostTrades top 5:", rankings.mostTrades);
+            logger.debug("LeagueRecords: mostWaivers top 5:", rankings.mostWaivers);
         } else {
-            rankings.mostTrades = calculatedCareerDPRs
-                .map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.careerTradeFees }))
-                .sort((a, b) => b.value - a.value)
-                .slice(0, 5);
-            rankings.mostWaivers = calculatedCareerDPRs
-                .map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.careerWaiverFees }))
-                .sort((a, b) => b.value - a.value)
-                .slice(0, 5);
+            logger.warn("LeagueRecords: No transactionTotals available, falling back to financial data (this may be incorrect)");
+            rankings.mostTrades = calculatedCareerDPRs.map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.careerTradeFees })).sort((a, b) => b.value - a.value).slice(0, 5);
+            rankings.mostWaivers = calculatedCareerDPRs.map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.careerWaiverFees })).sort((a, b) => b.value - a.value).slice(0, 5);
+            logger.debug("LeagueRecords: mostTrades (FALLBACK):", rankings.mostTrades);
+            logger.debug("LeagueRecords: mostWaivers (FALLBACK):", rankings.mostWaivers);
         }
-
-        // Add points share rankings
-        rankings.highestPointsShare = calculatedCareerDPRs
-            .map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.pointsShare }))
-            .filter(team => typeof team.value === 'number' && team.value > 0)
-            .sort((a, b) => b.value - a.value)
-            .slice(0, 5);
-            
-        rankings.lowestPointsShare = calculatedCareerDPRs
-            .map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.pointsShare }))
-            .filter(team => typeof team.value === 'number' && team.value > 0)
-            .sort((a, b) => a.value - b.value)
-            .slice(0, 5);
-
+        rankings.highestPointsShare = calculatedCareerDPRs.map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.pointsShare })).filter(team => typeof team.value === 'number' && team.value > 0).sort((a, b) => b.value - a.value).slice(0, 5);
+        rankings.lowestPointsShare = calculatedCareerDPRs.map(team => ({ name: team.teamName, ownerId: team.ownerId, value: team.pointsShare })).filter(team => typeof team.value === 'number' && team.value > 0).sort((a, b) => a.value - b.value).slice(0, 5);
         setTopFiveRankings(rankings);
-        
-        // Calculate all-time records
+
         let highestDPR = { value: -Infinity, teams: [], key: 'highestDPR' };
         let lowestDPR = { value: Infinity, teams: [], key: 'lowestDPR' };
         let mostWins = { value: -Infinity, teams: [], key: 'mostWins' };
@@ -318,9 +231,8 @@ const LeagueRecords = () => {
         let mostPointsAgainst = { value: -Infinity, teams: [], key: 'mostPointsAgainst' };
         let bestLuck = { value: -Infinity, teams: [], key: 'bestLuck' };
         let worstLuck = { value: Infinity, teams: [], key: 'worstLuck' };
-    // Use transactionTotals for trades/waivers records
-    let mostTrades = { value: -Infinity, teams: [], key: 'mostTrades' };
-    let mostWaivers = { value: -Infinity, teams: [], key: 'mostWaivers' };
+        let mostTrades = { value: -Infinity, teams: [], key: 'mostTrades' };
+        let mostWaivers = { value: -Infinity, teams: [], key: 'mostWaivers' };
         let highestPointsShare = { value: -Infinity, teams: [], key: 'highestPointsShare' };
         let lowestPointsShare = { value: Infinity, teams: [], key: 'lowestPointsShare' };
         let mostPointsChampionships = { value: -Infinity, teams: [], key: 'mostPointsChampionships' };
@@ -329,79 +241,63 @@ const LeagueRecords = () => {
         calculatedCareerDPRs.forEach(careerStats => {
             const teamName = careerStats.teamName;
             const ownerId = careerStats.ownerId;
-
             if (careerStats.dpr !== 0) {
-                updateRecord(highestDPR, careerStats.dpr, { name: teamName, value: careerStats.dpr, ownerId: ownerId });
-                updateLowestRecord(lowestDPR, careerStats.dpr, { name: teamName, value: careerStats.dpr, ownerId: ownerId });
+                updateRecord(highestDPR, careerStats.dpr, { name: teamName, value: careerStats.dpr, ownerId });
+                updateLowestRecord(lowestDPR, careerStats.dpr, { name: teamName, value: careerStats.dpr, ownerId });
             }
-
-            // Update luck records (can be zero; include valid numbers only)
             if (typeof careerStats.totalLuckRating === 'number' && !isNaN(careerStats.totalLuckRating)) {
-                updateRecord(bestLuck, careerStats.totalLuckRating, { name: teamName, value: careerStats.totalLuckRating, ownerId: ownerId });
-                updateLowestRecord(worstLuck, careerStats.totalLuckRating, { name: teamName, value: careerStats.totalLuckRating, ownerId: ownerId });
+                updateRecord(bestLuck, careerStats.totalLuckRating, { name: teamName, value: careerStats.totalLuckRating, ownerId });
+                updateLowestRecord(worstLuck, careerStats.totalLuckRating, { name: teamName, value: careerStats.totalLuckRating, ownerId });
             }
-
-            // Update points share records
             if (typeof careerStats.pointsShare === 'number' && careerStats.pointsShare > 0) {
-                updateRecord(highestPointsShare, careerStats.pointsShare, { name: teamName, value: careerStats.pointsShare, ownerId: ownerId });
-                updateLowestRecord(lowestPointsShare, careerStats.pointsShare, { name: teamName, value: careerStats.pointsShare, ownerId: ownerId });
+                updateRecord(highestPointsShare, careerStats.pointsShare, { name: teamName, value: careerStats.pointsShare, ownerId });
+                updateLowestRecord(lowestPointsShare, careerStats.pointsShare, { name: teamName, value: careerStats.pointsShare, ownerId });
             }
-
             if (careerStats.totalGames > 0) {
-                updateRecord(mostWins, careerStats.wins, { name: teamName, value: careerStats.wins, ownerId: ownerId });
-                updateRecord(mostLosses, careerStats.losses, { name: teamName, value: careerStats.losses, ownerId: ownerId });
-                updateRecord(bestWinPct, careerStats.winPercentage, { name: teamName, value: careerStats.winPercentage, ownerId: ownerId });
-                updateRecord(mostTotalPoints, careerStats.pointsFor, { name: teamName, value: careerStats.pointsFor, ownerId: ownerId });
-                updateRecord(mostPointsAgainst, careerStats.pointsAgainst, { name: teamName, value: careerStats.pointsAgainst, ownerId: ownerId });
-                updateRecord(mostBlowoutWins, careerStats.blowoutWins, { name: teamName, value: careerStats.blowoutWins, ownerId: ownerId });
-                updateRecord(mostBlowoutLosses, careerStats.blowoutLosses, { name: teamName, value: careerStats.blowoutLosses, ownerId: ownerId });
-                updateRecord(mostSlimWins, careerStats.slimWins, { name: teamName, value: careerStats.slimWins, ownerId: ownerId });
-                updateRecord(mostSlimLosses, careerStats.slimLosses, { name: teamName, value: careerStats.slimLosses, ownerId: ownerId });
-                updateRecord(mostWeeklyTop2Scores, careerStats.weeklyTop2ScoresCount, { name: teamName, value: careerStats.weeklyTop2ScoresCount, ownerId: ownerId });
-                updateRecord(mostWeeklyHighScores, careerStats.topScoreWeeksCount, { name: teamName, value: careerStats.topScoreWeeksCount, ownerId: ownerId });
-                updateRecord(bestAllPlayWinPct, careerStats.allPlayWinPercentage, { name: teamName, value: careerStats.allPlayWinPercentage, ownerId: ownerId });
+                updateRecord(mostWins, careerStats.wins, { name: teamName, value: careerStats.wins, ownerId });
+                updateRecord(mostLosses, careerStats.losses, { name: teamName, value: careerStats.losses, ownerId });
+                updateRecord(bestWinPct, careerStats.winPercentage, { name: teamName, value: careerStats.winPercentage, ownerId });
+                updateRecord(mostTotalPoints, careerStats.pointsFor, { name: teamName, value: careerStats.pointsFor, ownerId });
+                updateRecord(mostPointsAgainst, careerStats.pointsAgainst, { name: teamName, value: careerStats.pointsAgainst, ownerId });
+                updateRecord(mostBlowoutWins, careerStats.blowoutWins, { name: teamName, value: careerStats.blowoutWins, ownerId });
+                updateRecord(mostBlowoutLosses, careerStats.blowoutLosses, { name: teamName, value: careerStats.blowoutLosses, ownerId });
+                updateRecord(mostSlimWins, careerStats.slimWins, { name: teamName, value: careerStats.slimWins, ownerId });
+                updateRecord(mostSlimLosses, careerStats.slimLosses, { name: teamName, value: careerStats.slimLosses, ownerId });
+                updateRecord(mostWeeklyTop2Scores, careerStats.weeklyTop2ScoresCount, { name: teamName, value: careerStats.weeklyTop2ScoresCount, ownerId });
+                updateRecord(mostWeeklyHighScores, careerStats.topScoreWeeksCount, { name: teamName, value: careerStats.topScoreWeeksCount, ownerId });
+                updateRecord(bestAllPlayWinPct, careerStats.allPlayWinPercentage, { name: teamName, value: careerStats.allPlayWinPercentage, ownerId });
             }
-
-            // Calculate points share records
-            if (careerStats.highestPointsShare !== undefined && careerStats.highestPointsShare > 0) {
-                updateRecord(highestPointsShare, careerStats.highestPointsShare, { name: teamName, value: careerStats.highestPointsShare, ownerId: ownerId });
-            }
-            if (careerStats.lowestPointsShare !== undefined && careerStats.lowestPointsShare < 100) {
-                updateLowestRecord(lowestPointsShare, careerStats.lowestPointsShare, { name: teamName, value: careerStats.lowestPointsShare, ownerId: ownerId });
-            }
-            
-            // Calculate championship records
-            updateRecord(mostPointsChampionships, careerStats.mostPointsTitles || 0, { name: teamName, value: careerStats.mostPointsTitles || 0, ownerId: ownerId });
-            updateRecord(mostRegularSeasonTitles, careerStats.regularSeasonTitles || 0, { name: teamName, value: careerStats.regularSeasonTitles || 0, ownerId: ownerId });
-            
-            let winningSeasonsCount = 0;
-            let losingSeasonsCount = 0;
-
+            if (careerStats.highestPointsShare !== undefined && careerStats.highestPointsShare > 0)
+                updateRecord(highestPointsShare, careerStats.highestPointsShare, { name: teamName, value: careerStats.highestPointsShare, ownerId });
+            if (careerStats.lowestPointsShare !== undefined && careerStats.lowestPointsShare < 100)
+                updateLowestRecord(lowestPointsShare, careerStats.lowestPointsShare, { name: teamName, value: careerStats.lowestPointsShare, ownerId });
+            updateRecord(mostPointsChampionships, careerStats.mostPointsTitles || 0, { name: teamName, value: careerStats.mostPointsTitles || 0, ownerId });
+            updateRecord(mostRegularSeasonTitles, careerStats.regularSeasonTitles || 0, { name: teamName, value: careerStats.regularSeasonTitles || 0, ownerId });
+            let winningSeasonsCount = 0, losingSeasonsCount = 0;
             Object.keys(seasonalMetrics).forEach(year => {
                 const teamsInSeason = Object.values(seasonalMetrics[year]);
                 const currentOwnerTeamInSeason = teamsInSeason.find(t => t.ownerId === ownerId);
                 if (currentOwnerTeamInSeason && currentOwnerTeamInSeason.totalGames > 0) {
-                    if (currentOwnerTeamInSeason.winPercentage > 0.5) {
-                        winningSeasonsCount++;
-                    } else if (currentOwnerTeamInSeason.winPercentage < 0.5) {
-                        losingSeasonsCount++;
-                    }
+                    if (currentOwnerTeamInSeason.winPercentage > 0.5) winningSeasonsCount++;
+                    else if (currentOwnerTeamInSeason.winPercentage < 0.5) losingSeasonsCount++;
                 }
             });
-            updateRecord(mostWinningSeasons, winningSeasonsCount, { name: teamName, value: winningSeasonsCount, ownerId: ownerId });
-            updateRecord(mostLosingSeasons, losingSeasonsCount, { name: teamName, value: losingSeasonsCount, ownerId: ownerId });
+            updateRecord(mostWinningSeasons, winningSeasonsCount, { name: teamName, value: winningSeasonsCount, ownerId });
+            updateRecord(mostLosingSeasons, losingSeasonsCount, { name: teamName, value: losingSeasonsCount, ownerId });
         });
 
-        // Use transactionTotals for trades/waivers records when available; otherwise fall back to careerDPR data
         if (transactionTotals && transactionTotals.length > 0) {
+            logger.debug("LeagueRecords (allTimeRecords): Using transactionTotals for trade/waiver records");
             const sortedTrades = [...transactionTotals].sort((a, b) => b.trades - a.trades);
             const sortedWaivers = [...transactionTotals].sort((a, b) => b.pickups - a.pickups);
             mostTrades.value = sortedTrades[0]?.trades || 0;
             mostTrades.teams = sortedTrades.filter(t => t.trades === mostTrades.value).map(t => ({ name: t.teamName, value: t.trades, ownerId: t.ownerId }));
             mostWaivers.value = sortedWaivers[0]?.pickups || 0;
             mostWaivers.teams = sortedWaivers.filter(t => t.pickups === mostWaivers.value).map(t => ({ name: t.teamName, value: t.pickups, ownerId: t.ownerId }));
+            logger.debug("LeagueRecords: mostTrades record:", mostTrades);
+            logger.debug("LeagueRecords: mostWaivers record:", mostWaivers);
         } else {
-            // Fallback: compute from calculatedCareerDPRs careerTradeFees/careerWaiverFees
+            logger.warn("LeagueRecords (allTimeRecords): No transactionTotals, using fallback career data");
             calculatedCareerDPRs.forEach(careerStats => {
                 const teamName = careerStats.teamName;
                 const ownerId = careerStats.ownerId;
@@ -410,238 +306,202 @@ const LeagueRecords = () => {
             });
         }
 
-        setAllTimeRecords({
-            highestDPR,
-            lowestDPR,
-            bestLuck,
-            worstLuck,
-            mostWins,
-            mostLosses,
-            bestWinPct,
-            bestAllPlayWinPct,
-            mostWeeklyHighScores,
-            mostWeeklyTop2Scores,
-            mostWinningSeasons,
-            mostLosingSeasons,
-            mostBlowoutWins,
-            mostBlowoutLosses,
-            mostSlimWins,
-            mostSlimLosses,
-            mostTotalPoints,
-            mostPointsAgainst,
-            mostTrades,
-            mostWaivers,
-            highestPointsShare,
-            lowestPointsShare,
-            mostPointsChampionships,
-            mostRegularSeasonTitles,
-        });
+        setAllTimeRecords({ highestDPR, lowestDPR, bestLuck, worstLuck, mostWins, mostLosses, bestWinPct, bestAllPlayWinPct, mostWeeklyHighScores, mostWeeklyTop2Scores, mostWinningSeasons, mostLosingSeasons, mostBlowoutWins, mostBlowoutLosses, mostSlimWins, mostSlimLosses, mostTotalPoints, mostPointsAgainst, mostTrades, mostWaivers, highestPointsShare, lowestPointsShare, mostPointsChampionships, mostRegularSeasonTitles });
     };
 
     useEffect(() => {
         setIsLoading(true);
-
         if (loading || error || !historicalData || !historicalData.matchupsBySeason || Object.keys(historicalData.matchupsBySeason).length === 0 || !nflState) {
-            setAllTimeRecords({});
-            setRecordHistory({});
-            setIsLoading(false);
-            return;
+            setAllTimeRecords({}); setRecordHistory({}); setIsLoading(false); return;
         }
-
         try {
             const { seasonalMetrics, careerDPRData: calculatedCareerDPRs } = calculateAllLeagueMetrics(historicalData, allDraftHistory, getTeamName, nflState);
-            
-            // Calculate historical progression (doesn't need financial data)
             const history = calculateRecordHistory(seasonalMetrics);
             setRecordHistory(history);
-            
-            // Load financial data for transaction counts, then do all other calculations
             setLoadingFinancial(true);
             const allYears = Object.keys(historicalData.matchupsBySeason || {});
-            
             const finishCalculations = (financialData = {}) => {
                 logger.debug("League Records: Processing with financial data for", Object.keys(financialData).length, "years");
                 setFinancialDataByYear(financialData);
                 setLoadingFinancial(false);
-                
-                // Now do all calculations that need both league and financial data
-                    // store computed metrics so we can re-run if transactionTotals updates later
-                    setComputedCareerDPRs(calculatedCareerDPRs);
-                    setComputedSeasonalMetrics(seasonalMetrics);
-                    setComputedFinancialData(financialData);
-                    doAllCalculations(calculatedCareerDPRs, seasonalMetrics, financialData);
+                setComputedCareerDPRs(calculatedCareerDPRs);
+                setComputedSeasonalMetrics(seasonalMetrics);
+                setComputedFinancialData(financialData);
+                doAllCalculations(calculatedCareerDPRs, seasonalMetrics, financialData);
                 setIsLoading(false);
             };
-            
             if (allYears.length > 0) {
-                fetchFinancialDataForYears(allYears)
-                    .then(finishCalculations)
-                    .catch(financialError => {
-                        logger.warn("Could not load financial data for transaction counts:", financialError);
-                        finishCalculations({});
-                    });
-            } else {
-                finishCalculations({});
-            }
-
+                fetchFinancialDataForYears(allYears).then(finishCalculations).catch(financialError => { logger.warn("Could not load financial data:", financialError); finishCalculations({}); });
+            } else { finishCalculations({}); }
         } catch (error) {
             logger.error("Error calculating league records:", error);
-            setAllTimeRecords({});
-            setRecordHistory({});
-            setIsLoading(false);
+            setAllTimeRecords({}); setRecordHistory({}); setIsLoading(false);
         }
     }, [historicalData, allDraftHistory, getTeamName, loading, error, nflState]);
 
-    // Re-run calculations when transactionTotals updates so records/top-5 reflect the latest totals
+    useEffect(() => {
+        // Expose for debugging
+        try {
+            window.__leagueRecordsDebug = {
+                transactionTotals,
+                allTimeRecords,
+                topFiveRankings
+            };
+        } catch (e) {}
+    }, [transactionTotals, allTimeRecords, topFiveRankings]);
+
     useEffect(() => {
         if (computedCareerDPRs && computedSeasonalMetrics) {
+            logger.debug("LeagueRecords: Re-running calculations with transactionTotals update:", transactionTotals);
             doAllCalculations(computedCareerDPRs, computedSeasonalMetrics, computedFinancialData || {});
         }
     }, [transactionTotals]);
 
+    // ── Loading ───────────────────────────────────────────────────────────────
     if (isLoading) {
-        return <div className="text-center py-8">Loading all-time league records...</div>;
+        return (
+            <div className="flex items-center justify-center py-16">
+                <div className="flex flex-col items-center gap-3">
+                    <svg className="animate-spin h-7 w-7 text-blue-400" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <p className="text-sm text-gray-400 animate-pulse">Loading all-time league records…</p>
+                </div>
+            </div>
+        );
     }
 
     if (Object.keys(allTimeRecords).length === 0 || allTimeRecords.highestDPR?.value === -Infinity) {
-        return <div className="text-center py-8">No historical data available to calculate all-time records.</div>;
+        return (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="text-4xl mb-3">📊</div>
+                <p className="text-sm text-gray-500">No historical data available to calculate all-time records.</p>
+            </div>
+        );
     }
 
     const getDisplayTeamName = (team) => {
-        if (team.ownerId) {
-            return getTeamName(team.ownerId, null);
-        } else if (team.rosterId && team.year) {
+        if (team.ownerId) return getTeamName(team.ownerId, null);
+        if (team.rosterId && team.year) {
             const rosterForYear = historicalData.rostersBySeason?.[team.year]?.find(r => String(r.roster_id) === String(team.rosterId));
-            if (rosterForYear?.owner_id) {
-                return getTeamName(rosterForYear.owner_id, null);
+            if (rosterForYear?.owner_id) return getTeamName(rosterForYear.owner_id, null);
+        }
+        return 'Unknown Team';
+    };
+
+    const formatRecordValue = (key, value) => {
+        const config = formatConfig[key] || { decimals: 2, type: 'default' };
+        if (config.type === 'percentage')
+            return (value * 100).toLocaleString('en-US', { minimumFractionDigits: config.decimals, maximumFractionDigits: config.decimals }) + '%';
+        return value.toLocaleString('en-US', { minimumFractionDigits: config.decimals, maximumFractionDigits: config.decimals });
+    };
+
+    const humanLabel = (key) => {
+        const label = key.replace(/([A-Z])/g, ' $1').trim();
+        return label.charAt(0).toUpperCase() + label.slice(1);
+    };
+
+    // Medal colors for top-5 rank badges
+    const rankBadgeClass = (idx) => {
+        if (idx === 0) return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40';
+        if (idx === 1) return 'bg-gray-500/20 text-gray-300 border-gray-500/40';
+        if (idx === 2) return 'bg-amber-700/20 text-amber-500 border-amber-700/40';
+        return 'bg-white/5 text-gray-500 border-white/10';
+    };
+
+    const calculateRank = (items, currentIndex) => {
+        if (currentIndex === 0) return 1;
+        // Walk backwards to find the first different value
+        for (let i = currentIndex - 1; i >= 0; i--) {
+            if (items[i].value !== items[currentIndex].value) {
+                return i + 2; // i+1 for 1-indexing, +1 for next position
             }
         }
-        return "Unknown Team";
+        return 1; // All items up to current have same value
     };
 
-    // Helper to format a record value for display (re-usable in mobile cards)
-    const formatRecordValueForDisplay = (key, record) => {
-        const config = formatConfig[key] || { decimals: 2, type: 'default' };
-        if (config.type === 'percentage') {
-            return (record.value * 100).toLocaleString('en-US', { minimumFractionDigits: config.decimals, maximumFractionDigits: config.decimals }) + '%';
-        }
-        return record.value.toLocaleString('en-US', { minimumFractionDigits: config.decimals, maximumFractionDigits: config.decimals });
-    };
-
+    // ── Render ────────────────────────────────────────────────────────────────
     return (
-        <div className="p-4 sm:p-6 lg:p-8">
-            {/* Header Section */}
-            <div className="mb-6 sm:mb-8">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-4">
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-r from-green-500 to-teal-600 rounded-xl flex items-center justify-center text-white text-lg sm:text-xl font-bold">
-                        🌍
-                    </div>
-                    <div>
-                        <h3 className="text-2xl sm:text-3xl font-bold text-gray-900">All-Time League Records</h3>
-                        <p className="text-gray-600 mt-1 text-sm sm:text-base">
-                            Career-spanning achievements and historical league data.
-                        </p>
-                    </div>
-                </div>
+        <div className="p-3 sm:p-5 space-y-1">
+
+            {/* Section header */}
+            <div className="flex items-center gap-2 px-1 pb-3 border-b border-white/8">
+                <svg className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">All-Time Career Records</span>
             </div>
 
-            {/* Mobile: compact card list (mobile-only) */}
-            <div className="sm:hidden space-y-3 mb-4">
+            {/* ── Mobile: stacked cards ── */}
+            <div className="sm:hidden space-y-1.5 pt-2">
                 {Object.entries(allTimeRecords).map(([key, record]) => {
-                    const label = key.replace(/([A-Z])/g, ' $1').trim();
-                    const displayLabel = label.charAt(0).toUpperCase() + label.slice(1);
-
+                    const label = humanLabel(key);
                     const topFiveData = topFiveRankings[key] || [];
                     const isExpanded = !!expandedSections[key];
-
-                    if (!record || record.value === -Infinity || record.value === Infinity || !record.teams || record.teams.length === 0) {
-                        return (
-                            <div key={key} className="bg-white border border-gray-200 rounded-lg p-3">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <div className="text-sm font-semibold text-gray-900">{displayLabel}</div>
-                                        <div className="text-xs text-gray-500 mt-1">No data available</div>
-                                    </div>
-                                    {topFiveData.length > 0 && (
-                                        <button
-                                            onClick={() => toggleSection(key)}
-                                            aria-label={`${isExpanded ? 'Hide' : 'Show'} top 5 for ${displayLabel}`}
-                                            className="p-1 rounded-md hover:bg-gray-100 flex-shrink-0"
-                                        >
-                                            <svg className={`w-4 h-4 text-gray-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                            </svg>
-                                        </button>
-                                    )}
-                                </div>
-                                {isExpanded && topFiveData.length > 0 && (
-                                    <div className="mt-3 space-y-2">
-                                        {topFiveData.map((team, idx) => (
-                                            <div key={idx} className="flex items-center justify-between bg-gray-50 rounded-md p-2 border border-gray-100">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-6 h-6 flex items-center justify-center bg-blue-100 text-blue-800 rounded-full text-xs font-bold">{idx + 1}</div>
-                                                    <div className="text-sm font-medium text-gray-900">{team.name}</div>
-                                                </div>
-                                                <div className="text-sm font-semibold text-gray-900">
-                                                    {formatRecordValueForDisplay(key, { value: team.value })}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    }
-
-                    const displayValue = formatRecordValueForDisplay(key, record);
+                    const hasData = record && record.value !== -Infinity && record.value !== Infinity && record.teams?.length > 0;
 
                     return (
-                        <div key={key} className="bg-white border border-gray-200 rounded-lg p-3">
-                            <div className="flex items-start justify-between">
-                                <div className="flex-1 min-w-0 pr-3">
-                                    <div className="text-sm font-semibold text-gray-900">{displayLabel}</div>
-                                    {record.teams.length > 0 && (
-                                        <div className="text-xs text-gray-600 mt-1">
-                                            {record.teams.map((team, idx) => (
-                                                <div key={idx} className={idx > 0 ? "mt-1" : ""}>
-                                                    <span className="font-medium">{getDisplayTeamName(team)}</span>
-                                                </div>
+                        <div key={key} className="bg-white/[0.03] border border-white/8 rounded-xl overflow-hidden">
+                            <div className="flex items-center gap-3 px-3 py-2.5">
+                                {/* Label */}
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-xs font-semibold text-gray-300 leading-tight">{label}</div>
+                                    {hasData && (
+                                        <div className="text-[10px] text-gray-500 mt-0.5 space-y-1">
+                                            {record.teams.map((t, idx) => (
+                                                <div key={idx}>{getDisplayTeamName(t)}</div>
                                             ))}
                                         </div>
                                     )}
                                 </div>
 
-                                <div className="flex items-center gap-2 flex-shrink-0">
-                                    <div className="inline-flex items-center px-2 py-1 rounded-full bg-gradient-to-r from-green-100 to-teal-100 border border-green-200">
-                                        <span className="font-bold text-gray-900 text-sm">{displayValue}</span>
+                                {/* Value badge */}
+                                {hasData ? (
+                                    <div className="flex-shrink-0 px-2.5 py-1 bg-blue-500/15 border border-blue-500/25 rounded-lg">
+                                        <span className="text-xs font-bold text-blue-300 tabular-nums whitespace-nowrap">
+                                            {formatRecordValue(key, record.value)}
+                                        </span>
                                     </div>
+                                ) : (
+                                    <span className="text-[10px] text-gray-600 italic flex-shrink-0">No data</span>
+                                )}
 
-                                    {topFiveData.length > 0 && (
-                                        <button
-                                            onClick={() => toggleSection(key)}
-                                            aria-label={`${isExpanded ? 'Hide' : 'Show'} top 5 for ${displayLabel}`}
-                                            className="p-1 rounded-md hover:bg-gray-100 flex-shrink-0"
-                                        >
-                                            <svg className={`w-4 h-4 text-gray-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                            </svg>
-                                        </button>
-                                    )}
-                                </div>
+                                {/* Expand chevron */}
+                                {topFiveData.length > 0 && (
+                                    <button
+                                        onClick={() => toggleSection(key)}
+                                        className="flex-shrink-0 p-1 rounded-md text-gray-600 hover:text-gray-300 transition-colors"
+                                        aria-label={`${isExpanded ? 'Hide' : 'Show'} top 5 for ${label}`}
+                                    >
+                                        <svg className={`w-3.5 h-3.5 transition-transform duration-150 ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                    </button>
+                                )}
                             </div>
+
+                            {/* Top-5 expansion */}
                             {isExpanded && topFiveData.length > 0 && (
-                                <div className="mt-3 space-y-2">
-                                    {topFiveData.map((team, idx) => (
-                                        <div key={idx} className="flex items-center justify-between bg-gray-50 rounded-md p-2 border border-gray-100">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-6 h-6 flex items-center justify-center bg-blue-100 text-blue-800 rounded-full text-xs font-bold">{idx + 1}</div>
-                                                <div className="text-sm font-medium text-gray-900">{team.name}</div>
+                                <div className="border-t border-white/8 px-3 py-2.5 space-y-1.5 bg-black/20">
+                                    <div className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-2">Top 5</div>
+                                    {topFiveData.map((team, idx) => {
+                                        const rank = calculateRank(topFiveData, idx);
+                                        return (
+                                        <div key={idx} className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <span className={`w-5 h-5 flex-shrink-0 flex items-center justify-center rounded-md text-[10px] font-bold border ${rankBadgeClass(rank - 1)}`}>
+                                                    {rank}
+                                                </span>
+                                                <span className="text-xs text-gray-300 truncate">{team.name}</span>
                                             </div>
-                                            <div className="text-sm font-semibold text-gray-900">
-                                                {formatRecordValueForDisplay(key, { value: team.value })}
-                                            </div>
+                                            <span className="text-xs font-semibold text-gray-400 tabular-nums flex-shrink-0">
+                                                {formatRecordValue(key, team.value)}
+                                            </span>
                                         </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>
@@ -649,130 +509,103 @@ const LeagueRecords = () => {
                 })}
             </div>
 
-            {/* Records Display */}
-            {/* Desktop/table view: hidden on small screens to avoid duplication with mobile cards */}
-            <div className="hidden sm:block bg-gradient-to-r from-gray-50 to-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-                <div className="overflow-x-auto">
-                <table className="min-w-full">
-                        <thead>
-                            <tr className="bg-gradient-to-r from-gray-100 to-gray-50 border-b border-gray-200">
-                                <th className="py-3 px-3 sm:py-4 sm:px-6 text-left text-xs sm:text-sm font-bold text-gray-800 uppercase tracking-wide">
-                                    <div className="flex items-center gap-1 sm:gap-2">
-                                        <span className="hidden sm:inline">🏆</span> Record
-                                    </div>
-                                </th>
-                                <th className="py-3 px-3 sm:py-4 sm:px-6 text-center text-xs sm:text-sm font-bold text-gray-800 uppercase tracking-wide">
-                                    <div className="flex items-center justify-center gap-1 sm:gap-2">
-                                        <span className="hidden sm:inline">📊</span> Value
-                                    </div>
-                                </th>
-                                <th className="py-3 px-3 sm:py-4 sm:px-6 text-left text-xs sm:text-sm font-bold text-gray-800 uppercase tracking-wide">
-                                    <div className="flex items-center gap-1 sm:gap-2">
-                                        <span className="hidden sm:inline">👑</span> Holder(s)
-                                    </div>
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {Object.entries(allTimeRecords).map(([key, record], recordGroupIndex) => {
-                                const config = formatConfig[record.key] || { decimals: 2, type: 'default' };
-                                const getLabel = () => {
-                                    let label = record.key.replace(/([A-Z])/g, ' $1').trim();
-                                    return label.charAt(0).toUpperCase() + label.slice(1);
-                                };
+            {/* ── Desktop: table ── */}
+            <div className="hidden sm:block pt-2">
+                <table className="min-w-full text-xs">
+                    <thead>
+                        <tr className="border-b border-white/10">
+                            <th className="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider w-[36%]">Record</th>
+                            <th className="py-2.5 px-3 text-center text-[10px] font-semibold text-gray-500 uppercase tracking-wider w-[20%]">Value</th>
+                            <th className="py-2.5 px-3 text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider w-[44%]">Holder(s)</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                        {Object.entries(allTimeRecords).map(([key, record], idx) => {
+                            const label = humanLabel(key);
+                            const config = formatConfig[key] || { decimals: 2, type: 'default' };
+                            const topFiveData = topFiveRankings[key] || [];
+                            const isExpanded = !!expandedSections[key];
+                            const hasData = record && record.value !== -Infinity && record.value !== Infinity && record.teams?.length > 0;
 
-                                if (!record || record.value === -Infinity || record.value === Infinity || !record.teams || record.teams.length === 0) {
-                                    return (
-                                        <tr key={key} className={`transition-all duration-200 hover:bg-blue-50 ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}>
-                                            <td className="py-3 px-3 sm:py-4 sm:px-6">
-                                                <div className="flex items-center gap-2 sm:gap-3">
-                                                    <span className="font-semibold text-gray-900 text-xs sm:text-sm">{getLabel()}</span>
-                                                </div>
-                                            </td>
-                                            <td colSpan="2" className="py-3 px-3 sm:py-4 sm:px-6 text-center">
-                                                <span className="text-gray-500 text-xs sm:text-sm italic">No data available</span>
-                                            </td>
-                                        </tr>
-                                    );
-                                }
+                            return (
+                                <React.Fragment key={key}>
+                                    <tr className={`hover:bg-white/[0.025] transition-colors ${idx % 2 === 0 ? '' : 'bg-white/[0.015]'}`}>
+                                        {/* Record name + expand toggle */}
+                                        <td className="py-2.5 px-3">
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-semibold text-gray-200">{label}</span>
+                                                {topFiveData.length > 0 && (
+                                                    <button
+                                                        onClick={() => toggleSection(key)}
+                                                        className="text-gray-600 hover:text-blue-400 transition-colors"
+                                                        aria-label={`${isExpanded ? 'Hide' : 'Show'} top 5`}
+                                                    >
+                                                        <svg className={`w-3.5 h-3.5 transition-transform duration-150 ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                                                        </svg>
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
 
-                                const topFiveData = topFiveRankings[record.key] || [];
-                                const isExpanded = expandedSections[record.key];
+                                        {/* Value */}
+                                        <td className="py-2.5 px-3 text-center">
+                                            {hasData ? (
+                                                <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-blue-500/15 border border-blue-500/25 font-bold text-blue-300 tabular-nums">
+                                                    {formatRecordValue(key, record.value)}
+                                                </span>
+                                            ) : (
+                                                <span className="text-gray-600 italic text-[10px]">No data</span>
+                                            )}
+                                        </td>
 
-                                return (
-                                    <React.Fragment key={key}>
-                                        <tr className={`transition-all duration-200 hover:bg-blue-50 hover:shadow-sm ${recordGroupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}>
-                                            <td className="py-3 px-3 sm:py-4 sm:px-6">
-                                                <div className="flex items-center gap-2 sm:gap-3">
-                                                    <span className="font-semibold text-gray-900 text-xs sm:text-sm">{getLabel()}</span>
-                                                    {topFiveData.length > 0 && (
-                                                        <button
-                                                            onClick={() => toggleSection(record.key)}
-                                                            className="text-blue-600 hover:text-blue-800 transition-colors"
-                                                        >
-                                                            <svg 
-                                                                className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                                                                fill="none" 
-                                                                stroke="currentColor" 
-                                                                viewBox="0 0 24 24"
-                                                            >
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                                            </svg>
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="py-3 px-3 sm:py-4 sm:px-6 text-center">
-                                                <div className="inline-flex items-center px-2 py-1 sm:px-3 sm:py-1 rounded-full bg-gradient-to-r from-green-100 to-teal-100 border border-green-200">
-                                                    <span className="font-bold text-gray-900 text-xs sm:text-sm">
-                                                        {config.type === 'percentage'
-                                                            ? (record.value * 100).toLocaleString('en-US', { minimumFractionDigits: config.decimals, maximumFractionDigits: config.decimals }) + '%'
-                                                            : record.value.toLocaleString('en-US', { minimumFractionDigits: config.decimals, maximumFractionDigits: config.decimals })}
-                                                    </span>
-                                                </div>
-                                            </td>
-                                            <td className="py-3 px-3 sm:py-4 sm:px-6">
-                                                <div className="flex flex-col space-y-1 sm:space-y-2">
-                                                    {record.teams.map((team, index) => (
-                                                        <div key={index} className="flex items-center gap-2 sm:gap-3 bg-gray-100 rounded-lg p-1.5 sm:p-2 border border-gray-200">
-                                                            <span className="font-medium text-gray-800 text-xs sm:text-sm truncate">{getDisplayTeamName(team)}</span>
-                                                        </div>
+                                        {/* Holder(s) */}
+                                        <td className="py-2.5 px-3">
+                                            {hasData ? (
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {record.teams.map((team, i) => (
+                                                        <span key={i} className="inline-flex items-center px-2 py-0.5 rounded-md bg-white/8 border border-white/10 text-gray-200 text-xs font-medium">
+                                                            {getDisplayTeamName(team)}
+                                                        </span>
                                                     ))}
                                                 </div>
+                                            ) : (
+                                                <span className="text-gray-600 text-[10px] italic">—</span>
+                                            )}
+                                        </td>
+                                    </tr>
+
+                                    {/* Top-5 expansion row */}
+                                    {isExpanded && topFiveData.length > 0 && (
+                                        <tr className="bg-black/20 border-b border-white/8">
+                                            <td colSpan={3} className="px-4 py-3">
+                                                <div className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-2">Top 5 Rankings</div>
+                                                <div className="grid grid-cols-1 sm:grid-cols-5 gap-1.5">
+                                                    {topFiveData.map((team, i) => {
+                                                        const rank = calculateRank(topFiveData, i);
+                                                        return (
+                                                        <div key={i} className="flex items-center gap-2 bg-white/[0.04] border border-white/8 rounded-lg px-2.5 py-2">
+                                                            <span className={`w-5 h-5 flex-shrink-0 flex items-center justify-center rounded-md text-[10px] font-bold border ${rankBadgeClass(rank - 1)}`}>
+                                                                {rank}
+                                                            </span>
+                                                            <div className="min-w-0 flex-1">
+                                                                <div className="text-xs font-medium text-gray-200 truncate">{team.name}</div>
+                                                                <div className="text-[10px] text-gray-500 tabular-nums">
+                                                                    {formatRecordValue(key, team.value)}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        );
+                                                    })}
+                                                </div>
                                             </td>
                                         </tr>
-                                        {isExpanded && topFiveData.length > 0 && (
-                                            <tr className="bg-blue-50/50">
-                                                <td colSpan="3" className="py-3 px-3 sm:py-4 sm:px-6">
-                                                    <div className="bg-white rounded-lg p-3 sm:p-4 border border-blue-200">
-                                                        <h4 className="font-semibold text-gray-800 text-xs sm:text-sm mb-3">Top 5 Rankings</h4>
-                                                        <div className="space-y-2">
-                                                            {topFiveData.map((team, index) => (
-                                                                <div key={index} className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <span className="w-6 h-6 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
-                                                                            {index + 1}
-                                                                        </span>
-                                                                        <span className="font-medium text-gray-800 text-xs sm:text-sm">{team.name}</span>
-                                                                    </div>
-                                                                    <span className="font-bold text-gray-900 text-xs sm:text-sm">
-                                                                        {config.type === 'percentage'
-                                                                            ? (team.value * 100).toLocaleString('en-US', { minimumFractionDigits: config.decimals, maximumFractionDigits: config.decimals }) + '%'
-                                                                            : team.value.toLocaleString('en-US', { minimumFractionDigits: config.decimals, maximumFractionDigits: config.decimals })}
-                                                                    </span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        )}
-                                    </React.Fragment>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
+                                    )}
+                                </React.Fragment>
+                            );
+                        })}
+                    </tbody>
+                </table>
             </div>
         </div>
     );
