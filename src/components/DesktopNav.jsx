@@ -50,6 +50,7 @@ export default function DesktopNav({ handleTabClick, handleSubTabClick, openSubM
                 <DropdownItem label="Gamecenter"   onClick={e => { e.stopPropagation(); handleTabClick(NAV_CATEGORIES.GAMECENTER.tab); }} />
                 <DropdownItem label="Sportsbook"   onClick={e => { e.stopPropagation(); handleTabClick(NAV_CATEGORIES.SPORTSBOOK.tab); }} />
                 <DropdownItem label="Head-to-Head" onClick={e => { e.stopPropagation(); handleTabClick(NAV_CATEGORIES.HEAD_TO_HEAD.tab); }} />
+                <DropdownItem label="Mini-Games"   onClick={e => { e.stopPropagation(); handleTabClick(NAV_CATEGORIES.MINIGAMES.tab); }} />
             </Dropdown>
 
             <Dropdown label="League" isOpen={openSubMenu === 'league'} onToggle={() => toggleSubMenu('league')}>
@@ -57,6 +58,7 @@ export default function DesktopNav({ handleTabClick, handleSubTabClick, openSubM
                 <DropdownItem label="Keepers"           onClick={e => { e.stopPropagation(); handleTabClick('keepers'); }} />
                 <DropdownItem label="League History"    onClick={e => { e.stopPropagation(); handleTabClick('leagueHistory'); }} />
                 <DropdownItem label="Record Book"       onClick={e => { e.stopPropagation(); handleTabClick('recordBook'); }} />
+                <DropdownItem label="Player History"    onClick={e => { e.stopPropagation(); handleTabClick('playerHistory'); }} />
                 <DropdownItem label="Season Breakdown"  onClick={e => { e.stopPropagation(); handleTabClick('seasonBreakdown'); }} />
                 <DropdownItem label="Finances"          onClick={e => { e.stopPropagation(); handleTabClick('financials'); }} />
                 <DropdownItem label="Memes & Memories"  onClick={e => { e.stopPropagation(); handleTabClick('memesAndMemories'); }} />

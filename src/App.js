@@ -18,6 +18,8 @@ import HallOfChampions from './lib/HallOfChampions';
 import Gamecenter from './components/Gamecenter';
 import Sportsbook from './components/Sportsbook';
 import KeeperList from './lib/KeeperList';
+import MiniGames from './lib/MiniGames';
+import PlayerHistory from './lib/PlayersHistory';
 const MemesAndMemories = lazy(() => import('./lib/MemesAndMemories'));
 import DesktopNav from './components/DesktopNav';
 import PasswordLock from './components/PasswordLock';
@@ -39,6 +41,7 @@ const NAV_CATEGORIES = {
             { label: 'Keepers', tab: 'keepers' },
             { label: 'Record Book', tab: 'recordBook' },
             { label: 'Head-to-Head', tab: 'headToHead' },
+            { label: 'Player History', tab: 'playerHistory' },
             { label: 'DPR Analysis', tab: 'dprAnalysis' },
             { label: 'Luck Rating', tab: 'luckRating' },
         ]
@@ -49,6 +52,7 @@ const NAV_CATEGORIES = {
     },
     SEASON_BREAKDOWN: { label: 'Season Breakdown', tab: 'seasonBreakdown' },
     DRAFT: { label: 'Draft', tab: 'draftAnalysis' },
+    MINIGAMES: { label: 'Mini-Games', tab: 'miniGames' },
     FINANCIALS: { label: 'Financials', tab: 'financials' },
 };
 
@@ -62,6 +66,7 @@ const TABS = {
     HEAD_TO_HEAD: 'headToHead',
     DPR_ANALYSIS: 'dprAnalysis',
     LUCK_RATING: 'luckRating',
+    PLAYER_HISTORY: 'playerHistory',
     TEAMS_OVERVIEW: 'teamsOverview',
     TEAMS: 'teams',
     ROSTER: 'roster',
@@ -70,6 +75,7 @@ const TABS = {
     SEASON_BREAKDOWN: 'seasonBreakdown',
     DRAFT_ANALYSIS: 'draftAnalysis',
     KEEPERS: 'keepers',
+    MINI_GAMES: 'miniGames',
     MEMES_AND_MEMORIES: 'memesAndMemories',
     ACHIEVEMENTS: 'achievements',
     TRADE_HISTORY: 'tradeHistory',
@@ -425,11 +431,13 @@ const AppContent = () => {
             case TABS.HEAD_TO_HEAD: return <Head2HeadGrid historicalMatchups={allMatchups} getDisplayTeamName={getUserDisplayName} />;
             case TABS.DPR_ANALYSIS: return <DPRAnalysis />;
             case TABS.LUCK_RATING: return <LuckRatingAnalysis />;
+            case TABS.PLAYER_HISTORY: return <PlayerHistory />;
             case TABS.KEEPERS: return <KeeperList />;
             case TABS.TEAMS_OVERVIEW: return <TeamsOverviewPage selectedTeamName={selectedTeamName} />;
             case TABS.FINANCIALS: return <FinancialTracker />;
             case TABS.SEASON_BREAKDOWN: return <SeasonBreakdown />;
             case TABS.DRAFT_ANALYSIS: return <DraftAnalysis />;
+            case TABS.MINI_GAMES: return <MiniGames />;
             case TABS.MEMES_AND_MEMORIES:
                 return (
                     <Suspense fallback={<div className="flex items-center justify-center min-h-screen text-gray-400"><p>Loading gallery…</p></div>}>
@@ -555,6 +563,7 @@ const AppContent = () => {
                             <MobileSubItem label="Gamecenter" onClick={() => handleTabClick(NAV_CATEGORIES.GAMECENTER.tab)} />
                             <MobileSubItem label="Sportsbook" onClick={() => handleTabClick(NAV_CATEGORIES.SPORTSBOOK.tab)} />
                             <MobileSubItem label="Head-to-Head" onClick={() => handleTabClick(NAV_CATEGORIES.HEAD_TO_HEAD.tab)} />
+                            <MobileSubItem label="Mini-Games" onClick={() => handleTabClick(NAV_CATEGORIES.MINIGAMES.tab)} />
                         </MobileDropdown>
 
                         <MobileDropdown
@@ -567,6 +576,7 @@ const AppContent = () => {
                             <MobileSubItem label="Keepers" onClick={() => handleTabClick('keepers')} />
                             <MobileSubItem label="League History" onClick={() => handleTabClick('leagueHistory')} />
                             <MobileSubItem label="Record Book" onClick={() => handleTabClick('recordBook')} />
+                            <MobileSubItem label="Player History" onClick={() => handleTabClick('playerHistory')} />
                             <MobileSubItem label="Season Breakdown" onClick={() => handleTabClick('seasonBreakdown')} />
                             <MobileSubItem label="Finances" onClick={() => handleTabClick('financials')} />
                             <MobileSubItem label="Memes & Memories" onClick={() => handleTabClick('memesAndMemories')} />

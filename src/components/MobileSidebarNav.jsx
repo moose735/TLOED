@@ -8,6 +8,8 @@ const navGroups = [
     children: [
       { label: 'Gamecenter', link: '/gamecenter' },
       { label: 'Sportsbook', link: '/sportsbook' },
+      { label: 'Head-to-Head', link: '/head-to-head' },
+      { label: 'Mini-Games', link: '/mini-games' },
     ],
   },
   {

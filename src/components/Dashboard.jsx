@@ -529,7 +529,7 @@ const Dashboard = () => {
                                         </div>
                                     );
                                 });
-                                const doubled = [...nodes, ...nodes];
+                                const doubled = [...nodes, ...nodes.map((node, i) => React.cloneElement(node, { key: node.key + '-copy' }))];
                                 return <div className="whitespace-nowrap flex items-center gap-2.5 animate-scroll px-4">{doubled}</div>;
                             })()}
                         </div>
@@ -562,7 +562,7 @@ const Dashboard = () => {
                                         </div>
                                     );
                                 });
-                                const doubled = [...nodes, ...nodes];
+                                const doubled = [...nodes, ...nodes.map((node, i) => React.cloneElement(node, { key: node.key + '-copy' }))];
                                 return <div className="whitespace-nowrap flex items-center gap-2.5 animate-scroll-reverse px-4">{doubled}</div>;
                             })()}
                         </div>
