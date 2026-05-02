@@ -141,6 +141,11 @@ const NotableRivalryCard = ({ title, subtitle, accentColor, statLabel, statValue
     const totalGamesA = (teamA?.wins || 0) + (teamA?.losses || 0) + (teamA?.ties || 0);
     const totalGamesB = (teamB?.wins || 0) + (teamB?.losses || 0) + (teamB?.ties || 0);
 
+    const winPctA = totalGamesA ? (teamA?.wins || 0) / totalGamesA : 0;
+    const winPctB = totalGamesB ? (teamB?.wins || 0) / totalGamesB : 0;
+    const ppgA = teamA?.ppg ?? 0;
+    const ppgB = teamB?.ppg ?? 0;
+
     return (
         <div
             onClick={onSelect}
@@ -164,15 +169,20 @@ const NotableRivalryCard = ({ title, subtitle, accentColor, statLabel, statValue
                     <span className="text-xs font-semibold text-gray-200 truncate max-w-[45%]">{teamA?.name}</span>
                     <span className="text-xs font-semibold text-gray-200 truncate max-w-[45%] text-right">{teamB?.name}</span>
                 </div>
+
                 {/* Record row */}
                 <div className="flex justify-between items-center text-[10px] text-gray-400 mb-0.5">
                     <span className="font-medium">
                         {teamA?.wins || 0}-{teamA?.losses || 0}{teamA?.ties ? `-${teamA.ties}` : ''}{' '}
-                        <span className="text-gray-600">({totalGamesA ? Math.round(((teamA?.wins || 0) / totalGamesA) * 100) : 0}%)</span>
+                        <span className="text-gray-600">({totalGamesA ? Math.round(winPctA * 100) : 0}%)</span>
                     </span>
-                    <span className="text-gray-600 text-[9px] uppercase tracking-wider">Record</span>
+                    <span className="text-gray-600 text-[9px] uppercase tracking-wider flex items-center gap-0.5">
+                        {winPctA > winPctB && <span className="text-emerald-400 font-bold">&lt;</span>}
+                        Record
+                        {winPctB > winPctA && <span className="text-emerald-400 font-bold">&gt;</span>}
+                    </span>
                     <span className="font-medium text-right">
-                        <span className="text-gray-600">({totalGamesB ? Math.round(((teamB?.wins || 0) / totalGamesB) * 100) : 0}%) </span>
+                        <span className="text-gray-600">({totalGamesB ? Math.round(winPctB * 100) : 0}%) </span>
                         {teamB?.wins || 0}-{teamB?.losses || 0}{teamB?.ties ? `-${teamB.ties}` : ''}
                     </span>
                 </div>
@@ -184,7 +194,11 @@ const NotableRivalryCard = ({ title, subtitle, accentColor, statLabel, statValue
                         {teamA?.ptsFor != null ? formatScore(teamA.ptsFor, 2) : '—'}
                         {teamA?.ppg != null ? <span className="text-gray-600"> ({formatScore(teamA.ppg, 1)})</span> : ''}
                     </span>
-                    <span className="text-gray-600 text-[9px] uppercase tracking-wider">Total Pts (PPG)</span>
+                    <span className="text-gray-600 text-[9px] uppercase tracking-wider flex items-center gap-0.5">
+                        {ppgA > ppgB && <span className="text-emerald-400 font-bold">&lt;</span>}
+                        Total Pts (PPG)
+                        {ppgB > ppgA && <span className="text-emerald-400 font-bold">&gt;</span>}
+                    </span>
                     <span className="font-medium text-right">
                         {teamB?.ptsFor != null ? formatScore(teamB.ptsFor, 2) : '—'}
                         {teamB?.ppg != null ? <span className="text-gray-600"> ({formatScore(teamB.ppg, 1)})</span> : ''}
@@ -699,7 +713,7 @@ const Head2HeadGrid = () => {
                 ownerId, ownerName: getTeamName(ownerId, null),
                 opponentId: r.opponent, opponentName: getTeamName(r.opponent, null),
                 record: `${wins}-${losses}${ties > 0 ? `-${ties}` : ''}`,
-                winPct: winPctNum >= 0 ? winPctNum.toFixed(3) : 'N/A',
+                winPct: winPctNum >= 0 ? winPctNum.toFixed(3) + '%' : 'N/A',
                 winPctNum, totalGames, wins
             };
         });
