@@ -60,10 +60,10 @@ export default function DesktopNav({ handleTabClick, handleSubTabClick, openSubM
                 <DropdownItem label="Record Book"       onClick={e => { e.stopPropagation(); handleTabClick('recordBook'); }} />
                 <DropdownItem label="Player History"    onClick={e => { e.stopPropagation(); handleTabClick('playerHistory'); }} />
                 <DropdownItem label="Season Breakdown"  onClick={e => { e.stopPropagation(); handleTabClick('seasonBreakdown'); }} />
-                <DropdownItem label="Finances"          onClick={e => { e.stopPropagation(); handleTabClick('financials'); }} />
                 <DropdownItem label="Memes & Memories"  onClick={e => { e.stopPropagation(); handleTabClick('memesAndMemories'); }} />
             </Dropdown>
 
+            <NavItem label="Finances" onClick={() => handleTabClick('financials')} />
             <NavItem label="Teams" onClick={() => handleTabClick('teamsOverview')} />
 
             <Dropdown label="Analysis" isOpen={openSubMenu === 'analysis'} onToggle={() => toggleSubMenu('analysis')}>

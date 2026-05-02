@@ -577,9 +577,17 @@ const AppContent = () => {
                             <MobileSubItem label="Record Book" onClick={() => handleTabClick('recordBook')} />
                             <MobileSubItem label="Player History" onClick={() => handleTabClick('playerHistory')} />
                             <MobileSubItem label="Season Breakdown" onClick={() => handleTabClick('seasonBreakdown')} />
-                            <MobileSubItem label="Finances" onClick={() => handleTabClick('financials')} />
                             <MobileSubItem label="Memes & Memories" onClick={() => handleTabClick('memesAndMemories')} />
                         </MobileDropdown>
+
+                        <li>
+                            <MobileNavButton
+                                icon="💰"
+                                label="Finances"
+                                onClick={() => handleTabClick('financials')}
+                                isActive={activeTab === 'financials'}
+                            />
+                        </li>
 
                         <li>
                             <MobileNavButton

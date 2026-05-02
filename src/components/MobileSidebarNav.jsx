@@ -21,10 +21,10 @@ const navGroups = [
       { label: 'League History', link: '/league-history' },
       { label: 'Record Book', link: '/record-book' },
       { label: 'Season Breakdown', link: '/season-breakdown' },
-      { label: 'Finances', link: '/finances' },
       { label: 'Memes & Memories', link: '/memes-and-memories' },
     ],
   },
+  { label: 'Finances', link: '/finances' },
   { label: 'Teams', link: '/teams', emoji: '👥' },
   {
     label: 'Analysis',
