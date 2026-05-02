@@ -323,7 +323,7 @@ const AppContent = () => {
             [TABS.TEAMS_OVERVIEW]: selectedTeamName || 'Teams',
             [TABS.FINANCIALS]: 'Financials', [TABS.SEASON_BREAKDOWN]: 'Season Breakdown',
             [TABS.DRAFT_ANALYSIS]: 'Draft Analysis', [TABS.MEMES_AND_MEMORIES]: 'Memes & Memories',
-            [TABS.ACHIEVEMENTS]: 'Achievements', [TABS.TRADE_HISTORY]: 'Trade History',
+            [TABS.ACHIEVEMENTS]: 'Achievements',
         };
         document.title = `TLOED - ${titles[activeTab] || 'Dashboard'}`;
     }, [activeTab, selectedTeamName]);
@@ -445,7 +445,6 @@ const AppContent = () => {
                     </Suspense>
                 );
             case TABS.ACHIEVEMENTS: return <Dashboard />;
-            case TABS.TRADE_HISTORY: return <MostTradedPlayers />;
             default: return <Dashboard />;
         }
     };
@@ -600,7 +599,6 @@ const AppContent = () => {
                             <MobileSubItem label="Draft" onClick={() => handleTabClick('draftAnalysis')} />
                             <MobileSubItem label="DPR Analysis" onClick={() => handleTabClick('dprAnalysis')} />
                             <MobileSubItem label="Luck Rating" onClick={() => handleTabClick('luckRating')} />
-                            <MobileSubItem label="Trade History" onClick={() => handleTabClick(TABS.TRADE_HISTORY)} />
                         </MobileDropdown>
                     </ul>
 

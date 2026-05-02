@@ -70,7 +70,6 @@ export default function DesktopNav({ handleTabClick, handleSubTabClick, openSubM
                 <DropdownItem label="Draft"         onClick={e => { e.stopPropagation(); handleTabClick('draftAnalysis'); }} />
                 <DropdownItem label="DPR Analysis"  onClick={e => { e.stopPropagation(); handleTabClick('dprAnalysis'); }} />
                 <DropdownItem label="Luck Rating"   onClick={e => { e.stopPropagation(); handleTabClick('luckRating'); }} />
-                <DropdownItem label="Trade History" onClick={e => { e.stopPropagation(); handleTabClick('tradeHistory'); }} />
             </Dropdown>
 
         </ul>

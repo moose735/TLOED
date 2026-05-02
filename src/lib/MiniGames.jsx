@@ -272,7 +272,7 @@ const MiniGames = () => {
         <div className="space-y-4 py-6">
             <div className="text-center mb-8">
                 <h2 className="text-3xl font-bold text-white mb-2">Mini-Games</h2>
-                <p className="text-gray-400">Alternate realities. Different formats. Same trash talk.</p>
+                <p className="text-gray-400">For shits and gigs.</p>
             </div>
 
             <div className="flex justify-center mb-6">
