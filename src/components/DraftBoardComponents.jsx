@@ -25,13 +25,13 @@ const BOARD_CSS = `
   --db-text-full:   #ffffff;
   --db-accent:      #58a6ff;
 
-  /* position palette */
+  /* position palette — TE gold, DEF teal so they're clearly distinct */
   --pos-QB: #f85149;
   --pos-RB: #3fb950;
   --pos-WR: #388bfd;
   --pos-TE: #d29922;
   --pos-K:  #8957e5;
-  --pos-DEF:#e3b341;
+  --pos-DEF:#20b2aa;
   --pos-default: #484f58;
 }
 
@@ -158,6 +158,11 @@ const BOARD_CSS = `
   letter-spacing: -0.01em;
 }
 
+/* DEF cards: slightly smaller last-name so city abbrevs fit cleanly */
+.db-card.db-card--def .db-last-name {
+  font-size: 12px;
+}
+
 .db-card-footer {
   display: flex;
   align-items: center;
@@ -215,14 +220,65 @@ const BOARD_CSS = `
 
 // ── Position colour map ──────────────────────────────────────────────────────
 const POS_CSS_VAR = {
-    QB: 'var(--pos-QB)', RB: 'var(--pos-RB)',
-    WR: 'var(--pos-WR)', TE: 'var(--pos-TE)',
-    K:  'var(--pos-K)',  DEF:'var(--pos-DEF)',
+    QB:  'var(--pos-QB)',
+    RB:  'var(--pos-RB)',
+    WR:  'var(--pos-WR)',
+    TE:  'var(--pos-TE)',
+    K:   'var(--pos-K)',
+    DEF: 'var(--pos-DEF)',
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Abbreviate a DEF team name to its city/mascot abbreviation.
+ * Handles the common Sleeper formats:
+ *   "Los Angeles Rams"   → "LAR"
+ *   "Kansas City Chiefs" → "KC"
+ *   "New England Patriots" → "NE"
+ *   "San Francisco 49ers"  → "SF"
+ * Falls back to the first 3 characters of the first word if no match.
+ */
+const DEF_ABBREV = {
+    'Arizona Cardinals':       'ARI',  'Atlanta Falcons':        'ATL',
+    'Baltimore Ravens':        'BAL',  'Buffalo Bills':          'BUF',
+    'Carolina Panthers':       'CAR',  'Chicago Bears':          'CHI',
+    'Cincinnati Bengals':      'CIN',  'Cleveland Browns':       'CLE',
+    'Dallas Cowboys':          'DAL',  'Denver Broncos':         'DEN',
+    'Detroit Lions':           'DET',  'Green Bay Packers':      'GB',
+    'Houston Texans':          'HOU',  'Indianapolis Colts':     'IND',
+    'Jacksonville Jaguars':    'JAX',  'Kansas City Chiefs':     'KC',
+    'Las Vegas Raiders':       'LV',   'Los Angeles Chargers':   'LAC',
+    'Los Angeles Rams':        'LAR',  'Miami Dolphins':         'MIA',
+    'Minnesota Vikings':       'MIN',  'New England Patriots':   'NE',
+    'New Orleans Saints':      'NO',   'New York Giants':        'NYG',
+    'New York Jets':           'NYJ',  'Philadelphia Eagles':    'PHI',
+    'Pittsburgh Steelers':     'PIT',  'San Francisco 49ers':    'SF',
+    'Seattle Seahawks':        'SEA',  'Tampa Bay Buccaneers':   'TB',
+    'Tennessee Titans':        'TEN',  'Washington Commanders':  'WAS',
+    'Washington Football Team':'WAS',  'Oakland Raiders':        'OAK',
+    'San Diego Chargers':      'SD',   'St. Louis Rams':         'STL',
+};
+
+function abbreviateDef(name = '') {
+    if (!name) return 'DEF';
+    // Already short (≤4 chars)
+    if (name.length <= 4) return name.toUpperCase();
+    // Lookup table
+    if (DEF_ABBREV[name]) return DEF_ABBREV[name];
+    // Try trimming trailing "D/ST" or "Defense"
+    const stripped = name.replace(/\s*(D\/ST|Defense|Def\.?)$/i, '').trim();
+    if (DEF_ABBREV[stripped]) return DEF_ABBREV[stripped];
+    // Fallback: first letters of each word, max 3
+    const words = stripped.split(' ').filter(Boolean);
+    if (words.length >= 2) return (words[0].slice(0, 2) + words[1][0]).toUpperCase();
+    return stripped.slice(0, 3).toUpperCase();
+}
+
 function splitName(fullName = '', position = '') {
-    if (position === 'DEF') return { first: '', last: fullName || 'DEF' };
+    if (position === 'DEF') {
+        return { first: 'Defense', last: abbreviateDef(fullName) };
+    }
     const parts = fullName.trim().split(' ');
     if (parts.length === 1) return { first: '', last: parts[0] };
     return { first: parts[0], last: parts.slice(1).join(' ') };
@@ -246,6 +302,7 @@ function DraftPickCard({ pick, isTradedPickForPlayer }) {
     }
 
     const pos = (pick.player_position || '').toUpperCase();
+    const isDef = pos === 'DEF';
     const posColor = POS_CSS_VAR[pos] || 'var(--pos-default)';
     const { first, last } = splitName(pick.player_name, pos);
     const vorpVal = pick.scaled_vorp_delta;
@@ -253,15 +310,20 @@ function DraftPickCard({ pick, isTradedPickForPlayer }) {
     const vorpClass = typeof vorpVal === 'number' ? (vorpVal >= 0 ? 'pos' : 'neg') : '';
 
     return (
-        <div className="db-card" style={{ '--pos-color': posColor, background: '#161b22' }}>
+        <div
+            className={`db-card${isDef ? ' db-card--def' : ''}`}
+            style={{ '--pos-color': posColor, background: '#161b22' }}
+        >
             {/* top row: position badge + NFL team */}
             <div className="db-card-meta">
                 <span className="db-pos-badge">{pos}</span>
-                <span className="db-nfl-team">{pick.player_team || ''}</span>
+                {/* For DEF, the NFL team label is redundant — skip it */}
+                {!isDef && <span className="db-nfl-team">{pick.player_team || ''}</span>}
             </div>
 
             {/* name block */}
             <div className="db-card-name">
+                {/* "Defense" label in dim colour, abbreviated name large */}
                 {first && <span className="db-first-name">{first}</span>}
                 <span className="db-last-name">{last}</span>
             </div>
@@ -371,10 +433,14 @@ export function DraftBoardGrid({
 }
 
 // ── OverallDraftPositionChart (restyled) ─────────────────────────────────────
-const POSITIONS = ['QB','RB','WR','TE','K','DEF'];
+const POSITIONS = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
 const POS_COLORS = {
-    QB: '#f85149', RB: '#3fb950', WR: '#388bfd',
-    TE: '#d29922', K: '#8957e5', DEF: '#e3b341',
+    QB:  '#f85149',
+    RB:  '#3fb950',
+    WR:  '#388bfd',
+    TE:  '#d29922',
+    K:   '#8957e5',
+    DEF: '#20b2aa',   // teal — clearly distinct from TE gold
 };
 
 const CustomTooltip = ({ active, payload, label }) => {
