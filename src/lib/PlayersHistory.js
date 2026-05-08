@@ -22,7 +22,7 @@ const posStyle = (pos) => POSITION_COLORS[pos] || POSITION_COLORS.DEF;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Determine how a player arrived on a roster for a given stint
-// Returns: { method: 'draft'|'trade'|'waiver'|'fa', label, detail }
+// Returns: { method: 'draft'|'trade'|'waiver'|'fa'|'keeper', label, detail }
 // ─────────────────────────────────────────────────────────────────────────────
 const computeAcquisitionMethod = (playerId, stint, historicalData, playerTrades, getTeamName, allTransactions) => {
     const { season, rosterId, startWeek } = stint;
@@ -33,7 +33,6 @@ const computeAcquisitionMethod = (playerId, stint, historicalData, playerTrades,
         String(p.player_id) === String(playerId) && !p.is_keeper
     );
     if (draftPick) {
-        // Verify this draft pick was made by the same roster
         const draftRoster = historicalData?.rostersBySeason?.[season]?.find(r =>
             String(r.owner_id) === String(draftPick.picked_by)
         );
@@ -68,25 +67,65 @@ const computeAcquisitionMethod = (playerId, stint, historicalData, playerTrades,
         }
     }
 
+    // ── 2b. Detect KEEPER disguised as FA (2022/2023 style) ──────────────────
+    // In leagues where keepers are added via free agency rather than the draft,
+    // a player present from Week 1 with an FA/waiver transaction that has
+    // leg=0 or null (preseason/offseason window) is almost certainly a keeper,
+    // not a true in-season pickup. A real Week 1 waiver pickup has leg >= 1.
+    if (allTransactions && startWeek <= 2) {
+        const keeperFaTxs = (allTransactions || [])
+            .filter(tx =>
+                (tx.type === 'waiver' || tx.type === 'free_agent') &&
+                String(tx.season) === String(season) &&
+                tx.adds &&
+                String(playerId) in tx.adds
+            )
+            .map(tx => {
+                const addEntry = tx.adds[String(playerId)];
+                const rId = addEntry && typeof addEntry === 'object'
+                    ? addEntry.roster_id
+                    : addEntry;
+                return { ...tx, resolvedRosterId: String(rId) };
+            })
+            .filter(tx => tx.resolvedRosterId === String(rosterId));
+
+        // Preseason FA add: leg is 0, null/undefined, OR created before Sep 1
+        const preseasonAdd = keeperFaTxs.find(tx => {
+            const txWeek = tx.leg != null ? Number(tx.leg) : null;
+            if (txWeek === 0 || txWeek === null) return true;
+            if (tx.created) {
+                const created = new Date(tx.created);
+                const seasonStart = new Date(`${season}-09-01`);
+                if (created < seasonStart) return true;
+            }
+            return false;
+        });
+
+        if (preseasonAdd) {
+            return {
+                method: 'keeper',
+                label: 'Kept',
+                detail: 'Keeper (pre-season FA)',
+                icon: '🔒',
+            };
+        }
+    }
+
     // ── 3. Check TRADE — find a trade that delivered this player to this roster ─
-    // A qualifying trade: same season, week <= startWeek, toRosterId matches this stint's rosterId
     const inboundTrade = (playerTrades || [])
         .filter(tr =>
             String(tr.season) === String(season) &&
             Number(tr.week) <= startWeek + 1 &&
             tr.type === 'received'
         )
-        .sort((a, b) => Number(b.week) - Number(a.week)) // most recent first
+        .sort((a, b) => Number(b.week) - Number(a.week))
         .find(tr => {
-            // Verify the "to" side of the trade resolves to this roster
-            // tr.toTeam is the team name; cross-check via toRosterId if available
             if (tr.toRosterId) {
                 const toRoster = historicalData?.rostersBySeason?.[season]?.find(r =>
                     String(r.roster_id) === String(tr.toRosterId)
                 );
                 if (toRoster && String(toRoster.roster_id) === String(rosterId)) return true;
             }
-            // Fallback: match by ownerId
             const stintOwnerRoster = historicalData?.rostersBySeason?.[season]?.find(r =>
                 String(r.roster_id) === String(rosterId)
             );
@@ -101,14 +140,12 @@ const computeAcquisitionMethod = (playerId, stint, historicalData, playerTrades,
         return {
             method: 'trade',
             label: 'Via Trade',
-            detail: null, // AcquisitionTradeItem below already shows from/week
+            detail: null,
             icon: '🔄',
         };
     }
 
     // ── 4. FA / Waivers — try to detect the drop week from transactions ─────────
-    // Look for a waiver/free_agent transaction that dropped this player from this roster
-    // at or after the stint's last week (indicating a mid-season release)
     let dropDetail = null;
     if (allTransactions && stint.endWeek) {
         const dropTx = (allTransactions || [])
@@ -252,15 +289,13 @@ const StatBox = ({ label, value, accent }) => (
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Compact acquisition receipt — shown on the receiving team's row in Chain of Custody
-// Only shows "Acquired from X", date, and other players. No "To" since that's obvious.
+// Compact acquisition receipt
 // ─────────────────────────────────────────────────────────────────────────────
 const AcquisitionTradeItem = ({ trade, playerId, nflPlayers, onSelectPlayer }) => {
     const date = trade.created
         ? new Date(trade.created).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
         : null;
 
-    // Deduplicate other players — seenIds excludes the subject player
     const seenIds = new Set([String(playerId)]);
     const otherPlayers = [...(trade.adds || []), ...(trade.drops || [])].filter(p => {
         const id = String(p.playerId);
@@ -311,8 +346,6 @@ const AcquisitionTradeItem = ({ trade, playerId, nflPlayers, onSelectPlayer }) =
 const TradeItem = ({ trade, playerId, nflPlayers, onSelectPlayer }) => {
     const date = trade.created ? new Date(trade.created).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
 
-    // Deduplicate other players: combine adds+drops, exclude the subject player,
-    // unique by playerId (keeps first occurrence = the adds side wins over drops)
     const seenIds = new Set([String(playerId)]);
     const otherPlayers = [
         ...(trade.adds || []),
@@ -438,7 +471,6 @@ const AllLeagueView = ({ allLeagueData, nflPlayers, onSelectPlayer }) => {
 
     const seasonData = allLeagueData[selectedSeason] || {};
 
-    // Build the three teams + honorable mention per position
     const buildTeams = (pos) => {
         const players = seasonData[pos] || [];
         return {
@@ -451,7 +483,6 @@ const AllLeagueView = ({ allLeagueData, nflPlayers, onSelectPlayer }) => {
 
     return (
         <div className="space-y-6">
-            {/* Season selector */}
             <div className="flex items-center gap-3 flex-wrap">
                 <span className="text-xs font-bold uppercase tracking-widest text-gray-400">Season</span>
                 <div className="flex gap-2 flex-wrap">
@@ -468,23 +499,18 @@ const AllLeagueView = ({ allLeagueData, nflPlayers, onSelectPlayer }) => {
                 </div>
             </div>
 
-            {/* Explanation */}
             <p className="text-xs text-gray-500">
                 Minimum 10 starts required · Ranked by Avg PPG (started weeks only)
             </p>
 
-            {/* All-League Teams — one section per tier */}
             {TEAM_STYLES.map(ts => (
                 <div key={ts.tier} className="rounded-2xl border border-white/10 overflow-hidden">
-                    {/* Team header */}
                     <div className={`px-5 py-3 border-b border-white/10 ${ts.headerBg} flex items-center gap-2`}>
                         <span className="text-lg">{ts.trophy}</span>
                         <h2 className={`text-sm font-black uppercase tracking-widest ${ts.headerText}`}>
                             {selectedSeason} All-League {ts.label}
                         </h2>
                     </div>
-
-                    {/* Position columns */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-4">
                         {ALL_LEAGUE_POSITIONS.map(pos => {
                             const teams = buildTeams(pos);
@@ -509,7 +535,6 @@ const AllLeagueView = ({ allLeagueData, nflPlayers, onSelectPlayer }) => {
                 </div>
             ))}
 
-            {/* Honorable Mention */}
             <div className="rounded-2xl border border-white/10 overflow-hidden">
                 <div className="px-5 py-3 border-b border-white/10 bg-white/3 flex items-center gap-2">
                     <span className="text-lg">🎖️</span>
@@ -557,7 +582,7 @@ const AllLeagueView = ({ allLeagueData, nflPlayers, onSelectPlayer }) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Static Leaderboard — top 10 per stat, no API needed
+// Static Leaderboard
 // ─────────────────────────────────────────────────────────────────────────────
 const StaticLeaderboard = ({ leaderboardData, nflPlayers, onSelectPlayer }) => {
     if (!leaderboardData || leaderboardData.length === 0) {
@@ -626,13 +651,13 @@ const PlayerHistory = () => {
     const [playerDetail, setPlayerDetail] = useState(null);
     const [detailLoading, setDetailLoading] = useState(false);
     const [journeymen, setJourneymen] = useState([]);
-    const [activeTab, setActiveTab] = useState('search'); // 'search' | 'leaderboard'
+    const [activeTab, setActiveTab] = useState('search');
     const [allTransactions, setAllTransactions] = useState([]);
     const [detailTab, setDetailTab] = useState('history');
     const inputRef = useRef(null);
     const leagueTxCache = useRef(new Map());
 
-    // ── Load all historical transactions (from MostTradedPlayers logic) ──────
+    // ── Load all historical transactions (including week 0 for keeper FA detection) ──
     useEffect(() => {
         (async () => {
             try {
@@ -656,8 +681,9 @@ const PlayerHistory = () => {
                         continue;
                     }
 
+                    // ── Fetch weeks 0–18: week 0 captures preseason keeper FA adds ──
                     const weekPromises = [];
-                    for (let w = 1; w <= 18; w++) {
+                    for (let w = 0; w <= 18; w++) {
                         weekPromises.push(
                             fetchTransactionsForWeek(leagueId, w).catch(() => [])
                         );
@@ -684,7 +710,7 @@ const PlayerHistory = () => {
         })();
     }, [historicalData, transactions]);
 
-    // ── Build player trade map (playerId -> trade array) ─────────────────────
+    // ── Build player trade map ────────────────────────────────────────────────
     const playerTradeMap = useMemo(() => {
         const map = new Map();
         const playerSeenTxIds = {};
@@ -842,7 +868,7 @@ const PlayerHistory = () => {
         setJourneymen(results.slice(0, 12));
     }, [historicalData, nflPlayers, getPlayerStintAndTeamCounts]);
 
-    // ── Static leaderboard data (teams, stints, trades — no API needed) ────────
+    // ── Static leaderboard data ───────────────────────────────────────────────
     const leaderboardData = useMemo(() => {
         if (!nflPlayers || !leaguePlayers.size) return [];
         const validPositions = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
@@ -863,9 +889,7 @@ const PlayerHistory = () => {
             });
     }, [nflPlayers, leaguePlayers, getPlayerStintAndTeamCounts, playerTradeMap]);
 
-    // ── All-League data — computed from matchupsBySeason (no API needed) ────────
-    // For each season: scan every matchup, accumulate per-player starts + totalPoints
-    // Then rank by avgPPG (totalStartingPoints / starts) with minimum 12 starts
+    // ── All-League data ───────────────────────────────────────────────────────
     const allLeagueData = useMemo(() => {
         if (!historicalData?.matchupsBySeason || !nflPlayers) return {};
         const validPositions = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
@@ -874,7 +898,6 @@ const PlayerHistory = () => {
 
         Object.entries(historicalData.matchupsBySeason).forEach(([season, matchups]) => {
             const seasonNum = Number(season);
-            // Skip 2021 (no data) and current/future seasons (not yet concluded)
             if (seasonNum <= 2021 || seasonNum >= currentYear) return;
 
             const playerData = {};
@@ -904,7 +927,6 @@ const PlayerHistory = () => {
                 });
             });
 
-            // Min 10 starts, sort by avgPPG desc
             const byPos = {};
             Object.values(playerData).forEach(p => {
                 if (p.starts < 10) return;
@@ -921,19 +943,18 @@ const PlayerHistory = () => {
         return result;
     }, [historicalData, nflPlayers]);
 
-    // ── All-League honors lookup: pid -> [{ season, tier, tierLabel, position }] ─
+    // ── All-League honors lookup ──────────────────────────────────────────────
     const playerAllLeagueHonors = useMemo(() => {
-        const honors = {}; // pid -> array of honor objects
+        const honors = {};
         const tierLabels = { 1: 'First Team', 2: 'Second Team', 3: 'Third Team', 4: 'Honorable Mention', 5: 'Honorable Mention' };
         Object.entries(allLeagueData).forEach(([season, byPos]) => {
             Object.entries(byPos).forEach(([pos, players]) => {
                 players.forEach((player, idx) => {
-                    const tier = idx + 1; // 1=first, 2=second, 3=third, 4-5=HM
+                    const tier = idx + 1;
                     if (tier > 5) return;
                     if (!honors[player.pid]) honors[player.pid] = [];
                     honors[player.pid].push({
-                        season,
-                        tier,
+                        season, tier,
                         tierLabel: tierLabels[tier] || 'Honorable Mention',
                         isHM: tier > 3,
                         position: pos,
@@ -944,14 +965,14 @@ const PlayerHistory = () => {
         return honors;
     }, [allLeagueData]);
 
-    // ── Championship roster lookup: pid -> [{ season, teamName }] ─────────────
+    // ── Championship roster lookup ────────────────────────────────────────────
     const playerChampionshipHonors = useMemo(() => {
-        const honors = {}; // pid -> array
+        const honors = {};
         if (!historicalData?.winnersBracketBySeason || !historicalData?.rostersBySeason) return honors;
 
         Object.entries(historicalData.winnersBracketBySeason).forEach(([year, bracket]) => {
             const yearNum = Number(year);
-            if (yearNum <= 2021) return; // skip 2021
+            if (yearNum <= 2021) return;
             const champGame = Array.isArray(bracket) ? bracket.find(g => g.p === 1 && g.w) : null;
             if (!champGame) return;
             const champRosterId = String(champGame.w);
@@ -959,10 +980,7 @@ const PlayerHistory = () => {
             const champRoster = rosters.find(r => String(r.roster_id) === champRosterId);
             if (!champRoster) return;
 
-            // Get players from roster snapshot
             const players = Array.isArray(champRoster.players) ? champRoster.players : [];
-
-            // Also try to get players from the championship matchup week
             const matchups = historicalData.matchupsBySeason?.[yearNum] || [];
             const champWeek = champGame.week || champGame.weekNumber;
             let extraPlayers = [];
@@ -1055,9 +1073,6 @@ const PlayerHistory = () => {
                     const pts = Number(ppMap[pid] ?? 0);
                     const isStarter = starters.includes(pid);
                     const inPointsMap = pid in ppMap;
-                    // A player is "active" only if they actually scored > 0, OR were
-                    // explicitly started (a 0-pt start is still a real game — e.g. DEF).
-                    // A 0-pt non-started entry = injured/inactive on bench; skip it.
                     const playerWasActive = isStarter || (inPointsMap && pts > 0);
                     if (playerWasActive) {
                         gamesOnRoster++;
@@ -1096,12 +1111,10 @@ const PlayerHistory = () => {
         const cdr = totalGames > 0 ? (totalStarts / totalGames) * 100 : 0;
         const winRate = (totalWins + totalLosses) > 0 ? (totalWins / (totalWins + totalLosses)) * 100 : 0;
 
-        const detail = {
+        setPlayerDetail({
             stints: rawStints, totalPoints, totalStarts, totalGames, avgPPG, cdr, winRate, totalWins, totalLosses,
             trades: playerTrades, totalTrades: playerTrades.length,
-        };
-        setPlayerDetail(detail);
-
+        });
         setDetailLoading(false);
     }, [historicalData, getLeagueIdForSeason, playerTradeMap, nflPlayers, getTeamName, allTransactions]);
 
@@ -1193,7 +1206,6 @@ const PlayerHistory = () => {
                                 if (!allLeague.length && !champs.length) return null;
                                 return (
                                     <div className="flex flex-wrap gap-1.5 mt-3">
-                                        {/* Championship rings */}
                                         {champs.map((c, i) => {
                                             const champTeamName = c.ownerId ? getTeamName(c.ownerId, c.season) : null;
                                             return (
@@ -1204,7 +1216,6 @@ const PlayerHistory = () => {
                                                 </span>
                                             );
                                         })}
-                                        {/* All-League honors — group by season for compactness */}
                                         {allLeague.map((h, i) => {
                                             const tierStyle =
                                                 h.tier === 1 ? 'bg-yellow-500/15 text-yellow-300 border-yellow-500/30' :
@@ -1255,13 +1266,12 @@ const PlayerHistory = () => {
                         {/* ── History Tab ── */}
                         {detailTab === 'history' && (
                             <>
-                                {/* Stat boxes — 3 cols on mobile, 6 on desktop, +teams +stints +trades */}
                                 <div className="grid grid-cols-3 sm:grid-cols-9 gap-3">
                                     <StatBox label="Total Points"   value={playerDetail.totalPoints.toFixed(1)} accent="text-blue-300" />
                                     <StatBox label="Avg PPG"        value={playerDetail.avgPPG.toFixed(1)}      accent="text-emerald-300" />
                                     <StatBox label="Games Started"  value={playerDetail.totalStarts} />
                                     <StatBox label="Games Benched"  value={playerDetail.totalGames - playerDetail.totalStarts} />
-                                    <StatBox label="Start Rate"            value={`${playerDetail.cdr.toFixed(1)}%`}   accent="text-yellow-300" />
+                                    <StatBox label="Start Rate"     value={`${playerDetail.cdr.toFixed(1)}%`}   accent="text-yellow-300" />
                                     <StatBox label="Team Win Rate"  value={`${playerDetail.winRate.toFixed(1)}%`}
                                         accent={playerDetail.winRate >= 50 ? 'text-green-300' : 'text-red-300'} />
                                     <StatBox label="Teams"          value={new Set(playerDetail.stints.map(s => s.ownerId)).size} accent="text-orange-300" />
@@ -1285,7 +1295,6 @@ const PlayerHistory = () => {
                                             const ppg = stint.starts > 0 ? (stint.startingPoints / stint.starts).toFixed(1) : '—';
                                             const cdr = stint.gamesOnRoster > 0 ? Math.round((stint.starts / stint.gamesOnRoster) * 100) : 0;
                                             const isLast = idx === playerDetail.stints.length - 1;
-                                            // Show the INCOMING trade on the team that received the player
                                             const currentTeamName = getTeamInfo(stint.ownerId, stint.season).name;
                                             const incomingTrade = (playerDetail.trades || [])
                                                 .filter(tr =>
@@ -1327,18 +1336,17 @@ const PlayerHistory = () => {
                                                                         {acq.detail && (
                                                                             <span className="text-[10px] text-gray-500">{acq.detail}</span>
                                                                         )}
-
                                                                     </div>
                                                                 );
                                                             })()}
                                                         </div>
                                                         <div className="hidden sm:flex items-center gap-6 shrink-0">
                                                             {[
-                                                                { label: 'G',      value: stint.gamesOnRoster },
-                                                                { label: 'PPG',    value: ppg },
-                                                                { label: 'STARTS', value: stint.starts },
+                                                                { label: 'G',          value: stint.gamesOnRoster },
+                                                                { label: 'PPG',        value: ppg },
+                                                                { label: 'STARTS',     value: stint.starts },
                                                                 { label: 'START RATE', value: `${cdr}%` },
-                                                                { label: 'W-L',    value: `${stint.wins}-${stint.losses}` },
+                                                                { label: 'W-L',        value: `${stint.wins}-${stint.losses}` },
                                                             ].map(({ label, value }) => (
                                                                 <div key={label} className="text-center">
                                                                     <div className="text-xs font-bold text-white">{value}</div>
@@ -1357,7 +1365,6 @@ const PlayerHistory = () => {
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    {/* Incoming trade receipt — shown on the team that acquired the player */}
                                                     {incomingTrade && (
                                                         <div className="px-10 pb-3">
                                                             <AcquisitionTradeItem trade={incomingTrade} playerId={pid} nflPlayers={nflPlayers} onSelectPlayer={handleSelectPlayer} />
@@ -1410,7 +1417,6 @@ const PlayerHistory = () => {
                                         <div className="space-y-3">
                                             {playerDetail.trades.map((trade, i) => (
                                                 <div key={i} className="bg-gray-800/60 border border-white/10 rounded-2xl p-5 space-y-3">
-                                                    {/* Header row */}
                                                     <div className="flex items-center justify-between flex-wrap gap-2">
                                                         <div className="flex items-center gap-3">
                                                             <span className="text-[10px] font-bold uppercase tracking-widest text-violet-400 bg-violet-500/10 px-2 py-1 rounded-lg border border-violet-500/20">
@@ -1425,7 +1431,6 @@ const PlayerHistory = () => {
                                                             </span>
                                                         )}
                                                     </div>
-                                                    {/* From → To */}
                                                     {(trade.fromTeam || trade.toTeam) && (
                                                         <div className="flex items-center gap-3 flex-wrap">
                                                             {trade.fromTeam && (
@@ -1443,7 +1448,6 @@ const PlayerHistory = () => {
                                                             )}
                                                         </div>
                                                     )}
-                                                    {/* Other players in trade */}
                                                     {(() => {
                                                         const seenIds = new Set([pid]);
                                                         const others = [...(trade.adds || []), ...(trade.drops || [])].filter(p => {
@@ -1497,13 +1501,11 @@ const PlayerHistory = () => {
     // ─────────────────────────────────────────────────────────────────────────
     return (
         <div className="max-w-5xl mx-auto space-y-8 pb-12">
-            {/* Header */}
             <div className="text-center pt-4">
                 <h1 className="text-3xl font-bold text-white mb-1">Player History</h1>
                 <p className="text-sm text-gray-400">Search for any player to view their history in this league</p>
             </div>
 
-            {/* Top-level tabs */}
             <div className="flex gap-1 bg-white/5 rounded-xl p-1 border border-white/8">
                 {[
                     { key: 'search',      label: 'Search & Browse' },
@@ -1535,7 +1537,6 @@ const PlayerHistory = () => {
                 />
             ) : (
                 <>
-                    {/* Search */}
                     <div className="relative">
                         <input ref={inputRef} value={query} onChange={e => setQuery(e.target.value)}
                             placeholder="Search for a player…"
@@ -1559,7 +1560,6 @@ const PlayerHistory = () => {
                         )}
                     </div>
 
-                    {/* Popular players */}
                     <section>
                         <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">Popular Players</h2>
                         <div className="flex flex-wrap gap-2">
@@ -1582,7 +1582,6 @@ const PlayerHistory = () => {
                         </div>
                     </section>
 
-                    {/* League Journeymen */}
                     {journeymen.length > 0 && (
                         <section>
                             <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">League Journeymen</h2>
