@@ -81,6 +81,32 @@ describe('resolveKeeperPick', () => {
         // This test ensures the traded pick is findable via tradedPicksBySeason lookup.
     });
 
+    test('falls back to the most recent prior draft season when target season has not started yet', () => {
+        const preDraftHistorical = {
+            draftPicksBySeason: {
+                2025: [
+                    { pick_no: 1, round: 1, pick_in_round: 1, roster_id: '1', picked_by: '1' },
+                    { pick_no: 17, round: 2, pick_in_round: 5, roster_id: '3', picked_by: '3' },
+                    { pick_no: 29, round: 3, pick_in_round: 5, roster_id: '4', picked_by: '4' },
+                ],
+                2026: []
+            },
+            rostersBySeason: {
+                2025: [
+                    { roster_id: '1', owner_id: 'u1' },
+                    { roster_id: '3', owner_id: 'u3' },
+                    { roster_id: '4', owner_id: 'u4' },
+                ],
+                2026: []
+            }
+        };
+
+        const r = resolveKeeperPick(preDraftHistorical, 'u4', 2026, 3);
+        expect(r.resolved).toBe(true);
+        expect(r.round).toBe(3);
+        expect(r.label).toContain('R3');
+    });
+
     test('returns round cost when season picks missing', () => {
         const r = resolveKeeperPick({}, '1', 2027, 2);
         expect(r.resolved).toBe(false);

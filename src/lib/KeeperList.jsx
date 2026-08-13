@@ -51,6 +51,16 @@ function computeAssignedRound(originalDraftRound, teamKeeperCount) {
     return Math.max(1, base - deduction);
 }
 
+function isCompletedDraftSeason(historicalData, season) {
+    const draftEntry = historicalData?.draftsBySeason?.[String(season)]
+        || historicalData?.draftsBySeason?.[season];
+    const status = draftEntry?.status;
+    if (!status) {
+        return (historicalData?.draftPicksBySeason?.[String(season)] || historicalData?.draftPicksBySeason?.[season] || []).length > 0;
+    }
+    return status !== 'pre_draft' && status !== 'drafting';
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -91,7 +101,7 @@ export default function KeeperList() {
         // Used so FA/waiver pickups acquired during the 2025 season get the same
         // expiration as players who were drafted in the 2025 draft.
         const allPickSeasons = Object.keys(historicalData?.draftPicksBySeason || {}).map(Number).sort((a, b) => b - a);
-        const lastCompletedDraftSeason = allPickSeasons.find(s => (historicalData.draftPicksBySeason[s] || []).length > 0) ?? currentSeasonNum;
+        const lastCompletedDraftSeason = allPickSeasons.find(s => isCompletedDraftSeason(historicalData, s)) ?? currentSeasonNum;
 
         // --- Current roster set from live rostersWithDetails ---
         const currentRosterPlayerIds = new Set();
@@ -292,7 +302,7 @@ export default function KeeperList() {
         const allPickSeasons = Object.keys(historicalData?.draftPicksBySeason || {})
             .map(Number)
             .sort((a, b) => b - a);
-        return allPickSeasons.find(s => (historicalData?.draftPicksBySeason[s] || []).length > 0)
+        return allPickSeasons.find(s => isCompletedDraftSeason(historicalData, s))
             ?? currentSeasonNum;
     }, [historicalData, currentSeasonNum]);
 
@@ -476,6 +486,13 @@ export default function KeeperList() {
         }
 
         const expirationYear = computeExpiration(r, currentSeasonNum, lastCompletedDraftSeason);
+        const currentDraftStatus = historicalData?.draftsBySeason?.[String(currentSeasonNum)]?.status
+            || historicalData?.draftsBySeason?.[currentSeasonNum]?.status;
+        const currentSeasonDraftIsLive = currentDraftStatus && currentDraftStatus !== 'pre_draft' && currentDraftStatus !== 'drafting';
+        const costLookupSeason = currentSeasonNum && !currentSeasonDraftIsLive
+            ? lastCompletedDraftSeason ?? currentSeasonNum
+            : expirationYear ?? currentSeasonNum;
+
         // Keeper count for THIS team in the last completed draft (drives F Jon deduction)
         const teamKeeperCount = keeperCountByRosterId.get(String(team.id)) || 0;
         const assignedRound  = computeAssignedRound(r.originalDraftRound, teamKeeperCount);
@@ -517,7 +534,7 @@ export default function KeeperList() {
             const res = resolveKeeperPick(
                 historicalData,
                 team.id,
-                expirationYear,
+                costLookupSeason,
                 assignedRound
             );
             pickLabel = res.label;

@@ -17,18 +17,48 @@ export function resolveKeeperPick(historicalData, ownerId, targetSeason, targetR
         return { resolved: false, label: `Round Cost: R${targetRound}` };
     }
 
-    const seasonPicks = historicalData.draftPicksBySeason[String(targetSeason)]
+    const currentDraftEntry = historicalData.draftsBySeason
+        && (historicalData.draftsBySeason[String(targetSeason)]
+            || historicalData.draftsBySeason[targetSeason]);
+    const draftStatus = currentDraftEntry?.status;
+    const draftIsLive = draftStatus && draftStatus !== 'pre_draft' && draftStatus !== 'drafting';
+
+    const rawSeasonPicks = historicalData.draftPicksBySeason[String(targetSeason)]
         || historicalData.draftPicksBySeason[targetSeason];
+
+    const effectiveSeason = (() => {
+        if (draftIsLive && Array.isArray(rawSeasonPicks) && rawSeasonPicks.length) {
+            return Number(targetSeason);
+        }
+        const seasons = Object.keys(historicalData.draftPicksBySeason)
+            .map(Number)
+            .filter(Number.isFinite)
+            .sort((a, b) => b - a);
+        for (const season of seasons) {
+            if (season >= Number(targetSeason)) continue;
+            const priorSeasonPicks = historicalData.draftPicksBySeason[String(season)]
+                || historicalData.draftPicksBySeason[season];
+            if (Array.isArray(priorSeasonPicks) && priorSeasonPicks.length) {
+                return season;
+            }
+        }
+        return Number(targetSeason);
+    })();
+
+    const seasonPicks = historicalData.draftPicksBySeason[String(effectiveSeason)]
+        || historicalData.draftPicksBySeason[effectiveSeason];
+
     if (!seasonPicks || !seasonPicks.length) {
         return { resolved: false, label: `Round Cost: R${targetRound}` };
     }
 
-    // Try to resolve owner's roster_id for the target season if ownerId is a user_id
+    // Use the effective season for roster ownership and trade lookups when the target
+    // season has not started yet and there are no fresh picks to resolve.
     let rosterIdForOwner = null;
     try {
         const rostersForSeason = historicalData.rostersBySeason
-            && (historicalData.rostersBySeason[String(targetSeason)]
-                || historicalData.rostersBySeason[targetSeason]);
+            && (historicalData.rostersBySeason[String(effectiveSeason)]
+                || historicalData.rostersBySeason[effectiveSeason]);
         if (rostersForSeason && ownerId != null) {
             // ownerId might already be a roster_id
             const asRoster = rostersForSeason.find(r => String(r.roster_id) === String(ownerId));
@@ -75,8 +105,8 @@ export function resolveKeeperPick(historicalData, ownerId, targetSeason, targetR
     // Build traded picks lookup: Map<round, Map<original_roster_id, tradedPickInfo>>
     const tradedPicksForSeason = (
         historicalData.tradedPicksBySeason
-        && (historicalData.tradedPicksBySeason[String(targetSeason)]
-            || historicalData.tradedPicksBySeason[targetSeason])
+        && (historicalData.tradedPicksBySeason[String(effectiveSeason)]
+            || historicalData.tradedPicksBySeason[effectiveSeason])
     ) || [];
     const tradedPicksLookup = new Map();
     if (Array.isArray(tradedPicksForSeason)) {
@@ -147,14 +177,14 @@ export function resolveKeeperPick(historicalData, ownerId, targetSeason, targetR
             round: targetRound,
             pick_in_round: pickInRound,
             pick_no: pickNo,
-            label: `R${targetRound} • Pick ${pickInRound || pickNo || '—'}`,
+            label: `R${targetRound}`,
         };
     }
 
-    // Per rules: if owner doesn't have the assigned round pick, cost is exactly -1 round.
-    // Check ONE round earlier only — do not walk all the way back.
-    if (targetRound > 1) {
-        const fallbackRound = targetRound - 1;
+    // If the owner does not have the assigned round pick, keep stepping backward to the
+    // closest earlier round that they do own. This matches the league rule that keeper cost
+    // is based on the nearest available draft slot, not just a single-round decrement.
+    for (let fallbackRound = targetRound - 1; fallbackRound >= 1; fallbackRound -= 1) {
         const fallbackPick = findPickInRound(fallbackRound);
         if (fallbackPick) {
             const pickInRound = computePickInRound(fallbackPick);
@@ -164,12 +194,12 @@ export function resolveKeeperPick(historicalData, ownerId, targetSeason, targetR
                 round: fallbackRound,
                 pick_in_round: pickInRound,
                 pick_no: pickNo,
-                label: `R${fallbackRound} • Pick ${pickInRound || pickNo || '—'}`,
+                label: `R${fallbackRound}`,
             };
         }
     }
 
-    // Neither the assigned round nor one round earlier found — show round cost only
+    // Neither the assigned round nor any earlier available round was found — show round cost only
     return { resolved: false, label: `Round Cost: R${targetRound}` };
 }
 
