@@ -24,8 +24,96 @@ const posStyle = (pos) => POSITION_COLORS[pos] || POSITION_COLORS.DEF;
 // Determine how a player arrived on a roster for a given stint
 // Returns: { method: 'draft'|'trade'|'waiver'|'fa'|'keeper', label, detail }
 // ─────────────────────────────────────────────────────────────────────────────
-const computeAcquisitionMethod = (playerId, stint, historicalData, playerTrades, getTeamName, allTransactions) => {
+export const isActiveTransaction = (tx) => {
+    if (!tx) return false;
+
+    const status = String(tx.status || '').trim().toLowerCase();
+    const explicitVeto = tx?.metadata?.vetoed === true || tx?.metadata?.veto === true;
+
+    if (['failed', 'vetoed', 'cancelled', 'canceled', 'reverted', 'void'].includes(status)) return false;
+    if (explicitVeto) return false;
+
+    return true;
+};
+
+export const normalizeTransactionSeason = (tx) => {
+    if (!tx) return null;
+
+    if (tx.season != null && tx.season !== '') return Number(tx.season);
+    if (tx.year != null && tx.year !== '') return Number(tx.year);
+    if (tx.created) {
+        const createdDate = new Date(tx.created);
+        if (!Number.isNaN(createdDate.getTime())) return createdDate.getFullYear();
+    }
+    return null;
+};
+
+export const resolveOwnerIdForRosterId = (historicalData, rosterId, season) => {
+    if (rosterId == null || !historicalData?.rostersBySeason) return null;
+    const normalizedRosterId = String(rosterId);
+    const relevantSeasons = [];
+
+    const normalizedSeason = season == null || season === '' ? null : String(season);
+    if (normalizedSeason) relevantSeasons.push(normalizedSeason);
+    Object.keys(historicalData.rostersBySeason)
+        .filter(key => !(normalizedSeason && String(key) === normalizedSeason))
+        .forEach(key => relevantSeasons.push(String(key)));
+
+    for (const seasonKey of relevantSeasons) {
+        const roster = (historicalData.rostersBySeason?.[seasonKey] || []).find(r => String(r.roster_id) === normalizedRosterId);
+        if (roster && roster.owner_id != null) return String(roster.owner_id);
+    }
+
+    return null;
+};
+
+export const dedupeTradeRecords = (trades = []) => {
+    const seen = new Map();
+
+    for (const trade of trades || []) {
+        if (!trade) continue;
+
+        const tradeId = trade.transactionId || trade.transaction_id || trade.id || null;
+        const signature = tradeId
+            ? `id:${String(tradeId)}`
+            : JSON.stringify({
+                season: trade.season,
+                week: trade.week,
+                created: trade.created,
+                fromTeam: trade.fromTeam,
+                toTeam: trade.toTeam,
+                rosterIds: Array.isArray(trade.rosterIds) ? trade.rosterIds.slice().sort() : [],
+                adds: (trade.adds || []).map(p => String(p?.playerId || p?.id || '')).sort(),
+                drops: (trade.drops || []).map(p => String(p?.playerId || p?.id || '')).sort(),
+            });
+
+        if (!seen.has(signature)) {
+            seen.set(signature, trade);
+        }
+    }
+
+    return Array.from(seen.values()).sort((a, b) => {
+        const seasonA = Number(a?.season ?? 0);
+        const seasonB = Number(b?.season ?? 0);
+        if (seasonA !== seasonB) return seasonB - seasonA;
+        return Number(b?.week ?? 0) - Number(a?.week ?? 0);
+    });
+};
+
+export const computeAcquisitionMethod = (playerId, stint, historicalData, playerTrades, getTeamName, allTransactions) => {
     const { season, rosterId, startWeek } = stint;
+
+    const findRosterByOwnerKey = (ownerKey) => {
+        if (ownerKey == null) return null;
+        const key = String(ownerKey);
+        const rostersForSeason = historicalData?.rostersBySeason?.[season] || [];
+        return rostersForSeason.find(r =>
+            String(r.roster_id) === key ||
+            String(r.owner_id) === key ||
+            String(r.user_id) === key ||
+            String(r.id) === key
+        ) || null;
+    };
 
     // ── 1. Check if player was DRAFTED onto this roster this season ───────────
     const seasonDraftPicks = historicalData?.draftPicksBySeason?.[season] || [];
@@ -33,9 +121,7 @@ const computeAcquisitionMethod = (playerId, stint, historicalData, playerTrades,
         String(p.player_id) === String(playerId) && !p.is_keeper
     );
     if (draftPick) {
-        const draftRoster = historicalData?.rostersBySeason?.[season]?.find(r =>
-            String(r.owner_id) === String(draftPick.picked_by)
-        );
+        const draftRoster = findRosterByOwnerKey(draftPick.picked_by ?? draftPick.roster_id ?? draftPick.owner_id);
         if (draftRoster && String(draftRoster.roster_id) === String(rosterId)) {
             const round = draftPick.round || Math.ceil((draftPick.pick_no || 1) / 12);
             const pickInRound = draftPick.draft_slot || (((draftPick.pick_no || 1) - 1) % 12) + 1;
@@ -53,9 +139,7 @@ const computeAcquisitionMethod = (playerId, stint, historicalData, playerTrades,
         String(p.player_id) === String(playerId) && p.is_keeper
     );
     if (keeperPick) {
-        const keeperRoster = historicalData?.rostersBySeason?.[season]?.find(r =>
-            String(r.owner_id) === String(keeperPick.picked_by)
-        );
+        const keeperRoster = findRosterByOwnerKey(keeperPick.picked_by ?? keeperPick.roster_id ?? keeperPick.owner_id);
         if (keeperRoster && String(keeperRoster.roster_id) === String(rosterId)) {
             const round = keeperPick.round || Math.ceil((keeperPick.pick_no || 1) / 12);
             return {
@@ -67,51 +151,8 @@ const computeAcquisitionMethod = (playerId, stint, historicalData, playerTrades,
         }
     }
 
-    // ── 2b. Detect KEEPER disguised as FA (2022/2023 style) ──────────────────
-    // In leagues where keepers are added via free agency rather than the draft,
-    // a player present from Week 1 with an FA/waiver transaction that has
-    // leg=0 or null (preseason/offseason window) is almost certainly a keeper,
-    // not a true in-season pickup. A real Week 1 waiver pickup has leg >= 1.
-    if (allTransactions && startWeek <= 2) {
-        const keeperFaTxs = (allTransactions || [])
-            .filter(tx =>
-                (tx.type === 'waiver' || tx.type === 'free_agent') &&
-                String(tx.season) === String(season) &&
-                tx.adds &&
-                String(playerId) in tx.adds
-            )
-            .map(tx => {
-                const addEntry = tx.adds[String(playerId)];
-                const rId = addEntry && typeof addEntry === 'object'
-                    ? addEntry.roster_id
-                    : addEntry;
-                return { ...tx, resolvedRosterId: String(rId) };
-            })
-            .filter(tx => tx.resolvedRosterId === String(rosterId));
-
-        // Preseason FA add: leg is 0, null/undefined, OR created before Sep 1
-        const preseasonAdd = keeperFaTxs.find(tx => {
-            const txWeek = tx.leg != null ? Number(tx.leg) : null;
-            if (txWeek === 0 || txWeek === null) return true;
-            if (tx.created) {
-                const created = new Date(tx.created);
-                const seasonStart = new Date(`${season}-09-01`);
-                if (created < seasonStart) return true;
-            }
-            return false;
-        });
-
-        if (preseasonAdd) {
-            return {
-                method: 'keeper',
-                label: 'Kept',
-                detail: 'Keeper (pre-season FA)',
-                icon: '🔒',
-            };
-        }
-    }
-
-    // ── 3. Check TRADE — find a trade that delivered this player to this roster ─
+    // ── 2b. Check any trade that landed the player on this roster before taking
+    // the early-season carryover fallback. A valid week-1 or week-2 trade should win. ─
     const inboundTrade = (playerTrades || [])
         .filter(tr =>
             String(tr.season) === String(season) &&
@@ -145,10 +186,116 @@ const computeAcquisitionMethod = (playerId, stint, historicalData, playerTrades,
         };
     }
 
+    // ── 2c. Startup roster setup (manual Yahoo/Sleeper import before draft) takes precedence over
+    // carryover/FA fallback when the player was intentionally placed on the roster before the season begins.
+    if (startWeek <= 2) {
+        const startupCommissionerAdd = (allTransactions || [])
+            .filter(isActiveTransaction)
+            .filter(tx =>
+                (tx.type === 'commissioner' || tx.creator === 'commissioner') &&
+                String(normalizeTransactionSeason(tx) ?? '') === String(season) &&
+                tx.adds &&
+                String(playerId) in tx.adds
+            )
+            .map(tx => {
+                const addEntry = tx.adds[String(playerId)];
+                const rId = addEntry && typeof addEntry === 'object' ? addEntry.roster_id : addEntry;
+                return { ...tx, resolvedRosterId: String(rId) };
+            })
+            .find(tx => {
+                if (String(tx.resolvedRosterId || '') !== String(rosterId)) return false;
+                if (tx.leg != null && Number(tx.leg) <= 0) return true;
+                if (tx.created) {
+                    const created = new Date(tx.created);
+                    const seasonStart = new Date(`${season}-09-01T00:00:00Z`);
+                    if (!Number.isNaN(created.getTime()) && created < seasonStart) return true;
+                }
+                return false;
+            });
+
+        if (startupCommissionerAdd) {
+            return {
+                method: 'keeper',
+                label: 'Kept',
+                detail: 'Pre-draft roster setup',
+                icon: '🔒',
+            };
+        }
+
+        const rosterForSeason = historicalData?.rostersBySeason?.[season]?.find(r => String(r.roster_id) === String(rosterId));
+        const ownerId = rosterForSeason?.owner_id ? String(rosterForSeason.owner_id) : null;
+
+        if (ownerId && historicalData?.rostersBySeason) {
+            const priorSeasons = Object.keys(historicalData.rostersBySeason)
+                .map(Number)
+                .filter(s => s < Number(season))
+                .sort((a, b) => b - a);
+
+            const hadPriorSeasonCarryover = priorSeasons.some(priorSeason => {
+                const priorRoster = (historicalData.rostersBySeason?.[String(priorSeason)] || []).find(r => String(r.owner_id) === String(ownerId));
+                if (!priorRoster || !Array.isArray(priorRoster.players)) return false;
+                return priorRoster.players.some(pid => String(pid) === String(playerId));
+            });
+
+            if (hadPriorSeasonCarryover) {
+                return {
+                    method: 'keeper',
+                    label: 'Kept',
+                    detail: 'Prior season carryover',
+                    icon: '🔒',
+                };
+            }
+        }
+
+        // In leagues where keepers are added via free agency rather than the draft,
+        // a player present from Week 1 with an FA/waiver transaction that has
+        // leg=0 or null (preseason/offseason window) is almost certainly a keeper,
+        // not a true in-season pickup. A real Week 1 waiver pickup has leg >= 1.
+        if (allTransactions) {
+            const keeperFaTxs = (allTransactions || [])
+                .filter(isActiveTransaction)
+                .filter(tx =>
+                    (tx.type === 'waiver' || tx.type === 'free_agent') &&
+                    String(normalizeTransactionSeason(tx) ?? '') === String(season) &&
+                    tx.adds &&
+                    String(playerId) in tx.adds
+                )
+                .map(tx => {
+                    const addEntry = tx.adds[String(playerId)];
+                    const rId = addEntry && typeof addEntry === 'object'
+                        ? addEntry.roster_id
+                        : addEntry;
+                    return { ...tx, resolvedRosterId: String(rId) };
+                })
+                .filter(tx => tx.resolvedRosterId === String(rosterId));
+
+            const preseasonAdd = keeperFaTxs.find(tx => {
+                const txWeek = tx.leg != null ? Number(tx.leg) : null;
+                if (txWeek === 0 || txWeek === null) return true;
+                if (tx.created) {
+                    const created = new Date(tx.created);
+                    const seasonStart = new Date(`${season}-09-01`);
+                    if (created < seasonStart) return true;
+                }
+                return false;
+            });
+
+            if (preseasonAdd) {
+                return {
+                    method: 'keeper',
+                    label: 'Kept',
+                    detail: 'Keeper (pre-season FA)',
+                    icon: '🔒',
+                };
+            }
+        }
+    }
+
     // ── 4. FA / Waivers — try to detect the drop week from transactions ─────────
     let dropDetail = null;
     if (allTransactions && stint.endWeek) {
         const dropTx = (allTransactions || [])
+            .filter(isActiveTransaction)
             .filter(tx =>
                 (tx.type === 'waiver' || tx.type === 'free_agent') &&
                 String(tx.season) === String(season) &&
@@ -199,7 +346,7 @@ const fetchLeagueMatchupsForWeek = async (leagueId, week) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // Compute stints (week-by-week tracking)
 // ─────────────────────────────────────────────────────────────────────────────
-const computePlayerStints = (playerId, historicalData, leagueData, nflPlayers) => {
+const computePlayerStints = (playerId, historicalData, leagueData, nflPlayers, allTransactions = []) => {
     if (!historicalData?.matchupsBySeason) return [];
     const playerInfo = nflPlayers?.[playerId];
     const validPositions = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
@@ -208,18 +355,100 @@ const computePlayerStints = (playerId, historicalData, leagueData, nflPlayers) =
     const seasons = Object.keys(historicalData.matchupsBySeason).sort((a, b) => Number(a) - Number(b));
     const stints = [];
 
+    const resolveTxRosterId = (value) => {
+        if (value == null) return null;
+        if (typeof value === 'object') {
+            return String(value.roster_id ?? value.owner_id ?? value.user_id ?? value.id ?? '');
+        }
+        return String(value);
+    };
+
+    const transactionStintsBySeason = new Map();
+    const activeTx = (allTransactions || []).filter(isActiveTransaction);
+
+    activeTx.forEach(tx => {
+        const season = normalizeTransactionSeason(tx);
+        if (season == null) return;
+        const adds = tx.adds || {};
+        const drops = tx.drops || {};
+        const addEntry = adds[String(playerId)];
+        const dropEntry = drops[String(playerId)];
+        const addRosterId = resolveTxRosterId(addEntry);
+        const dropRosterId = resolveTxRosterId(dropEntry);
+        const txWeek = Number(tx.leg ?? tx.week ?? 1) || 1;
+
+        if (addRosterId) {
+            if (!transactionStintsBySeason.has(season)) transactionStintsBySeason.set(season, []);
+            transactionStintsBySeason.get(season).push({
+                type: 'add', rosterId: String(addRosterId), week: txWeek, created: tx.created || 0,
+            });
+        }
+
+        if (dropRosterId) {
+            if (!transactionStintsBySeason.has(season)) transactionStintsBySeason.set(season, []);
+            transactionStintsBySeason.get(season).push({
+                type: 'drop', rosterId: String(dropRosterId), week: txWeek, created: tx.created || 0,
+            });
+        }
+    });
+
     seasons.forEach(season => {
+        const seasonTxEvents = (transactionStintsBySeason.get(String(season)) || []).sort((a, b) => {
+            if (a.week !== b.week) return Number(a.week) - Number(b.week);
+            return Number(a.created || 0) - Number(b.created || 0);
+        });
+
+        const txWindows = [];
+        let currentTx = null;
+        seasonTxEvents.forEach(event => {
+            if (event.type === 'add') {
+                if (currentTx && currentTx.rosterId !== event.rosterId) {
+                    txWindows.push({ season, rosterId: currentTx.rosterId, startWeek: currentTx.startWeek, endWeek: Math.max(1, event.week - 1), weeks: [] });
+                    currentTx = { rosterId: event.rosterId, startWeek: event.week };
+                } else if (!currentTx) {
+                    currentTx = { rosterId: event.rosterId, startWeek: event.week };
+                }
+            }
+            if (event.type === 'drop') {
+                if (currentTx && currentTx.rosterId === event.rosterId) {
+                    txWindows.push({ season, rosterId: currentTx.rosterId, startWeek: currentTx.startWeek, endWeek: Math.max(currentTx.startWeek, event.week), weeks: [] });
+                    currentTx = null;
+                }
+            }
+        });
+        if (currentTx) {
+            txWindows.push({ season, rosterId: currentTx.rosterId, startWeek: currentTx.startWeek, endWeek: 17, weeks: [] });
+        }
+
+        const transactionWeekMap = new Map();
+        txWindows.forEach(win => {
+            for (let w = win.startWeek; w <= Math.min(win.endWeek, 18); w++) {
+                transactionWeekMap.set(w, { rosterId: String(win.rosterId), season });
+            }
+        });
+
         const matchups = historicalData.matchupsBySeason[season] || [];
         const weekOwnershipMap = new Map();
 
         matchups.forEach(matchup => {
             const week = Number(matchup.week);
+            if (weekOwnershipMap.has(week) && transactionWeekMap.has(week)) {
+                const txRosterId = transactionWeekMap.get(week)?.rosterId;
+                if (txRosterId) weekOwnershipMap.set(week, { rosterId: String(txRosterId), teamPlayers: matchup.team1_players || matchup.team2_players });
+                return;
+            }
             if (matchup.team1_players?.players_points && playerId in matchup.team1_players.players_points) {
                 weekOwnershipMap.set(week, { rosterId: String(matchup.team1_roster_id), teamPlayers: matchup.team1_players });
             } else if (matchup.team2_players?.players_points && playerId in matchup.team2_players.players_points) {
                 weekOwnershipMap.set(week, { rosterId: String(matchup.team2_roster_id), teamPlayers: matchup.team2_players });
             }
         });
+
+        if (transactionWeekMap.size > 0) {
+            transactionWeekMap.forEach((value, week) => {
+                if (!weekOwnershipMap.has(week)) weekOwnershipMap.set(week, value);
+            });
+        }
 
         if (weekOwnershipMap.size === 0) return;
         const sortedWeeks = Array.from(weekOwnershipMap.keys()).sort((a, b) => a - b);
@@ -287,6 +516,32 @@ const StatBox = ({ label, value, accent }) => (
         <div className="text-[10px] text-gray-500 uppercase tracking-widest mt-1">{label}</div>
     </div>
 );
+
+const RecordCard = ({ title, player, value, onSelectPlayer, formatValue, accent }) => {
+    const resolvedPlayer = player || null;
+    const name = resolvedPlayer?.full_name || resolvedPlayer?.first_name || resolvedPlayer?.last_name
+        ? `${resolvedPlayer?.first_name || ''} ${resolvedPlayer?.last_name || ''}`.trim() || resolvedPlayer?.full_name
+        : '—';
+    const id = resolvedPlayer?.player_id || resolvedPlayer?.id || null;
+    const position = resolvedPlayer?.position || '—';
+
+    return (
+        <button
+            onClick={() => id && onSelectPlayer?.({ id, name, position, team: resolvedPlayer?.team || 'FA' })}
+            disabled={!id}
+            className={`w-full text-left rounded-2xl border border-white/10 bg-gradient-to-br ${accent || 'from-blue-500/10 to-indigo-500/10'} p-4 transition-all hover:border-white/20 hover:bg-white/5 ${!id ? 'opacity-60 cursor-default' : 'cursor-pointer'}`}>
+            <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{title}</div>
+            <div className="mt-3 flex items-center gap-3 min-w-0">
+                {id ? <PlayerAvatar playerId={id} size="md" /> : <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10" />}
+                <div className="min-w-0 flex-1">
+                    <div className="text-sm font-bold text-white truncate">{name}</div>
+                    <div className="text-[10px] text-gray-500 truncate">{position}</div>
+                </div>
+            </div>
+            <div className="mt-4 text-2xl font-black text-white tabular-nums">{formatValue ? formatValue(value) : value}</div>
+        </button>
+    );
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Compact acquisition receipt
@@ -650,84 +905,86 @@ const PlayerHistory = () => {
     const [selectedPlayer, setSelectedPlayer] = useState(null);
     const [playerDetail, setPlayerDetail] = useState(null);
     const [detailLoading, setDetailLoading] = useState(false);
-    const [journeymen, setJourneymen] = useState([]);
     const [activeTab, setActiveTab] = useState('search');
     const [allTransactions, setAllTransactions] = useState([]);
+    const [playerDirectoryFilter, setPlayerDirectoryFilter] = useState('All');
+    const [playerDirectorySort, setPlayerDirectorySort] = useState({ key: 'totalPoints', direction: 'desc' });
     const [detailTab, setDetailTab] = useState('history');
     const inputRef = useRef(null);
     const leagueTxCache = useRef(new Map());
 
-    // ── Load all historical transactions (including week 0 for keeper FA detection) ──
-    useEffect(() => {
-        (async () => {
-            try {
-                if (!historicalData?.rostersBySeason) {
-                    setAllTransactions(Array.isArray(transactions) ? transactions : []);
-                    return;
-                }
-
-                const CACHE_EXPIRY_MS = 6 * 60 * 60 * 1000;
-                let leagueFetchedTransactions = [];
-
-                const seasonsToFetch = Object.keys(historicalData.leaguesMetadataBySeason || {});
-                for (const season of seasonsToFetch) {
-                    const leagueMeta = historicalData.leaguesMetadataBySeason?.[String(season)];
-                    const leagueId = leagueMeta?.league_id || leagueMeta?.leagueId || leagueMeta?.id || null;
-                    if (!leagueId) continue;
-
-                    const cached = leagueTxCache.current.get(leagueId);
-                    if (cached && (Date.now() - cached.timestamp < CACHE_EXPIRY_MS)) {
-                        leagueFetchedTransactions.push(...cached.transactions);
-                        continue;
-                    }
-
-                    // ── Fetch weeks 0–18: week 0 captures preseason keeper FA adds ──
-                    const weekPromises = [];
-                    for (let w = 0; w <= 18; w++) {
-                        weekPromises.push(
-                            fetchTransactionsForWeek(leagueId, w).catch(() => [])
-                        );
-                    }
-                    const results = await Promise.all(weekPromises);
-                    const seasonTx = results.flat()
-                        .map(tx => { if (tx && !tx.season) tx.season = season; return tx; })
-                        .filter(Boolean);
-                    leagueTxCache.current.set(leagueId, { timestamp: Date.now(), transactions: seasonTx });
-                    leagueFetchedTransactions.push(...seasonTx);
-                }
-
-                const contextTx = Array.isArray(transactions) ? transactions : [];
-                const allTx = [...leagueFetchedTransactions, ...contextTx];
-                const txMap = new Map();
-                allTx.forEach(tx => {
-                    const key = tx.transaction_id || JSON.stringify(tx);
-                    if (!txMap.has(key)) txMap.set(key, tx);
-                });
-                setAllTransactions(Array.from(txMap.values()));
-            } catch {
+    const loadHistoricalTransactions = useCallback(async () => {
+        try {
+            if (!historicalData?.rostersBySeason) {
                 setAllTransactions(Array.isArray(transactions) ? transactions : []);
+                return Array.isArray(transactions) ? transactions : [];
             }
-        })();
+
+            const CACHE_EXPIRY_MS = 6 * 60 * 60 * 1000;
+            let leagueFetchedTransactions = [];
+
+            const seasonsToFetch = Object.keys(historicalData.leaguesMetadataBySeason || {});
+            for (const season of seasonsToFetch) {
+                const leagueMeta = historicalData.leaguesMetadataBySeason?.[String(season)];
+                const leagueId = leagueMeta?.league_id || leagueMeta?.leagueId || leagueMeta?.id || null;
+                if (!leagueId) continue;
+
+                const cached = leagueTxCache.current.get(leagueId);
+                if (cached && (Date.now() - cached.timestamp < CACHE_EXPIRY_MS)) {
+                    leagueFetchedTransactions.push(...cached.transactions);
+                    continue;
+                }
+
+                const weekPromises = [];
+                for (let w = 0; w <= 18; w++) {
+                    weekPromises.push(
+                        fetchTransactionsForWeek(leagueId, w).catch(() => [])
+                    );
+                }
+                const results = await Promise.all(weekPromises);
+                const seasonTx = results.flat()
+                    .map(tx => { if (tx && !tx.season) tx.season = season; return tx; })
+                    .filter(Boolean);
+                leagueTxCache.current.set(leagueId, { timestamp: Date.now(), transactions: seasonTx });
+                leagueFetchedTransactions.push(...seasonTx);
+            }
+
+            const contextTx = Array.isArray(transactions) ? transactions : [];
+            const allTx = [...leagueFetchedTransactions, ...contextTx];
+            const txMap = new Map();
+            allTx.forEach(tx => {
+                const key = tx.transaction_id || JSON.stringify(tx);
+                if (!txMap.has(key)) txMap.set(key, tx);
+            });
+            const mergedTx = Array.from(txMap.values()).filter(isActiveTransaction);
+            setAllTransactions(mergedTx);
+            return mergedTx;
+        } catch {
+            const fallback = Array.isArray(transactions) ? transactions : [];
+            setAllTransactions(fallback);
+            return fallback;
+        }
     }, [historicalData, transactions]);
+
+    useEffect(() => {
+        if (!selectedPlayer) {
+            setAllTransactions(Array.isArray(transactions) ? transactions : []);
+            return;
+        }
+
+        loadHistoricalTransactions();
+    }, [selectedPlayer, loadHistoricalTransactions, transactions]);
 
     // ── Build player trade map ────────────────────────────────────────────────
     const playerTradeMap = useMemo(() => {
         const map = new Map();
         const playerSeenTxIds = {};
 
-        const getOwnerIdForRoster = (rosterId, year) => {
-            if (!historicalData?.rostersBySeason) return null;
-            const tryYears = year ? [String(year), ...Object.keys(historicalData.rostersBySeason)] : Object.keys(historicalData.rostersBySeason);
-            for (const y of tryYears) {
-                const found = (historicalData.rostersBySeason[y] || []).find(r => String(r.roster_id) === String(rosterId));
-                if (found) return String(found.owner_id);
-            }
-            return null;
-        };
+        const getOwnerIdForRoster = (rosterId, year) => resolveOwnerIdForRosterId(historicalData, rosterId, year);
 
         allTransactions.forEach(tx => {
+            if (!isActiveTransaction(tx)) return;
             if (tx.type !== 'trade') return;
-            if (tx.status && String(tx.status).toLowerCase() === 'failed') return;
 
             const adds = tx.adds || {};
             const drops = tx.drops || {};
@@ -754,8 +1011,9 @@ const PlayerHistory = () => {
                     .map(id => { const d = adds[id]; return d && typeof d === 'object' ? d.roster_id : d; })
                     .find(id => id != null && String(id) !== String(dropRosterId));
 
-                const fromOwnerId = fromRosterId ? getOwnerIdForRoster(fromRosterId, tx.season) : null;
-                const toOwnerId = toRosterId ? getOwnerIdForRoster(toRosterId, tx.season) : null;
+                const txSeason = normalizeTransactionSeason(tx);
+                const fromOwnerId = fromRosterId ? getOwnerIdForRoster(fromRosterId, txSeason) : null;
+                const toOwnerId = toRosterId ? getOwnerIdForRoster(toRosterId, txSeason) : null;
 
                 const addsArray = Object.keys(adds)
                     .map(id => { const d = adds[id]; return { playerId: id, rosterId: d && typeof d === 'object' ? d.roster_id : d, ...(nflPlayers?.[id] || {}) }; })
@@ -770,21 +1028,87 @@ const PlayerHistory = () => {
                     type: addEntry ? 'received' : 'sent',
                     week: tx.leg,
                     created: tx.created,
-                    season: tx.season,
+                    season: txSeason,
                     adds: addsArray,
                     drops: dropsArray,
                     fromRosterId, toRosterId,
-                    fromTeam: fromOwnerId ? getTeamName(fromOwnerId, tx.season) : null,
-                    toTeam: toOwnerId ? getTeamName(toOwnerId, tx.season) : null,
+                    fromTeam: fromOwnerId ? getTeamName(fromOwnerId, txSeason) : null,
+                    toTeam: toOwnerId ? getTeamName(toOwnerId, txSeason) : null,
                     rosterIds: tx.roster_ids || [],
                 });
             });
         });
 
+        for (const [pidStr, txList] of map.entries()) {
+            map.set(pidStr, dedupeTradeRecords(txList));
+        }
+
         return map;
     }, [allTransactions, nflPlayers, historicalData, getTeamName]);
 
-    // ── Build search index ────────────────────────────────────────────────────
+    // ── Record cards for the landing view ─────────────────────────────────────
+    const playerRecords = useMemo(() => {
+        if (!historicalData?.matchupsBySeason || !nflPlayers) {
+            return null;
+        }
+
+        const playerStats = new Map();
+        Object.entries(historicalData.matchupsBySeason || {}).forEach(([season, matchups]) => {
+            (matchups || []).forEach(matchup => {
+                const matchupEntries = [
+                    { players: matchup.team1_players },
+                    { players: matchup.team2_players },
+                ];
+
+                matchupEntries.forEach(({ players }) => {
+                    if (!players?.players_points) return;
+                    const starters = new Set(players.starters || []);
+                    Object.entries(players.players_points).forEach(([pid, points]) => {
+                        const playerInfo = nflPlayers[String(pid)];
+                        if (!playerInfo || !['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].includes(playerInfo.position)) return;
+
+                        const numPoints = Number(points) || 0;
+                        const current = playerStats.get(String(pid)) || {
+                            totalPoints: 0,
+                            startedPoints: 0,
+                            startedWeeks: 0,
+                            bestSingleWeek: 0,
+                        };
+
+                        current.totalPoints += numPoints;
+                        if (starters.has(String(pid))) {
+                            current.startedPoints += numPoints;
+                            current.startedWeeks += 1;
+                        }
+                        current.bestSingleWeek = Math.max(current.bestSingleWeek, numPoints);
+                        playerStats.set(String(pid), current);
+                    });
+                });
+            });
+        });
+
+        const topScorerEntry = [...playerStats.entries()]
+            .filter(([, stats]) => stats.totalPoints > 0)
+            .sort((a, b) => b[1].totalPoints - a[1].totalPoints)[0];
+
+        const bestAvgStartedEntry = [...playerStats.entries()]
+            .filter(([, stats]) => stats.startedWeeks >= 10)
+            .sort((a, b) => (b[1].startedPoints / b[1].startedWeeks) - (a[1].startedPoints / a[1].startedWeeks))[0];
+
+        const bestSingleWeekEntry = [...playerStats.entries()]
+            .filter(([, stats]) => stats.bestSingleWeek > 0)
+            .sort((a, b) => b[1].bestSingleWeek - a[1].bestSingleWeek)[0];
+
+        const mostTradedEntry = [...(playerTradeMap || new Map()).entries()].sort((a, b) => b[1].length - a[1].length)[0];
+
+        return {
+            topScorer: topScorerEntry ? { playerId: topScorerEntry[0], value: topScorerEntry[1].totalPoints } : null,
+            bestAvgWeek: bestAvgStartedEntry ? { playerId: bestAvgStartedEntry[0], value: bestAvgStartedEntry[1].startedPoints / bestAvgStartedEntry[1].startedWeeks } : null,
+            bestSingleWeek: bestSingleWeekEntry ? { playerId: bestSingleWeekEntry[0], value: bestSingleWeekEntry[1].bestSingleWeek } : null,
+            mostTraded: mostTradedEntry ? { playerId: mostTradedEntry[0], value: mostTradedEntry[1].length } : null,
+        };
+    }, [historicalData, nflPlayers, playerTradeMap]);
+
     const playerIndex = useMemo(() => {
         if (!nflPlayers) return [];
         return Object.entries(nflPlayers)
@@ -851,22 +1175,123 @@ const PlayerHistory = () => {
         return { teamCount: uniqueTeams.size, stintCount: stintCombos.size, lastOwner, lastSeason };
     }, [historicalData]);
 
-    // ── Journeymen ────────────────────────────────────────────────────────────
-    useEffect(() => {
-        if (!historicalData?.matchupsBySeason || !nflPlayers) return;
-        const results = [];
-        Object.entries(nflPlayers).forEach(([pid, playerInfo]) => {
-            if (!playerInfo?.full_name) return;
-            const counts = getPlayerStintAndTeamCounts(pid, playerInfo);
-            if (!counts || counts.teamCount < 3) return;
-            results.push({
-                id: pid, name: playerInfo.full_name, position: playerInfo.position,
-                team: playerInfo.team || 'FA', ...counts,
+    // ── Player Directory data ────────────────────────────────────────────────
+    const playerDirectoryData = useMemo(() => {
+        if (!historicalData?.matchupsBySeason || !nflPlayers) return [];
+
+        const stats = new Map();
+        const validPositions = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
+
+        Object.entries(historicalData.matchupsBySeason).forEach(([season, matchups]) => {
+            (matchups || []).forEach(matchup => {
+                [
+                    { players: matchup.team1_players, rosterId: matchup.team1_roster_id },
+                    { players: matchup.team2_players, rosterId: matchup.team2_roster_id },
+                ].forEach(({ players }) => {
+                    if (!players?.players_points) return;
+                    const starters = new Set(players.starters || []);
+
+                    Object.entries(players.players_points).forEach(([pid, points]) => {
+                        const playerInfo = nflPlayers[String(pid)];
+                        if (!playerInfo || !validPositions.includes(playerInfo.position)) return;
+
+                        const current = stats.get(String(pid)) || {
+                            id: String(pid),
+                            name: playerInfo.full_name || `${playerInfo.first_name || ''} ${playerInfo.last_name || ''}`.trim(),
+                            position: playerInfo.position,
+                            team: playerInfo.team || 'FA',
+                            totalPoints: 0,
+                            startedPoints: 0,
+                            starts: 0,
+                            bestWeek: 0,
+                        };
+
+                        const value = Number(points) || 0;
+                        current.totalPoints += value;
+                        current.bestWeek = Math.max(current.bestWeek, value);
+
+                        if (starters.has(String(pid))) {
+                            current.startedPoints += value;
+                            current.starts += 1;
+                        }
+
+                        stats.set(String(pid), current);
+                    });
+                });
             });
         });
-        results.sort((a, b) => b.stintCount - a.stintCount || b.teamCount - a.teamCount);
-        setJourneymen(results.slice(0, 12));
-    }, [historicalData, nflPlayers, getPlayerStintAndTeamCounts]);
+
+        const ranked = Array.from(stats.values())
+            .map(player => ({
+                ...player,
+                avgPerWeek: player.starts > 0 ? player.startedPoints / player.starts : 0,
+            }))
+            .sort((a, b) => b.totalPoints - a.totalPoints);
+
+        const byPosition = new Map();
+        ranked.forEach(player => {
+            if (!byPosition.has(player.position)) byPosition.set(player.position, []);
+            byPosition.get(player.position).push(player);
+        });
+
+        const positionRankMap = new Map();
+        byPosition.forEach((players, position) => {
+            players.forEach((player, idx) => {
+                positionRankMap.set(player.id, {
+                    rank: idx + 1,
+                    label: `#${idx + 1} ${position}`,
+                    position,
+                });
+            });
+        });
+
+        return ranked.map(player => ({
+            ...player,
+            positionRank: positionRankMap.get(player.id)?.rank ?? null,
+            positionRankLabel: positionRankMap.get(player.id)?.label ?? null,
+        }));
+    }, [historicalData, nflPlayers]);
+
+    const directoryColumns = [
+        { key: 'rank', label: 'Rank' },
+        { key: 'player', label: 'Player' },
+        { key: 'totalPoints', label: 'Total Pts' },
+        { key: 'avgPerWeek', label: 'Avg/Wk' },
+        { key: 'bestWeek', label: 'Best Wk' },
+        { key: 'starts', label: 'Starts' },
+    ];
+
+    const sortedPlayerDirectory = useMemo(() => {
+        const filtered = playerDirectoryFilter === 'All'
+            ? playerDirectoryData
+            : playerDirectoryData.filter(player => player.position === playerDirectoryFilter);
+
+        const { key, direction } = playerDirectorySort;
+        return [...filtered].sort((a, b) => {
+            let aVal = a[key];
+            let bVal = b[key];
+
+            if (key === 'player') {
+                aVal = a.name.toLowerCase();
+                bVal = b.name.toLowerCase();
+            }
+
+            if (typeof aVal === 'string' && typeof bVal === 'string') {
+                return direction === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+            }
+
+            return direction === 'asc' ? (aVal || 0) - (bVal || 0) : (bVal || 0) - (aVal || 0);
+        });
+    }, [playerDirectoryData, playerDirectoryFilter, playerDirectorySort]);
+
+    const handleDirectorySort = (key) => {
+        setPlayerDirectorySort(prev => {
+            if (prev.key === key) {
+                return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+            }
+            return { key, direction: key === 'player' ? 'asc' : 'desc' };
+        });
+    };
 
     // ── Static leaderboard data ───────────────────────────────────────────────
     const leaderboardData = useMemo(() => {
@@ -1036,8 +1461,54 @@ const PlayerHistory = () => {
         setSelectedPlayer(player);
 
         const pid = String(player.id);
-        const rawStints = computePlayerStints(pid, historicalData, leagueData, nflPlayers);
-        const playerTrades = (playerTradeMap.get(pid) || []).sort((a, b) => {
+        const txSnapshot = await loadHistoricalTransactions();
+        const freshTransactions = Array.isArray(txSnapshot) ? txSnapshot : (Array.isArray(allTransactions) ? allTransactions : []);
+
+        const rawStints = computePlayerStints(pid, historicalData, leagueData, nflPlayers, freshTransactions);
+
+        const directPlayerTrades = (freshTransactions || [])
+            .filter(tx => isActiveTransaction(tx) && tx.type === 'trade')
+            .flatMap(tx => {
+                const adds = tx.adds || {};
+                const drops = tx.drops || {};
+                const allPlayerIds = new Set([...Object.keys(adds), ...Object.keys(drops)]);
+                if (!allPlayerIds.has(pid)) return [];
+
+                const addEntry = adds[pid];
+                const dropEntry = drops[pid];
+                const addRosterId = addEntry && typeof addEntry === 'object' ? addEntry.roster_id : addEntry;
+                const dropRosterId = dropEntry && typeof dropEntry === 'object' ? dropEntry.roster_id : dropEntry;
+
+                const fromRosterId = dropRosterId || Object.keys(drops)
+                    .map(id => { const d = drops[id]; return d && typeof d === 'object' ? d.roster_id : d; })
+                    .find(id => id != null && String(id) !== String(addRosterId));
+                const toRosterId = addRosterId || Object.keys(adds)
+                    .map(id => { const d = adds[id]; return d && typeof d === 'object' ? d.roster_id : d; })
+                    .find(id => id != null && String(id) !== String(dropRosterId));
+
+                const txSeason = normalizeTransactionSeason(tx);
+                const fromOwnerId = fromRosterId ? resolveOwnerIdForRosterId(historicalData, fromRosterId, txSeason) : null;
+                const toOwnerId = toRosterId ? resolveOwnerIdForRosterId(historicalData, toRosterId, txSeason) : null;
+
+                return [{
+                    transactionId: tx.transaction_id,
+                    type: addEntry ? 'received' : 'sent',
+                    week: tx.leg,
+                    created: tx.created,
+                    season: txSeason,
+                    adds: Object.keys(adds).map(id => ({ playerId: id, rosterId: adds[id] && typeof adds[id] === 'object' ? adds[id].roster_id : adds[id], ...(nflPlayers?.[id] || {}) })).filter(p => p.first_name || p.last_name),
+                    drops: Object.keys(drops).map(id => ({ playerId: id, rosterId: drops[id] && typeof drops[id] === 'object' ? drops[id].roster_id : drops[id], ...(nflPlayers?.[id] || {}) })).filter(p => p.first_name || p.last_name),
+                    fromRosterId, toRosterId,
+                    fromTeam: fromOwnerId ? getTeamName(fromOwnerId, txSeason) : null,
+                    toTeam: toOwnerId ? getTeamName(toOwnerId, txSeason) : null,
+                    rosterIds: tx.roster_ids || [],
+                }];
+            });
+
+        const playerTrades = dedupeTradeRecords([
+            ...(playerTradeMap.get(pid) || []),
+            ...directPlayerTrades,
+        ]).sort((a, b) => {
             if (a.season !== b.season) return Number(b.season) - Number(a.season);
             return (b.week || 0) - (a.week || 0);
         });
@@ -1091,7 +1562,7 @@ const PlayerHistory = () => {
 
             const rosterData = historicalData.rostersBySeason?.[stint.season]?.find(r => String(r.roster_id) === stint.rosterId);
             const resolvedOwnerId = rosterData?.owner_id ? String(rosterData.owner_id) : '?';
-            const acquisition = computeAcquisitionMethod(pid, { ...stint, rosterId: stint.rosterId }, historicalData, playerTrades, getTeamName, allTransactions);
+            const acquisition = computeAcquisitionMethod(pid, { ...stint, rosterId: stint.rosterId }, historicalData, playerTrades, getTeamName, freshTransactions);
             Object.assign(stint, {
                 points: totalPoints, startingPoints, starts: totalStarts,
                 wins, losses, gamesOnRoster,
@@ -1116,7 +1587,7 @@ const PlayerHistory = () => {
             trades: playerTrades, totalTrades: playerTrades.length,
         });
         setDetailLoading(false);
-    }, [historicalData, getLeagueIdForSeason, playerTradeMap, nflPlayers, getTeamName, allTransactions]);
+    }, [historicalData, getLeagueIdForSeason, playerTradeMap, nflPlayers, getTeamName, allTransactions, loadHistoricalTransactions]);
 
     const handleSelectPlayer = (player) => {
         setQuery('');
@@ -1188,6 +1659,15 @@ const PlayerHistory = () => {
                             </div>
                             <div className="flex items-center gap-3 flex-wrap text-sm text-gray-400 mb-3">
                                 <PosBadge pos={pos} />
+                                {(() => {
+                                    const rankInfo = playerDirectoryData.find(player => String(player.id) === String(pid));
+                                    if (!rankInfo?.positionRankLabel) return null;
+                                    return (
+                                        <span className="inline-flex items-center rounded-full border border-blue-500/20 bg-blue-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-blue-300">
+                                            {rankInfo.positionRankLabel}
+                                        </span>
+                                    );
+                                })()}
                                 <span className="text-gray-300 font-semibold">{nflTeam}</span>
                                 {fullPlayerInfo?.number && <span>#{fullPlayerInfo.number}</span>}
                                 {fullPlayerInfo?.college && <span><span className="text-gray-600">⌂</span> {fullPlayerInfo.college}</span>}
@@ -1523,6 +2003,43 @@ const PlayerHistory = () => {
                 ))}
             </div>
 
+            {playerRecords && (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
+                    <RecordCard
+                        title="Top Scorer (All-Time)"
+                        player={playerRecords.topScorer ? nflPlayers?.[playerRecords.topScorer.playerId] : null}
+                        value={playerRecords.topScorer?.value ?? 0}
+                        onSelectPlayer={handleSelectPlayer}
+                        accent="from-blue-500/10 to-cyan-500/10"
+                        formatValue={(v) => `${Number(v).toFixed(1)} pts`}
+                    />
+                    <RecordCard
+                        title="Best Avg/Week (Started)"
+                        player={playerRecords.bestAvgWeek ? nflPlayers?.[playerRecords.bestAvgWeek.playerId] : null}
+                        value={playerRecords.bestAvgWeek?.value ?? 0}
+                        onSelectPlayer={handleSelectPlayer}
+                        accent="from-emerald-500/10 to-teal-500/10"
+                        formatValue={(v) => `${Number(v).toFixed(1)} PPG`}
+                    />
+                    <RecordCard
+                        title="Best Single Week"
+                        player={playerRecords.bestSingleWeek ? nflPlayers?.[playerRecords.bestSingleWeek.playerId] : null}
+                        value={playerRecords.bestSingleWeek?.value ?? 0}
+                        onSelectPlayer={handleSelectPlayer}
+                        accent="from-violet-500/10 to-purple-500/10"
+                        formatValue={(v) => `${Number(v).toFixed(1)} pts`}
+                    />
+                    <RecordCard
+                        title="Most Traded"
+                        player={playerRecords.mostTraded ? nflPlayers?.[playerRecords.mostTraded.playerId] : null}
+                        value={playerRecords.mostTraded?.value ?? 0}
+                        onSelectPlayer={handleSelectPlayer}
+                        accent="from-pink-500/10 to-rose-500/10"
+                        formatValue={(v) => `${Number(v).toFixed(0)}`}
+                    />
+                </div>
+            )}
+
             {activeTab === 'leaderboard' ? (
                 <StaticLeaderboard
                     leaderboardData={leaderboardData}
@@ -1582,54 +2099,98 @@ const PlayerHistory = () => {
                         </div>
                     </section>
 
-                    {journeymen.length > 0 && (
-                        <section>
-                            <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">League Journeymen</h2>
-                            <p className="text-xs text-gray-500 mb-4">Players who have traveled around the league the most</p>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                {journeymen.map(p => {
-                                    const lastTeamName = p.lastOwner ? getTeamName(p.lastOwner, p.lastSeason) : '—';
-                                    let earliestSeason = p.lastSeason;
-                                    Object.keys(historicalData?.rostersBySeason || {}).forEach(season => {
-                                        const found = (historicalData.rostersBySeason[season] || []).some(r =>
-                                            r.owner_id === p.lastOwner && Array.isArray(r.players) && r.players.includes(p.id)
-                                        );
-                                        if (found && Number(season) < Number(earliestSeason)) earliestSeason = season;
-                                    });
-                                    return (
-                                        <button key={p.id}
-                                            onClick={() => handleSelectPlayer({ id: p.id, name: p.name, position: p.position, team: p.team })}
-                                            className="bg-gray-800/60 border border-white/8 rounded-xl p-4 text-left hover:bg-gray-700/50 hover:border-white/15 transition-all group">
-                                            <div className="flex items-start gap-3">
-                                                <PlayerAvatar playerId={p.id} size="md" />
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <span className="font-bold text-white text-sm group-hover:text-blue-300 transition-colors">{p.name}</span>
-                                                        <PosBadge pos={p.position} />
-                                                    </div>
-                                                    <div className="flex items-center gap-2 text-xs text-gray-400">
-                                                        <TeamAvatar ownerId={p.lastOwner} year={p.lastSeason} getTeamDetails={getTeamDetails} />
-                                                        <span>LAST ON: <span className="text-gray-200 font-medium">{lastTeamName}</span></span>
-                                                        <span className="text-gray-600">({earliestSeason}–{p.lastSeason})</span>
-                                                    </div>
-                                                </div>
-                                                <div className="flex gap-4 shrink-0 text-right">
-                                                    <div>
-                                                        <div className="text-xl font-bold text-white">{p.teamCount}</div>
-                                                        <div className="text-[9px] text-gray-500 uppercase tracking-widest">Teams</div>
-                                                    </div>
-                                                    <div>
-                                                        <div className="text-xl font-bold text-white">{p.stintCount}</div>
-                                                        <div className="text-[9px] text-gray-500 uppercase tracking-widest">Stints</div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </button>
-                                    );
-                                })}
+                    <section className="space-y-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">Player Directory</h2>
+                                <p className="text-xs text-gray-500">League-wide player production across all tracked seasons</p>
                             </div>
-                        </section>
-                    )}
+                            <div className="flex items-center gap-2">
+                                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Position</label>
+                                <select
+                                    value={playerDirectoryFilter}
+                                    onChange={(e) => setPlayerDirectoryFilter(e.target.value)}
+                                    className="bg-gray-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/60"
+                                >
+                                    <option value="All">All</option>
+                                    <option value="QB">QB</option>
+                                    <option value="RB">RB</option>
+                                    <option value="WR">WR</option>
+                                    <option value="TE">TE</option>
+                                    <option value="K">K</option>
+                                    <option value="DEF">DEF</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="overflow-x-auto rounded-2xl border border-white/10 bg-gray-800/60">
+                            <table className="min-w-full text-left text-sm">
+                                <thead className="bg-white/5">
+                                    <tr>
+                                        {directoryColumns.map(column => {
+                                            const isSortable = column.key !== 'rank' && column.key !== 'player';
+                                            const isActive = playerDirectorySort.key === column.key;
+                                            const arrow = !isSortable ? (column.key === 'rank' ? '↑' : '↕') : isActive ? (playerDirectorySort.direction === 'asc' ? '↑' : '↓') : '↕';
+                                            return (
+                                                <th key={column.key} className="px-3 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400 border-b border-white/10">
+                                                    {isSortable ? (
+                                                        <button
+                                                            onClick={() => handleDirectorySort(column.key)}
+                                                            className="flex items-center gap-1 text-left hover:text-white transition-colors"
+                                                        >
+                                                            <span>{column.label}</span>
+                                                            <span className="text-gray-500">{arrow}</span>
+                                                        </button>
+                                                    ) : (
+                                                        <span className="flex items-center gap-1">
+                                                            <span>{column.label}</span>
+                                                            <span className="text-gray-500">{arrow}</span>
+                                                        </span>
+                                                    )}
+                                                </th>
+                                            );
+                                        })}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {sortedPlayerDirectory.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={6} className="px-3 py-8 text-center text-sm text-gray-500">No players match this filter.</td>
+                                        </tr>
+                                    ) : (
+                                        sortedPlayerDirectory.map((player, index) => (
+                                            <tr key={player.id} className="border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors">
+                                                <td className="px-3 py-3 text-sm font-bold text-white">{index + 1}</td>
+                                                <td className="px-3 py-3">
+                                                    <button
+                                                        onClick={() => handleSelectPlayer({ id: player.id, name: player.name, position: player.position, team: player.team })}
+                                                        className="flex items-center gap-3 text-left hover:text-blue-300 transition-colors"
+                                                    >
+                                                        <PlayerAvatar playerId={player.id} size="sm" />
+                                                        <div className="min-w-0">
+                                                            <div className="font-semibold text-white truncate">{player.name}</div>
+                                                            <div className="flex items-center gap-2 text-[10px] text-gray-500 flex-wrap">
+                                                                <PosBadge pos={player.position} />
+                                                                {player.positionRankLabel && (
+                                                                    <span className="inline-flex items-center rounded-full border border-blue-500/20 bg-blue-500/10 px-2 py-0.5 font-bold uppercase tracking-widest text-blue-300">
+                                                                        {player.positionRankLabel}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </button>
+                                                </td>
+                                                <td className="px-3 py-3 text-white font-semibold tabular-nums">{player.totalPoints.toFixed(1)}</td>
+                                                <td className="px-3 py-3 text-gray-200 tabular-nums">{player.avgPerWeek.toFixed(1)}</td>
+                                                <td className="px-3 py-3 text-gray-200 tabular-nums">{player.bestWeek.toFixed(1)}</td>
+                                                <td className="px-3 py-3 text-gray-200 tabular-nums">{player.starts}</td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
                 </>
             )}
         </div>

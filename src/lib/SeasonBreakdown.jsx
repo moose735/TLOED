@@ -50,6 +50,29 @@ const Td = ({ children, align = 'left', bold }) => (
     </td>
 );
 
+export const getSelectableSeasons = (years, currentSeason, currentWeek, hasStartedByData = null) => {
+    const parsedYears = Array.from(new Set((years || [])
+        .map(year => Number(year))
+        .filter(year => Number.isFinite(year))))
+        .sort((a, b) => b - a);
+
+    if (!currentSeason || !Number.isFinite(Number(currentSeason))) {
+        return parsedYears;
+    }
+
+    const currentSeasonNum = Number(currentSeason);
+    const weekNum = Number(currentWeek);
+    const hasSeasonStarted = hasStartedByData !== null
+        ? Boolean(hasStartedByData)
+        : Number.isFinite(weekNum) && weekNum >= 1;
+
+    if (hasSeasonStarted) {
+        return parsedYears;
+    }
+
+    return parsedYears.filter(year => year !== currentSeasonNum);
+};
+
 // ─── SeasonBreakdown ─────────────────────────────────────────────────────────
 
 const SeasonBreakdown = () => {
@@ -91,15 +114,26 @@ const SeasonBreakdown = () => {
                 if (historicalData.winnersBracketBySeason) Object.keys(historicalData.winnersBracketBySeason).forEach(y => allYears.add(Number(y)));
             }
             const sortedYears = Array.from(allYears).sort((a, b) => b - a);
-            setSeasons(sortedYears);
-            if (sortedYears.length > 0) {
-                const defaultSeason = currentSeason && sortedYears.includes(Number(currentSeason))
+            const currentSeasonMatchups = historicalData?.matchupsBySeason?.[String(currentSeason)] || historicalData?.matchupsBySeason?.[Number(currentSeason)] || [];
+            const hasCurrentSeasonStarted = Array.isArray(currentSeasonMatchups)
+                ? currentSeasonMatchups.some(matchup => {
+                    const hasScore = typeof matchup?.team1_score === 'number' && !Number.isNaN(matchup.team1_score)
+                        && typeof matchup?.team2_score === 'number' && !Number.isNaN(matchup.team2_score);
+                    return hasScore || Number(matchup?.week) >= 1;
+                })
+                : false;
+            const selectableYears = getSelectableSeasons(sortedYears, currentSeason, nflState?.week, hasCurrentSeasonStarted);
+            setSeasons(selectableYears);
+            if (selectableYears.length > 0) {
+                const defaultSeason = selectableYears.includes(Number(currentSeason))
                     ? Number(currentSeason)
-                    : sortedYears[0];
+                    : selectableYears[0];
                 setSelectedSeason(defaultSeason);
+            } else {
+                setSelectedSeason(null);
             }
         }
-    }, [loading, error, historicalData, seasonalMetrics, currentSeason]);
+    }, [loading, error, historicalData, seasonalMetrics, currentSeason, nflState?.week]);
 
     useEffect(() => {
         if (selectedSeason && historicalData && seasonalMetrics[selectedSeason]) {

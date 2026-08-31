@@ -233,18 +233,6 @@ const Dashboard = () => {
         }
     };
 
-    const formatTransactionDescription = (transaction) => {
-        const { addedPlayers, droppedPlayers } = transaction;
-        if (transaction.type === 'trade') {
-            const playerCount = addedPlayers.length + droppedPlayers.length;
-            return `Trade involving ${playerCount} player${playerCount !== 1 ? 's' : ''}`;
-        }
-        if (addedPlayers.length > 0 && droppedPlayers.length > 0) return `Added ${addedPlayers[0].name}, dropped ${droppedPlayers[0].name}`;
-        else if (addedPlayers.length > 0) return `Added ${addedPlayers[0].name}`;
-        else if (droppedPlayers.length > 0) return `Dropped ${droppedPlayers[0].name}`;
-        return 'Transaction processed';
-    };
-
     if (contextLoading) {
         return (
             <div className="w-full flex items-center justify-center min-h-[200px] py-8">
@@ -273,7 +261,7 @@ const Dashboard = () => {
         const isPassed = diff <= 0;
         const isSoon = diff > 0 && diff < (1000 * 60 * 60 * 24);
 
-        const baseClass = "flex flex-col items-center justify-center rounded-xl px-4 py-3 min-w-[120px] border border-white/10 bg-gray-800";
+        const baseClass = "flex flex-col items-center justify-center rounded-2xl px-4 py-3 min-w-[120px] border border-white/10 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 shadow-[0_8px_20px_rgba(15,23,42,0.3)] ring-1 ring-white/5";
 
         if (!targetDate) return (
             <div className={baseClass}>
@@ -300,7 +288,7 @@ const Dashboard = () => {
         parts.push(`${String(seconds).padStart(2, '0')}s`);
 
         return (
-            <div className={`${baseClass} ${isSoon ? 'border-yellow-500/40 bg-yellow-900/20' : ''}`}>
+            <div className={`${baseClass} ${isSoon ? 'border-amber-400/40 bg-gradient-to-br from-amber-500/10 via-slate-900 to-slate-900 shadow-[0_0_0_1px_rgba(251,191,36,0.18),0_10px_24px_rgba(251,191,36,0.08)]' : ''}`}>
                 <span className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold mb-1">{label}</span>
                 <span className={`text-sm font-bold tabular-nums ${isSoon ? 'text-yellow-400' : 'text-white'}`}>{parts.join(' ')}</span>
             </div>
@@ -311,8 +299,8 @@ const Dashboard = () => {
     const DRAFT_DATE = useMemo(() => (DRAFT_DATE_ISO ? new Date(DRAFT_DATE_ISO) : null), [DRAFT_DATE_ISO]);
 
     // ── Shared card class ─────────────────────────────────────────────────────
-    const card = "bg-gray-800 border border-white/10 rounded-xl";
-    const cardHeader = "flex items-center gap-2 px-4 py-3 border-b border-white/10";
+    const card = "bg-slate-800/90 border border-white/10 rounded-2xl overflow-hidden shadow-[0_14px_30px_rgba(15,23,42,0.22)]";
+    const cardHeader = "flex items-center gap-2 px-4 py-3 border-b border-white/10 bg-slate-900/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]";
 
     // ── Matchup card renderer (used twice for seamless loop) ──────────────────
     const renderMatchupCard = (matchup, keyPrefix, idx) => {
@@ -432,34 +420,43 @@ const Dashboard = () => {
                 }
             `}</style>
 
-            <DashboardContainer className="max-w-full px-4 sm:px-6 lg:px-8 space-y-4 sm:space-y-6">
+            <DashboardContainer className="max-w-full px-3 sm:px-6 lg:px-8 space-y-3 sm:space-y-5">
 
-                {/* ── Page Header ──────────────────────────────────────────── */}
-                <div className="text-center pt-2 pb-1">
-                    <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">TLOED Dashboard</h1>
-                    <p className="text-sm text-gray-500 mt-1">
-                        {currentSeason ? `${currentSeason} Season` : 'Fantasy Football League'}
-                        {nflState?.week ? ` · Week ${nflState.week}` : ''}
-                    </p>
+                {/* ── Season Hero ─────────────────────────────────────────────── */}
+                <div className="relative overflow-hidden rounded-2xl border border-slate-700/80 bg-slate-900/80 px-4 py-4 sm:px-6 sm:py-5 shadow-[0_16px_38px_rgba(2,6,23,0.22)]">
+                    <div className="relative flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className="inline-flex items-center rounded-full border border-slate-600/80 bg-slate-800/80 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-200">
+                                    {currentSeason || 'Season'}
+                                </span>
+                            </div>
+                            <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">TLOED Dashboard</h1>
+                            <p className="text-xs sm:text-sm text-slate-300 mt-1">
+                                {currentSeason ? `${currentSeason} Season` : 'Fantasy Football League'}
+                                {nflState?.week ? ` · Week ${nflState.week}` : ''}
+                            </p>
+                        </div>
+                    </div>
                 </div>
 
                 {/* ── Countdowns ───────────────────────────────────────────── */}
-                <div className="flex flex-wrap items-center justify-center gap-3">
+                <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3">
                     <Countdown targetDate={TRADE_DEADLINE} label="Trade Deadline" />
                     <Countdown targetDate={DRAFT_DATE} label="Draft" />
                 </div>
 
                 {/* ── Matchups Ticker ──────────────────────────────────────── */}
-                <div className={card}>
-                    <div className={cardHeader}>
+                <div className={`${card} shadow-[0_18px_36px_rgba(15,23,42,0.26)]`}>
+                    <div className={`${cardHeader} from-blue-500/10 via-slate-800 to-slate-900`}>
                         <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
-                        <span className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                        <span className="text-xs font-semibold text-gray-200 uppercase tracking-[0.18em]">
                             Week {nflState?.week || 1} Matchups
                         </span>
                     </div>
-                    <div className="relative h-[72px] overflow-hidden">
+                    <div className="relative h-[72px] overflow-hidden bg-slate-950/20">
                         <div className="absolute whitespace-nowrap flex items-center h-full animate-scroll-slow">
                             {currentWeekMatchups.length > 0 ? (
                                 <>
@@ -474,12 +471,12 @@ const Dashboard = () => {
                 </div>
 
                 {/* ── Power Rankings ───────────────────────────────────────── */}
-                <div className={`${card} -mx-4 sm:mx-0 rounded-none sm:rounded-xl overflow-hidden`}>
-                    <div className={cardHeader}>
-                        <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className={`${card} rounded-2xl overflow-hidden`}>
+                    <div className={`${cardHeader} from-emerald-500/12 via-slate-800 to-slate-900`}>
+                        <svg className="w-3.5 h-3.5 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                         </svg>
-                        <span className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                        <span className="text-xs font-semibold text-gray-200 uppercase tracking-[0.18em]">
                             Power Rankings
                         </span>
                     </div>
@@ -494,13 +491,13 @@ const Dashboard = () => {
 
                 {/* ── Trending Players ─────────────────────────────────────── */}
                 <div className={card}>
-                    <div className={cardHeader}>
-                        <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className={`${cardHeader} from-violet-500/12 via-slate-800 to-slate-900`}>
+                        <svg className="w-3.5 h-3.5 text-violet-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                         </svg>
-                        <span className="text-xs font-semibold text-gray-300 uppercase tracking-wider">Trending · Last 24h</span>
+                        <span className="text-xs font-semibold text-gray-200 uppercase tracking-[0.18em]">Trending · Last 24h</span>
                     </div>
-                    <div className="py-3 space-y-2">
+                    <div className="py-3 space-y-2 bg-slate-950/10">
                         {/* Added - scroll left */}
                         <div className="relative overflow-hidden">
                             {trendingPlayers.loading ? (
@@ -571,16 +568,23 @@ const Dashboard = () => {
 
                 {/* ── Recent Transactions ──────────────────────────────────── */}
                 <div className={card}>
-                    <div className={cardHeader}>
-                        <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className={`${cardHeader} from-blue-500/12 via-slate-800 to-slate-900`}>
+                        <svg className="w-3.5 h-3.5 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                         </svg>
-                        <span className="text-xs font-semibold text-gray-300 uppercase tracking-wider">Recent Transactions</span>
+                        <span className="text-xs font-semibold text-gray-200 uppercase tracking-[0.18em]">Recent Transactions</span>
                     </div>
 
                     <div className="divide-y divide-white/5">
                         {recentTransactions.length > 0 ? recentTransactions.map((transaction) => (
-                            <div key={transaction.id} className="hover:bg-white/[0.02] transition-colors">
+                            <div
+                                key={transaction.id}
+                                className={`mx-2 my-2 rounded-xl bg-slate-900/65 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-colors hover:bg-slate-900/80 ${
+                                    transaction.type === 'trade'
+                                        ? 'bg-blue-500/5'
+                                        : 'bg-emerald-500/5'
+                                }`}
+                            >
 
                                 {/* Transaction meta row */}
                                 <div className="flex items-center justify-between px-4 py-2.5">
@@ -591,13 +595,6 @@ const Dashboard = () => {
                                             'bg-gray-600/40 text-gray-300 border border-white/10'
                                         }`}>
                                             {formatTransactionType(transaction.type)}
-                                        </span>
-                                        <span className={`px-2 py-0.5 text-[10px] font-semibold rounded uppercase tracking-wider ${
-                                            transaction.status === 'complete'
-                                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                                                : 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30'
-                                        }`}>
-                                            {transaction.status}
                                         </span>
                                     </div>
                                     <span className="text-[10px] text-gray-600 tabular-nums">

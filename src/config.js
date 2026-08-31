@@ -8,6 +8,7 @@ export const GOOGLE_SHEET_POWER_RANKINGS_API_URL = 'https://script.google.com/ma
 export const HISTORICAL_MATCHUPS_API_URL = 'https://script.google.com/macros/s/AKfycbxpo21zzZgNamYShESfqe-SX09miJz2LK7SpdlYrtHXQplneB3bF2xu2byy0HhjM8e-/exec';
 
 export const CURRENT_LEAGUE_ID = '1312104042406612992';
+export const LEAGUE_SEASON = 2026;
 
 // Optional: provide an explicit, ordered list of historical league IDs to "freeze" the
 // historical league chain. If this array is non-empty, the app will use these IDs

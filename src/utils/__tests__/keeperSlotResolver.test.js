@@ -1,4 +1,5 @@
 import { resolveKeeperPick } from '../keeperSlotResolver';
+import { computeAcquisitionMethod, dedupeTradeRecords, isActiveTransaction, normalizeTransactionSeason, resolveOwnerIdForRosterId } from '../../lib/PlayersHistory';
 
 describe('resolveKeeperPick', () => {
     const sampleHistorical = {
@@ -111,5 +112,100 @@ describe('resolveKeeperPick', () => {
         const r = resolveKeeperPick({}, '1', 2027, 2);
         expect(r.resolved).toBe(false);
         expect(r.label).toContain('Round Cost');
+    });
+
+    test('ignores only explicit vetoed trades while keeping real trade metadata intact', () => {
+        expect(isActiveTransaction({ type: 'trade', status: 'complete' })).toBe(true);
+        expect(isActiveTransaction({ type: 'trade', status: 'vetoed' })).toBe(false);
+        expect(isActiveTransaction({ type: 'trade', status: 'complete', metadata: { veto_msg_id: 'abc123' } })).toBe(true);
+        expect(isActiveTransaction({ type: 'trade', status: 'complete', metadata: { vetoed: true } })).toBe(false);
+        expect(isActiveTransaction({ type: 'commissioner', status: 'complete', adds: { '123': 1 } })).toBe(true);
+        expect(isActiveTransaction({ type: 'free_agent', creator: 'commissioner', status: 'complete' })).toBe(true);
+    });
+
+    test('prefers a valid week-1/2 trade over prior carryover fallback', () => {
+        const historical = {
+            rostersBySeason: {
+                2025: [{ roster_id: '6', owner_id: 'owner-6' }],
+                2024: [{ roster_id: '11', owner_id: 'owner-6', players: ['4881'] }],
+            },
+            draftPicksBySeason: { 2025: [] },
+        };
+
+        const acquisition = computeAcquisitionMethod('4881', { season: '2025', rosterId: '6', startWeek: 2 }, historical, [
+            { season: '2025', week: 2, type: 'received', toRosterId: '6', toTeam: 'Team 6' },
+        ], () => 'Team 6', []);
+
+        expect(acquisition.method).toBe('trade');
+        expect(acquisition.label).toBe('Via Trade');
+    });
+
+    test('deduplicates the same trade transaction when it is assembled from cached and fresh records', () => {
+        const sameTradeId = 'trade-123';
+        const cachedTrade = {
+            transactionId: sameTradeId,
+            season: 2025,
+            week: 1,
+            type: 'received',
+            fromTeam: 'Team A',
+            toTeam: 'Team B',
+            adds: [{ playerId: '1', first_name: 'Josh', last_name: 'Allen' }],
+            drops: [{ playerId: '99', first_name: 'Other', last_name: 'Player' }],
+        };
+        const freshTrade = {
+            transactionId: sameTradeId,
+            season: 2025,
+            week: 1,
+            type: 'received',
+            fromTeam: 'Team A',
+            toTeam: 'Team B',
+            adds: [{ playerId: '1', first_name: 'Josh', last_name: 'Allen' }],
+            drops: [{ playerId: '99', first_name: 'Other', last_name: 'Player' }],
+        };
+
+        const deduped = dedupeTradeRecords([cachedTrade, freshTrade]);
+        expect(deduped).toHaveLength(1);
+        expect(deduped[0].transactionId).toBe(sameTradeId);
+    });
+
+    test('resolves the owner for a roster_id using the exact season instead of a reused roster number from another year', () => {
+        const historical = {
+            rostersBySeason: {
+                2023: [
+                    { roster_id: '10', owner_id: 'owner-23' },
+                    { roster_id: '11', owner_id: 'owner-24' },
+                ],
+                2024: [
+                    { roster_id: '10', owner_id: 'owner-24' },
+                    { roster_id: '11', owner_id: 'owner-25' },
+                ],
+            },
+        };
+
+        expect(resolveOwnerIdForRosterId(historical, '10', 2023)).toBe('owner-23');
+        expect(resolveOwnerIdForRosterId(historical, '10', 2024)).toBe('owner-24');
+    });
+
+    test('infers the season from the transaction date for offseason trades when sleeper omits season', () => {
+        const tx = { created: '2023-08-10T00:00:00.000Z' };
+        expect(normalizeTransactionSeason(tx)).toBe(2023);
+    });
+
+    test('treats a pre-draft commissioner add from a Yahoo import as a startup keeper instead of a waiver pickup', () => {
+        const historical = {
+            rostersBySeason: {
+                2024: [{ roster_id: '7', owner_id: 'owner-7' }],
+                2023: [{ roster_id: '8', owner_id: 'owner-7', players: ['9999'] }],
+            },
+            draftPicksBySeason: { 2024: [] },
+        };
+
+        const acquisition = computeAcquisitionMethod('9999', { season: '2024', rosterId: '7', startWeek: 1 }, historical, [], () => 'Team 7', [
+            { type: 'commissioner', season: 2024, created: '2024-05-01T00:00:00Z', adds: { '9999': { roster_id: '7' } }, creator: 'commissioner' },
+        ]);
+
+        expect(acquisition.method).toBe('keeper');
+        expect(acquisition.label).toBe('Kept');
+        expect(acquisition.detail).toBe('Pre-draft roster setup');
     });
 });

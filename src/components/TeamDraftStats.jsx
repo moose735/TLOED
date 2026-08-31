@@ -123,95 +123,100 @@ const TeamDraftStats = ({ ownerId, allDraftHistory = [], totalRounds = 12, total
     }, [myPicks, totalRounds]);
 
     return (
-        <section className="mb-6 sm:mb-8">
-            <h3 className="text-lg sm:text-xl font-bold text-gray-800 mb-3 sm:mb-4 border-b pb-2">Draft Habits</h3>
-            <div className="bg-white border border-gray-200 rounded-lg p-3">
-                <p className="text-sm text-gray-600">Round-by-Round Position Mix (percent)</p>
-                
-                {/* Mobile: Optimized chart layout */}
-                <div className="sm:hidden w-full h-72 mt-2" style={{ minHeight: '288px' }}>
-                    <ResponsiveContainer width="100%" height="100%" minHeight={288}>
-                        <BarChart 
-                            data={positionByRoundData} 
-                            margin={{ top: 8, right: 8, left: 8, bottom: 35 }}
-                        >
-                            <XAxis 
-                                dataKey="round" 
-                                tick={{ fontSize: 10 }}
-                                interval={0}
-                                angle={-45}
-                                textAnchor="end"
-                                height={50}
-                            />
-                            <YAxis 
-                                domain={[0, 100]} 
-                                tick={{ fontSize: 10 }} 
-                                unit="%" 
-                                width={35}
-                            />
-                            <Tooltip 
-                                formatter={(value, name) => [`${Number(value).toFixed(1)}%`, name]}
-                                wrapperStyle={{ fontSize: 11 }}
-                            />
-                            <Legend 
-                                wrapperStyle={{ fontSize: 10 }}
-                                iconSize={8}
-                                layout="horizontal"
-                                align="center"
-                                verticalAlign="bottom"
-                                height={30}
-                            />
-                            {POSITIONS.map(pos => (
-                                <Bar key={pos} dataKey={pos} stackId="a" fill={POSITION_COLORS[pos]} />
-                            ))}
-                        </BarChart>
-                    </ResponsiveContainer>
-                </div>
+        <div className="space-y-3">
+            <p className="text-sm text-slate-300">Round-by-Round Position Mix (percent)</p>
 
-                {/* Desktop: Compact layout (match mobile variant but tuned for desktop readability) */}
-                <div className="hidden sm:block w-full h-72 mt-2" style={{ minHeight: '288px' }}>
-                    <ResponsiveContainer width="100%" height="100%" minHeight={288}>
-                        <BarChart 
-                            data={positionByRoundData} 
-                            margin={{ top: 8, right: 8, left: 8, bottom: 35 }}
-                        >
-                            <XAxis 
-                                dataKey="round" 
-                                tick={{ fontSize: 11 }}
-                                interval={0}
-                                angle={-30}
-                                textAnchor="end"
-                                height={45}
-                            />
-                            <YAxis 
-                                domain={[0, 100]} 
-                                tick={{ fontSize: 11 }} 
-                                unit="%" 
-                                width={40}
-                                ticks={[0,25,50,75,100]}
-                            />
-                            <Tooltip 
-                                formatter={(value, name) => [`${Number(value).toFixed(1)}%`, name]}
-                                wrapperStyle={{ fontSize: 12 }}
-                            />
-                            <Legend 
-                                wrapperStyle={{ fontSize: 11 }}
-                                iconSize={8}
-                                layout="horizontal"
-                                align="center"
-                                verticalAlign="bottom"
-                                height={30}
-                            />
-                            {POSITIONS.map(pos => (
-                                <Bar key={pos} dataKey={pos} stackId="a" fill={POSITION_COLORS[pos]} />
-                            ))}
-                        </BarChart>
-                    </ResponsiveContainer>
-                </div>
-                
-                <div className="mt-3" />
+            {/* Mobile: Optimized chart layout */}
+            <div className="sm:hidden w-full h-72" style={{ minHeight: '288px' }}>
+                <ResponsiveContainer width="100%" height="100%" minHeight={288}>
+                    <BarChart
+                        data={positionByRoundData}
+                        margin={{ top: 8, right: 8, left: 8, bottom: 35 }}
+                    >
+                        <XAxis
+                            dataKey="round"
+                            tick={{ fill: '#94a3b8', fontSize: 10 }}
+                            interval={0}
+                            angle={-45}
+                            textAnchor="end"
+                            height={50}
+                            tickLine={false}
+                            axisLine={{ stroke: 'rgba(148,163,184,0.2)' }}
+                        />
+                        <YAxis
+                            domain={[0, 100]}
+                            tick={{ fill: '#94a3b8', fontSize: 10 }}
+                            unit="%"
+                            width={35}
+                            tickLine={false}
+                            axisLine={{ stroke: 'rgba(148,163,184,0.2)' }}
+                        />
+                        <Tooltip
+                            formatter={(value, name) => [`${Number(value).toFixed(1)}%`, name]}
+                            wrapperStyle={{ fontSize: 11 }}
+                            contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(148,163,184,0.2)', borderRadius: 12, color: '#e2e8f0' }}
+                        />
+                        <Legend
+                            wrapperStyle={{ fontSize: 10, color: '#cbd5e1' }}
+                            iconSize={8}
+                            layout="horizontal"
+                            align="center"
+                            verticalAlign="bottom"
+                            height={30}
+                        />
+                        {POSITIONS.map(pos => (
+                            <Bar key={pos} dataKey={pos} stackId="a" fill={POSITION_COLORS[pos]} radius={[4,4,0,0]} />
+                        ))}
+                    </BarChart>
+                </ResponsiveContainer>
             </div>
-        </section>
+
+            {/* Desktop: Compact layout (match mobile variant but tuned for desktop readability) */}
+            <div className="hidden sm:block w-full h-72" style={{ minHeight: '288px' }}>
+                <ResponsiveContainer width="100%" height="100%" minHeight={288}>
+                    <BarChart
+                        data={positionByRoundData}
+                        margin={{ top: 8, right: 8, left: 8, bottom: 35 }}
+                    >
+                        <XAxis
+                            dataKey="round"
+                            tick={{ fill: '#94a3b8', fontSize: 11 }}
+                            interval={0}
+                            angle={-30}
+                            textAnchor="end"
+                            height={45}
+                            tickLine={false}
+                            axisLine={{ stroke: 'rgba(148,163,184,0.2)' }}
+                        />
+                        <YAxis
+                            domain={[0, 100]}
+                            tick={{ fill: '#94a3b8', fontSize: 11 }}
+                            unit="%"
+                            width={40}
+                            ticks={[0,25,50,75,100]}
+                            tickLine={false}
+                            axisLine={{ stroke: 'rgba(148,163,184,0.2)' }}
+                        />
+                        <Tooltip
+                            formatter={(value, name) => [`${Number(value).toFixed(1)}%`, name]}
+                            wrapperStyle={{ fontSize: 12 }}
+                            contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(148,163,184,0.2)', borderRadius: 12, color: '#e2e8f0' }}
+                        />
+                        <Legend
+                            wrapperStyle={{ fontSize: 11, color: '#cbd5e1' }}
+                            iconSize={8}
+                            layout="horizontal"
+                            align="center"
+                            verticalAlign="bottom"
+                            height={30}
+                        />
+                        {POSITIONS.map(pos => (
+                            <Bar key={pos} dataKey={pos} stackId="a" fill={POSITION_COLORS[pos]} radius={[4,4,0,0]} />
+                        ))}
+                    </BarChart>
+                </ResponsiveContainer>
+            </div>
+        </div>
     );
 };
 

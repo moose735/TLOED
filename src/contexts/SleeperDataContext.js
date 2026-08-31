@@ -331,8 +331,8 @@ export const SleeperDataProvider = ({ children }) => {
 
             let resolvedName = `Unknown Team (ID: ${ownerId})`; // Default fallback
 
-            // If year is null, we want the MOST CURRENT team name
-            if (year === null) {
+            // If year is null/undefined, we want the MOST CURRENT team name
+            if (year == null) {
                 // 1. Try to get name from current league's usersData first (most current)
                 const currentUser = currentLeagueUserMap.get(ownerId);
                 const currentName = getNameFromUser(currentUser);

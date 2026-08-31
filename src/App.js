@@ -87,8 +87,8 @@ const MobileNavButton = ({ icon, label, onClick, isActive }) => (
     <button
         className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-all duration-150 border-b border-white/5 ${
             isActive
-                ? 'bg-blue-600/20 text-blue-300 border-l-2 border-l-blue-400'
-                : 'text-gray-200 hover:bg-white/5 hover:text-white active:bg-white/10'
+                ? 'bg-gradient-to-r from-red-500/20 to-red-600/10 text-red-100 border-l-2 border-l-red-500 shadow-[inset_0_0_0_1px_rgba(220,38,38,0.12)]'
+                : 'text-slate-200 hover:bg-white/5 hover:text-white active:bg-white/10'
         }`}
         onClick={onClick}
     >
@@ -100,20 +100,20 @@ const MobileNavButton = ({ icon, label, onClick, isActive }) => (
 const MobileDropdown = ({ icon, label, isOpen, onToggle, children }) => (
     <li>
         <button
-            className="w-full flex items-center gap-3 px-4 py-3 text-left text-gray-200 hover:bg-white/5 hover:text-white active:bg-white/10 transition-all duration-150 border-b border-white/5"
+            className="w-full flex items-center gap-3 px-4 py-3 text-left text-slate-200 hover:bg-white/5 hover:text-white active:bg-white/10 transition-all duration-150 border-b border-white/5"
             onClick={onToggle}
         >
             <span className="text-base w-5 text-center flex-shrink-0">{icon}</span>
             <span className="text-sm font-medium flex-1">{label}</span>
             <svg
-                className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180 text-red-300' : ''}`}
                 fill="none" viewBox="0 0 24 24" stroke="currentColor"
             >
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
         </button>
         {isOpen && (
-            <ul className="bg-black/20 border-b border-white/5">
+            <ul className="bg-slate-950/60 border-b border-white/5 backdrop-blur-sm">
                 {children}
             </ul>
         )}
@@ -123,10 +123,10 @@ const MobileDropdown = ({ icon, label, isOpen, onToggle, children }) => (
 const MobileSubItem = ({ label, onClick }) => (
     <li>
         <button
-            className="w-full flex items-center gap-2 pl-12 pr-4 py-2.5 text-left text-gray-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition-all duration-150 text-sm border-b border-white/5 last:border-b-0"
+            className="w-full flex items-center gap-2 pl-12 pr-4 py-2.5 text-left text-slate-300 hover:bg-red-500/10 hover:text-white active:bg-white/10 transition-all duration-150 text-sm border-b border-white/5 last:border-b-0"
             onClick={(e) => { e.stopPropagation(); onClick(); }}
         >
-            <span className="w-1 h-1 rounded-full bg-gray-500 flex-shrink-0" />
+            <span className="w-1 h-1 rounded-full bg-red-400/80 flex-shrink-0" />
             {label}
         </button>
     </li>
@@ -141,7 +141,7 @@ const FinisherBadges = ({ finishers }) => {
             {/* Mobile: 1st only */}
             <div className="sm:hidden flex items-center gap-1">
                 <span className="text-xs leading-none">{finishers[0].emoji}</span>
-                <span className="text-xs font-medium text-gray-200 truncate max-w-[80px]">
+                <span className="min-w-0 text-xs font-medium leading-tight text-gray-200 whitespace-normal break-words">
                     {finishers[0].name}
                 </span>
             </div>
@@ -450,10 +450,21 @@ const AppContent = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-900 flex flex-col font-inter overflow-x-hidden">
+        <div
+            className="min-h-screen flex flex-col font-inter overflow-x-hidden text-white"
+            style={{
+                background: '#0b1220'
+            }}
+        >
 
             {/* ── Header ─────────────────────────────────────────────── */}
-            <header className="bg-gray-900 border-b border-white/10 text-white shadow-xl safe-area-top">
+            <header
+                className="border-b text-white shadow-[0_12px_40px_rgba(2,6,23,0.9)] backdrop-blur-md safe-area-top"
+                style={{
+                    backgroundColor: 'rgba(11, 18, 32, 0.9)',
+                    borderColor: 'rgba(148, 163, 184, 0.14)'
+                }}
+            >
                 <div className="flex items-center justify-between px-3 py-1.5 md:px-6 md:py-2 max-w-6xl w-full mx-auto gap-3">
 
                     {/* Logo + Title */}
@@ -478,12 +489,14 @@ const AppContent = () => {
                         </button>
 
                         <div className="flex flex-col min-w-0 flex-1">
-                            <h1 className="font-bold leading-tight tracking-tight">
-                                <span className="sm:hidden text-sm text-white">TLOED</span>
-                                <span className="hidden sm:inline text-base md:text-xl text-white">
-                                    The League of Extraordinary Douchebags
-                                </span>
-                            </h1>
+                            <div className="flex items-center gap-2.5 flex-wrap">
+                                <h1 className="font-bold leading-tight tracking-tight">
+                                    <span className="sm:hidden text-sm text-white">TLOED</span>
+                                    <span className="hidden sm:inline text-base md:text-xl text-white">
+                                        The League of Extraordinary Douchebags
+                                    </span>
+                                </h1>
+                            </div>
                             <FinisherBadges finishers={topFinishers} />
                         </div>
                     </div>
@@ -492,7 +505,7 @@ const AppContent = () => {
                     <div className="flex items-center gap-1.5 flex-shrink-0">
                         {navigationHistory.length > 0 && (
                             <button
-                                className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
+                                className="flex items-center justify-center w-8 h-8 rounded-lg text-slate-300 hover:bg-white/10 hover:text-white transition-colors border border-white/5"
                                 onClick={handleGoBack}
                                 aria-label="Go back"
                                 title="Go back"
@@ -505,7 +518,7 @@ const AppContent = () => {
 
                         {/* Hamburger – mobile only */}
                         <button
-                            className="md:hidden flex items-center justify-center w-9 h-9 rounded-lg text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
+                            className="md:hidden flex items-center justify-center w-9 h-9 rounded-lg text-slate-300 hover:bg-white/10 hover:text-white transition-colors border border-white/5"
                             onClick={toggleMobileMenu}
                             aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'}
                         >
@@ -537,7 +550,7 @@ const AppContent = () => {
             </header>
 
             {/* ── Navigation ──────────────────────────────────────────── */}
-            <nav className={`bg-gray-800 border-b border-white/10 text-white shadow-md transition-all duration-300 md:block relative z-50 ${
+            <nav className={`bg-slate-900/80 border-b border-red-500/30 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-md transition-all duration-300 md:block relative z-50 ${
                 isMobileMenuOpen ? 'block' : 'hidden'
             }`}>
                 <div className="max-w-6xl w-full mx-auto">

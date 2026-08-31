@@ -2,7 +2,7 @@ import React from 'react';
 
 const NavItem = ({ label, onClick }) => (
     <li
-        className="px-3 py-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-white/8 cursor-pointer rounded-lg mx-0.5 transition-colors duration-150 whitespace-nowrap"
+        className="px-3 py-2 text-sm font-medium text-slate-200 hover:text-white hover:bg-red-500/10 cursor-pointer rounded-lg mx-0.5 transition-all duration-150 whitespace-nowrap border border-transparent hover:border-red-400/30"
         onClick={onClick}
     >
         {label}
@@ -11,7 +11,7 @@ const NavItem = ({ label, onClick }) => (
 
 const DropdownItem = ({ label, onClick }) => (
     <li
-        className="px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/8 cursor-pointer rounded-lg transition-colors duration-150 whitespace-nowrap"
+        className="px-3 py-2 text-sm text-slate-200 hover:text-white hover:bg-red-500/10 cursor-pointer rounded-lg transition-all duration-150 whitespace-nowrap border border-transparent hover:border-red-400/30"
         onClick={onClick}
     >
         {label}
@@ -20,20 +20,20 @@ const DropdownItem = ({ label, onClick }) => (
 
 const Dropdown = ({ label, isOpen, onToggle, children }) => (
     <li
-        className={`relative px-3 py-2 text-sm font-medium cursor-pointer rounded-lg mx-0.5 transition-colors duration-150 select-none whitespace-nowrap flex items-center gap-1 ${
-            isOpen ? 'text-white bg-white/8' : 'text-gray-300 hover:text-white hover:bg-white/8'
+        className={`relative px-3 py-2 text-sm font-medium cursor-pointer rounded-lg mx-0.5 transition-all duration-150 select-none whitespace-nowrap flex items-center gap-1 border ${
+            isOpen ? 'text-white bg-red-500/10 border-red-400/40 shadow-[0_0_0_1px_rgba(220,38,38,0.18)]' : 'text-slate-200 hover:text-white hover:bg-red-500/10 border-transparent hover:border-red-400/30'
         }`}
         onClick={onToggle}
     >
         {label}
         <svg
-            className={`w-3 h-3 text-gray-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+            className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180 text-red-300' : ''}`}
             fill="none" viewBox="0 0 24 24" stroke="currentColor"
         >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
         {isOpen && (
-            <ul className="absolute left-0 top-full mt-1.5 bg-gray-800 border border-white/10 shadow-xl rounded-xl py-1.5 min-w-[180px] z-50">
+            <ul className="absolute left-0 top-full mt-1.5 bg-slate-900/95 border border-red-400/30 shadow-2xl rounded-xl py-1.5 min-w-[180px] z-50 backdrop-blur-sm">
                 {children}
             </ul>
         )}
