@@ -18,7 +18,7 @@ const HallOfChampions = () => {
     const leagueMVPs = {
         2025: { 
             playerId: '4034', name: 'Christian McCaffrey', position: 'RB', team: 'SF', 
-            reasonTitle: 'Dominant Season',
+            reasonTitle: 'Thanks Jamie',
             staticHeadshot: require('../assets/images/mvp-headshots/2025-christian-mccaffrey-sf.png')
         },
         2024: { 
