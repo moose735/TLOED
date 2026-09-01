@@ -5,11 +5,6 @@ import { fetchTransactionsForWeek } from '../utils/sleeperApi';
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
-const POPULAR_PLAYER_IDS = [
-    '7564','4866','6794','4984','7588','3164','7547','4972','7523','4035',
-    '8155','3972','7652','4029','6904','2371','1374','3163','7986','4034',
-];
-
 const POSITION_COLORS = {
     QB:  { bg: 'bg-red-500/20',    text: 'text-red-300',    border: 'border-red-500/30',    dot: '#ef4444' },
     RB:  { bg: 'bg-blue-500/20',   text: 'text-blue-300',   border: 'border-blue-500/30',   dot: '#3b82f6' },
@@ -330,6 +325,9 @@ const STATIC_LEADERBOARD_STATS = [
     { key: 'teamCount',   label: 'Most Teams',        format: v => v,  accent: 'text-orange-300',  suffix: 'teams'  },
     { key: 'stintCount',  label: 'Most Stints',       format: v => v,  accent: 'text-pink-300',    suffix: 'stints' },
     { key: 'totalTrades', label: 'Most Times Traded', format: v => v,  accent: 'text-violet-300',  suffix: 'trades' },
+    { key: 'draftCount',  label: 'Most Drafted',      format: v => v,  accent: 'text-blue-300',    suffix: 'times'  },
+    { key: 'keeperCount', label: 'Most Kept',         format: v => v,  accent: 'text-green-300',   suffix: 'times'  },
+    { key: 'championshipCount', label: 'Most Championships', format: v => v, accent: 'text-yellow-300', suffix: 'titles' },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1175,6 +1173,78 @@ const PlayerHistory = () => {
         return { teamCount: uniqueTeams.size, stintCount: stintCombos.size, lastOwner, lastSeason };
     }, [historicalData]);
 
+    // ── Pre-compute all player stats (draft, keeper, championship) for efficiency ──
+    const playerStatsMap = useMemo(() => {
+        const statsMap = new Map();
+        const validPositions = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
+
+        // Hardcoded 2021 championship roster
+        const hardcoded2021Roster = [
+            '4984', '5000', '4962', '6786', '2078', '1466', '4950', '59', 'PHI',
+            '6826', '6945', '1689', '5038', '6989', '6770', '6824', '4149', '2168', '4028',
+        ];
+
+        // Calculate draft and keeper counts in one pass
+        if (historicalData?.draftPicksBySeason) {
+            Object.values(historicalData.draftPicksBySeason).forEach(picks => {
+                picks.forEach(p => {
+                    const pid = String(p.player_id);
+                    if (!statsMap.has(pid)) {
+                        statsMap.set(pid, { draftCount: 0, keeperCount: 0, championshipCount: 0 });
+                    }
+                    const stats = statsMap.get(pid);
+                    if (p.is_keeper) {
+                        stats.keeperCount += 1;
+                    } else {
+                        stats.draftCount += 1;
+                    }
+                });
+            });
+        }
+
+        // Add championship counts
+        hardcoded2021Roster.forEach(pid => {
+            const pidStr = String(pid);
+            if (!statsMap.has(pidStr)) statsMap.set(pidStr, { draftCount: 0, keeperCount: 0, championshipCount: 0 });
+            statsMap.get(pidStr).championshipCount += 1;
+        });
+
+        if (historicalData?.winnersBracketBySeason && historicalData?.rostersBySeason) {
+            Object.entries(historicalData.winnersBracketBySeason).forEach(([year, bracket]) => {
+                const yearNum = Number(year);
+                const champGame = Array.isArray(bracket) ? bracket.find(g => g.p === 1 && g.w) : null;
+                if (!champGame) return;
+                const champRosterId = String(champGame.w);
+                const rosters = historicalData.rostersBySeason?.[yearNum] || [];
+                const champRoster = rosters.find(r => String(r.roster_id) === champRosterId);
+                if (!champRoster) return;
+
+                const players = Array.isArray(champRoster.players) ? champRoster.players : [];
+                const matchups = historicalData.matchupsBySeason?.[yearNum] || [];
+                const champWeek = champGame.week || champGame.weekNumber;
+                let extraPlayers = [];
+                if (champWeek) {
+                    const weekMatchups = matchups.filter(m => String(m.week) === String(champWeek) || String(m.weekNumber) === String(champWeek));
+                    const champMatch = weekMatchups.find(m => String(m.team1_roster_id) === champRosterId || String(m.team2_roster_id) === champRosterId);
+                    if (champMatch) {
+                        const isTeam1 = String(champMatch.team1_roster_id) === champRosterId;
+                        const tp = isTeam1 ? champMatch.team1_players : champMatch.team2_players;
+                        if (tp?.players_points) extraPlayers = Object.keys(tp.players_points);
+                        if (tp?.starters) extraPlayers = [...new Set([...extraPlayers, ...tp.starters])];
+                    }
+                }
+
+                const allPids = [...new Set([...players.map(String), ...extraPlayers.map(String)])];
+                allPids.forEach(pid => {
+                    if (!statsMap.has(pid)) statsMap.set(pid, { draftCount: 0, keeperCount: 0, championshipCount: 0 });
+                    statsMap.get(pid).championshipCount += 1;
+                });
+            });
+        }
+
+        return statsMap;
+    }, [historicalData]);
+
     // ── Player Directory data ────────────────────────────────────────────────
     const playerDirectoryData = useMemo(() => {
         if (!historicalData?.matchupsBySeason || !nflPlayers) return [];
@@ -1222,10 +1292,16 @@ const PlayerHistory = () => {
         });
 
         const ranked = Array.from(stats.values())
-            .map(player => ({
-                ...player,
-                avgPerWeek: player.starts > 0 ? player.startedPoints / player.starts : 0,
-            }))
+            .map(player => {
+                const playerStats = playerStatsMap.get(player.id) || { draftCount: 0, keeperCount: 0, championshipCount: 0 };
+                return {
+                    ...player,
+                    avgPerWeek: player.starts > 0 ? player.startedPoints / player.starts : 0,
+                    draftCount: playerStats.draftCount,
+                    keeperCount: playerStats.keeperCount,
+                    championshipCount: playerStats.championshipCount,
+                };
+            })
             .sort((a, b) => b.totalPoints - a.totalPoints);
 
         const byPosition = new Map();
@@ -1250,7 +1326,7 @@ const PlayerHistory = () => {
             positionRank: positionRankMap.get(player.id)?.rank ?? null,
             positionRankLabel: positionRankMap.get(player.id)?.label ?? null,
         }));
-    }, [historicalData, nflPlayers]);
+    }, [historicalData, nflPlayers, playerStatsMap]);
 
     const directoryColumns = [
         { key: 'rank', label: 'Rank' },
@@ -1259,6 +1335,9 @@ const PlayerHistory = () => {
         { key: 'avgPerWeek', label: 'Avg/Wk' },
         { key: 'bestWeek', label: 'Best Wk' },
         { key: 'starts', label: 'Starts' },
+        { key: 'draftCount', label: 'Drafted' },
+        { key: 'keeperCount', label: 'Kept' },
+        { key: 'championshipCount', label: '🏆' },
     ];
 
     const sortedPlayerDirectory = useMemo(() => {
@@ -1294,6 +1373,76 @@ const PlayerHistory = () => {
     };
 
     // ── Static leaderboard data ───────────────────────────────────────────────
+    const getDraftAndKeeperCounts = useCallback((playerId) => {
+        let draftCount = 0, keeperCount = 0;
+        if (historicalData?.draftPicksBySeason) {
+            Object.values(historicalData.draftPicksBySeason).forEach(picks => {
+                picks.forEach(p => {
+                    if (String(p.player_id) === String(playerId)) {
+                        if (p.is_keeper) {
+                            keeperCount += 1;
+                        } else {
+                            draftCount += 1;
+                        }
+                    }
+                });
+            });
+        }
+        return { draftCount, keeperCount };
+    }, [historicalData]);
+
+    // ── Championship roster lookup ────────────────────────────────────────────
+    const playerChampionshipHonors = useMemo(() => {
+        const honors = {};
+        if (!historicalData?.winnersBracketBySeason || !historicalData?.rostersBySeason) return honors;
+
+        // Hardcoded 2021 championship roster (from different platform)
+        const hardcoded2021Roster = [
+            '4984', '5000', '4962', '6786', '2078', '1466', '4950', '59', 'PHI',
+            '6826', '6945', '1689', '5038', '6989', '6770', '6824', '4149', '2168', '4028',
+        ];
+
+        Object.entries(historicalData.winnersBracketBySeason).forEach(([year, bracket]) => {
+            const yearNum = Number(year);
+            if (yearNum <= 2021) return;
+            const champGame = Array.isArray(bracket) ? bracket.find(g => g.p === 1 && g.w) : null;
+            if (!champGame) return;
+            const champRosterId = String(champGame.w);
+            const rosters = historicalData.rostersBySeason?.[yearNum] || [];
+            const champRoster = rosters.find(r => String(r.roster_id) === champRosterId);
+            if (!champRoster) return;
+
+            const players = Array.isArray(champRoster.players) ? champRoster.players : [];
+            const matchups = historicalData.matchupsBySeason?.[yearNum] || [];
+            const champWeek = champGame.week || champGame.weekNumber;
+            let extraPlayers = [];
+            if (champWeek) {
+                const weekMatchups = matchups.filter(m => String(m.week) === String(champWeek) || String(m.weekNumber) === String(champWeek));
+                const champMatch = weekMatchups.find(m => String(m.team1_roster_id) === champRosterId || String(m.team2_roster_id) === champRosterId);
+                if (champMatch) {
+                    const isTeam1 = String(champMatch.team1_roster_id) === champRosterId;
+                    const tp = isTeam1 ? champMatch.team1_players : champMatch.team2_players;
+                    if (tp?.players_points) extraPlayers = Object.keys(tp.players_points);
+                    if (tp?.starters) extraPlayers = [...new Set([...extraPlayers, ...tp.starters])];
+                }
+            }
+
+            const allPids = [...new Set([...players.map(String), ...extraPlayers.map(String)])];
+            allPids.forEach(pid => {
+                if (!honors[pid]) honors[pid] = [];
+                honors[pid].push({ season: yearNum, ownerId: String(champRoster.owner_id) });
+            });
+        });
+
+        // Add 2021 hardcoded championship roster
+        hardcoded2021Roster.forEach(pid => {
+            if (!honors[pid]) honors[pid] = [];
+            honors[pid].push({ season: 2021, ownerId: '783790952367169536' });
+        });
+
+        return honors;
+    }, [historicalData]);
+
     const leaderboardData = useMemo(() => {
         if (!nflPlayers || !leaguePlayers.size) return [];
         const validPositions = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
@@ -1302,6 +1451,8 @@ const PlayerHistory = () => {
             .map(([pid, pInfo]) => {
                 const counts = getPlayerStintAndTeamCounts(pid, pInfo);
                 const tradeArr = playerTradeMap.get(pid) || [];
+                const playerStats = playerStatsMap.get(pid) || { draftCount: 0, keeperCount: 0, championshipCount: 0 };
+                const champHonors = playerChampionshipHonors[pid] || [];
                 return {
                     id: pid,
                     name: pInfo.full_name || `${pInfo.first_name || ''} ${pInfo.last_name || ''}`.trim(),
@@ -1310,9 +1461,12 @@ const PlayerHistory = () => {
                     teamCount: counts?.teamCount || 0,
                     stintCount: counts?.stintCount || 0,
                     totalTrades: tradeArr.length,
+                    draftCount: playerStats.draftCount,
+                    keeperCount: playerStats.keeperCount,
+                    championshipCount: champHonors.length,
                 };
             });
-    }, [nflPlayers, leaguePlayers, getPlayerStintAndTeamCounts, playerTradeMap]);
+    }, [nflPlayers, leaguePlayers, getPlayerStintAndTeamCounts, playerTradeMap, playerStatsMap, playerChampionshipHonors]);
 
     // ── All-League data ───────────────────────────────────────────────────────
     const allLeagueData = useMemo(() => {
@@ -1389,45 +1543,6 @@ const PlayerHistory = () => {
         });
         return honors;
     }, [allLeagueData]);
-
-    // ── Championship roster lookup ────────────────────────────────────────────
-    const playerChampionshipHonors = useMemo(() => {
-        const honors = {};
-        if (!historicalData?.winnersBracketBySeason || !historicalData?.rostersBySeason) return honors;
-
-        Object.entries(historicalData.winnersBracketBySeason).forEach(([year, bracket]) => {
-            const yearNum = Number(year);
-            if (yearNum <= 2021) return;
-            const champGame = Array.isArray(bracket) ? bracket.find(g => g.p === 1 && g.w) : null;
-            if (!champGame) return;
-            const champRosterId = String(champGame.w);
-            const rosters = historicalData.rostersBySeason?.[yearNum] || [];
-            const champRoster = rosters.find(r => String(r.roster_id) === champRosterId);
-            if (!champRoster) return;
-
-            const players = Array.isArray(champRoster.players) ? champRoster.players : [];
-            const matchups = historicalData.matchupsBySeason?.[yearNum] || [];
-            const champWeek = champGame.week || champGame.weekNumber;
-            let extraPlayers = [];
-            if (champWeek) {
-                const weekMatchups = matchups.filter(m => String(m.week) === String(champWeek) || String(m.weekNumber) === String(champWeek));
-                const champMatch = weekMatchups.find(m => String(m.team1_roster_id) === champRosterId || String(m.team2_roster_id) === champRosterId);
-                if (champMatch) {
-                    const isTeam1 = String(champMatch.team1_roster_id) === champRosterId;
-                    const tp = isTeam1 ? champMatch.team1_players : champMatch.team2_players;
-                    if (tp?.players_points) extraPlayers = Object.keys(tp.players_points);
-                    if (tp?.starters) extraPlayers = [...new Set([...extraPlayers, ...tp.starters])];
-                }
-            }
-
-            const allPids = [...new Set([...players.map(String), ...extraPlayers.map(String)])];
-            allPids.forEach(pid => {
-                if (!honors[pid]) honors[pid] = [];
-                honors[pid].push({ season: yearNum, ownerId: String(champRoster.owner_id) });
-            });
-        });
-        return honors;
-    }, [historicalData]);
 
     // ── Search ────────────────────────────────────────────────────────────────
     useEffect(() => {
@@ -2003,42 +2118,7 @@ const PlayerHistory = () => {
                 ))}
             </div>
 
-            {playerRecords && (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
-                    <RecordCard
-                        title="Top Scorer (All-Time)"
-                        player={playerRecords.topScorer ? nflPlayers?.[playerRecords.topScorer.playerId] : null}
-                        value={playerRecords.topScorer?.value ?? 0}
-                        onSelectPlayer={handleSelectPlayer}
-                        accent="from-blue-500/10 to-cyan-500/10"
-                        formatValue={(v) => `${Number(v).toFixed(1)} pts`}
-                    />
-                    <RecordCard
-                        title="Best Avg/Week (Started)"
-                        player={playerRecords.bestAvgWeek ? nflPlayers?.[playerRecords.bestAvgWeek.playerId] : null}
-                        value={playerRecords.bestAvgWeek?.value ?? 0}
-                        onSelectPlayer={handleSelectPlayer}
-                        accent="from-emerald-500/10 to-teal-500/10"
-                        formatValue={(v) => `${Number(v).toFixed(1)} PPG`}
-                    />
-                    <RecordCard
-                        title="Best Single Week"
-                        player={playerRecords.bestSingleWeek ? nflPlayers?.[playerRecords.bestSingleWeek.playerId] : null}
-                        value={playerRecords.bestSingleWeek?.value ?? 0}
-                        onSelectPlayer={handleSelectPlayer}
-                        accent="from-violet-500/10 to-purple-500/10"
-                        formatValue={(v) => `${Number(v).toFixed(1)} pts`}
-                    />
-                    <RecordCard
-                        title="Most Traded"
-                        player={playerRecords.mostTraded ? nflPlayers?.[playerRecords.mostTraded.playerId] : null}
-                        value={playerRecords.mostTraded?.value ?? 0}
-                        onSelectPlayer={handleSelectPlayer}
-                        accent="from-pink-500/10 to-rose-500/10"
-                        formatValue={(v) => `${Number(v).toFixed(0)}`}
-                    />
-                </div>
-            )}
+
 
             {activeTab === 'leaderboard' ? (
                 <StaticLeaderboard
@@ -2077,27 +2157,44 @@ const PlayerHistory = () => {
                         )}
                     </div>
 
-                    <section>
-                        <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">Popular Players</h2>
-                        <div className="flex flex-wrap gap-2">
-                            {POPULAR_PLAYER_IDS.map(pid => {
-                                const p = nflPlayers?.[pid];
-                                if (!p) return null;
-                                const validPositions = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
-                                if (!validPositions.includes(p.position)) return null;
-                                const name = p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim();
-                                const ps = posStyle(p.position);
-                                return (
-                                    <button key={pid}
-                                        onClick={() => handleSelectPlayer({ id: pid, name, position: p.position, team: p.team || 'FA' })}
-                                        className={`flex items-center gap-2 px-3 py-2 rounded-full border ${ps.border} ${ps.bg} hover:brightness-125 transition-all`}>
-                                        <PlayerAvatar playerId={pid} size="sm" />
-                                        <span className="text-sm font-semibold text-white whitespace-nowrap">{name}</span>
-                                    </button>
-                                );
-                            })}
+                    {playerRecords && (
+                        <div className="flex justify-center">
+                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 w-full">
+                                <RecordCard
+                                    title="Top Scorer (All-Time)"
+                                    player={playerRecords.topScorer ? nflPlayers?.[playerRecords.topScorer.playerId] : null}
+                                    value={playerRecords.topScorer?.value ?? 0}
+                                    onSelectPlayer={handleSelectPlayer}
+                                    accent="from-blue-500/10 to-cyan-500/10"
+                                    formatValue={(v) => `${Number(v).toFixed(1)} pts`}
+                                />
+                                <RecordCard
+                                    title="Best Avg/Week (Started)"
+                                    player={playerRecords.bestAvgWeek ? nflPlayers?.[playerRecords.bestAvgWeek.playerId] : null}
+                                    value={playerRecords.bestAvgWeek?.value ?? 0}
+                                    onSelectPlayer={handleSelectPlayer}
+                                    accent="from-emerald-500/10 to-teal-500/10"
+                                    formatValue={(v) => `${Number(v).toFixed(1)} PPG`}
+                                />
+                                <RecordCard
+                                    title="Best Single Week"
+                                    player={playerRecords.bestSingleWeek ? nflPlayers?.[playerRecords.bestSingleWeek.playerId] : null}
+                                    value={playerRecords.bestSingleWeek?.value ?? 0}
+                                    onSelectPlayer={handleSelectPlayer}
+                                    accent="from-violet-500/10 to-purple-500/10"
+                                    formatValue={(v) => `${Number(v).toFixed(1)} pts`}
+                                />
+                                <RecordCard
+                                    title="Most Traded"
+                                    player={playerRecords.mostTraded ? nflPlayers?.[playerRecords.mostTraded.playerId] : null}
+                                    value={playerRecords.mostTraded?.value ?? 0}
+                                    onSelectPlayer={handleSelectPlayer}
+                                    accent="from-pink-500/10 to-rose-500/10"
+                                    formatValue={(v) => `${Number(v).toFixed(0)}`}
+                                />
+                            </div>
                         </div>
-                    </section>
+                    )}
 
                     <section className="space-y-4">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -2184,6 +2281,9 @@ const PlayerHistory = () => {
                                                 <td className="px-3 py-3 text-gray-200 tabular-nums">{player.avgPerWeek.toFixed(1)}</td>
                                                 <td className="px-3 py-3 text-gray-200 tabular-nums">{player.bestWeek.toFixed(1)}</td>
                                                 <td className="px-3 py-3 text-gray-200 tabular-nums">{player.starts}</td>
+                                                <td className="px-3 py-3 text-gray-200 tabular-nums">{player.draftCount}</td>
+                                                <td className="px-3 py-3 text-gray-200 tabular-nums">{player.keeperCount}</td>
+                                                <td className={`px-3 py-3 font-semibold tabular-nums ${player.championshipCount > 0 ? 'text-yellow-300' : 'text-gray-200'}`}>{player.championshipCount}</td>
                                             </tr>
                                         ))
                                     )}

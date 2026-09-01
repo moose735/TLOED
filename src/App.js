@@ -315,15 +315,28 @@ const AppContent = () => {
     // Page title
     useEffect(() => {
         const titles = {
-            [TABS.HOME]: 'Dashboard', [TABS.GAMECENTER]: 'Gamecenter',
-            [TABS.SPORTSBOOK]: 'Sportsbook', [TABS.LEAGUE_HISTORY]: 'League History',
-            [TABS.HALL_OF_CHAMPIONS]: 'Hall of Champions', [TABS.RECORD_BOOK]: 'Record Book',
-            [TABS.HEAD_TO_HEAD]: 'Head-to-Head', [TABS.DPR_ANALYSIS]: 'DPR Analysis',
+            [TABS.HOME]: 'Dashboard',
+            [TABS.GAMECENTER]: 'Gamecenter',
+            [TABS.SPORTSBOOK]: 'Sportsbook',
+            [TABS.LEAGUE_HISTORY]: 'League History',
+            [TABS.HALL_OF_CHAMPIONS]: 'Hall of Champions',
+            [TABS.RECORD_BOOK]: 'Record Book',
+            [TABS.HEAD_TO_HEAD]: 'Head-to-Head',
+            [TABS.DPR_ANALYSIS]: 'DPR Analysis',
             [TABS.LUCK_RATING]: 'Luck Rating',
+            [TABS.PLAYER_HISTORY]: 'Player History',
             [TABS.TEAMS_OVERVIEW]: selectedTeamName || 'Teams',
-            [TABS.FINANCIALS]: 'Financials', [TABS.SEASON_BREAKDOWN]: 'Season Breakdown',
-            [TABS.DRAFT_ANALYSIS]: 'Draft Analysis', [TABS.MEMES_AND_MEMORIES]: 'Memes & Memories',
+            [TABS.TEAMS]: 'Teams',
+            [TABS.ROSTER]: 'Roster',
+            [TABS.FINANCIALS]: 'Financials',
+            [TABS.SEASON_BREAKDOWN]: 'Season Breakdown',
+            [TABS.DRAFT_ANALYSIS]: 'Draft Analysis',
+            [TABS.KEEPERS]: 'Keepers',
+            [TABS.MINI_GAMES]: 'Mini-Games',
+            [TABS.MEMES_AND_MEMORIES]: 'Memes & Memories',
             [TABS.ACHIEVEMENTS]: 'Achievements',
+            [TABS.TRANSACTIONS]: 'Transactions',
+            [TABS.TRADE_HISTORY]: 'Trade History',
         };
         document.title = `TLOED - ${titles[activeTab] || 'Dashboard'}`;
     }, [activeTab, selectedTeamName]);
